@@ -61,6 +61,31 @@ describe("CloudSignIn", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeDisabled();
   });
 
+  it("moves between account tabs with the arrow keys and keeps the panel linked", async () => {
+    api.status.mockResolvedValue(signedOut);
+    start();
+    const user = userEvent.setup();
+    const signIn = await screen.findByRole("tab", { name: "Sign in" });
+    const signUp = screen.getByRole("tab", { name: "Create account" });
+    const panel = screen.getByRole("tabpanel");
+    expect(signIn).toHaveAttribute("tabindex", "0");
+    expect(signUp).toHaveAttribute("tabindex", "-1");
+    expect(signIn).toHaveAttribute("aria-controls", panel.id);
+    expect(panel).toHaveAttribute("aria-labelledby", signIn.id);
+
+    signIn.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(signUp).toHaveAttribute("aria-selected", "true");
+    expect(signUp).toHaveClass("is-selected");
+    expect(signUp).toHaveFocus();
+    expect(panel).toHaveAttribute("aria-labelledby", signUp.id);
+    expect(screen.getByRole("button", { name: "Create account" })).toBeInTheDocument();
+
+    await user.keyboard("{ArrowLeft}");
+    expect(signIn).toHaveAttribute("aria-selected", "true");
+    expect(signIn).toHaveFocus();
+  });
+
   it("skips straight through when the cloud is not configured", async () => {
     api.status.mockResolvedValue({ ...signedOut, configured: false });
     const { onSkip } = start();

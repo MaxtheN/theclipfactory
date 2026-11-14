@@ -1,4 +1,11 @@
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { cloudApi, type CloudStatus } from "./cloudApi";
 import { announceCloudChange } from "./appEvents";
 import { Field } from "./parts";
@@ -112,24 +119,60 @@ export function CloudAccountFields({
     "sign-up": "Create account",
   };
   const off = disabled || account.submitting;
+  const base = useId();
+  const tabId = (id: Mode) => `${base}-tab-${id}`;
+  const panelId = `${base}-panel`;
+  const tabs = useRef<Partial<Record<Mode, HTMLButtonElement | null>>>({});
+  // WAI-ARIA tabs: arrows move and select, Home/End jump to the ends.
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const at = order.indexOf(account.mode);
+    let next = -1;
+    if (e.key === "ArrowRight") next = (at + 1) % order.length;
+    else if (e.key === "ArrowLeft") next = (at - 1 + order.length) % order.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = order.length - 1;
+    if (next < 0 || off) return;
+    e.preventDefault();
+    account.switchMode(order[next]);
+    tabs.current[order[next]]?.focus();
+  };
   return (
     <>
-      <div className="gf-cloud-tabs" role="tablist" aria-label="Account options">
-        {order.map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={account.mode === id}
-            className={`gf-cloud-tab${account.mode === id ? " is-selected" : ""}`}
-            disabled={off}
-            onClick={() => account.switchMode(id)}
-          >
-            {labels[id]}
-          </button>
-        ))}
+      <div
+        className="gf-cloud-tabs"
+        role="tablist"
+        aria-label="Account options"
+        onKeyDown={onKeyDown}
+      >
+        {order.map((id) => {
+          const selected = account.mode === id;
+          return (
+            <button
+              key={id}
+              ref={(el) => {
+                tabs.current[id] = el;
+              }}
+              id={tabId(id)}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-controls={panelId}
+              tabIndex={selected ? 0 : -1}
+              className={`gf-cloud-tab${selected ? " is-selected" : ""}`}
+              disabled={off}
+              onClick={() => account.switchMode(id)}
+            >
+              {labels[id]}
+            </button>
+          );
+        })}
       </div>
-      <div className="gf-form-fields gf-cloud-fields" role="tabpanel">
+      <div
+        className="gf-form-fields gf-cloud-fields"
+        role="tabpanel"
+        id={panelId}
+        aria-labelledby={tabId(account.mode)}
+      >
         <Field label="Email">
           {(id) => (
             <input
