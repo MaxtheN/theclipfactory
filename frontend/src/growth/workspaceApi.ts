@@ -72,7 +72,8 @@ export const workspaceApi = {
   upload: (file: File) => {
     const body = new FormData();
     body.append("file", file);
-    return api<Video>("/api/videos", { method: "POST", body });
+    // The shell starts production itself, inside the workspace, once the footage is attached.
+    return api<Video>("/api/videos?autostart=false", { method: "POST", body });
   },
   propose: (
     id: string,

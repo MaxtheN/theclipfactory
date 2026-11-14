@@ -5,8 +5,8 @@ import { clip, settings, testState } from "../test-state";
 import { Instagram, isPublicHttps, publishingGate } from "./Instagram";
 import { MetricGroup, Results } from "./Results";
 import { Models } from "./Models";
-import { Factory, getCandidates } from "./Factory";
-import { Library } from "./Library";
+import { Studio, getCandidates } from "./Studio";
+import { Footage } from "./Footage";
 import { SettingsPage, editableSettings } from "./Settings";
 import { ClipReview } from "../components/ClipReview";
 afterEach(() => vi.unstubAllGlobals());
@@ -152,7 +152,7 @@ describe("local production controls", () => {
     const user = userEvent.setup();
     const state = testState();
     state.data.videos = [{ id: "v1", name: "Source", duration: 60 }];
-    render(<Factory state={state} />);
+    render(<Studio state={state} />);
     expect(
       screen.getByRole("button", { name: "Analyze video" }),
     ).toBeDisabled();
@@ -196,7 +196,7 @@ describe("local production controls", () => {
     const user = userEvent.setup();
     const state = testState();
     state.data.videos = [{ id: "v1", name: "Source", duration: 60 }];
-    render(<Factory state={state} />);
+    render(<Studio state={state} />);
     await user.clear(screen.getByLabelText("Start (seconds)"));
     await user.type(screen.getByLabelText("Start (seconds)"), "35");
     await user.click(
@@ -212,13 +212,13 @@ describe("local production controls", () => {
     const state = testState();
     state.data.videos = [{ id: "v1", name: "Source", duration: 60 }];
     state.data.jobs = [{ id: "active", kind: "team", status, context: { video_id: "v1" } }];
-    render(<Factory state={state} />);
+    render(<Studio state={state} />);
     expect(screen.getByRole("button", { name: /Queue subtitled render/ })).toBeDisabled();
   });
   it("uploads multipart video files with the contract file field", async () => {
     const fetch = mockFetch();
     const user = userEvent.setup();
-    render(<Library state={testState()} onEdit={vi.fn()} />);
+    render(<Footage state={testState()} onEdit={vi.fn()} />);
     await user.upload(
       screen.getByLabelText("Upload video files"),
       new File(["source bytes"], "source.mp4", { type: "video/mp4" }),

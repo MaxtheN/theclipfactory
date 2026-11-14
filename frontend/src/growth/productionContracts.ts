@@ -28,6 +28,8 @@ export interface AgentProductionRequest {
   // IDs are dynamic: installed Ollama models use ollama:<name>:<tag>.
   model_id: string;
   revision_budget?: number;
+  /** team (default): a few self-checked clips. swarm: many clips, one hypothesis each. */
+  strategy?: "team" | "swarm";
 }
 export interface TranscriptImportRequest {
   format: "srt" | "vtt" | "json";
@@ -88,8 +90,8 @@ export interface StoredRenderPlan {
   objective?: string;
   subtitles?: boolean;
   format?: "vertical";
-  framing?: "fit" | "fill";
-  caption_style?: "standard" | "high_contrast";
+  framing?: "fit" | "fill" | "blur";
+  caption_style?: "standard" | "high_contrast" | "pop";
   hook_overlay?: boolean;
   opening_treatment?: OpeningTreatment | "none" | null;
   cold_open_start?: number | null;
@@ -105,8 +107,8 @@ export interface ProductionClip extends Clip {
   transcript_origin?: "generated" | "imported" | null;
   caption_cues?: number | null;
   focus_x?: number | null;
-  framing?: "fit" | "fill" | null;
-  caption_style?: "standard" | "high_contrast" | null;
+  framing?: "fit" | "fill" | "blur" | null;
+  caption_style?: "standard" | "high_contrast" | "pop" | null;
   width?: number | null;
   height?: number | null;
   duration?: number | null;
@@ -301,13 +303,8 @@ function parsePlan(value: unknown): void {
     );
   requireShape(
     optional(value, "format", (v) => v === "vertical", false) &&
-      optional(value, "framing", (v) => v === "fit" || v === "fill", false) &&
-      optional(
-        value,
-        "caption_style",
-        (v) => v === "standard" || v === "high_contrast",
-        false,
-      ) &&
+      optional(value, "framing", framing, false) &&
+      optional(value, "caption_style", captionStyle, false) &&
       optional(value, "focus_x", (v) => finite(v) && v >= 0 && v <= 1, false) &&
       optional(value, "opening_treatment", (v) =>
         ["none", "text_overlay", "cold_open"].includes(String(v)),
@@ -437,12 +434,8 @@ export function parseProductionClip(
       optional(value, "opening_treatment", (v) =>
         ["none", "text_overlay", "cold_open"].includes(String(v)),
       ) &&
-      optional(value, "framing", (v) => v === "fit" || v === "fill") &&
-      optional(
-        value,
-        "caption_style",
-        (v) => v === "standard" || v === "high_contrast",
-      ) &&
+      optional(value, "framing", framing) &&
+      optional(value, "caption_style", captionStyle) &&
       optional(
         value,
         "transcript_origin",
@@ -598,12 +591,22 @@ export function parseExportRecord(
   return value as unknown as ExportRecord;
 }
 
+// fit/fill are what a direction can ask for. Agent-made clips can also be "blur" (the whole
+// picture over a blurred backdrop) and "pop" (word-by-word captions).
+function framing(value: unknown) {
+  return value === "fit" || value === "fill" || value === "blur";
+}
+function captionStyle(value: unknown) {
+  return value === "standard" || value === "high_contrast" || value === "pop";
+}
+
 export function parseAgentProductionResponse(
   value: unknown,
   scope: ProductionScope = {},
+  strategy: "team" | "swarm" = "team",
 ): AgentProductionResponse {
   requireShape(object(value), "Agent production requires a job/run envelope.");
-  const job = parseProductionJob(value.job, undefined, "team");
+  const job = parseProductionJob(value.job, undefined, strategy);
   const run = value.run;
   requireShape(
     object(run) &&
@@ -611,7 +614,7 @@ export function parseAgentProductionResponse(
       identifier(run.video_id) &&
       run.job_id === job.id &&
       identifier(run.model_id) &&
-      run.mode === "team" &&
+      run.mode === strategy &&
       [
         "queued",
         "running",

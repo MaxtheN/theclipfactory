@@ -3,7 +3,11 @@ import type { Clip, TeamRun, Video } from "../types";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, reviewPreview } from "./workspaceApi";
+import { productionApi } from "./productionApi";
 import { jobInScope } from "./productionState";
+import { endpoint, post } from "../api";
+import { Storyboard } from "../components/Storyboard";
+import { Stages } from "../pages/Home";
 import { activeJob } from "../productionPreflight";
 import { Icon } from "./Icon";
 import { FactoryWorkflow } from "./FactoryWorkflow";
@@ -118,6 +122,45 @@ export function FactoryHome({
   const jobs = factory.data.jobs.filter(
     (j) => jobInScope(j, scope, runs) && activeJob(j),
   );
+  // The production line as the local service reports it: one entry per source, with the stage
+  // it is at and the model production will use.
+  const line = factory.data.factory;
+  const modelId = line?.model_id ?? "";
+  const autopilot = factory.data.settings?.autonomy === "auto";
+  const [seen, setSeen] = useState<Record<string, boolean>>({});
+  const swarmRequest = (videoId: string, strategyId: string) => ({
+    expected_strategy_version_id: strategyId,
+    video_id: videoId,
+    profile_id: w.profileId,
+    model_id: modelId,
+    strategy: "swarm" as const,
+  });
+  /** Many clips from one source, each on its own hypothesis, under the approved direction. */
+  async function makeClips(source: Video) {
+    const strategyId = campaign?.active_strategy_id;
+    if (!campaign || !direction || !strategyId || !modelId) return;
+    setError("");
+    setSuccess("");
+    await w.run(
+      async () => {
+        await productionApi.campaignProduce(campaign.id, swarmRequest(source.id, strategyId));
+        reloadRuns.current();
+        void factory.refresh();
+        setSuccess(`Making clips from ${source.name}. They arrive below as they finish.`);
+      },
+      "Production started.",
+      campaign.id,
+    );
+  }
+  async function cancel(jobId: string) {
+    setError("");
+    try {
+      await post(endpoint("jobs", jobId, "cancel"));
+      void factory.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The job could not be cancelled.");
+    }
+  }
   const blocked =
     w.busy ||
     w.loading ||
@@ -200,6 +243,23 @@ export function FactoryHome({
           if (pendingImports.get(campaign.id)?.id === video.id)
             pendingImports.delete(campaign.id);
           setPending(undefined);
+          // Autopilot: with a direction already approved, new footage goes straight into production.
+          const strategyId = latest.active_strategy_id;
+          if (autopilot && direction && strategyId && modelId && !reviewPreview) {
+            try {
+              await productionApi.campaignProduce(latest.id, swarmRequest(video.id, strategyId));
+              reloadRuns.current();
+              setSuccess(`${video.name} added. The factory is making clips from it now.`);
+              return;
+            } catch (e) {
+              setSuccess(
+                `${video.name} added. Production did not start by itself: ${
+                  e instanceof Error ? e.message : "try Make clips."
+                }`,
+              );
+              return;
+            }
+          }
           setSuccess(`${video.name} added. Open production when you’re ready.`);
         },
         "Footage added to this workspace.",
@@ -385,7 +445,14 @@ export function FactoryHome({
                 className="gf-cut-card"
                 onClick={() => onReview(clip)}
               >
-                <span className="gf-cut-art">
+                <span
+                  className="gf-cut-art"
+                  style={
+                    reviewPreview
+                      ? undefined
+                      : { backgroundImage: `url(${endpoint("clips", clip.id, "cover")})` }
+                  }
+                >
                   <Icon name="play" size={28} />
                   <span>
                     {reviewPreview
@@ -440,33 +507,118 @@ export function FactoryHome({
           </div>
         ) : (
           <div className="gf-footage-list">
-            {sources.map((source) => (
-              <div className="gf-footage-row" key={source.id}>
-                <span className="gf-footage-icon">
-                  <Icon name="studio" size={22} />
-                </span>
-                <div className="gf-footage-copy">
-                  <strong>{source.name}</strong>
-                  <span>
-                    {reviewPreview
-                      ? "Illustrative source"
-                      : formatTime(source.duration)}
-                    {source.has_audio === true && source.transcript == null
-                      ? " · Transcript needed for captions"
-                      : ""}
-                  </span>
+            {sources.map((source) => {
+              const status = line?.sources.find((item) => item.video_id === source.id);
+              const working = status?.state === "queued" || status?.state === "working";
+              const ready =
+                !!direction && !!modelId && !!status?.can_produce && !w.busy && !w.loading;
+              // Counts are for this workspace: clips made elsewhere from the same file do not belong here.
+              const own = clips.filter((c) => c.video_id === source.id);
+              const waiting = own.filter((c) => !c.approved).length;
+              const headline =
+                !status || working || status.state === "failed" || status.state === "cancelled"
+                  ? status?.error || status?.headline
+                  : waiting
+                    ? `${waiting} clip${waiting === 1 ? "" : "s"} ready for review`
+                    : own.length
+                      ? `${own.length} clip${own.length === 1 ? "" : "s"} approved`
+                      : "Ready to make clips";
+              return (
+                <div className="gf-footage-item" key={source.id}>
+                  <div className="gf-footage-row">
+                    <span className="gf-footage-icon">
+                      <Icon name="studio" size={22} />
+                    </span>
+                    <div className="gf-footage-copy">
+                      <strong>{source.name}</strong>
+                      <span>
+                        {reviewPreview
+                          ? "Illustrative source"
+                          : formatTime(source.duration)}
+                        {source.has_audio === true && source.transcript == null
+                          ? " · Transcript needed for captions"
+                          : ""}
+                      </span>
+                    </div>
+                    {status &&
+                      (working && status.job_id ? (
+                        <button
+                          type="button"
+                          className="gf-button secondary compact"
+                          onClick={() => void cancel(status.job_id!)}
+                        >
+                          Cancel
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="gf-button primary compact"
+                          disabled={!ready}
+                          title={
+                            !direction
+                              ? "Approve the creative direction first."
+                              : !modelId
+                                ? "Set up a local model in Advanced tools → Models."
+                                : status.blocked_reason || undefined
+                          }
+                          onClick={() => void makeClips(source)}
+                        >
+                          Make clips
+                        </button>
+                      ))}
+                    <button
+                      type="button"
+                      className="gf-button secondary compact"
+                      disabled={w.busy || w.loading}
+                      onClick={() => onProduce(source.id, "agent")}
+                    >
+                      Find clips
+                      <Icon name="arrow" size={15} />
+                    </button>
+                  </div>
+                  {status && (
+                    <div className="gf-footage-line">
+                      <div className="source-card-body">
+                        <Stages source={status} />
+                        <p className="gf-footage-status" role="status">
+                          {headline}
+                        </p>
+                        {typeof status.progress === "number" && (
+                          <progress
+                            aria-label={`Progress for ${source.name}`}
+                            max={100}
+                            value={Math.min(100, Math.max(0, status.progress))}
+                          />
+                        )}
+                      </div>
+                      {status.storyboard && (
+                        <details
+                          className="gf-disclosure"
+                          onToggle={(event) => {
+                            const open = event.currentTarget.open;
+                            setSeen((current) =>
+                              current[source.id] === open ? current : { ...current, [source.id]: open },
+                            );
+                          }}
+                        >
+                          <summary>
+                            <Icon name="play" />
+                            What the factory saw · {status.storyboard.scenes} scenes
+                            <Icon name="down" size={15} />
+                          </summary>
+                          {seen[source.id] && (
+                            <Storyboard
+                              videoId={source.id}
+                              version={status.storyboard.updated_at}
+                            />
+                          )}
+                        </details>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  className="gf-button secondary compact"
-                  disabled={w.busy || w.loading}
-                  onClick={() => onProduce(source.id, "agent")}
-                >
-                  Find clips
-                  <Icon name="arrow" size={15} />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

@@ -10,6 +10,7 @@ const initial: Data = {
   clips: [],
   instagram: null,
   analytics: null,
+  factory: null,
 };
 const paths: Record<Resource, string> = {
   system: "/api/system",
@@ -20,8 +21,10 @@ const paths: Record<Resource, string> = {
   clips: "/api/clips",
   instagram: "/api/instagram/status",
   analytics: "/api/analytics",
+  factory: "/api/factory",
 };
 const polling: Resource[] = [
+  "factory",
   "jobs",
   "videos",
   "clips",

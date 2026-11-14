@@ -11,7 +11,7 @@ import { TeamLedger } from "./TeamLedger";
 import { TeamComparisons } from "./TeamComparisons";
 import { StructuredData } from "./StructuredData";
 import { ClipReview } from "./ClipReview";
-import { Factory } from "../pages/Factory";
+import { Studio } from "../pages/Studio";
 import { editableSettings, SettingsPage } from "../pages/Settings";
 import { clip, settings, testState } from "../test-state";
 import type { TeamRun } from "../types";
@@ -91,7 +91,7 @@ describe("team production contract", () => {
       );
       vi.stubGlobal("fetch", fetch);
       const user = userEvent.setup();
-      render(<Factory state={readyState()} />);
+      render(<Studio state={readyState()} />);
       expect(screen.getByLabelText("Team revision budget")).toHaveValue("2");
       await user.selectOptions(
         screen.getByLabelText("Team revision budget"),
@@ -123,7 +123,7 @@ describe("team production contract", () => {
     );
     const state = readyState();
     state.data.videos.push({ id: "v2", name: "Other" });
-    render(<Factory state={state} />);
+    render(<Studio state={state} />);
     await userEvent.selectOptions(screen.getByLabelText("Source video"), "v2");
     expect(
       screen.getAllByRole("button", { name: "Start team run" }),
@@ -142,7 +142,7 @@ describe("team production contract", () => {
       json(path === "/api/team/runs" ? [] : { id: "j1" }),
     );
     vi.stubGlobal("fetch", fetch);
-    render(<Factory state={readyState()} />);
+    render(<Studio state={readyState()} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Run comparative baseline" }),
     );
@@ -154,8 +154,11 @@ describe("team production contract", () => {
       model_id: "qwen-small",
     });
   });
-  it("defaults old typed settings to team and saves a deliberate baseline option", async () => {
-    expect(editableSettings(settings).production_strategy).toBe("team");
+  it("defaults untyped settings to the swarm and saves a deliberate baseline option", async () => {
+    expect(editableSettings(settings).production_strategy).toBe("swarm");
+    expect(
+      editableSettings({ ...settings, production_strategy: "team" }).production_strategy,
+    ).toBe("team");
     const fetch = vi.fn(async () => json({}));
     vi.stubGlobal("fetch", fetch);
     render(<SettingsPage state={testState()} />);

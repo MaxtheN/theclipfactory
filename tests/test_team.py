@@ -1,4 +1,7 @@
-"""Bounded team orchestration with scripted JSON, never weights or remote APIs."""
+"""Bounded team orchestration with scripted JSON, never weights or remote APIs.
+
+Roles select storyboard scenes by ID; source ranges are derived and repaired in code.
+"""
 
 import copy
 import json
@@ -6,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from conftest import board
 
 from clip_factory.jobs import JobCancelled, WorkError
 from clip_factory.models import Models
@@ -21,6 +25,8 @@ from clip_factory.team import (
     Strategy,
     TeamEngine,
     decode_output,
+    fit_range,
+    snap_to_speech,
 )
 
 
@@ -33,10 +39,23 @@ def plan():
     }
 
 
-def footage(ref="frame:0"):
+def footage(*refs):
     return {
-        "moments": [{"start": 0, "end": 2, "summary": "Visible source", "evidence_refs": [ref]}],
-        "limitations": "Silent sampled frames do not establish speech",
+        "moments": [{"scenes": list(refs or ["scene:0"]), "summary": "Visible source"}],
+        "limitations": "A few frames per scene do not show everything",
+    }
+
+
+def moment(start=0.0, end=1.0, refs=("scene:0",), peak=0.5):
+    """What the engine derives from a cited scene: measured range, never model-supplied."""
+    return {
+        "start": start,
+        "end": end,
+        "summary": "Visible source",
+        "scenes": list(refs),
+        "evidence_refs": list(refs),
+        "peak_time": peak,
+        "id": "moment-1",
     }
 
 
@@ -45,7 +64,7 @@ def strategy(objective="sales"):
         "angles": [
             {
                 "id": "angle-1",
-                "moment_index": 0,
+                "moment": "moment-1",
                 "objective": objective,
                 "hook": "See the source",
                 "rationale": "A supported demonstration",
@@ -54,7 +73,7 @@ def strategy(objective="sales"):
     }
 
 
-def edits(ref="frame:0", *, hook="See the source", objective="sales"):
+def edits(ref="scene:0", *, hook="See the source", objective="sales"):
     return {
         "candidates": [
             {
@@ -71,7 +90,7 @@ def edits(ref="frame:0", *, hook="See the source", objective="sales"):
     }
 
 
-def critique(verdict="pass", ref="frame:0"):
+def critique(verdict="pass", ref="scene:0"):
     check = {"pass": "pass", "revise": "fail", "unknown": "unknown"}[verdict]
     return {
         "verdict": verdict,
@@ -94,17 +113,17 @@ def revision(instruction="Remove unsupported claim", decision="revise"):
     return {"decision": decision, "instruction": instruction}
 
 
-def script(ref="frame:0", *, verdict="pass", objective="sales"):
+def script(ref="scene:0", *, verdict="pass", objective="sales"):
     # Source IDs passed by API fixtures select this source, not grounding evidence.
     # Negative cases set literal invalid refs after building this valid script.
     if ref.startswith("source:"):
-        ref = "frame:0"
+        ref = "scene:0"
     return [
         plan(),
-        footage(ref),
+        footage(),
         strategy(objective),
         edits(ref, objective=objective),
-        critique(verdict, ref),
+        critique(verdict, ref if ref.startswith("scene:") else "scene:0"),
     ]
 
 
@@ -116,19 +135,35 @@ class ScriptedModels:
         self.calls = []
         self.required = []
         self.after_call = None
+        self.sees = True
+        self.batches = []
+        self.closeups = []
 
     def require(self, identifier, kind):
         self.required.append((identifier, kind))
 
+    def vision(self, identifier):
+        return self.sees
+
+    def run_batch(self, job_id, model_id, requests):
+        """Close looks. Unscripted, they are unavailable and production carries on without them."""
+        self.batches.append(copy.deepcopy(requests))
+        scripted = self.closeups[: len(requests)]
+        return [
+            {"output": json.dumps(scripted[index])} if index < len(scripted) else {"error": "unscripted"}
+            for index in range(len(requests))
+        ]
+
     def run(self, job_id, model_id, action, **payload):
         prompt = payload["prompt"]
         schema_text, data_text = prompt.split("\nSCHEMA:\n", 1)[1].split("\nDATA:\n", 1)
+        # The grammar the model is held to is exactly the schema it is shown.
+        assert payload["schema"] == json.loads(schema_text)
         self.calls.append(
             {
                 "job_id": job_id,
                 "model_id": model_id,
                 "action": action,
-                "schema": json.loads(schema_text),
                 "data": json.loads(data_text),
                 **payload,
             }
@@ -172,7 +207,10 @@ class Harness:
         )
         self.config = {"brand": "Original brand", "objective": "sales", "language": "en", "custom_event": ""}
         self.rendered = []
-        self.sampled_frames = [{"time": 0.5, "path": "sample.jpg"}, {"time": 1.5, "path": "sample-1.jpg"}]
+        # Two one-second scenes: scene:0 covers 0-1s, scene:1 covers 1-2s.
+        self.board = board("source", 2.0, scenes=2)
+        self.watched = []
+        self.still_requests = []
         self.transcribe = Mock(side_effect=AssertionError("Silent source must not be transcribed"))
         self.baseline = Mock(side_effect=AssertionError("Team must not invoke baseline"))
         self.engine = self.new_engine()
@@ -192,6 +230,30 @@ class Harness:
         )
         return {"clip_id": identifier}
 
+    def storyboard(self, job_id, video, model_id, progress=None):
+        self.watched.append((job_id, video["id"], model_id))
+        return self.board
+
+    def stills(self, job_id, video, ranges, per_range):
+        self.still_requests.append((list(ranges), per_range))
+        return [
+            {"time": round((start + end) / 2, 2), "path": f"still-{index}.jpg", "range": index}
+            for index, (start, end) in enumerate(ranges)
+        ]
+
+    def dense_stills(self, job_id, video, ranges, per_range):
+        """Several frames per range, as the real extractor returns."""
+        self.still_requests.append((list(ranges), per_range))
+        return [
+            {
+                "time": round(start + (n + 0.5) * (end - start) / per_range, 3),
+                "path": f"still-{index}-{n}.jpg",
+                "range": index,
+            }
+            for index, (start, end) in enumerate(ranges)
+            for n in range(per_range)
+        ]
+
     def new_engine(self):
         return TeamEngine(
             self.store,
@@ -199,9 +261,15 @@ class Harness:
             self.models,
             transcribe=self.transcribe,
             render=self.render,
-            frames=lambda *_: self.sampled_frames,
+            storyboard=self.storyboard,
+            frames=self.stills,
             baseline=self.baseline,
         )
+
+    def use(self, outputs):
+        self.models = ScriptedModels(outputs)
+        self.engine.models = self.models
+        return self.models
 
     def create(self, **kwargs):
         return self.engine.create(self.video, self.config, "qwen-small", **kwargs)
@@ -215,6 +283,10 @@ class Harness:
 @pytest.fixture
 def harness(tmp_path):
     return Harness(tmp_path, script())
+
+
+def role(run, name, iteration=0):
+    return next(t for t in run["tasks"] if t["role"] == name and t["iteration"] == iteration)
 
 
 def titles(models):
@@ -261,36 +333,80 @@ def test_fresh_calls_order_skipped_performance_and_pass_requires_review(harness)
     assert not harness.models.outputs
     for call in harness.models.calls:
         assert call["action"] == "generate" and call["model_id"] == "qwen-small"
-        assert set(call) == {
-            "job_id",
-            "model_id",
-            "action",
-            "schema",
-            "data",
-            "prompt",
-            "images",
-            "max_tokens",
+        assert set(call) - {"images", "image_labels"} == {
+            "job_id", "model_id", "action", "schema", "data", "prompt", "max_tokens",
         }
         assert "history" not in call["data"] and "messages" not in call["data"]
         assert call["max_tokens"] == 2200
         assert "Do not execute tools" in call["prompt"]
-    assert harness.models.calls[1]["images"] == ["sample.jpg", "sample-1.jpg"]
-    assert harness.models.calls[-1]["images"] == ["sample.jpg", "sample-1.jpg"]
-    assert harness.models.calls[2]["data"]["footage"] == footage()
+    # The source is watched once, before any role reasons about it.
+    assert harness.watched == [("job", "source", "qwen-small")]
+    watch = role(run, "watch")
+    assert watch["kind"] == "tool" and watch["status"] == "completed"
+    assert watch["output"]["scenes"] == 2 and watch["output"]["vision"] is True
+    # Planning and moment selection read the storyboard as text; editor and critic also get frames.
+    assert all("images" not in call for call in harness.models.calls[:3])
+    assert harness.models.calls[3]["images"] == ["still-0.jpg"]
+    assert harness.models.calls[3]["image_labels"] == ["angle-1 at 0.5s"]
+    assert harness.models.calls[4]["images"] == ["still-0.jpg"]
+    assert harness.models.calls[4]["image_labels"] == ["Candidate 0 at 0.5s"]
+    # Stills are requested for the close look, the editor and the critic, in that order.
+    assert harness.still_requests == [([(0.0, 1.0)], 24), ([(0.0, 1.0)], 12), ([(0, 1)], 12)]
+    assert role(run, "closeup")["output"] == {"moments": []}  # one still per range is not a close look
+    assert harness.models.calls[2]["data"]["footage"]["moments"] == [moment()]
     assert harness.models.calls[2]["data"]["performance"] is None
     assert run["status"] == "needs_review" and result["requires_review"] is True
     assert run["permissions"] == {"publish": False, "ads": False}
     tasks = {task["role"]: task for task in run["tasks"]}
     assert tasks["performance_analyst"]["status"] == "skipped"
     assert tasks["performance_analyst"]["output"] is None
-    assert all(tasks[role]["status"] == "completed" for role in ROLES if role != "performance_analyst")
+    assert all(tasks[name]["status"] == "completed" for name in ROLES if name != "performance_analyst")
     assert tasks["producer"]["output"] == plan()
     assert run["elapsed_seconds"] >= 0
     assert "not model peak VRAM" in run["resource_observations"]["measurement"]
     clip = harness.store.get("clips", result["clip_ids"][0])
     assert clip["approved"] is False and clip["team_review_status"] == "pass"
-    assert harness.rendered[0]["_team"]["team_run_id"] == run["id"]
-    assert harness.rendered[0]["_team"]["team_checks"] == critique()["checks"]
+    team = harness.rendered[0]["_team"]
+    assert team["team_run_id"] == run["id"] and team["team_checks"] == critique()["checks"]
+    # Why this moment travels with the clip for the reviewer.
+    assert (team["reason"], team["moment_summary"], team["scene_refs"]) == (
+        "Supported source range", "Visible source", ["scene:0"],
+    )
+
+
+def test_storyboard_is_the_evidence_and_models_can_only_cite_what_exists(harness):
+    harness.board["scenes"][1].update(usable=False, visual="Lens covered")
+    run, _ = harness.execute()
+    evidence = run["context"]["evidence"]
+    # Unusable footage is not offered to any role.
+    assert set(evidence) == {"source:source", "scene:0"}
+    assert evidence["scene:0"]["seen"] == "Visible source scene 0"
+    assert (evidence["scene:0"]["start"], evidence["scene:0"]["end"]) == (0.0, 1.0)
+    analyst = harness.models.calls[1]
+    assert [row["ref"] for row in analyst["data"]["storyboard"]] == ["scene:0"]
+    assert analyst["schema"]["$defs"]["Moment"]["properties"]["scenes"]["items"] == {
+        "type": "string", "enum": ["scene:0"],
+    }
+    assert analyst["schema"]["properties"]["moments"]["maxItems"] == 3
+    editor = harness.models.calls[3]["schema"]["$defs"]["Candidate"]["properties"]
+    assert editor["angle_id"]["enum"] == ["angle-1"]
+    assert editor["evidence_refs"]["items"]["enum"] == ["scene:0"]
+    critic = harness.models.calls[4]["schema"]["$defs"]["Finding"]["properties"]
+    assert critic["candidate_index"]["maximum"] == 0
+    assert critic["evidence_refs"]["items"]["enum"] == ["source:source", "scene:0"]
+    # The producer plans from a brief, not from the whole evidence set.
+    assert "evidence" not in harness.models.calls[0]["data"]["context"]
+    assert harness.models.calls[0]["data"]["context"]["storyboard"]["scenes"] == 1
+
+
+def test_no_usable_footage_stops_before_any_model_call(harness):
+    for scene in harness.board["scenes"]:
+        scene["usable"] = False
+    run = harness.create()
+    with pytest.raises(WorkError, match="No usable footage"):
+        harness.engine.execute(run["id"], "job")
+    assert not harness.models.calls and not harness.rendered
+    assert harness.engine.get(run["id"])["status"] == "failed"
 
 
 def test_all_six_roles_observed_performance_keeps_actual_provenance(harness):
@@ -306,8 +422,7 @@ def test_all_six_roles_observed_performance_keeps_actual_provenance(harness):
     }
     outputs = script()
     outputs.insert(2, performance)
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run, _ = harness.execute()
     assert titles(harness.models) == ["Plan", "Footage", "Performance", "Strategy", "Edits", "Critique"]
     observations = harness.models.calls[2]["data"]["observations"]
@@ -319,106 +434,150 @@ def test_all_six_roles_observed_performance_keeps_actual_provenance(harness):
     assert all(task["status"] == "completed" for task in run["tasks"])
 
 
-def test_schema_correction_repairs_excess_evidence_refs_before_dependent_calls(harness):
+@pytest.mark.parametrize(
+    "cited,expected",
+    [
+        (["scene:1"], (1.0, 2.0, ["scene:1"])),
+        (["scene:0", "scene:1"], (0.0, 2.0, ["scene:0", "scene:1"])),
+        (["scene:1", "scene:0"], (0.0, 2.0, ["scene:0", "scene:1"])),
+        # Scenes that are not adjacent to the first-cited one are not stitched into its range.
+        (["scene:0", "scene:3"], (0.0, 1.0, ["scene:0"])),
+        (["scene:9", "scene:2"], (2.0, 3.0, ["scene:2"])),
+    ],
+)
+def test_moment_ranges_are_measured_from_cited_scenes(harness, cited, expected):
+    harness.video["duration"] = 4
+    harness.store.put("videos", harness.video)
+    harness.board = board("source", 4.0, scenes=4)
+    outputs = script()
+    outputs[1] = footage(*cited)
+    start, end, refs = expected
+    outputs[3]["candidates"][0].update(start=start, end=end, evidence_refs=[refs[0]])
+    outputs[4] = critique("pass")
+    harness.use(outputs)
+    run, _ = harness.execute()
+    accepted = role(run, "footage_analyst")["output"]["moments"][0]
+    assert (accepted["start"], accepted["end"], accepted["scenes"]) == (start, end, refs)
+    assert accepted["evidence_refs"] == refs
+    assert (harness.rendered[0]["start"], harness.rendered[0]["end"]) == (start, end)
+
+
+def test_long_moments_are_capped_around_the_first_cited_scene(harness):
+    harness.video["duration"] = 360
+    harness.store.put("videos", harness.video)
+    harness.board = board("source", 360.0, scenes=4)  # 90-second scenes
+    outputs = script()
+    outputs[1] = footage("scene:1", "scene:0", "scene:2")
+    outputs[3]["candidates"][0].update(start=95, end=140, evidence_refs=["scene:1"])
+    harness.use(outputs)
+    run, _ = harness.execute()
+    accepted = role(run, "footage_analyst")["output"]["moments"][0]
+    # Three 90s scenes would be 270s; the scene farthest from the first cited one is dropped.
+    assert accepted["end"] - accepted["start"] == 180 and "scene:1" in accepted["scenes"]
+    assert len(accepted["scenes"]) == 2
+
+
+def test_duplicate_or_ungrounded_moments_are_omitted_and_noted(harness):
+    outputs = script()
+    outputs[1]["moments"] += [
+        {"scenes": ["scene:0"], "summary": "Same range again"},
+        {"scenes": ["source:source"], "summary": "Metadata is not footage"},
+    ]
+    harness.use(outputs)
+    run, _ = harness.execute()
+    accepted = role(run, "footage_analyst")["output"]
+    assert accepted["moments"] == [moment()]
+    assert "omitted" in accepted["limitations"]
+    assert run["status"] == "needs_review" and len(harness.rendered) == 1
+
+
+def test_requested_clip_count_bounds_moments_angles_and_candidates(harness):
+    harness.video["duration"] = 6
+    harness.store.put("videos", harness.video)
+    harness.board = board("source", 6.0, scenes=6)
+    harness.config["clip_count"] = 2
+    outputs = script()
+    outputs[1]["moments"] = [{"scenes": [f"scene:{i}"], "summary": f"Moment {i}"} for i in range(4)]
+    outputs[2]["angles"] = [
+        {**strategy()["angles"][0], "id": f"angle-{i + 1}", "moment": f"moment-{i + 1}"} for i in range(2)
+    ]
+    outputs[3]["candidates"] = [
+        {**edits()["candidates"][0], "angle_id": f"angle-{i + 1}", "start": i, "end": i + 1,
+         "evidence_refs": [f"scene:{i}"], "hook": f"Clip {i}"}
+        for i in range(2)
+    ]
+    harness.use(outputs)
+    run, result = harness.execute()
+    assert run["clip_count"] == 2
+    assert len(role(run, "footage_analyst")["output"]["moments"]) == 2
+    assert harness.models.calls[1]["schema"]["properties"]["moments"]["maxItems"] == 2
+    assert harness.models.calls[2]["schema"]["properties"]["angles"]["maxItems"] == 2
+    assert harness.models.calls[2]["schema"]["$defs"]["Angle"]["properties"]["moment"]["enum"] == [
+        "moment-1", "moment-2",
+    ]
+    assert [clip["hook"] for clip in harness.rendered] == ["Clip 0", "Clip 1"]
+    assert len(result["clip_ids"]) == 2
+
+
+def test_schema_correction_repairs_a_malformed_handoff_before_dependent_calls(harness):
     outputs = script()
     oversized = copy.deepcopy(outputs[1])
-    oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17
+    oversized["moments"][0]["scenes"] = ["scene:0"] * 5
     outputs.insert(1, oversized)
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run, _ = harness.execute()
     assert titles(harness.models) == ["Plan", "Footage", "Footage", "Strategy", "Edits", "Critique"]
     correction = harness.models.calls[2]["data"]["format_correction"]
-    assert correction[0]["field"] == "moments.0.evidence_refs"
-    assert "at most 16" in correction[0]["problem"]
+    assert correction[0]["field"] == "moments.0.scenes"
+    assert "at most 4" in correction[0]["problem"]
     assert run["status"] == "needs_review"
     assert len(harness.rendered) == 1
-    assert next(task for task in run["tasks"] if task["role"] == "footage_analyst")["output"] == footage()
+    assert role(run, "footage_analyst")["output"]["moments"] == [moment()]
 
 
-def test_schema_correction_stops_after_one_failed_retry(harness):
-    oversized = footage()
-    oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17
-    harness.models = ScriptedModels([plan(), oversized, oversized])
-    harness.engine.models = harness.models
-    run = harness.create()
-    with pytest.raises(WorkError, match="invalid structured handoff"):
-        harness.engine.execute(run["id"], "job")
-    assert titles(harness.models) == ["Plan", "Footage", "Footage"]
-    assert not harness.rendered
-    assert harness.engine.get(run["id"])["status"] == "failed"
-
-
-def test_footage_keeps_grounded_moments_when_other_citations_are_outside_the_range(harness):
+@pytest.mark.parametrize("problem", ["malformed", "ungrounded"])
+def test_unusable_moment_selection_falls_back_to_the_measured_shortlist(harness, problem):
+    harness.board["scenes"][1].update(score=0.9, visual="A decisive rally")
+    rejected = footage("source:invented")
+    if problem == "malformed":
+        rejected["moments"][0]["scenes"] = ["scene:0"] * 5
     outputs = script()
-    outputs[1]["moments"].append({
-        "start": 0, "end": 0.25, "summary": "Unsupported frame timing", "evidence_refs": ["frame:1"]
-    })
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
-    run, _ = harness.execute()
-    accepted = next(task for task in run["tasks"] if task["role"] == "footage_analyst")["output"]
-    assert accepted["moments"] == footage()["moments"]
-    assert "omitted" in accepted["limitations"]
-    assert harness.models.calls[2]["data"]["footage"] == accepted
-    assert run["status"] == "needs_review"
-    assert len(harness.rendered) == 1
+    outputs[1:2] = [rejected, rejected]
+    outputs[3]["angles"][0]["moment"] = "moment-2"
+    outputs[4]["candidates"][0].update(start=1, end=2, evidence_refs=["scene:1"])
+    outputs[5] = critique("pass", "scene:1")
+    harness.use(outputs)
+    run, result = harness.execute()
+    assert titles(harness.models) == ["Plan", "Footage", "Footage", "Strategy", "Edits", "Critique"]
+    assert role(run, "footage_analyst")["status"] == "failed"
+    shortlist = role(run, "shortlist")
+    assert shortlist["kind"] == "tool" and shortlist["status"] == "completed"
+    # Highest measured and observed interest first; described by what the watcher saw.
+    assert [m["scenes"] for m in shortlist["output"]["moments"]] == [["scene:0"], ["scene:1"]]
+    assert shortlist["output"]["moments"][1]["summary"] == "A decisive rally"
+    assert run["status"] == "needs_review" and "shortlisted from measured signals" in run["stop_reason"]
+    assert len(harness.rendered) == 1 and result["requires_review"] is True
+    assert not harness.store.all("clips")[0]["approved"]
 
 
 def test_footage_keeps_valid_moments_when_another_row_violates_the_schema(harness):
     outputs = script()
     rejected = copy.deepcopy(outputs[1]["moments"][0])
-    rejected["evidence_refs"] = ["frame:0"] * 17
+    rejected["scenes"] = ["scene:0"] * 5
     outputs[1]["moments"].append(rejected)
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run, _ = harness.execute()
-    accepted = next(t for t in run["tasks"] if t["role"] == "footage_analyst")["output"]
-    assert accepted["moments"] == footage()["moments"]
+    accepted = role(run, "footage_analyst")["output"]
+    assert accepted["moments"] == [moment()]
     assert "structured fields were invalid" in accepted["limitations"]
     assert titles(harness.models) == ["Plan", "Footage", "Strategy", "Edits", "Critique"]
     assert len(harness.rendered) == 1
 
 
-@pytest.mark.parametrize("case", ["valid", "wrong_source", "out_of_bounds", "no_evidence"])
-def test_rejected_footage_can_only_reuse_same_source_time_grounded_analysis(harness, case):
-    analysis = {"video_id": "source", "candidates": [{
-        "start": 0, "end": 2,
-        "reason": "Previously analyzed source window"
-    }]}
-    if case == "wrong_source":
-        analysis["video_id"] = "another-source"
-    elif case == "out_of_bounds":
-        analysis["candidates"][0]["end"] = 3
-    elif case == "no_evidence":
-        analysis["candidates"][0]["end"] = 0.25
-    harness.store.patch("videos", "source", analysis=analysis)
-    rejected = footage("source:invented")
-    harness.models = ScriptedModels([plan(), rejected, rejected] + script()[2:])
-    harness.engine.models = harness.models
-    if case != "valid":
-        run = harness.create()
-        with pytest.raises(WorkError):
-            harness.engine.execute(run["id"], "job")
-        assert not harness.rendered
-        return
-    run, _ = harness.execute()
-    assert run["status"] == "needs_review"
-    assert "Reused revalidated saved source analysis" in run["stop_reason"]
-    assert next(t for t in run["tasks"] if t["role"] == "footage_analyst")["status"] == "failed"
-    reused = next(t for t in run["tasks"] if t["role"] == "reuse_footage")
-    assert reused["kind"] == "tool" and reused["status"] == "completed"
-    assert reused["output"]["moments"][0]["evidence_refs"] == ["frame:0", "frame:1"]
-    assert analysis["candidates"][0]["reason"] not in json.dumps(harness.models.calls[3]["data"])
-    assert len(harness.rendered) == 1
-    assert not harness.store.all("clips")[0]["approved"]
-
-
 def test_schema_correction_honors_cancellation_before_retry(harness):
     oversized = footage()
-    oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17
-    harness.models = ScriptedModels([plan(), oversized])
-    harness.engine.models = harness.models
+    oversized["moments"][0]["scenes"] = ["scene:0"] * 5
+    harness.use([plan(), oversized])
     harness.models.after_call = lambda calls: setattr(harness.jobs, "cancelled", calls == 2)
     run = harness.create()
     with pytest.raises(JobCancelled):
@@ -432,11 +591,12 @@ def test_schema_correction_honors_cancellation_before_retry(harness):
 def test_grounding_correction_revalidates_footage_and_editor_before_dependents(harness, role_index):
     outputs = script()
     rejected = copy.deepcopy(outputs[role_index])
-    rows = rejected["moments" if role_index == 1 else "candidates"]
-    rows[0]["end"] = 3
+    if role_index == 1:
+        rejected["moments"][0]["scenes"] = ["scene:9"]
+    else:
+        rejected["candidates"][0]["angle_id"] = "angle-2"
     outputs.insert(role_index, rejected)
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run, _ = harness.execute()
     correction = harness.models.calls[role_index + 1]["data"]
     assert correction["previous_handoff"] == rejected
@@ -447,10 +607,7 @@ def test_grounding_correction_revalidates_footage_and_editor_before_dependents(h
 
 
 def test_grounding_correction_honors_cancellation(harness):
-    rejected = footage()
-    rejected["moments"][0]["end"] = 3
-    harness.models = ScriptedModels([plan(), rejected])
-    harness.engine.models = harness.models
+    harness.use([plan(), footage("scene:9")])
     harness.models.after_call = lambda calls: setattr(harness.jobs, "cancelled", calls == 2)
     run = harness.create()
     with pytest.raises(JobCancelled):
@@ -459,50 +616,109 @@ def test_grounding_correction_honors_cancellation(harness):
     assert not harness.rendered
 
 
-@pytest.mark.parametrize("invalid_angle", [
-    {"id": "angle-2", "moment_index": 1},
-    {"id": "angle-1"},
-    {"id": "angle-2", "objective": "traffic"},
-])
-def test_strategy_keeps_valid_angles_when_another_cannot_be_used(harness, invalid_angle):
+def test_strategy_repairs_labels_and_objective_and_keeps_one_angle_per_moment(harness):
+    harness.video["duration"] = 4
+    harness.store.put("videos", harness.video)
+    harness.board = board("source", 4.0, scenes=4)
     outputs = script()
-    rejected = {**outputs[2]["angles"][0], **invalid_angle}
-    outputs[2]["angles"].append(rejected)
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    outputs[1]["moments"].append({"scenes": ["scene:2"], "summary": "Second moment"})
+    first = outputs[2]["angles"][0]
+    outputs[2]["angles"] = [
+        {**first, "id": "angle-3", "moment": "moment-2", "objective": "traffic"},  # label and objective are set, not judged
+        {**first, "hook": "Same footage again"},
+        {**first, "id": "angle-1", "moment": "moment-2"},  # a second angle on one moment is the same clip
+        {**first, "moment": "moment-5"},  # there is no such moment
+    ]
+    outputs[3]["candidates"][0].update(start=2, end=3, evidence_refs=["scene:2"])
+    harness.use(outputs)
     run, _ = harness.execute()
-    assert harness.models.calls[3]["data"]["strategy"] == strategy()
-    assert run["status"] == "needs_review"
-    assert "Omitted 1 invalid creative angles" in run["stop_reason"]
-    assert len(harness.rendered) == 1
+    accepted = role(run, "creative_strategist")["output"]["angles"]
+    assert [(a["id"], a["objective"], a["moment"], a["moment_index"]) for a in accepted] == [
+        ("angle-1", "sales", "moment-2", 1), ("angle-2", "sales", "moment-1", 0),
+    ]
+    assert harness.models.calls[3]["schema"]["$defs"]["Candidate"]["properties"]["angle_id"]["enum"] == [
+        "angle-1", "angle-2",
+    ]
+    assert "Omitted 2 invalid creative angles" in run["stop_reason"]
+    assert run["status"] == "needs_review" and len(harness.rendered) == 1
 
 
-def test_editor_receives_only_accepted_moment_evidence_and_explicit_angle_ranges(harness):
+def test_discovery_keeps_the_strategists_intended_outcomes(harness):
+    harness.config["objective"] = "discovery"
+    harness.use(script(objective="traffic"))
+    run, _ = harness.execute()
+    assert role(run, "creative_strategist")["output"]["angles"][0]["objective"] == "traffic"
+    assert harness.rendered[0]["objective"] == "traffic"
+
+
+def test_editor_zooms_into_selected_moments_with_their_speech(harness):
     harness.store.patch("videos", "source", transcript={"segments": [
-        {"start": 0, "end": 1, "text": "Unselected speech"}
+        {"start": 0.2, "end": 0.9, "text": "Speech inside the moment"},
+        {"start": 1.2, "end": 1.9, "text": "Speech in an unselected scene"},
     ]})
     run, _ = harness.execute()
     editor = harness.models.calls[3]["data"]
-    assert set(run["context"]["evidence"]) >= {"frame:0", "frame:1", "transcript:0", "source:source"}
-    assert set(editor["evidence"]) == {"frame:0", "transcript:selected:0"}
-    assert editor["evidence"]["transcript:selected:0"]["segments"][0]["text"] == "Unselected speech"
+    # Speech joins the evidence only for the moments that were selected.
+    assert set(run["context"]["evidence"]) == {"source:source", "scene:0", "scene:1", "transcript:0"}
+    assert set(editor["evidence"]) == {"scene:0", "transcript:0"}
+    assert editor["evidence"]["transcript:0"] == {"start": 0.2, "end": 0.9, "text": "Speech inside the moment"}
     assert editor["allowed_source_ranges"] == {
-        "angle-1": {"start": 0, "end": 2, "objective": "sales", "evidence_refs": ["transcript:selected:0", "frame:0"]}
+        "angle-1": {
+            "start": 0.0, "end": 1.0, "objective": "sales",
+            "evidence_refs": ["scene:0", "transcript:0"], "peak_time": 0.5,
+            "suggested_range": {"start": 0.0, "end": 1.0},
+        }
     }
+    critic = harness.models.calls[4]["data"]
+    assert set(critic["evidence"]) == {"source:source", "scene:0", "transcript:0"}
+    assert critic["clip_speech"] == ["Speech inside the moment"]
 
 
-@pytest.mark.parametrize("role_index", [1, 3])
-def test_grounding_correction_stops_after_one_rejected_retry(harness, role_index):
-    outputs = script()[:role_index + 1]
-    rejected = outputs[role_index]
-    rejected["moments" if role_index == 1 else "candidates"][0]["end"] = 3
-    outputs.append(copy.deepcopy(rejected))
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+@pytest.mark.parametrize(
+    "proposed,rendered,adjusted",
+    [
+        ((0, 1), (0, 1), False),
+        ((0.2, 0.8), (0.0, 1.0), False),  # under a second is not a clip: widened to the moment
+        ((0, 3), (0.0, 1.0), True),  # runs past its moment: trimmed to it
+        ((1.4, 1.9), (0.0, 1.0), True),  # misses its moment: centred on the measured peak
+    ],
+)
+def test_editor_ranges_are_fitted_inside_their_moment_instead_of_rejected(harness, proposed, rendered, adjusted):
+    outputs = script()
+    outputs[3]["candidates"][0].update(start=proposed[0], end=proposed[1])
+    harness.use(outputs)
+    harness.execute()
+    assert titles(harness.models) == ["Plan", "Footage", "Strategy", "Edits", "Critique"]
+    assert (harness.rendered[0]["start"], harness.rendered[0]["end"]) == rendered
+    assert ("adjusted" in harness.rendered[0]) is adjusted
+    # The critic reviews the range that will actually be rendered.
+    reviewed = harness.models.calls[4]["data"]["candidates"][0]
+    assert (reviewed["start"], reviewed["end"]) == rendered
+
+
+def test_editor_objective_and_references_are_repaired_to_the_assigned_angle(harness):
+    outputs = script()
+    outputs[3]["candidates"][0].update(objective="traffic", evidence_refs=["scene:1", "source:invented"])
+    harness.use(outputs)
+    run, _ = harness.execute()
+    assert harness.rendered[0]["objective"] == "sales"
+    assert harness.rendered[0]["evidence_refs"] == ["scene:0"]
+    assert run["status"] == "needs_review"
+
+
+@pytest.mark.parametrize("role_index", [2, 3])
+def test_unusable_strategy_or_edit_stops_before_any_render(harness, role_index):
+    outputs = script()[: role_index + 1]
+    if role_index == 2:
+        outputs[2]["angles"][0]["moment"] = "moment-5"
+    else:
+        outputs[3]["candidates"][0]["angle_id"] = "angle-2"
+        outputs.append(copy.deepcopy(outputs[3]))
+    harness.use(outputs)
     run = harness.create()
     with pytest.raises(WorkError):
         harness.engine.execute(run["id"], "job")
-    assert len(harness.models.calls) == role_index + 2
+    assert not harness.models.outputs
     assert not harness.rendered
     assert harness.engine.get(run["id"])["status"] == "failed"
 
@@ -518,46 +734,14 @@ def test_unknown_or_wrong_account_metrics_do_not_invent_performance(harness, met
     assert not any(ref.startswith("observation:") for ref in run["context"]["evidence"])
 
 
-@pytest.mark.parametrize(
-    "bad",
-    [
-        "bad_evidence",
-        "out_of_bounds",
-        "changed_objective",
-        "editor_range",
-        "editor_objective",
-        "editor_angle",
-        "editor_refs",
-        "permissions",
-        "tools",
-        "truncated",
-        "duplicate_roles",
-    ],
-)
-def test_invalid_handoff_fails_before_any_render(harness, bad):
+@pytest.mark.parametrize("bad", ["permissions", "tools", "truncated"])
+def test_invalid_plan_fails_before_any_render(harness, bad):
     outputs = script()
-    if bad == "bad_evidence":
-        outputs[1]["moments"][0]["evidence_refs"] = ["source:invented"]
-    elif bad == "out_of_bounds":
-        outputs[1]["moments"][0]["end"] = 3
-    elif bad == "changed_objective":
-        outputs[2]["angles"][0]["objective"] = "traffic"
-    elif bad == "editor_range":
-        outputs[3]["candidates"][0]["end"] = 3
-    elif bad == "editor_objective":
-        outputs[3]["candidates"][0]["objective"] = "traffic"
-    elif bad == "editor_angle":
-        outputs[3]["candidates"][0]["angle_id"] = "angle-2"
-    elif bad == "editor_refs":
-        outputs[3]["candidates"][0]["evidence_refs"] = ["frame:1"]  # Exists, but not in assigned moment.
-    elif bad in {"permissions", "tools"}:
+    if bad in {"permissions", "tools"}:
         outputs[0][bad] = {"publish": True}
-    elif bad == "truncated":
+    else:
         outputs[0] = '{"summary":"incomplete", "tasks":['
-    elif bad == "duplicate_roles":
-        outputs[0]["tasks"][0]["role"] = "editor"
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run = harness.create()
     with pytest.raises(WorkError):
         harness.engine.execute(run["id"], "job")
@@ -567,6 +751,18 @@ def test_invalid_handoff_fails_before_any_render(harness, bad):
     assert not any(task["status"] in {"queued", "running"} for task in persisted["tasks"])
     assert not harness.rendered and not harness.store.all("clips")
     assert persisted["permissions"] == {"publish": False, "ads": False}
+
+
+def test_plan_with_a_duplicated_role_gets_the_standard_assignment(harness):
+    outputs = script()
+    outputs[0]["tasks"][0]["role"] = "editor"  # footage_analyst is now missing, editor appears twice
+    harness.use(outputs)
+    run, _ = harness.execute()
+    tasks = {t["role"]: t["instruction"] for t in run["plan"]["tasks"]}
+    assert set(tasks) == set(ROLES[1:])
+    assert tasks["footage_analyst"].startswith("Find the strongest")
+    assert tasks["editor"] == "Complete footage_analyst using supplied evidence"
+    assert run["status"] == "needs_review"
 
 
 @pytest.mark.parametrize(
@@ -611,12 +807,15 @@ def test_thinking_is_not_saved_as_ledger_output():
     )
 
 
-@pytest.mark.parametrize("check", ["fail", "unknown"])
-def test_pass_cannot_override_unresolved_checks(check):
+@pytest.mark.parametrize("check,verdict", [("fail", "revise"), ("unknown", "unknown")])
+def test_pass_with_unresolved_checks_is_read_as_the_stricter_verdict(check, verdict):
     value = critique()
     value["checks"]["claims"] = check
-    with pytest.raises(WorkError):
-        decode_output(json.dumps(value), Critique)
+    assert decode_output(json.dumps(value), Critique)["verdict"] == verdict
+    blocking = critique()
+    blocking["findings"] = critique("revise")["findings"]
+    assert decode_output(json.dumps(blocking), Critique)["verdict"] == "revise"
+    assert decode_output(json.dumps(critique()), Critique)["verdict"] == "pass"
 
 
 def test_default_two_revisions_exhaust_budget_without_approval(harness):
@@ -628,8 +827,7 @@ def test_default_two_revisions_exhaust_budget_without_approval(harness):
         edits(hook="Third edit"),
         critique("revise"),
     ]
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run, result = harness.execute()
     assert run["revision_budget"] == 2 and run["revision_count"] == 2
     assert titles(harness.models).count("Critique") == 3
@@ -643,9 +841,8 @@ def test_default_two_revisions_exhaust_budget_without_approval(harness):
 
 def test_invalid_revision_retains_validated_draft_with_unresolved_review(harness):
     invalid = edits(hook="Rejected revision")
-    invalid["candidates"][0]["evidence_refs"] = ["source:invented"]
-    harness.models = ScriptedModels(script(verdict="revise") + [revision(), invalid, invalid])
-    harness.engine.models = harness.models
+    invalid["candidates"][0]["angle_id"] = "angle-2"
+    harness.use(script(verdict="revise") + [revision(), invalid, invalid])
     run, result = harness.execute()
     assert run["status"] == "needs_review"
     assert "Revision rejected" in run["stop_reason"]
@@ -655,7 +852,7 @@ def test_invalid_revision_retains_validated_draft_with_unresolved_review(harness
     clip = harness.store.get("clips", result["clip_ids"][0])
     assert clip["approved"] is False
     assert clip["team_review_status"] == "fail"
-    assert any(t["role"] == "editor" and t["iteration"] == 1 and t["status"] == "failed" for t in run["tasks"])
+    assert role(run, "editor", 1)["status"] == "failed"
 
 
 @pytest.mark.parametrize("case", ["reference", "index", "schema"])
@@ -667,8 +864,7 @@ def test_rejected_first_critic_allows_only_validated_unapproved_previews(harness
         outputs[-1]["findings"][0]["candidate_index"] = 1
     else:
         outputs[-1]["findings"][0]["evidence_refs"] *= 17
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run, result = harness.execute()
     assert run["status"] == "needs_review"
     assert "Critic review unavailable" in run["stop_reason"]
@@ -677,17 +873,14 @@ def test_rejected_first_critic_allows_only_validated_unapproved_previews(harness
     clip = harness.store.all("clips")[0]
     assert not clip["approved"] and clip["team_review_status"] == "unknown"
     assert set(clip["team_checks"].values()) == {"unknown"}
-    assert next(t for t in run["tasks"] if t["role"] == "critic")["status"] == "failed"
+    assert role(run, "critic")["status"] == "failed"
     assert titles(harness.models).count("Critique") == 1
     assert run["permissions"] == {"publish": False, "ads": False}
 
 
 def test_rejected_critic_recheck_retains_prior_edit_with_its_original_review(harness):
     rejected = critique("revise", "source:invented")
-    harness.models = ScriptedModels(script(verdict="revise") + [
-        revision(), edits(hook="Unreviewed replacement"), rejected
-    ])
-    harness.engine.models = harness.models
+    harness.use(script(verdict="revise") + [revision(), edits(hook="Unreviewed replacement"), rejected])
     run, result = harness.execute()
     assert run["status"] == "needs_review"
     assert "Critic recheck rejected" in run["stop_reason"]
@@ -696,15 +889,12 @@ def test_rejected_critic_recheck_retains_prior_edit_with_its_original_review(har
     assert harness.rendered[0]["hook"] == "See the source"
     assert harness.rendered[0]["_team"]["team_findings"] == critique("revise")["findings"]
     assert not harness.store.all("clips")[0]["approved"]
-    assert next(t for t in run["tasks"] if t["role"] == "critic" and t["iteration"] == 1)["status"] == "failed"
+    assert role(run, "critic", 1)["status"] == "failed"
     assert titles(harness.models).count("Critique") == 2
 
 
 def test_cancellation_during_critic_recheck_does_not_render_retained_drafts(harness):
-    harness.models = ScriptedModels(script(verdict="revise") + [
-        revision(), edits(hook="Replacement"), critique("pass")
-    ])
-    harness.engine.models = harness.models
+    harness.use(script(verdict="revise") + [revision(), edits(hook="Replacement"), critique("pass")])
     harness.models.after_call = lambda calls: setattr(harness.jobs, "cancelled", calls == 8)
     run = harness.create()
     with pytest.raises(JobCancelled):
@@ -713,13 +903,12 @@ def test_cancellation_during_critic_recheck_does_not_render_retained_drafts(harn
     assert harness.engine.get(run["id"])["status"] == "cancelled"
 
 
-def test_invalid_editor_candidate_does_not_discard_other_validated_drafts(harness):
+def test_unusable_editor_candidate_does_not_discard_other_validated_drafts(harness):
     outputs = script()
     invalid = copy.deepcopy(outputs[3]["candidates"][0])
-    invalid.update(end=3, hook="Rejected out-of-range candidate")
+    invalid.update(angle_id="angle-2", hook="Candidate for an angle that was never proposed")
     outputs[3]["candidates"].insert(0, invalid)
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run, result = harness.execute()
     assert run["status"] == "needs_review"
     assert "Omitted 1 invalid editor candidates" in run["stop_reason"]
@@ -738,8 +927,7 @@ def test_non_progress_stops_dependent_calls(harness, stop):
         outputs += [revision(), edits()]
     else:
         outputs += [revision(), edits(hook="Different edit"), critique("revise"), revision()]
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run, result = harness.execute()
     assert not harness.models.outputs
     assert titles(harness.models).count("Edits") == (1 if stop == "producer_stop" else 2)
@@ -766,16 +954,17 @@ def test_cancellation_before_render_retains_completed_handoffs(harness):
         harness.engine.execute(run["id"], "job")
     saved = harness.engine.get(run["id"])
     assert saved["status"] == "cancelled"
-    assert next(t for t in saved["tasks"] if t["role"] == "critic")["output"] == critique()
+    assert role(saved, "critic")["output"] == critique()
     assert not harness.rendered
     assert all(t["status"] not in {"queued", "running"} for t in saved["tasks"])
 
 
 def test_cancellation_before_second_render_retains_first_local_output(harness):
     outputs = script()
-    outputs[3]["candidates"].append({**outputs[3]["candidates"][0], "hook": "Second variant"})
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    outputs[3]["candidates"].append(
+        {**outputs[3]["candidates"][0], "start": 0.2, "end": 0.9, "hook": "Second variant"}
+    )
+    harness.use(outputs)
     original_check = harness.jobs.check
 
     def check(job):
@@ -794,7 +983,7 @@ def test_cancellation_before_second_render_retains_first_local_output(harness):
     assert saved["status"] == "cancelled" and saved["clip_ids"] == ["clip-1"]
     assert len(harness.store.all("clips")) == 1
     assert harness.store.get("clips", "clip-1")["team_run_id"] == run["id"]
-    assert next(t for t in saved["tasks"] if t["role"] == "render")["status"] == "completed"
+    assert role(saved, "render")["status"] == "completed"
 
 
 @pytest.mark.parametrize("status", ["queued", "running"])
@@ -823,10 +1012,10 @@ def test_settings_snapshot_and_baseline_receive_original_intent(harness):
         "job",
         harness.video,
         "qwen-small",
-        {**original, "_previous_observations": [], "_team_run_id": run["id"]},
+        {**original, "clip_count": 3, "_previous_observations": [], "_team_run_id": run["id"]},
     )
     assert harness.engine.get(run["id"])["context"]["settings"] == original
-    assert not harness.models.calls
+    assert not harness.models.calls and not harness.watched
 
 
 def test_baseline_comparisons_match_source_intent_and_preserve_unknown_metrics(harness):
@@ -869,7 +1058,7 @@ def test_team_inherits_actual_models_memory_guard_before_any_inference(harness, 
         harness.engine.execute(run["id"], "job")
     assert harness.engine.get(run["id"])["status"] == "failed"
     models.jobs.process.assert_not_called()
-    assert not harness.rendered
+    assert not harness.rendered and not harness.watched
 
 
 def test_performance_cannot_cite_source_as_an_actual_outcome(harness):
@@ -887,17 +1076,19 @@ def test_performance_cannot_cite_source_as_an_actual_outcome(harness):
             ]
         },
     )
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run = harness.create()
     with pytest.raises(WorkError, match="unknown evidence"):
         harness.engine.execute(run["id"], "job")
     assert titles(harness.models) == ["Plan", "Footage", "Performance"]
+    assert harness.models.calls[2]["schema"]["$defs"]["Recommendation"]["properties"]["evidence_refs"][
+        "items"
+    ]["enum"] == ["feedback:feedback", "observation:media", "event:manual"]
     assert not harness.rendered
     assert harness.engine.get(run["id"])["status"] == "failed"
 
 
-def test_audio_transcription_completes_before_footage_and_uses_snapshot_language(harness):
+def test_audio_is_transcribed_before_watching_and_uses_snapshot_language(harness):
     harness.video["has_audio"] = True
     harness.store.put("videos", harness.video)
     calls = []
@@ -912,29 +1103,57 @@ def test_audio_transcription_completes_before_footage_and_uses_snapshot_language
         return {"video_id": video["id"], "language": language}
 
     harness.engine.transcribe = transcribe
-    harness.models = ScriptedModels(script("transcript:0"))
-    harness.engine.models = harness.models
+    harness.use(script("transcript:0"))
     run = harness.create()
     harness.config["language"] = "fr"
     harness.engine.execute(run["id"], "job")
     saved = harness.engine.get(run["id"])
     assert calls == [("job", "source", "en")]
+    order = [t["role"] for t in sorted(saved["tasks"], key=lambda t: t["started_at"] or "") if t["started_at"]]
+    assert order.index("transcribe") < order.index("watch") < order.index("footage_analyst")
     assert saved["context"]["evidence"]["transcript:0"] == {
         "start": 0,
         "end": 1,
         "text": "Actual spoken words",
     }
-    assert next(task for task in saved["tasks"] if task["role"] == "transcribe")["status"] == "completed"
-    assert (
-        harness.models.calls[1]["data"]["context"]["evidence"]["transcript:0"]["text"]
-        == "Actual spoken words"
-    )
+    assert role(saved, "transcribe")["status"] == "completed"
+    assert harness.models.calls[3]["data"]["evidence"]["transcript:0"]["text"] == "Actual spoken words"
+    assert harness.rendered[0]["evidence_refs"] == ["transcript:0"]
+
+
+def test_missing_speech_model_still_produces_clips_from_pictures(harness):
+    harness.video["has_audio"] = True
+    harness.store.put("videos", harness.video)
+    harness.engine.can_transcribe = lambda: False
+    run, result = harness.execute()
+    harness.transcribe.assert_not_called()
+    listen = role(run, "transcribe")
+    assert listen["status"] == "skipped" and "speech model is not installed" in listen["error"]
+    assert run["status"] == "needs_review" and len(result["clip_ids"]) == 1
+    assert "no captions" in run["stop_reason"]
+
+
+def test_text_only_model_gets_no_frames(harness):
+    harness.models.sees = False
+    run, _ = harness.execute()
+    assert all("images" not in call for call in harness.models.calls)
+    assert not harness.still_requests
+    assert run["status"] == "needs_review"
+
+
+def test_unavailable_stills_do_not_stop_production(harness):
+    def broken(*_):
+        raise WorkError("Frame sampling failed.")
+
+    harness.engine.frames = broken
+    run, _ = harness.execute()
+    assert all("images" not in call for call in harness.models.calls)
+    assert run["status"] == "needs_review" and len(harness.rendered) == 1
 
 
 def test_passing_revision_preserves_initial_critic_findings_in_ledger(harness):
     outputs = script(verdict="revise") + [revision(), edits(hook="Corrected draft"), critique()]
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(outputs)
     run, result = harness.execute()
     critics = [task for task in run["tasks"] if task["role"] == "critic"]
     assert [task["output"]["verdict"] for task in critics] == ["revise", "pass"]
@@ -945,69 +1164,14 @@ def test_passing_revision_preserves_initial_critic_findings_in_ledger(harness):
     assert harness.store.get("clips", result["clip_ids"][0])["approved"] is False
 
 
-@pytest.mark.parametrize(
-    "case",
-    [
-        "source_only",
-        "feedback_only",
-        "metrics_only",
-        "manual_only",
-        "transcript_out_of_time",
-        "transcript_touching_boundary",
-        "frame_out_of_time",
-        "frame_and_feedback",
-    ],
-)
-def test_footage_requires_time_associated_source_evidence_before_dependents(harness, case):
-    seed_observations(harness.store)
-    harness.store.patch(
-        "videos",
-        "source",
-        transcript={"segments": [{"start": 1, "end": 2, "text": "Speech outside the proposed moment"}]},
-    )
-    outputs = script()
-    moment = outputs[1]["moments"][0]
-    refs = {
-        "source_only": ["source:source"],
-        "feedback_only": ["feedback:feedback"],
-        "metrics_only": ["observation:media"],
-        "manual_only": ["event:manual"],
-        "transcript_out_of_time": ["transcript:0"],
-        "transcript_touching_boundary": ["transcript:0"],
-        "frame_out_of_time": ["frame:1"],
-        "frame_and_feedback": ["frame:0", "feedback:feedback"],
-    }
-    moment["evidence_refs"] = refs[case]
-    if case == "transcript_out_of_time":
-        moment["end"] = 0.5
-    elif case in {"transcript_touching_boundary", "frame_out_of_time"}:
-        moment["end"] = 1
-    outputs.insert(1, copy.deepcopy(outputs[1]))
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
-    run = harness.create()
-    with pytest.raises(WorkError):
-        harness.engine.execute(run["id"], "job")
-    saved = harness.engine.get(run["id"])
-    assert saved["status"] == "failed"
-    assert titles(harness.models) == ["Plan", "Footage", "Footage"]
-    assert next(t for t in saved["tasks"] if t["role"] == "footage_analyst")["status"] == "failed"
-    assert not harness.rendered
-    assert [clip["id"] for clip in harness.store.all("clips")] == ["previous"]
-
-
-@pytest.mark.parametrize("ref", ["frame:0", "frame:1", "transcript:0"])
-def test_valid_timestamped_frame_or_overlapping_transcript_grounds_footage(harness, ref):
+@pytest.mark.parametrize("ref", ["scene:0", "transcript:0"])
+def test_editor_may_cite_its_scene_or_the_speech_inside_it(harness, ref):
     harness.store.patch(
         "videos",
         "source",
         transcript={"segments": [{"start": 0.25, "end": 0.75, "text": "Actual overlapping speech"}]},
     )
-    outputs = script(ref)
-    if ref == "frame:1":
-        outputs[3]["candidates"][0].update(start=1, end=2)
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    harness.use(script(ref))
     run, result = harness.execute()
     assert run["status"] == "needs_review" and result["review_status"] == "pass"
     assert harness.rendered[0]["evidence_refs"] == [ref]
@@ -1038,8 +1202,7 @@ def test_cancel_immediately_after_persist_retains_completed_operation_and_lineag
         harness.engine.execute(run["id"], "job")
     saved = harness.engine.get(run["id"])
     assert saved["status"] == "cancelled" and saved["clip_ids"] == ["clip-1"]
-    role = "render" if mode == "team" else "baseline"
-    task = next(t for t in saved["tasks"] if t["role"] == role)
+    task = role(saved, "render" if mode == "team" else "baseline")
     assert task["status"] == "completed" and task["output"] is not None
     clip = harness.store.get("clips", "clip-1")
     assert clip["team_run_id"] == run["id"] and clip["approved"] is False
@@ -1064,62 +1227,133 @@ def test_restart_recovers_persisted_team_render_before_callback_return(harness):
     )
     recovered = harness.new_engine().get(run["id"])
     assert recovered["status"] == "interrupted" and recovered["clip_ids"] == ["persisted"]
-    render = next(t for t in recovered["tasks"] if t["role"] == "render")
+    render = role(recovered, "render")
     assert render["status"] == "completed" and render["output"]["clip_id"] == "persisted"
     assert render["output"]["recovered_from_persisted_output"] is True
     assert not harness.models.calls
 
 
-def test_off_range_citation_is_dropped_when_other_evidence_grounds_the_moment(harness):
-    # Ping pong regression: the model cited one transcript segment just outside its range.
-    harness.store.patch(
-        "videos",
-        "source",
-        transcript={
-            "segments": [
-                {"start": 0.25, "end": 0.75, "text": "In range"},
-                {"start": 2.5, "end": 3, "text": "After"},
-            ]
-        },
-    )
-    outputs = script()
-    outputs[1]["moments"][0]["evidence_refs"] = ["frame:0", "transcript:1", "transcript:0"]
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
-    run, _ = harness.execute()
-    assert run["status"] == "needs_review"
-    analyst = next(t for t in run["tasks"] if t["role"] == "footage_analyst")
-    assert analyst["output"]["moments"][0]["evidence_refs"] == ["frame:0", "transcript:0"]
+def test_progress_moves_forward_through_the_stages(harness):
+    harness.execute()
+    steps = [m["progress"] for m in harness.jobs.messages if "progress" in m]
+    assert steps == sorted(steps) and steps[0] <= 10 and steps[-1] >= 86
+    assert any(m.get("message") == "Rendering clip 1" for m in harness.jobs.messages)
 
 
-def test_ungrounded_moment_is_dropped_while_grounded_one_proceeds(harness):
-    outputs = script()
-    grounded = outputs[1]["moments"][0]
-    outputs[1]["moments"] = [
-        {"start": 1.6, "end": 2, "summary": "No evidence inside", "evidence_refs": ["frame:0"]},
-        grounded,
+@pytest.mark.parametrize(
+    "proposed,expected",
+    [
+        ((10, 40), (10, 40)),
+        ((0, 40), (5, 40)),  # starts before its moment
+        ((10, 90), (10, 65)),  # ends after it
+        ((70, 80), (20, 50)),  # entirely outside: centred on the peak, default 30s
+        ((40, 10), (20, 50)),  # reversed
+    ],
+)
+def test_fit_range_keeps_the_proposal_where_it_can(proposed, expected):
+    assert fit_range(*proposed, 5, 65, 180, peak=35) == expected
+
+
+def test_fit_range_respects_the_duration_limit_and_short_moments():
+    assert fit_range(10, 60, 5, 65, 20) == (10, 30)
+    assert fit_range(0, 9, 0, 2, 180) == (0, 2)
+    assert fit_range(5, 6, 0, 2, 180, peak=1.5) == (0, 2)
+
+
+def test_cuts_snap_to_nearby_speech_boundaries_never_outside_the_moment():
+    transcript = {"segments": [
+        {"start": 10.0, "end": 14.0, "text": "First sentence.", "words": [
+            {"word": "First", "start": 10.0, "end": 10.6}, {"word": "sentence.", "start": 10.7, "end": 14.0},
+        ]},
+        {"start": 14.5, "end": 19.0, "text": "Second sentence."},
+        {"start": 30.0, "end": 40.0, "text": "Far away."},
+    ]}
+    # Start lands mid-sentence near its beginning; end lands just before a sentence finishes.
+    assert snap_to_speech(10.8, 18.2, transcript, 5, 60, 180) == (9.88, 19.2)
+    # No boundary within reach: the proposal stands.
+    assert snap_to_speech(22.0, 27.0, transcript, 5, 60, 180) == (22.0, 27.0)
+    # Sentence boundaries outside the moment are never used; a cut inside a word still moves to its start.
+    assert snap_to_speech(10.8, 18.2, transcript, 10.5, 18.5, 180) == (10.58, 18.2)
+    assert snap_to_speech(12.0, 18.2, transcript, 11.0, 18.5, 180) == (12.0, 18.2)
+    # Snapping never breaks the duration limit.
+    assert snap_to_speech(10.8, 18.2, transcript, 5, 60, 8.0) == (10.8, 18.2)
+    assert snap_to_speech(1.0, 2.0, None, 0, 5, 180) == (1.0, 2.0)
+    # A cut three seconds into or before the end of a sentence moves out to the sentence's edge.
+    assert snap_to_speech(17.0, 33.0, transcript, 5, 60, 180) == (14.38, 33.0)
+    assert snap_to_speech(22.0, 36.5, transcript, 5, 60, 180) == (22.0, 40.2)
+
+
+def test_close_look_follows_the_action_and_moves_the_clip_to_its_peak(harness):
+    harness.video["duration"] = 120
+    harness.store.put("videos", harness.video)
+    harness.board = board("source", 120.0, scenes=2)  # 60-second scenes
+    harness.engine.frames = harness.dense_stills
+    harness.models.closeups = [
+        {"happens": "A long rally ends with a smash; the winner raises his arm.", "peak_frame": 20, "strength": 8}
     ]
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
-    run, _ = harness.execute()
-    analyst = next(t for t in run["tasks"] if t["role"] == "footage_analyst")
-    assert [m["summary"] for m in analyst["output"]["moments"]] == [grounded["summary"]]
-
-
-def test_unknown_reference_rejects_the_moment_and_requests_a_correction(harness):
     outputs = script()
-    bad = copy.deepcopy(outputs[1])
-    bad["moments"][0]["evidence_refs"] = ["frame:0", "transcript:99"]
-    outputs.insert(1, bad)  # first footage handoff cites unknown evidence; the retry is valid
-    harness.models = ScriptedModels(outputs)
-    harness.engine.models = harness.models
+    outputs[3]["candidates"][0].update(start=30, end=50)
+    harness.models.outputs = copy.deepcopy(outputs)
     run, _ = harness.execute()
-    footage_calls = [
-        c for c in harness.models.calls if c["data"].get("assignment", "").startswith("Complete footage")
-    ]
-    assert len(footage_calls) == 2
-    assert "unknown evidence" in json.dumps(footage_calls[1]["data"]["format_correction"])
-    assert run["status"] == "needs_review"
+    # Dense frames around the measured peak (30s): 25-37s, far tighter than the storyboard's stills.
+    request = harness.models.batches[0][0]
+    assert harness.still_requests[0] == ([(25.0, 37.0)], 24)
+    assert len(request["images"]) == 24 and request["image_labels"][0] == "Frame 1 at 25.2s"
+    assert request["schema"]["properties"]["peak_frame"]["maximum"] == 24
+    looked = role(run, "closeup")
+    assert looked["kind"] == "tool" and looked["status"] == "completed"
+    assert looked["output"]["moments"][0]["peak_time"] == 34.75  # frame 20 of 24
+    strategist, editor = harness.models.calls[2]["data"], harness.models.calls[3]["data"]
+    assert strategist["footage"]["moments"][0]["seen_up_close"].startswith("A long rally")
+    allowed = editor["allowed_source_ranges"]["angle-1"]
+    assert allowed["peak_time"] == 34.75 and allowed["seen_up_close"].startswith("A long rally")
+    # The suggested cut is half a minute placed around that instant, lead-in first.
+    assert allowed["suggested_range"] == {"start": 22.8, "end": 52.8}
+    assert harness.rendered[0]["start"] == 30 and harness.rendered[0]["end"] == 50
+
+
+@pytest.mark.parametrize("problem", ["malformed", "unavailable", "frames"])
+def test_production_continues_without_a_close_look(harness, problem):
+    harness.engine.frames = harness.dense_stills
+    if problem == "malformed":
+        harness.models.closeups = [{"happens": "", "peak_frame": 99, "strength": 50}]
+    elif problem == "unavailable":
+
+        def unavailable(*_):
+            raise WorkError("Local inference failed.")
+
+        harness.models.run_batch = unavailable
+    else:
+        calls = []
+
+        def first_fails(job, video, ranges, per_range):
+            calls.append(ranges)
+            if len(calls) == 1:
+                raise WorkError("Frame sampling failed.")
+            return harness.dense_stills(job, video, ranges, per_range)
+
+        harness.engine.frames = first_fails
+    run, _ = harness.execute()
+    assert run["status"] == "needs_review" and len(harness.rendered) == 1
+    assert "seen_up_close" not in harness.models.calls[3]["data"]["allowed_source_ranges"]["angle-1"]
+    assert role(run, "closeup")["status"] == ("completed" if problem == "malformed" else "failed")
+
+
+def test_background_chatter_is_not_evidence_and_does_not_move_cuts(harness):
+    harness.store.patch("videos", "source", transcript={"speech": "none", "segments": [
+        {"start": 0.3, "end": 0.6, "text": "Oh my God!", "background": True},
+    ]})
+    run, _ = harness.execute()
+    assert not any(ref.startswith("transcript:") for ref in run["context"]["evidence"])
+    assert harness.models.calls[4]["data"]["clip_speech"] == [""]
+    assert (harness.rendered[0]["start"], harness.rendered[0]["end"]) == (0, 1)
+
+
+def test_too_long_proposals_keep_the_stretch_around_the_peak():
+    # A 100-second proposal with a 60-second ceiling: lead-in before the peak, then the tail.
+    assert fit_range(0, 100, 0, 100, 60, peak=70) == (40, 100)
+    assert fit_range(0, 100, 0, 100, 60, peak=10) == (0, 60)
+    assert fit_range(0, 100, 0, 100, 60) == (0, 60)
 
 
 class ScoutingModels(ScriptedModels):
@@ -1137,11 +1371,16 @@ class ScoutingModels(ScriptedModels):
         return super().run(job_id, model_id, action, **payload)
 
 
-def test_long_source_footage_comes_from_scouts_and_passes_evidence_checks(harness):
-    segments = [{"start": s, "end": s + 4, "text": f"speech {s}"} for s in range(0, 1800, 5)]
+def long_talk(harness, text="speech {}"):
+    segments = [{"start": s, "end": s + 4, "text": text.format(s)} for s in range(0, 1800, 5)]
     harness.video = harness.store.put(
         "videos", {**harness.video, "duration": 1800, "has_audio": True, "transcript": {"segments": segments}}
     )
+    harness.board = board("source", 1800.0, scenes=36)  # 50-second scenes
+
+
+def test_long_talk_footage_comes_from_scouts_and_is_tied_to_storyboard_scenes(harness):
+    long_talk(harness)
     outputs = script()
     del outputs[1]  # no footage-analyst prompt: scouts replace it
     harness.models = ScoutingModels(
@@ -1152,67 +1391,173 @@ def test_long_source_footage_comes_from_scouts_and_passes_evidence_checks(harnes
     assert run["status"] == "needs_review" and result["review_status"] == "pass"
     assert harness.models.scout_calls and all(harness.models.scout_calls)  # every scout call kept warm
     assert run["scouting"]["chunks"] == 3 and run["scouting"]["candidates_found"] == 1
-    moment = next(t for t in run["tasks"] if t["role"] == "footage_analyst")["output"]["moments"][0]
-    assert (moment["start"], moment["end"]) == (0, 30) and "frame:0" in moment["evidence_refs"]
+    moment = role(run, "footage_analyst")["output"]["moments"][0]
+    assert (moment["start"], moment["end"], moment["scenes"], moment["id"]) == (0, 30, ["scene:0"], "moment-1")
+    assert "Opening bit" in moment["summary"]
+    # The words spoken inside the scout's range join the evidence for the editor and critic.
+    assert "transcript:0" in harness.models.calls[2]["data"]["evidence"]
     assert harness.rendered[0]["start"] == 0
 
 
-def test_long_source_with_no_scout_moments_fails_before_strategy(harness):
-    segments = [{"start": s, "end": s + 4, "text": "um"} for s in range(0, 1800, 5)]
-    harness.video = harness.store.put(
-        "videos", {**harness.video, "duration": 1800, "has_audio": True, "transcript": {"segments": segments}}
-    )
-    harness.models = ScoutingModels([plan()], {})
-    harness.engine.models = harness.models
-    run = harness.create()
-    with pytest.raises(WorkError, match="no speech-backed moments"):
-        harness.engine.execute(run["id"], "job")
-    assert not harness.rendered
-
-
-def test_long_scout_selection_supplies_exact_late_speech_to_editor_critic_and_recheck(harness):
-    segments = [
-        {"start": s, "end": s + 1, "text": f"ACTUAL speech at {s} " + "supporting words " * 8}
-        for s in range(0, 1800, 2)
-    ]
-    harness.video = harness.store.put(
-        "videos", {**harness.video, "duration": 1800, "has_audio": True, "transcript": {"segments": segments}}
-    )
+def test_long_talk_with_no_scout_moments_falls_back_to_the_measured_shortlist(harness):
+    long_talk(harness, text="um")
     outputs = script()
     del outputs[1]
-    outputs[2]["candidates"][0].update(start=106, end=120, evidence_refs=["transcript:selected:0"])
-    harness.models = ScoutingModels(
-        outputs, {"0": [{"start": 106, "end": 130, "hook": "Late speech", "score": 8, "why": "Full thought"}]}
-    )
+    harness.models = ScoutingModels(outputs, {})
     harness.engine.models = harness.models
-    run, result = harness.execute()
-    assert result["review_status"] == "pass" and not harness.store.all("clips")[0]["approved"]
-    evidence = run["context"]["evidence"]
-    assert not any(item.get("type") == "transcript_window" for item in evidence.values())
-    assert any(item.get("type") == "transcript_window" for item in run["context"]["discovery_transcript_evidence"].values())
-    exact = evidence["transcript:selected:0"]
-    assert exact["video_id"] == "source"
-    assert [cue["start"] for cue in exact["segments"]] == list(range(106, 130, 2))
-    assert "ACTUAL speech at 118" in json.dumps(exact)
-    editor = next(call["data"] for call in harness.models.calls if call["schema"]["title"] == "Edits")
-    critic = next(call["data"] for call in harness.models.calls if call["schema"]["title"] == "Critique")
-    assert editor["evidence"]["transcript:selected:0"] == exact
-    assert critic["evidence"]["transcript:selected:0"] == exact
-    tool = next(task for task in run["tasks"] if task["role"] == "source_evidence")
-    assert tool["kind"] == "tool" and tool["status"] == "completed"
-    assert tool["output"]["moments"][0]["selected_refs"][0] == "transcript:selected:0"
-    harness.models.outputs.append(critique())
-    harness.engine.review_clip("job", result["clip_ids"][0])
-    assert harness.models.calls[-1]["data"]["evidence"]["transcript:selected:0"] == exact
+    run, _ = harness.execute()
+    assert role(run, "footage_analyst")["status"] == "failed"
+    assert "no speech-backed moments" in role(run, "footage_analyst")["error"]
+    assert role(run, "shortlist")["status"] == "completed" and len(harness.rendered) == 1
+    assert "shortlisted from measured signals" in run["stop_reason"]
 
 
-def test_selected_transcript_bundle_cannot_ground_silence_between_its_actual_cues():
-    evidence = {"transcript:selected:0": {
-        "type": "selected_transcript", "start": 0, "end": 100,
-        "segments": [{"start": 0, "end": 1, "text": "First"}, {"start": 99, "end": 100, "text": "Last"}],
-    }}
-    with pytest.raises(WorkError, match="does not overlap"):
-        TeamEngine._source_refs(["transcript:selected:0"], evidence, 40, 50)
+def test_footage_with_only_background_chatter_is_never_sent_to_scouts(harness):
+    long_talk(harness)
+    transcript = harness.video["transcript"]
+    for segment in transcript["segments"]:
+        segment["background"] = True
+    harness.store.patch("videos", "source", transcript={**transcript, "speech": "none"})
+    harness.models = ScoutingModels(script(), {})
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    assert not harness.models.scout_calls and "scouting" not in run
+    assert titles(harness.models) == ["Plan", "Footage", "Strategy", "Edits", "Critique"]
+
+
+def test_a_prompt_over_the_local_limit_is_refused_with_what_to_shorten(harness):
+    harness.config["brand"] = "x" * 100_000
+    run = harness.create()
+    with pytest.raises(WorkError, match="over the 96,000 local limit"):
+        harness.engine.execute(run["id"], "job")
+    assert not harness.models.calls and not harness.rendered
+
+
+class SwarmModels(ScriptedModels):
+    """One idea per requested slot, placed inside the stretch named in the prompt."""
+
+    def __init__(self, empty=()):
+        super().__init__([])
+        self.empty = set(empty)
+
+    def run_batch(self, job_id, model_id, requests):
+        self.batches.append(copy.deepcopy(requests))
+        replies = []
+        for request in requests:
+            start = float(request["prompt"].split("Your stretch is ", 1)[1].split("s", 1)[0])
+            wanted = request["schema"]["properties"]["ideas"]["maxItems"]
+            kinds = request["schema"]["$defs"]["Idea"]["properties"]["hypothesis"]["enum"]
+            ideas = [
+                {"hypothesis": kinds[n], "start": start + 20 * n, "end": start + 20 * n + 15,
+                 "hook": f"{kinds[n]} at {start:.0f}", "caption": "Caption. #tag"}
+                for n in range(wanted)
+            ]
+            replies.append({"output": json.dumps({"ideas": [] if start in self.empty else ideas})})
+        return replies
+
+
+def swarm_source(harness, minutes=6, scenes=6, **transcript):
+    harness.video = harness.store.put("videos", {**harness.video, "duration": minutes * 60, **transcript})
+    harness.board = board("source", minutes * 60.0, scenes=scenes)
+
+
+def test_swarm_quotas_cover_every_scene_before_any_gets_a_second_idea():
+    value = board("v", 600.0, scenes=5)
+    for index, score in enumerate([0.2, 0.9, 0.5, 0.0, 0.7]):
+        value["scenes"][index]["score"] = score
+    value["scenes"][3]["usable"] = False
+    assert TeamEngine.swarm_quotas(value, 3) == {1: 1, 4: 1, 2: 1}  # fewer clips than scenes: the strongest
+    assert TeamEngine.swarm_quotas(value, 6) == {0: 1, 1: 2, 2: 1, 4: 2}
+    assert TeamEngine.swarm_quotas(value, 100) == {0: 3, 1: 3, 2: 3, 4: 3}  # never more than three a scene
+
+
+def test_swarm_makes_about_a_clip_a_minute_each_on_its_own_hypothesis(harness):
+    swarm_source(harness)
+    harness.use([])
+    harness.models = harness.engine.models = SwarmModels()
+    run, result = harness.execute(mode="swarm")
+    assert run["status"] == "needs_review" and run["mode"] == "swarm"
+    # Six minutes of footage: seven clips wanted, nine ideas asked (a little spare), nine delivered.
+    assert (result["target"], result["ideas"], result["clips"], result["stretches"]) == (7, 9, 9, 6)
+    assert [r["schema"]["properties"]["ideas"]["maxItems"] for r in harness.models.batches[0]] == [2, 2, 2, 1, 1, 1]
+    assert len(harness.rendered) == 9 and len(run["clip_ids"]) == 9
+    # Each stretch is offered a different slice of the hypotheses, so the set stays varied.
+    offered = [r["schema"]["$defs"]["Idea"]["properties"]["hypothesis"]["enum"] for r in harness.models.batches[0]]
+    assert offered[0] == ["spectacle", "emotion", "contrast", "humor"] and offered[1][0] == "humor"
+    assert result["hypotheses"] == ["contrast", "emotion", "humor", "spectacle"]
+    first = harness.rendered[0]
+    assert (first["start"], first["end"], first["hook"]) == (0.0, 15.0, "spectacle at 0")
+    assert first["_team"]["hypothesis"] == "spectacle" and first["_team"]["team_review_status"] == "not_applicable"
+    # Presentation rotates across clips: four treatments, each recorded with its clip.
+    looks = [(c["_team"]["treatment"]["captions"], c["_team"]["treatment"]["motion"]) for c in harness.rendered]
+    assert looks[:5] == [
+        ("pop", "push_in"), ("standard", "static"), ("pop", "static"), ("standard", "push_in"), ("pop", "push_in"),
+    ]
+    assert first["_team"]["reason"] == "Hypothesis: spectacle. Treatment: word-by-word captions, slow push-in."
+    assert first["_team"]["scene_refs"] == ["scene:0"] and first["_team"]["team_run_id"] == run["id"]
+    # No committee: the only model work is one short prompt per stretch.
+    assert not harness.models.calls and len(harness.models.batches) == 1
+    assert {t["role"]: t["status"] for t in run["tasks"]} == {"swarm": "completed", "watch": "completed"}
+    assert "9 clips from 6 stretches" in run["stop_reason"]
+    assert harness.watched == [("job", "source", "qwen-small")]  # footage without a transcript is watched
+
+
+def test_swarm_cuts_a_talk_from_its_words_without_first_watching_every_scene(harness):
+    lines = [{"start": 10.0 * i, "end": 10.0 * i + 8, "text": "Six words are spoken right here."} for i in range(36)]
+    swarm_source(harness, has_audio=True, transcript={"speech": "throughout", "segments": lines})
+    harness.models = harness.engine.models = SwarmModels()
+    run, _ = harness.execute(mode="swarm")
+    assert harness.watched == [("job", "source", None)]  # measured signals only: clips start sooner
+    prompt = harness.models.batches[0][0]["prompt"]
+    assert "[0.0-8.0] Six words are spoken right here." in prompt and "[60.0-" not in prompt
+    # A talk is offered spoken hypotheses; "spectacle" is for footage you look at.
+    spoken = harness.models.batches[0][0]["schema"]["$defs"]["Idea"]["properties"]["hypothesis"]["enum"]
+    assert spoken == ["bold_claim", "question", "story", "lesson"]
+    # Cuts land on sentence boundaries: 0-15s becomes 0-18.2s (the sentence ending at 18s, plus air).
+    assert (harness.rendered[0]["start"], harness.rendered[0]["end"]) == (0.0, 18.2)
+    assert run["status"] == "needs_review"
+
+
+def test_swarm_skips_empty_stretches_and_survives_failed_renders(harness):
+    swarm_source(harness)
+    harness.models = harness.engine.models = SwarmModels(empty={0.0, 60.0})
+    original = harness.engine.render
+    calls = []
+
+    def render(job, video, candidate):
+        calls.append(candidate["hook"])
+        if len(calls) == 2:
+            raise WorkError("FFmpeg render failed.")
+        return original(job, video, candidate)
+
+    harness.engine.render = render
+    run, result = harness.execute(mode="swarm")
+    assert (result["ideas"], result["clips"], result["failed_renders"]) == (5, 4, 1)
+    assert "1 renders failed" in run["stop_reason"] and run["status"] == "needs_review"
+
+
+def test_swarm_with_nothing_to_cut_fails_plainly_and_cancellation_keeps_finished_clips(harness):
+    swarm_source(harness)
+    harness.models = harness.engine.models = SwarmModels(empty={60.0 * i for i in range(6)})
+    run = harness.create(mode="swarm")
+    with pytest.raises(WorkError, match="no clip ideas"):
+        harness.engine.execute(run["id"], "job")
+    assert harness.engine.get(run["id"])["status"] == "failed" and not harness.rendered
+    harness.models = harness.engine.models = SwarmModels()
+    original = harness.engine.render
+
+    def render(job, video, candidate):
+        result = original(job, video, candidate)
+        harness.jobs.cancelled = True
+        return result
+
+    harness.engine.render = render
+    run = harness.create(mode="swarm")
+    with pytest.raises(JobCancelled):
+        harness.engine.execute(run["id"], "job")
+    saved = harness.engine.get(run["id"])
+    assert saved["status"] == "cancelled" and len(saved["clip_ids"]) >= 1
+    assert len(harness.store.all("clips")) == len(saved["clip_ids"])
 
 
 @pytest.mark.parametrize("outcome", ["success", "no_moments", "cancelled"])
@@ -1239,23 +1584,16 @@ def test_scout_warm_model_is_released_on_success_failure_and_cancellation(harnes
         harness.models.run = cancel_after_scout
     if outcome == "success":
         harness.execute()
-    else:
+    elif outcome == "cancelled":
         run = harness.create()
-        with pytest.raises(JobCancelled if outcome == "cancelled" else WorkError):
+        with pytest.raises(JobCancelled):
             harness.engine.execute(run["id"], "job")
         assert not harness.rendered
+    else:
+        # The storyboard pipeline may fall back when scouts find nothing; either way, no warm model is left behind.
+        run = harness.create()
+        try:
+            harness.engine.execute(run["id"], "job")
+        except WorkError:
+            pass
     harness.models.release_warm.assert_called_once_with("qwen-small")
-
-
-def test_oversize_selected_speech_fails_before_downstream_roles_without_discovery_fallback(harness):
-    harness.store.patch("videos", "source", transcript={"segments": [{"start": 0, "end": 1, "text": "word " * 6000}]})
-    harness.models = ScriptedModels(script()[:2])
-    harness.engine.models = harness.models
-    run = harness.create()
-    with pytest.raises(WorkError, match="Selected timed speech exceeds"):
-        harness.engine.execute(run["id"], "job")
-    assert titles(harness.models) == ["Plan", "Footage"]
-    assert not harness.rendered
-    saved = harness.engine.get(run["id"])
-    assert saved["status"] == "failed"
-    assert next(t for t in saved["tasks"] if t["role"] == "source_evidence")["status"] == "failed"

@@ -3,6 +3,7 @@ import json
 import shutil
 import subprocess
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -26,7 +27,9 @@ def test_probe_uses_argument_list_and_ignores_cover_art(tmp_path, monkeypatch):
         {"codec_type": "video", "width": 1, "height": 1, "disposition": {"attached_pic": 1}},
         {"codec_type": "video", "width": 320, "height": 180}, {"codec_type": "audio"},
     ]})
-    assert media.probe(path) == {"duration": 3.25, "width": 320, "height": 180, "has_audio": True}
+    assert media.probe(path) == {
+        "duration": 3.25, "width": 320, "height": 180, "has_audio": True, "hdr": False,
+    }
     assert run.call_args.args[0][-1] == str(path)
     assert run.call_args.kwargs["timeout"] == 30
     assert run.call_args.kwargs["check"] is True
@@ -91,7 +94,7 @@ def sample(tmp_path, request):
 
 @pytest.mark.parametrize(
     "sample,caption_style",
-    [(False, "standard"), (True, "standard"), (True, "high_contrast")],
+    [(False, "standard"), (True, "standard"), (True, "high_contrast"), (True, "pop")],
     indirect=["sample"],
 )
 def test_real_render_preserves_audio_and_truthful_subtitles(tmp_path, sample, caption_style):
@@ -109,7 +112,8 @@ def test_real_render_preserves_audio_and_truthful_subtitles(tmp_path, sample, ca
     try:
         job = jobs.submit("render", lambda identifier: media.render(
             jobs, identifier, source, output, start=0.1, end=0.5, transcript=transcript,
-            caption_style=caption_style))
+            caption_style=caption_style, motion="push_in" if caption_style == "pop" else "static",
+            framing="blur" if caption_style == "pop" else "fit"))
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             final = store.get("jobs", job["id"])
@@ -182,3 +186,196 @@ def test_find_tool_prefers_keg_only_ffmpeg_full(monkeypatch):
     assert media.find_tool("ffprobe") == "/opt/homebrew/bin/ffprobe"  # falls back to PATH
     present.clear()
     assert media.find_tool("ffmpeg") is None
+
+
+def spoken(start, text, *probabilities, length=1.0):
+    words = [{"word": w, "start": start, "end": start + length, "probability": p}
+             for w, p in zip(text.split(), probabilities)]
+    return {"start": start, "end": start + length, "text": f" {text}", "words": words}
+
+
+def test_transcript_cleaning_drops_invented_speech_and_keeps_real_lines_verbatim():
+    real = [spoken(500, "Come on, come on.", 0.9, 0.95, 0.9, 0.97), spoken(1200, "Can I challenge this table?", 0.6, 0.9, 0.98, 0.9, 1.0)]
+    invented = (
+        [spoken(30 * i, "Thank you.", 0.03, 0.99) for i in range(1, 12)]  # the same phrase looping through the file
+        + [spoken(400, "aiton gotta do that", 0.0, 0.0, 0.03, 0.14)]  # the recognizer did not believe its own words
+        + [spoken(1213, "How do you play?", 0.9, 0.9, 0.9, 0.9, length=17.0)]  # four words stretched over 17 seconds
+        + [{"start": 1054.8, "end": 1054.8, "text": ""}]
+    )
+    result = media.clean_transcript({"language": "en", "text": "raw", "segments": invented + real})
+    assert [s["text"] for s in result["segments"]] == [" Come on, come on.", " Can I challenge this table?"]
+    assert result["removed_segments"] == len(invented)
+    assert result["text"] == "Come on, come on. Can I challenge this table?"
+    assert result["language"] == "en"
+
+
+def test_transcript_cleaning_drops_a_line_stuck_on_repeat_but_not_ordinary_repetition():
+    stuck = [spoken(1100 + 3 * i, "I'm gonna move.", 0.9, 0.9, 0.9) for i in range(7)]
+    twice = [spoken(838, "Oh wow.", 0.9, 0.9), spoken(845, "Oh wow.", 0.9, 0.9)]
+    talk = [spoken(10 * i, f"Sentence number {i}.", 0.9, 0.9, 0.9) for i in range(30)]
+    result = media.clean_transcript({"segments": talk + twice + stuck})
+    assert len(result["segments"]) == 32 and result["removed_segments"] == 7
+    assert not any("gonna move" in s["text"] for s in result["segments"])
+
+
+def test_transcript_cleaning_leaves_confident_speech_and_wordless_imports_untouched():
+    transcript = {"language": "en", "text": "Hello there. Yes.", "segments": [
+        spoken(0, "Hello there.", 0.97, 0.99), {"start": 2, "end": 3, "text": "Yes."},
+    ]}
+    assert media.clean_transcript(transcript) == transcript
+
+
+def test_probe_reports_rotated_phone_footage_as_displayed_and_flags_hdr(tmp_path, monkeypatch):
+    mock_probe(monkeypatch, {"format": {"duration": "10"}, "streams": [{
+        "codec_type": "video", "width": 1920, "height": 1080, "color_transfer": "arib-std-b67",
+        "side_data_list": [{"side_data_type": "Display Matrix", "rotation": -90}],
+    }]})
+    assert media.probe(tmp_path / "phone.mov") == {
+        "duration": 10.0, "width": 1080, "height": 1920, "has_audio": False, "hdr": True,
+    }
+    mock_probe(monkeypatch, {"format": {"duration": "10"}, "streams": [{
+        "codec_type": "video", "width": 1920, "height": 1080, "tags": {"rotate": "180"},
+    }]})
+    info = media.probe(tmp_path / "upside-down.mov")
+    assert (info["width"], info["height"], info["hdr"]) == (1920, 1080, False)
+
+
+def test_metadata_parser_pairs_values_with_timestamps_and_treats_silence_as_floor(tmp_path):
+    log = tmp_path / "levels.txt"
+    log.write_text(
+        "frame:0    pts:0       pts_time:0\nlavfi.astats.Overall.RMS_level=-28.5\n"
+        "frame:1    pts:4000    pts_time:0.5\nlavfi.astats.Overall.RMS_level=-inf\n"
+        "frame:2    pts:8000    pts_time:1\nlavfi.other=3\n"
+        "frame:3    pts:12000   pts_time:1.5\nlavfi.astats.Overall.RMS_level=garbage\n"
+    )
+    assert media.read_metadata(log, "lavfi.astats.Overall.RMS_level") == [(0.0, -28.5), (0.5, -120.0)]
+    assert media.read_metadata(tmp_path / "missing.txt", "x") == []
+
+
+def test_speech_is_classified_as_carrying_the_footage_or_as_background():
+    def line(start, text):
+        return {"start": start, "end": start + 2, "text": text}
+
+    talk = {"segments": [line(3 * i, "Six words are spoken right here.") for i in range(40)]}
+    assert media.classify_speech(talk, 120.0)["speech"] == "throughout"
+    assert media.foreground(media.classify_speech(talk, 120.0)) == talk["segments"]
+    # A twenty-minute game with stray exclamations: nothing to caption or reason from.
+    gym = {"segments": [line(60 * i, "Oh wow.") for i in range(18)]}
+    quiet = media.classify_speech(gym, 1200.0)
+    assert quiet["speech"] == "none" and all(s["background"] for s in quiet["segments"])
+    assert media.foreground(quiet) == [] and media.subtitles(quiet, 0, 1200) == ""
+    # The same game with a real conversation near the end: only that stretch counts.
+    chat = [line(1100 + 2.5 * i, "They have a ping pong table at work.") for i in range(12)]
+    mixed = media.classify_speech({"segments": gym["segments"] + chat}, 1200.0)
+    assert mixed["speech"] == "in places"
+    assert [s["text"] for s in media.foreground(mixed)] == [c["text"] for c in chat]
+    # Reclassifying is stable and never mutates its input.
+    again = media.classify_speech(mixed, 1200.0)
+    assert again == mixed and "background" not in gym["segments"][0]
+    assert media.classify_speech({"segments": []}, 60.0)["speech"] == "none"
+
+
+class Recorder:
+    """Stands in for the job runner: records commands and writes what FFmpeg would have."""
+
+    def __init__(self, write=None):
+        self.commands = []
+        self.write = write
+
+    def process(self, job, command, **options):
+        self.commands.append(command)
+        if self.write:
+            self.write(command)
+        return ""
+
+
+def movement(columns_with_action, frames=8):
+    """Raw 64x36 grayscale difference frames with movement in the given columns."""
+    row = bytes(200 if column in columns_with_action else 3 for column in range(64))
+    return row * 36 * frames
+
+
+@pytest.mark.parametrize(
+    "columns,expected",
+    [
+        (range(28, 36), {"crop_width": 0.3164, "focus_x": 0.5}),  # a centred subject fills the screen
+        (range(8), {"crop_width": 0.3164, "focus_x": 0.0}),  # a subject at the left edge
+        (range(56, 64), {"crop_width": 0.3164, "focus_x": 1.0}),  # and at the right edge
+        (range(16, 50), {"crop_width": 0.5625, "focus_x": 0.536}),  # two players apart: a square crop
+        (range(4, 60), None),  # action across the frame: keep all of it
+    ],
+)
+def test_action_window_is_the_tightest_crop_that_keeps_the_movement(tmp_path, monkeypatch, columns, expected):
+    monkeypatch.setattr(media, "ffmpeg", lambda: "ffmpeg")
+    jobs = Recorder(lambda command: Path(command[-1]).write_bytes(movement(set(columns))))
+    window = media.action_window(jobs, "job", tmp_path / "v.mov", tmp_path / "w", start=10, end=40, width=1920, height=1080)
+    if expected is None:
+        assert window is None
+    else:
+        assert window["crop_width"] == expected["crop_width"] and window["share"] >= 0.9
+        assert window["focus_x"] == pytest.approx(expected["focus_x"], abs=0.04)
+    command = jobs.commands[0]
+    assert command[command.index("-ss") + 1] == "10.000" and command[command.index("-t") + 1] == "30.000"
+    assert not (tmp_path / "w" / "movement.gray").exists()  # scratch is removed
+
+
+def test_action_window_keeps_the_whole_frame_when_unsure(tmp_path, monkeypatch):
+    monkeypatch.setattr(media, "ffmpeg", lambda: "ffmpeg")
+    still = Recorder(lambda command: Path(command[-1]).write_bytes(bytes(64 * 36 * 8)))
+    assert media.action_window(still, "j", tmp_path / "v", tmp_path / "w", start=0, end=9, width=1920, height=1080) is None
+    portrait = Recorder()
+    assert media.action_window(portrait, "j", tmp_path / "v", tmp_path / "w", start=0, end=9, width=1080, height=1920) is None
+    assert not portrait.commands
+
+    def broken(command):
+        raise WorkError("Movement analysis failed.")
+
+    assert media.action_window(Recorder(broken), "j", tmp_path / "v", tmp_path / "w", start=0, end=9, width=1920, height=1080) is None
+
+
+def test_frames_are_extracted_in_one_process_and_tone_mapped_for_hdr(tmp_path, monkeypatch):
+    monkeypatch.setattr(media, "ffmpeg", lambda: "ffmpeg")
+    monkeypatch.setattr(media, "can_tonemap", lambda listing=None: True)
+    jobs = Recorder(lambda command: [Path(part).write_bytes(b"jpg") for part in command if str(part).endswith(".jpg")])
+    targets = [(1.5, tmp_path / "a.jpg"), (-2, tmp_path / "b.jpg")]
+    frames = media.extract_frames(jobs, "job", tmp_path / "source.mov", targets, hdr=True)
+    assert frames == [{"time": 1.5, "path": str(tmp_path / "a.jpg")}, {"time": -2, "path": str(tmp_path / "b.jpg")}]
+    command = jobs.commands[0]
+    assert len(jobs.commands) == 1 and command.count("-i") == 2
+    assert [command[i + 1] for i, part in enumerate(command) if part == "-ss"] == ["1.500", "0.000"]
+    assert all("tonemap" in command[i + 1] for i, part in enumerate(command) if part == "-vf")
+    monkeypatch.setattr(media, "can_tonemap", lambda listing=None: False)
+    media.extract_frames(jobs, "job", tmp_path / "source.mov", targets[:1], hdr=True)
+    assert "tonemap" not in " ".join(jobs.commands[1])  # a build without the filters still yields frames
+    assert media.extract_frames(jobs, "job", tmp_path / "source.mov", []) == [] and len(jobs.commands) == 2
+
+
+def test_render_rejects_an_impossible_crop(tmp_path):
+    for crop in (0.1, 1.5):
+        with pytest.raises(WorkError, match="kept width"):
+            media.render(Mock(), "job", tmp_path / "s.mp4", tmp_path / "o.mp4", start=0, end=1, crop_width=crop)
+    with pytest.raises(WorkError, match="framing"):
+        media.render(Mock(), "job", tmp_path / "s.mp4", tmp_path / "o.mp4", start=0, end=1, framing="tilt")
+
+
+def test_word_by_word_captions_highlight_the_spoken_word_with_the_same_verbatim_text():
+    transcript = {"segments": [{"start": 10.0, "end": 12.0, "text": "it is {really} good", "words": [
+        {"word": "it", "start": 10.0, "end": 10.3}, {"word": "is", "start": 10.3, "end": 10.6},
+        {"word": "{really}", "start": 10.6, "end": 11.4}, {"word": "good", "start": 11.4, "end": 12.0},
+    ]}, {"start": 13.0, "end": 14.0, "text": "No word timings here"}]}
+    entries = media.caption_entries(transcript, [{"start": 10.0, "end": 15.0}])
+    script = media.pop_captions(entries)
+    events = [line.split(",,0,0,0,,", 1) for line in script.splitlines() if line.startswith("Dialogue:")]
+    # One event per spoken word; the cue text is identical each time, only the highlight moves.
+    assert [text.replace("{\\c&H00E5FF&\\fscx112\\fscy112}", "[").replace("{\\r}", "]") for _, text in events] == [
+        "[IT] IS (REALLY) GOOD", "IT [IS] (REALLY) GOOD", "IT IS [(REALLY)] GOOD", "IT IS (REALLY) [GOOD]",
+        "NO WORD TIMINGS HERE",
+    ]
+    assert [head.split(",")[1:3] for head, _ in events] == [
+        ["0:00:00.00", "0:00:00.30"], ["0:00:00.30", "0:00:00.60"], ["0:00:00.60", "0:00:01.40"],
+        ["0:00:01.40", "0:00:02.00"], ["0:00:03.00", "0:00:04.00"],
+    ]
+    # Source braces cannot open an override tag: only the highlight uses them.
+    assert script.count("{") == 2 * 4 and "PlayResY: 1920" in script
+    assert media.srt_text(entries).count("-->") == 2  # the sidecar captions are unchanged
+    assert media.pop_captions([]).count("Dialogue:") == 0

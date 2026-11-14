@@ -15,7 +15,7 @@ export function publishingGate(
     reasons.push("Refresh connection, clips, and settings before publishing.");
   if (!clip) reasons.push("Select a clip.");
   else if (clip.approved !== true)
-    reasons.push("Approve this clip in Factory.");
+    reasons.push("Approve this clip in Clips.");
   if (
     clip &&
     (clip.publish_attempt ||
@@ -233,7 +233,7 @@ export function Instagram({ state }: { state: FactoryState }) {
       >
         {!state.data.clips.length ? (
           <Empty title="Create and review a clip first">
-            Rendered clips from Factory can be published only after explicit
+            Finished clips can be published only after explicit
             approval.
           </Empty>
         ) : (

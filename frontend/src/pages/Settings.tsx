@@ -4,15 +4,22 @@ import { put } from "../api";
 import { objectives, type Settings } from "../types";
 import type { FactoryState } from "../useFactory";
 import { Empty, Field, Section, ReadOnlyValue } from "../components/ui";
+import { installedLlms } from "../productionPreflight";
+export const CLIP_COUNTS = [1, 2, 3, 4, 5, 6];
 // Send only the contract's editable fields, never server-added capabilities.
 export function editableSettings(s: Settings): Settings {
+  const count = Math.round(Number(s.clip_count ?? 3));
   return {
+    default_model: typeof s.default_model === "string" ? s.default_model : "",
+    clip_count: CLIP_COUNTS.includes(count) ? count : 3,
     brand: s.brand ?? "",
     production_strategy:
-      s.production_strategy === "baseline" ? "baseline" : "team",
+      s.production_strategy === "baseline" || s.production_strategy === "team"
+        ? s.production_strategy
+        : "swarm",
     objective: s.objective ?? "discovery",
     language: s.language ?? "en",
-    autonomy: s.autonomy ?? "review",
+    autonomy: s.autonomy ?? "auto",
     publishing_enabled: s.publishing_enabled === true,
     ads_enabled: s.ads_enabled === true,
     daily_budget: s.daily_budget ?? 0,
@@ -67,8 +74,68 @@ export function SettingsPage({ state }: { state: FactoryState }) {
     )
       setDirty(false);
   }
+  const llms = installedLlms(state.data.models);
+  const chosen = draft.default_model ?? "";
   return (
     <form onSubmit={(e) => void save(e)}>
+      <Section
+        title="How the factory runs"
+        detail="What happens when you add footage"
+      >
+        <label className="check optin">
+          <input
+            type="checkbox"
+            checked={draft.autonomy === "auto"}
+            onChange={(e) =>
+              update("autonomy", e.target.checked ? "auto" : "review")
+            }
+          />
+          <span>
+            <strong>Autopilot</strong>
+            <small>
+              New footage starts production by itself. Clips still wait for your
+              approval, and nothing is published without you.
+            </small>
+          </span>
+        </label>
+        <div className="form-grid">
+          <Field
+            label="Default model"
+            hint="Automatic picks an installed model that can see video frames."
+          >
+            <select
+              value={chosen}
+              onChange={(e) => update("default_model", e.target.value)}
+            >
+              <option value="">Automatic</option>
+              {chosen && !llms.some((m) => m.id === chosen) && (
+                <option value={chosen}>{chosen} (not installed)</option>
+              )}
+              {llms.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                  {m.vision === false ? " (text only)" : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label="Clips per source"
+            hint="How many clips the factory aims to make from each video."
+          >
+            <select
+              value={draft.clip_count ?? 3}
+              onChange={(e) => update("clip_count", Number(e.target.value))}
+            >
+              {CLIP_COUNTS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </Section>
       <Section
         title="Creative direction"
         detail="A clear intent guides every new clip"
@@ -103,17 +170,18 @@ export function SettingsPage({ state }: { state: FactoryState }) {
           </Field>
           <Field
             label="Production strategy"
-            hint="Team is the backend default. Explicit Factory buttons can override this for a run."
+            hint="Swarm makes many clips fast, each on a different hypothesis. Team makes a few, with planning and a self-check."
           >
             <select
-              value={draft.production_strategy ?? "team"}
+              value={draft.production_strategy ?? "swarm"}
               onChange={(e) =>
                 update(
                   "production_strategy",
-                  e.target.value as "team" | "baseline",
+                  e.target.value as "swarm" | "team" | "baseline",
                 )
               }
             >
+              <option value="swarm">Swarm — many clips, about one per minute of footage</option>
               <option value="team">Team — bounded collaborative review</option>
               <option value="baseline">
                 Baseline — existing variant pipeline
@@ -129,24 +197,6 @@ export function SettingsPage({ state }: { state: FactoryState }) {
               value={draft.language}
               onChange={(e) => update("language", e.target.value)}
             />
-          </Field>
-          <Field
-            label="Autonomy"
-            hint="Review keeps you in control. Publishing still requires approval and explicit opt-in."
-          >
-            <select
-              value={draft.autonomy}
-              onChange={(e) => update("autonomy", e.target.value)}
-            >
-              {!["review", "manual", "auto"].includes(draft.autonomy) && (
-                <option value={draft.autonomy}>
-                  {draft.autonomy} (reported)
-                </option>
-              )}
-              <option value="review">Review before action</option>
-              <option value="manual">Manual</option>
-              <option value="auto">Automatic local production</option>
-            </select>
           </Field>
           {draft.objective === "custom" && (
             <Field label="Custom objective event">

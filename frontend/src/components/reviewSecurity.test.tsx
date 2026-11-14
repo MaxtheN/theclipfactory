@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClipReview } from "./ClipReview";
-import { Factory } from "../pages/Factory";
+import { Studio } from "../pages/Studio";
 import { clip, testState } from "../test-state";
 import { hasTranscript, jobContextId } from "../productionPreflight";
 import type { Job } from "../types";
@@ -278,7 +278,7 @@ describe("source-aware production preflight", () => {
         has_audio: true,
         transcript,
       };
-      render(<Factory state={state} />);
+      render(<Studio state={state} />);
       expectProduction(false);
       expect(screen.getByText(/Install whisper-turbo/)).toBeInTheDocument();
       expect(
@@ -303,7 +303,7 @@ describe("source-aware production preflight", () => {
         state.data.videos[0].transcript = {
           segments: [{ text: "Real transcript" }],
         };
-      render(<Factory state={state} />);
+      render(<Studio state={state} />);
       expectProduction(true);
       if (condition === "unknown")
         expect(
@@ -319,7 +319,7 @@ describe("source-aware production preflight", () => {
       state.data.jobs = [
         { id: "active", kind: "team", status, context: { video_id: "v1" } },
       ];
-      const view = render(<Factory state={state} />);
+      const view = render(<Studio state={state} />);
       expectProduction(false);
       expect(
         screen.getByRole("button", { name: "Analyze video" }),
@@ -341,7 +341,7 @@ describe("source-aware production preflight", () => {
         },
       ]) {
         view.rerender(
-          <Factory
+          <Studio
             state={{ ...state, data: { ...state.data, jobs: [job] } }}
           />,
         );
@@ -359,7 +359,7 @@ describe("source-aware production preflight", () => {
       if (condition === "stale") state.errors.system = "Unavailable";
       if (condition === "model") state.data.models = [];
       if (condition === "queue") state.errors.jobs = "Unavailable";
-      render(<Factory state={state} />);
+      render(<Studio state={state} />);
       expect(
         screen.getByRole("button", { name: "Analyze video" }),
       ).toBeDisabled();
@@ -368,7 +368,7 @@ describe("source-aware production preflight", () => {
   );
   it("submits analysis only with a ready runtime and installed selected model", async () => {
     const fetch = mockFetch();
-    render(<Factory state={readyState()} />);
+    render(<Studio state={readyState()} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Analyze video" }),
     );

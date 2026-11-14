@@ -66,12 +66,12 @@ def test_generation_rejects_opaque_or_unbounded_output(model, monkeypatch, outpu
     "changes",
     [
         {"prompt": ""},
-        {"prompt": "x" * 64_001},
+        {"prompt": "x" * 96_001},
         {"max_tokens": True},
         {"max_tokens": 0},
         {"max_tokens": 4097},
         {"images": ["https://external.example/image.jpg"]},
-        {"images": ["image"] * 17},
+        {"images": ["image"] * 25},
     ],
 )
 def test_generation_bounds_without_model_load(model, monkeypatch, changes):
@@ -123,7 +123,13 @@ def test_whisper_normalizes_numpy_segments_and_words(model, monkeypatch, tmp_pat
         ],
     }
     transcribe.assert_called_once_with(
-        str(audio), path_or_hf_repo=model, word_timestamps=True, language=None, verbose=False
+        str(audio),
+        path_or_hf_repo=model,
+        word_timestamps=True,
+        language=None,
+        verbose=False,
+        condition_on_previous_text=False,
+        hallucination_silence_threshold=2.0,
     )
 
 
@@ -241,3 +247,97 @@ def test_standalone_error_is_generic_and_does_not_echo_input(tmp_path):
     assert "private" not in result.stderr
     assert "Traceback" not in result.stderr
     assert not response.exists()
+
+
+def test_whisper_runs_window_by_window_and_keeps_its_own_confidence(model, monkeypatch, tmp_path):
+    audio = tmp_path / "input.wav"
+    audio.touch()
+    transcribe = Mock(return_value={"text": "hi", "language": "en", "segments": [
+        {"start": 1, "end": 2, "text": "hi", "avg_logprob": -0.4, "no_speech_prob": 0.1, "tokens": [1, 2]},
+    ]})
+    module(monkeypatch, "mlx_whisper", transcribe=transcribe)
+    result = worker.infer({"model": model, "action": "transcribe", "audio": str(audio), "language": "en"})
+    assert result["segments"] == [
+        {"start": 1.0, "end": 2.0, "text": "hi", "words": [], "no_speech_prob": 0.1, "avg_logprob": -0.4}
+    ]
+    options = transcribe.call_args.kwargs
+    # Each window stands alone and long silences are skipped: fewer invented phrases over noise.
+    assert options["condition_on_previous_text"] is False and options["hallucination_silence_threshold"] == 2.0
+
+
+def fake_processor(monkeypatch, grammar="grammar"):
+    """A processor with its own chat template, plus the runtime's grammar builder."""
+    processor = Mock()
+    processor.apply_chat_template.return_value = "interleaved"
+    build = Mock(return_value=grammar)
+    module(monkeypatch, "mlx_vlm.structured", build_json_schema_logits_processor=build)
+    return processor, build
+
+
+def test_labelled_frames_are_interleaved_and_output_is_held_to_the_schema(model, monkeypatch, tmp_path):
+    frames = [tmp_path / "a.jpg", tmp_path / "b.jpg"]
+    for frame in frames:
+        frame.touch()
+    load, generate, template = fake_vlm(monkeypatch, SimpleNamespace(text='{"ok": true}'))
+    processor, build = fake_processor(monkeypatch)
+    load.return_value = ("model", processor)
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
+    request = {
+        "model": model, "action": "generate", "prompt": "Describe.", "images": [str(f) for f in frames],
+        "image_labels": ["Frame at 1.0s", "Frame at 2.5s"], "schema": schema, "max_tokens": 300, "temperature": 0.2,
+    }
+    assert worker.infer(request) == {"output": '{"ok": true}'}
+    template.assert_not_called()  # the labelled path builds its own interleaved message
+    parts = processor.apply_chat_template.call_args.args[0][0]["content"]
+    assert [p.get("text", "<image>") for p in parts] == [
+        "\nFrame at 1.0s:", "<image>", "\nFrame at 2.5s:", "<image>", "\nDescribe.",
+    ]
+    assert processor.apply_chat_template.call_args.kwargs == {
+        "tokenize": False, "add_generation_prompt": True, "enable_thinking": False,
+    }
+    build.assert_called_once_with(processor.tokenizer, schema)
+    generate.assert_called_once_with(
+        "model", processor, "interleaved", image=[str(f) for f in frames], max_tokens=300, temperature=0.2,
+        verbose=False, logits_processors=["grammar"],
+    )
+
+
+def test_an_unsupported_schema_falls_back_to_free_generation(model, monkeypatch):
+    _, generate, _ = fake_vlm(monkeypatch, "free text")
+    module(monkeypatch, "mlx_vlm.structured", build_json_schema_logits_processor=Mock(side_effect=ValueError("x")))
+    assert worker.infer({"model": model, "action": "generate", "prompt": "p", "schema": {"type": "object"}}) == {
+        "output": "free text"
+    }
+    assert "logits_processors" not in generate.call_args.kwargs
+
+
+def test_a_batch_loads_the_model_once_and_one_failure_does_not_discard_the_rest(model, monkeypatch):
+    load, generate, _ = fake_vlm(monkeypatch, None)
+    generate.side_effect = ["first", RuntimeError("out of memory"), SimpleNamespace(text="third")]
+    result = worker.infer({"model": model, "action": "batch", "requests": [
+        {"prompt": "one"}, {"prompt": "two"}, {"prompt": "three", "max_tokens": 50},
+    ]})
+    assert result == {"outputs": [
+        {"output": "first"}, {"error": "Generation failed for this request."}, {"output": "third"},
+    ]}
+    load.assert_called_once_with(model, trust_remote_code=False)
+    assert generate.call_count == 3 and generate.call_args.kwargs["max_tokens"] == 50
+
+
+@pytest.mark.parametrize(
+    "request_changes",
+    [
+        {"requests": []},
+        {"requests": [{"prompt": "p"}] * 65},
+        {"requests": ["not a request"]},
+        {"requests": [{"prompt": ""}]},
+        {"requests": [{"prompt": "p", "images": ["a.jpg"], "image_labels": []}]},
+        {"requests": [{"prompt": "p", "schema": "not a schema"}]},
+        {"requests": [{"prompt": "p", "temperature": 9}]},
+    ],
+)
+def test_batch_bounds_without_model_load(model, monkeypatch, request_changes):
+    load, _, _ = fake_vlm(monkeypatch, "output")
+    with pytest.raises((ValueError, TypeError)):
+        worker.infer({"model": model, "action": "batch", **request_changes})
+    load.assert_not_called()
