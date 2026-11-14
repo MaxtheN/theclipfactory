@@ -446,11 +446,18 @@ class TeamEngine:
 
         def call():
             feedback = None
+            previous_handoff = None
             # Keep each requested critique to one independent assessment.
             attempts = 1 if role == "critic" else 2
             for attempt in range(attempts):
                 self.jobs.check(job_id)
-                request_data = data if feedback is None else {**data, "format_correction": feedback}
+                request_data = (
+                    data if feedback is None else {
+                        **data,
+                        "format_correction": feedback,
+                        "previous_handoff": previous_handoff,
+                    }
+                )
                 request = (
                     f"You are the {LABELS[role]} in a local video-production team. {instruction}\n"
                     "If approved_campaign_direction or campaign_snapshot is supplied, use the account-scoped "
@@ -470,6 +477,16 @@ class TeamEngine:
                 )
                 try:
                     accepted = decode_output(output.get("output"), schema)
+                    # Every correction must pass the same source and permission guards.
+                    if validate:
+                        try:
+                            validate(accepted)
+                        except WorkError as exc:
+                            if role not in {"footage_analyst", "editor"} or attempt + 1 == attempts:
+                                raise
+                            previous_handoff = accepted
+                            feedback = [{"field": "source_grounding", "problem": str(exc)[:500]}]
+                            continue
                 except WorkError as exc:
                     cause = exc.__cause__
                     if attempt + 1 == attempts or not isinstance(cause, (ValidationError, json.JSONDecodeError)):
@@ -485,9 +502,6 @@ class TeamEngine:
                     else:
                         feedback = [{"field": "response", "problem": "Return one complete JSON object."}]
                     continue
-                # Source, evidence, objective, and approval invariants still fail closed.
-                if validate:
-                    validate(accepted)
                 return accepted
 
         return self._operation(run_id, job_id, role, call, iteration=iteration, refs=refs)
