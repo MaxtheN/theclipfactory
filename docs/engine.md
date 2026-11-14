@@ -49,7 +49,7 @@ Three modes are available: `production_strategy` = swarm (the default), team or 
 | Input | Bound | Reaches |
 | --- | --- | --- |
 | Brand text and objective | Brand ≤4,000 characters (swarm uses 600) | All modes |
-| Campaign snapshot: approved Style rules, `profile_snapshot`, goal, `campaign_notes`, **`brief_snapshot`** | Whole JSON | Team as `campaign_snapshot`, swarm and scouts as `approved_campaign_direction` |
+| **Campaign brief block** (`brief.py:brief_block`): workspace voice/boundaries and audience, approved Style rules, goal, `campaign_notes`, `brief_snapshot`, per-run direction and references | Deterministic, ≤2,600 characters (compact ≤1,400 for swarm, scouts and the learning analyst); lowest-precedence lines are dropped first, must-avoid items never | Every team role, swarm, scouts and selector, baseline, learning analyst. Replaces the raw snapshot JSON (see §6) |
 | Learning memory (experiments and comparisons, citable as `experiment:` and `comparison:` IDs) | 2,000 characters (swarm: 1,200) | Team and swarm |
 | Strategist `selection_guidance` (a tagged block inside the approved `moment_selection`) | `strategist.py:selection_guidance` | Team and swarm |
 | Previous observations: the 8 most recent clips' feedback, insights and events | ≤6 of each | Team (`create`) |
@@ -110,15 +110,35 @@ request; each resolved decision is stored in the clip's `craft` record and rende
 | Where | Fields |
 | --- | --- |
 | Onboarding / workspace (`campaigns.py:Profile`) | name, audience, brand_context, creative_preferences (UI: "Your creative direction", "What should every edit respect?") |
-| Campaign (`campaigns.py:Campaign`) | objective, primary_metric, notes (≤2,000), **brief**: audience, constraints[], requested_outputs[], measurement_intent |
+| Campaign (`campaigns.py:Campaign`) | objective, primary_metric, notes (≤2,000), **brief** (`brief.py:Brief`): target audience (refines the workspace's), key_messages (≤5 × 160), cta (≤80, also the end card) + cta_link, must_include / must_avoid (≤8 × 120), tone (≤300), references (≤5 URLs + note; display-only, untrusted, never fetched), deliverables (clip_count 1–50, max_duration_seconds 5–180, platforms: Instagram Reels), context (≤1,500); legacy constraints[], requested_outputs[], measurement_intent kept. Old briefs read complete (`normalize_brief`); a PUT that omits the brief keeps it. UI: `CampaignBrief.tsx` in New campaign and Workspace settings → Campaign (Save brief), summary line on Find clips |
 | Style rules (`campaigns.py:Direction`) | angles[], moment_selection, hooks[], pacing, duration_seconds (1–180), framing (`fit`/`fill`), caption_style (`standard`/`high_contrast`), editing_preferences, measurement_questions[], next_experiments[], evidence_refs, limitations, confidence |
 | Fine-tune (`frontend/src/growth/Studio.tsx`) | mode (agents or manual start/end), model, correction budget, opening (text overlay or cold open + times), hook text, crop focus, captions on/off |
-| Per-run direction | ⚠️ *In flight*: the UI field "What should the agents look for?" (≤500 characters, `productionContracts.ts:direction`) has no backend support yet. `campaigns.py:AgentProduction` forbids extra fields and has no `direction`, and no prompt reads it. |
+| Per-run direction | "What should the agents look for?" (≤500, `AgentProduction.direction`). Reaches every agent inside the brief block's section [4] as untrusted data, a preference only |
 | Direct render (`campaigns.py:Production`) | `instructions` (≤4,000). Stored as `creator_instructions` but **not** fed to any model. |
 
 Only duration, framing and caption style are *enforced* in the render
-(`app.py:render_team`, `pipeline_task`). Pacing, editing_preferences and the brief reach
-the agents only as text.
+(`app.py:render_team`, `pipeline_task`). Pacing and editing_preferences reach the agents
+only as text.
+
+**How the brief is used.** One block (`brief.py:brief_block`) sits after each role's
+instruction with an explicit precedence: [1] hard limits (workspace voice and boundaries,
+must-avoid items `A#`) > [2] approved Style rules > [3] campaign brief (goal, key messages
+`M#`, include topics `T#`, CTA, audience, tone, deliverables, notes, context) > [4] run
+direction and references (untrusted data). Each role gets a one-line "YOUR USE".
+Enforced in code, not only by text:
+
+- **Must-avoid**: a moment (footage analyst, scouts, shortlist), swarm idea, baseline
+  candidate or editor cut is rejected when every content word of an avoid item appears
+  in its transcript span (plus hook and caption for cuts), or when the model flags the
+  `A#` itself. Rejections are recorded on the run as `brief_rejections`. The critic gets
+  deterministic `brief` error findings for hooks/captions that hit the list (also on
+  recheck after a manual edit), and the learning analyst cannot propose such a hook.
+- **Serves**: moments, angles and swarm ideas must name the `M#`/`T#` they serve or
+  `none` (grammar-required with a brief); clips record it as `brief_serves`.
+- **Deliverables**: `clip_count` sets the team run's clip count (capped at 6);
+  `max_duration_seconds` caps editor and swarm ranges below the Style-rules duration.
+- **CTA**: `Brief.cta` turns on the CTA end card (`app.py:render_team`).
+
 
 ## 7. Learning and strategist hooks
 
@@ -147,8 +167,8 @@ with libass and drawtext, and no Homebrew.
 
 | # | Upgrade | Impact | Effort | Extends | 16 GB / local risk |
 | --- | --- | --- | --- | --- | --- |
-| 1 | **Brief-driven agents**: give each role explicit instructions that use `brief_snapshot` (audience, constraints, requested_outputs) and score fit to the brief | High | S | `team.py:_agent` instructions, `scouts.py:CRITERIA`, `_swarm` prompt | Prompt size versus a 4B model's 8K context. Keep the brief block to about 1,000 characters. |
-| 2 | **Per-run direction note** (finish what is in flight) | High | S | `campaigns.py:AgentProduction` → `TeamEngine.create` context | Prompt-injection surface. Keep it inside the "untrusted DATA" framing. |
+| 1 | ✅ **Brief-driven agents** (shipped: `brief.py`, see §6) | High | S | — | Block bounded at 2,600 / 1,400 characters. Selection by message fit is the model's judgement; only must-avoid is enforced |
+| 2 | ✅ **Per-run direction note** (shipped, inside the brief block as untrusted data) | High | S | — | — |
 | 3 | **A/B variants per moment**: 2–3 hooks or openings for one range, tagged `changed_variable` | High | M | `_swarm` treatments, `Render.changed_variable`, `parent_clip_id` | Each variant is another render (about 2× disk and time). Render variants serially. |
 | 4 | **Silence / filler jump cuts** using word timestamps | High | M | Generalize `render` segments beyond cold_open and main, `caption_entries` offsets | Many-segment concat graphs in FFmpeg 4.4. Caption re-timing must stay verified by `verify`. |
 | 5 | **Hook craft**: rewrite hooks into a designed title card for the first 2 s | High | S–M | `.hook.ass` style, critic `claims` check | Rewritten hooks may overclaim, so the critic must still ground them. |
