@@ -1,3 +1,4 @@
+import { SHOW_FACTORY_MAP } from "./appEvents";
 import {
   useCallback,
   useEffect,
@@ -743,6 +744,12 @@ export function FactoryTabs({
       /* A remembered tab is only a convenience. */
     }
   };
+  // The first episode dropped on Factory opens the map so the stations can be watched.
+  useEffect(() => {
+    const show = () => choose("map");
+    window.addEventListener(SHOW_FACTORY_MAP, show);
+    return () => window.removeEventListener(SHOW_FACTORY_MAP, show);
+  }, []);
   return (
     <>
       <div className="gf-fmap-segment" role="tablist" aria-label="Factory view">

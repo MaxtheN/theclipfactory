@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
+import { SHOW_FACTORY_MAP } from "./appEvents";
+import { FirstRunInstagram } from "./FirstRunInstagram";
 import type { Clip, Job, TeamRun, Video } from "../types";
 import { ApiError, endpoint, post } from "../api";
 import { Storyboard } from "../components/Storyboard";
@@ -498,13 +500,19 @@ export function FactoryHome({
       return;
     }
     const file = event.dataTransfer.files[0];
-    if (file) void attach(file);
+    if (file) firstClip(file);
+  }
+  /** First episode: start the import, then show the Factory map so the stations can be watched. */
+  function firstClip(file: File) {
+    const first = !sources.length;
+    void attach(file);
+    if (first) window.dispatchEvent(new Event(SHOW_FACTORY_MAP));
   }
 
   return (
     <div className="gf-factory-home">
       <div
-        className={`gf-upload-stage gf-card${dragging ? " is-dragging" : ""}${sources.length ? " is-compact" : ""}`}
+        className={`gf-upload-stage gf-card${dragging ? " is-dragging" : ""}${sources.length ? " is-compact" : " is-first-run"}`}
         hidden={importing || !!pending || !!unknown}
         onDragOver={(e) => {
           e.preventDefault();
@@ -519,10 +527,20 @@ export function FactoryHome({
         <span className="gf-upload-stage-icon" aria-hidden="true">
           <Icon name="upload" size={26} />
         </span>
-        <div>
-          <h2>Add an episode</h2>
-          <p>Drop a video here, or choose a file.</p>
-        </div>
+        {sources.length ? (
+          <div>
+            <h2>Add an episode</h2>
+            <p>Drop a video here, or choose a file.</p>
+          </div>
+        ) : (
+          <div>
+            <h2>Drop an episode — your first clips in a few minutes</h2>
+            <p>
+              Usually a few minutes for every 10 minutes of footage. You'll watch
+              each station work on the Factory map.
+            </p>
+          </div>
+        )}
         <button
           type="button"
           className="gf-button"
@@ -543,10 +561,13 @@ export function FactoryHome({
           disabled={blocked || !!pending || !!unknown || importing}
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) void attach(file);
+            if (file) firstClip(file);
           }}
         />
       </div>
+      {!sources.length && !importing && !pending && !unknown && w.profileId && (
+        <FirstRunInstagram profileId={w.profileId} />
+      )}
       {error && (
         <p className="gf-message error" role="alert">
           {error}

@@ -1007,6 +1007,66 @@
   box-shadow: none !important;
 }
 
+/* ---------- Factory first run ---------- */
+.gf-app .gf-upload-stage.is-first-run {
+  min-height: 260px;
+  border-style: dashed;
+  border-width: 1.5px;
+  border-color: rgba(226, 196, 157, 0.45);
+  transition: border-color var(--gf-fast) ease, transform var(--gf-base) var(--gf-ease),
+    background-color var(--gf-fast) ease;
+}
+.gf-app .gf-upload-stage.is-first-run h2 {
+  font-size: clamp(20px, 2vw, 26px);
+  letter-spacing: -0.4px;
+}
+.gf-app .gf-upload-stage.is-dragging {
+  border-color: var(--material-focus);
+  background-color: rgba(226, 196, 157, 0.1);
+  transform: scale(1.005);
+}
+.gf-app .gf-first-instagram {
+  display: grid;
+  gap: var(--gf-s3);
+  margin-top: var(--gf-s4);
+  padding: var(--gf-s4) var(--gf-s5);
+}
+.gf-first-instagram-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--gf-s3);
+}
+.gf-first-instagram-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(140deg, rgba(240, 185, 172, 0.35), rgba(226, 196, 157, 0.35));
+}
+.gf-app .gf-first-instagram h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.gf-app .gf-first-instagram h2 small {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--material-metadata);
+}
+.gf-app .gf-first-instagram-head p,
+.gf-app .gf-first-instagram-baseline {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--material-secondary);
+}
+.gf-app .gf-first-instagram-baseline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ---------- 1024px: nothing wraps into a mess ---------- */
 @media (max-width: 1100px) {
   .gf-app .gf-main {

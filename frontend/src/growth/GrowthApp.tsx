@@ -31,7 +31,7 @@ import "./desktop-shell.css";
 import "./navigation.css";
 import "./polish.css";
 import { cloudApi } from "./cloudApi";
-import { CLOUD_CHANGED } from "./cloudEvents";
+import { CLOUD_CHANGED } from "./appEvents";
 
 const views = {
   factory: {
