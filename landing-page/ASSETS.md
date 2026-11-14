@@ -4,7 +4,7 @@
 - `assets/peaks.webp`, `valley.webp`, `hiker.webp`, `hiker-close.webp`, `towers.webp` and `summit.webp` are crops of that same photograph, used as sample 9:16 clips and scene thumbnails.
 - `assets/icon.svg`, `mark.svg`, `mark-white.svg` and `favicon.svg` are the Growth Factory mark: a play triangle cut into three clips. Project-native SVG.
 - `assets/social-card.jpg` is a capture of this site's opening screen, used for link previews.
-- Type is Bricolage Grotesque (headings) and Inter (body), loaded from Google Fonts. Both use the SIL Open Font License.
+- Type is Bricolage Grotesque throughout, self-hosted as `assets/bricolage-grotesque.woff2` under the SIL Open Font License (`assets/BricolageGrotesque-OFL.txt`). The variable font is from the Google Fonts `ofl/bricolagegrotesque` directory, subset to Latin and the punctuation/arrows used here with fontTools. No font request is made to Google.
 
 ## Image prompt
 

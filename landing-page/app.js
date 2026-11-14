@@ -1,21 +1,19 @@
 document.documentElement.classList.add("js");
 
-const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-/* Tabs with roving focus and arrow keys. onSelect runs after the switch. */
+/* Enhance readable HTML into keyboard-operated tabs. Nothing auto-advances. */
 function setupTabs(tabs, onSelect) {
-  function select(index, moveFocus) {
+  function select(index, moveFocus = false) {
     tabs.forEach((tab, i) => {
-      const on = i === index;
-      tab.setAttribute("aria-selected", String(on));
-      tab.tabIndex = on ? 0 : -1;
-      document.getElementById(tab.getAttribute("aria-controls")).hidden = !on;
+      const selected = i === index;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      document.getElementById(tab.getAttribute("aria-controls")).hidden = !selected;
     });
     if (moveFocus) tabs[index].focus();
     if (onSelect) onSelect(index);
   }
   tabs.forEach((tab, index) => {
-    tab.addEventListener("click", () => select(index, false));
+    tab.addEventListener("click", () => select(index));
     tab.addEventListener("keydown", (event) => {
       const keys = {
         ArrowRight: (index + 1) % tabs.length,
@@ -29,12 +27,14 @@ function setupTabs(tabs, onSelect) {
       }
     });
   });
+  if (tabs.length) select(0);
   return select;
 }
 
-/* Mobile menu */
+/* Mobile navigation closes on selection, Escape, outside interaction, or resize. */
 const menuButton = document.querySelector(".menu-btn");
 const mobileNav = document.querySelector("#mobile-nav");
+const desktop = window.matchMedia("(min-width: 761px)");
 if (menuButton && mobileNav) {
   const setMenu = (open) => {
     menuButton.setAttribute("aria-expanded", String(open));
@@ -43,7 +43,15 @@ if (menuButton && mobileNav) {
   };
   menuButton.addEventListener("click", () => setMenu(mobileNav.hidden));
   mobileNav.addEventListener("click", (event) => {
-    if (event.target.closest("a")) setMenu(false);
+    const link = event.target.closest("a");
+    if (!link) return;
+    setMenu(false);
+    // Do not strand keyboard focus in the collapsed navigation.
+    const target = document.querySelector(link.getAttribute("href"));
+    if (target) {
+      target.tabIndex = -1;
+      target.focus({ preventScroll: true });
+    }
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !mobileNav.hidden) {
@@ -51,9 +59,45 @@ if (menuButton && mobileNav) {
       menuButton.focus();
     }
   });
+  document.addEventListener("pointerdown", (event) => {
+    if (!mobileNav.hidden && !event.target.closest(".site-header")) setMenu(false);
+  });
+  document.addEventListener("focusin", (event) => {
+    if (!event.target.closest(".site-header")) setMenu(false);
+  });
+  desktop.addEventListener("change", () => {
+    if (desktop.matches) setMenu(false);
+  });
 }
 
-/* Decorative waveform for the Listener */
+/* Pause all decorative motion. OS preferences always win; storage is optional. */
+const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+const motionButtons = [...document.querySelectorAll(".motion-toggle")];
+let manuallyPaused = false;
+try {
+  manuallyPaused = localStorage.getItem("growth-factory-motion") === "paused";
+} catch { /* Private/embedded contexts can deny storage. */ }
+function updateMotion() {
+  const paused = manuallyPaused || motionPreference.matches;
+  document.documentElement.classList.toggle("motion-paused", paused);
+  motionButtons.forEach((button) => {
+    button.hidden = false;
+    button.setAttribute("aria-pressed", String(paused));
+    button.textContent = motionPreference.matches ? "Motion reduced" : paused ? "Resume motion" : "Pause motion";
+    button.disabled = motionPreference.matches;
+  });
+}
+motionButtons.forEach((button) => button.addEventListener("click", () => {
+  manuallyPaused = !manuallyPaused;
+  try {
+    localStorage.setItem("growth-factory-motion", manuallyPaused ? "paused" : "playing");
+  } catch { /* The control still works without persistence. */ }
+  updateMotion();
+}));
+motionPreference.addEventListener("change", updateMotion);
+updateMotion();
+
+/* Decorative sample assets, deliberately deterministic. */
 const wave = document.querySelector(".wave");
 if (wave) {
   for (let i = 0; i < 48; i++) {
@@ -64,8 +108,6 @@ if (wave) {
     wave.append(bar);
   }
 }
-
-/* Decorative filmstrip in the app window */
 const filmstrip = document.querySelector(".filmstrip");
 if (filmstrip) {
   for (let i = 0; i < 12; i++) {
@@ -75,74 +117,17 @@ if (filmstrip) {
   }
 }
 
-/* Agents: steps through on its own until someone picks one */
 const agentTabs = [...document.querySelectorAll(".agent")];
 const railFill = document.querySelector(".rail-fill");
-let agentIndex = 0;
-let autoplay = null;
-let userPicked = false;
-
-const selectAgent = setupTabs(agentTabs, (index) => {
-  agentIndex = index;
+setupTabs(agentTabs, (index) => {
   agentTabs.forEach((tab, i) => tab.classList.toggle("is-done", i < index));
-  if (railFill) railFill.style.width = `${(index / (agentTabs.length - 1)) * 100}%`;
+  if (railFill) railFill.style.width = `${(index / Math.max(1, agentTabs.length - 1)) * 100}%`;
 });
-
-function stopAutoplay() {
-  clearInterval(autoplay);
-  autoplay = null;
-}
-
-function startAutoplay() {
-  if (reduceMotion || autoplay || agentTabs.length === 0) return;
-  autoplay = setInterval(() => selectAgent((agentIndex + 1) % agentTabs.length, false), 3200);
-}
-
-if (agentTabs.length) {
-  const list = agentTabs[0].closest("[role=tablist]");
-  list.addEventListener("pointerdown", () => {
-    userPicked = true;
-    stopAutoplay();
+const appTabs = [...document.querySelectorAll(".app-tabs [role=tab]")];
+const selectApp = setupTabs(appTabs);
+document.querySelectorAll("[data-app-tab]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const index = appTabs.findIndex((tab) => tab.id === `app-tab-${button.dataset.appTab}`);
+    if (index >= 0) selectApp(index, true);
   });
-  list.addEventListener("keydown", () => {
-    userPicked = true;
-    stopAutoplay();
-  });
-}
-
-const agentsSection = document.querySelector("#agents");
-if (agentsSection && "IntersectionObserver" in window) {
-  new IntersectionObserver(
-    ([entry]) => {
-      if (entry.isIntersecting && !userPicked) startAutoplay();
-      else stopAutoplay();
-    },
-    { threshold: 0.25 },
-  ).observe(agentsSection);
-}
-
-/* Download buttons: not wired up yet */
-document.querySelectorAll("[data-download]").forEach((button) => {
-  button.addEventListener("click", (event) => event.preventDefault());
 });
-
-/* App window tabs */
-setupTabs([...document.querySelectorAll(".app-tabs [role=tab]")]);
-
-/* Reveal fallback when CSS scroll timelines are unavailable */
-const supportsScrollTimeline = window.CSS && CSS.supports && CSS.supports("animation-timeline: view()");
-if (!supportsScrollTimeline && !reduceMotion && "IntersectionObserver" in window) {
-  document.documentElement.classList.add("io");
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("in");
-          observer.unobserve(entry.target);
-        }
-      });
-    },
-    { threshold: 0.2, rootMargin: "0px 0px -8% 0px" },
-  );
-  document.querySelectorAll(".rv, .win, .tilt, .grey").forEach((el) => observer.observe(el));
-}

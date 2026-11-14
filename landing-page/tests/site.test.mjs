@@ -46,19 +46,34 @@ for (const [label, count] of [
   });
 }
 
-test("download CTAs are real buttons and the old demo link is gone", () => {
-  const buttons = [...html.matchAll(/<button\b[^>]*data-download[^>]*>/g)].map((m) => m[0]);
-  assert.ok(buttons.length >= 4);
-  for (const tag of buttons) assert.ok(tag.includes('type="button"'));
-  const hero = html.split('class="wrap hero-copy"')[1].split('class="hero-clips"')[0];
-  assert.match(hero, /data-download/);
+test("primary CTAs lead to an honest, actionable source setup", () => {
+  const hero = html.split('class="hero-copy"')[1].split('<figure')[0];
+  assert.match(hero, /href="#get"/);
+  const setup = html.split('id="get"')[1].split("</section>")[0];
+  assert.match(setup, /href="https:\/\/github.com\/MaxtheN\/theclipfactory#run-on-an-apple-silicon-mac"/);
+  assert.match(setup, /Public download not yet available/);
+  assert.doesNotMatch(html, /data-download|fake-btn/);
   assert.doesNotMatch(html, new RegExp(DEMO.replace(/[.]/g, "\\.")));
 });
 
-test("the rotating clip ring behind the closing section is decorative", () => {
-  const cta = html.split('id="get"')[1].split("</section>")[0];
-  assert.match(cta, /class="cta-orbit" aria-hidden="true"/);
-  assert.equal((cta.match(/class="ring-card/g) || []).length, 12);
+test("preview and privacy disclosures do not imply measured results or local-only processing", () => {
+  assert.match(html, /AI-generated sample imagery/);
+  assert.match(html, /Illustrative screens, not a live editing session/);
+  assert.match(html, /Synthetic example · Not measured results/);
+  assert.match(html, /Optional cloud roles send their inputs/);
+  assert.doesNotMatch(html, /Your footage never leaves|>Local only</);
+});
+
+test("scripts are progressive enhancement and fonts have no third-party requests", () => {
+  assert.equal((html.match(/role="tabpanel"/g) || []).length, 9);
+  assert.doesNotMatch(html, /role="tabpanel"[^>]* hidden/);
+  assert.match(html, /<noscript>/);
+  assert.doesNotMatch(html, /fonts\.googleapis|fonts\.gstatic/);
+  assert.match(css, /bricolage-grotesque\.woff2/);
+});
+
+test("every image has an explicit alternative text decision", () => {
+  for (const [image] of html.matchAll(/<img\b[^>]*>/g)) assert.match(image, /alt="[^"]*"/);
 });
 
 test("the mobile menu keeps its accessible associations", () => {

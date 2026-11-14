@@ -7,3 +7,11 @@ README.md
 package.json
 screenshots
 assets/alpine-story-original.png
+
+package-lock.json
+playwright.config.mjs
+tests
+playwright-report
+test-results
+scripts
+dist
