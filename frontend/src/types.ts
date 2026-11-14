@@ -8,6 +8,7 @@ export interface SystemInfo {
   ffprobe?: boolean | null;
   whisper?: boolean | null;
   model_runtime?: boolean | string | null;
+  ollama?: boolean | null;
   desktop?: boolean | null;
   data_dir?: string;
 }
@@ -43,6 +44,8 @@ export interface Model {
   estimated_gb?: number | null;
   installed?: boolean;
   status?: string;
+  source?: "ollama";
+  vision?: boolean;
 }
 export interface Job {
   lane?: "download" | "heavy";

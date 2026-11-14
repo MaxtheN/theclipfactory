@@ -8,7 +8,13 @@ import { Jobs } from "../components/Jobs";
 import { ClipReview } from "../components/ClipReview";
 import { TeamLedger } from "../components/TeamLedger";
 import { TeamComparisons } from "../components/TeamComparisons";
-import { hasTranscript, sourceHasActiveJob } from "../productionPreflight";
+import {
+  hasTranscript,
+  installedLlms,
+  runtimeSatisfied,
+  sourceHasActiveJob,
+  usableModel,
+} from "../productionPreflight";
 export function getCandidates(analysis: unknown): Candidate[] {
   let value = analysis;
   if (typeof value === "string") {
@@ -62,12 +68,12 @@ function Editor({
   );
   const [revisionBudget, setRevisionBudget] = useState(2);
   const strategy = state.data.settings?.production_strategy ?? "team";
-  const [model, setModel] = useState("qwen-small");
+  const [picked, setModel] = useState("qwen-small");
   const [error, setError] = useState("");
-  const installed = state.data.models.filter(
-    (m) =>
-      m.installed === true && (m.id.startsWith("qwen") || m.kind === "llm"),
-  );
+  const installed = installedLlms(state.data.models, { needsVision: true });
+  const model = usableModel(picked, installed);
+  const needsWhisper =
+    video.has_audio === true && !hasTranscript(video.transcript);
   const sourceBusy = sourceHasActiveJob(state.data.jobs, video.id);
   const analysisReady =
     !state.loading &&
@@ -76,10 +82,8 @@ function Editor({
     !state.errors.jobs &&
     !state.errors.system &&
     !sourceBusy &&
-    state.data.system?.model_runtime === true &&
+    runtimeSatisfied(state.data.system?.model_runtime, model, needsWhisper) &&
     installed.some((m) => m.id === model);
-  const needsWhisper =
-    video.has_audio === true && !hasTranscript(video.transcript);
   const whisperInstalled = state.data.models.some(
     (m) => m.id === "whisper-turbo" && m.installed === true,
   );

@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath
 import psutil
 
 from .jobs import Jobs, WorkError
+from .ollama import Ollama, OllamaError, is_ollama, model_name
 from .python_runtime import bootstrap_python, native_python
 
 # Opt out before huggingface_hub first import: HTTP tqdm hooks support cancellation.
@@ -192,6 +193,7 @@ class Models:
         self._download_reservations: dict[str, int] = {}
         self._ready_lock = threading.Lock()
         self._ready_cache = None
+        self.ollama = Ollama()
 
     @property
     def python(self) -> Path:
@@ -242,7 +244,35 @@ class Models:
                 self._ready_cache = (key, time.monotonic() + 5, False) if key else None
                 return False
 
+    @staticmethod
+    def _ollama_item(info: dict) -> dict:
+        details = " · ".join(filter(None, [info["parameter_size"], info["quantization"]]))
+        return {
+            "id": f"ollama:{info['name']}",
+            "name": f"{info['name']} · Ollama" + (f" ({details})" if details else ""),
+            "repo": "Managed by Ollama on this Mac",
+            "kind": "llm",
+            "license": "See `ollama show --license` for this model",
+            "estimated_gb": round(info["size"] / 1e9, 1) if info["size"] else None,
+            "installed": True,
+            "status": "Ready via Ollama",
+            "source": "ollama",
+            "vision": info["vision"],
+        }
+
     def item(self, identifier: str) -> dict:
+        if is_ollama(identifier):
+            try:
+                name = model_name(identifier)
+            except OllamaError as exc:
+                raise WorkError(str(exc)) from exc
+            status = self.ollama.status()
+            if not status["running"]:
+                raise WorkError("Ollama is not running. Open the Ollama app or run `ollama serve`.")
+            info = self.ollama.model(name)
+            if info is None:
+                raise WorkError("That Ollama model is not available locally. Run `ollama list` to check.")
+            return self._ollama_item(info)
         item = next((m for m in CATALOG if m["id"] == identifier), None)
         if not item:
             raise WorkError("Unknown model.")
@@ -260,7 +290,8 @@ class Models:
         return {**item, "installed": installed, "status": "installed" if installed else "not installed"}
 
     def catalog(self) -> list[dict]:
-        return [self.item(m["id"]) for m in CATALOG]
+        local = [self._ollama_item(m) for m in self.ollama.status()["models"]]
+        return [self.item(m["id"]) for m in CATALOG] + local
 
     def setup(self, job_id: str) -> dict:
         if not apple_silicon():
@@ -459,6 +490,8 @@ class Models:
         item = self.item(identifier)
         if item["kind"] != kind:
             raise WorkError("Choose a model appropriate to this task.")
+        if item.get("source") == "ollama":
+            return  # Ollama schedules its own memory and does not need the MLX runtime.
         if not item["installed"]:
             raise WorkError("Download and accept this model's license in Models first.")
         if not self.ready():
@@ -481,6 +514,8 @@ class Models:
         except (ValueError, TypeError, KeyError) as exc:
             raise WorkError("Inference input exceeds limits or is invalid.") from exc
         self.require(identifier, {"generate": "llm", "transcribe": "asr", "narrate": "tts"}[action])
+        if is_ollama(identifier):
+            return self._run_ollama(job_id, identifier, data)
         worker = Path(__file__).with_name("inference_worker.py")
         if not worker.is_file():
             raise WorkError(
@@ -529,3 +564,18 @@ class Models:
             return result
         except (OSError, ValueError, TypeError) as exc:
             raise WorkError("Inference worker returned an invalid result.") from exc
+
+    def _run_ollama(self, job_id: str, identifier: str, data: dict) -> dict:
+        name = model_name(identifier)
+        self.jobs.update(job_id, progress=35, message=f"Running {name} through local Ollama")
+        try:
+            text = self.ollama.generate(
+                name,
+                data["prompt"],
+                images=data.get("images", []),
+                max_tokens=data.get("max_tokens", 1500),
+                check=lambda: self.jobs.check(job_id),
+            )
+        except OllamaError as exc:
+            raise WorkError(f"{exc} No output was fabricated.") from exc
+        return {"output": text}

@@ -31,6 +31,7 @@ from .campaigns import Campaigns
 from .jobs import Jobs, WorkError
 from .meta import MetaClient, MetaError, MetaOAuth, SecureTokenStore, validate_public_video_url
 from .models import Models, apple_silicon
+from .ollama import LlmId, is_ollama
 from .store import Store, new_id, now
 from .team import TeamEngine
 
@@ -72,7 +73,7 @@ class Render(Body):
 
 
 class Analysis(Body):
-    model_id: Literal["qwen-small", "qwen-large"] = "qwen-small"
+    model_id: LlmId = "qwen-small"
 
 
 class TeamProduction(Analysis):
@@ -353,6 +354,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "ffprobe": bool(shutil.which("ffprobe")),
             "whisper": models().item("whisper-turbo")["installed"] and runtime_ready,
             "model_runtime": runtime_ready,
+            "ollama": models().ollama.status()["running"],
             "desktop": app.state.desktop,
             "data_dir": str(root),
         }
@@ -383,6 +385,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def download_model(identifier: str, body: License):
         if not body.accept_license:
             raise HTTPException(422, "Accept the model license before downloading.")
+        if is_ollama(identifier):
+            raise HTTPException(409, "Ollama manages this model. Use `ollama pull` instead.")
         with operations_lock:
             if jobs().busy("model_id", identifier):
                 raise HTTPException(409, "A job already uses this model.")
@@ -397,6 +401,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
     @app.delete("/api/models/{identifier}")
     def delete_model(identifier: str):
+        if is_ollama(identifier):
+            raise HTTPException(409, "Ollama manages this model. Use `ollama rm` instead.")
         models().item(identifier)
         with operations_lock:
             if (

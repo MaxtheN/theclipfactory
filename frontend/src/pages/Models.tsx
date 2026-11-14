@@ -10,15 +10,15 @@ import {
   ReadOnlyValue,
 } from "../components/ui";
 import { Jobs } from "../components/Jobs";
+import { installedLlms, usableModel } from "../productionPreflight";
 import { Narration } from "../components/Narration";
 export function Models({ state }: { state: FactoryState }) {
   const [consent, setConsent] = useState<Record<string, boolean>>({});
   const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("qwen-small");
-  const installed = state.data.models.filter(
-    (m) =>
-      m.installed === true && (m.id.startsWith("qwen") || m.kind === "llm"),
-  );
+  const [picked, setModel] = useState("qwen-small");
+  const installed = installedLlms(state.data.models);
+  const model = usableModel(picked, installed);
+  const ollama = state.errors.system ? null : state.data.system?.ollama;
   const inference = state.data.jobs.filter((j) => j.kind === "inference");
   return (
     <>
@@ -59,6 +59,14 @@ export function Models({ state }: { state: FactoryState }) {
         title="Model shelf"
         detail="Read the license and storage requirement before installing"
       >
+        <p className="muted" role="status">
+          Ollama:{" "}
+          {ollama === true
+            ? "running — its local models appear below as ready-to-use language models (cloud models are never listed)."
+            : ollama === false
+              ? "not running. Open the Ollama app or run “ollama serve” to use models you already pulled."
+              : "status unknown."}
+        </p>
         {!state.data.models.length ? (
           <Empty title="Model catalog unavailable">
             The local service has not returned a model catalog. Refresh or check
@@ -93,7 +101,14 @@ export function Models({ state }: { state: FactoryState }) {
                     <dd>{m.license || "Unknown — check repository terms"}</dd>
                   </div>
                 </dl>
-                {m.installed === true ? (
+                {m.source === "ollama" ? (
+                  <p className="muted">
+                    Managed by Ollama. Add or remove it with “ollama pull” /
+                    “ollama rm”.
+                    {m.vision === false &&
+                      " Text-only: clip analysis needs a vision model."}
+                  </p>
+                ) : m.installed === true ? (
                   <button
                     className="danger-button"
                     disabled={state.busy}
