@@ -1579,6 +1579,14 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             source_path(video).unlink()
             store.delete("videos", identifier)
             storyboards().delete(identifier)
+            # A campaign that still listed this source could never be saved again: every member must exist.
+            for campaign in store.all("campaigns"):
+                if identifier in (campaign.get("video_ids") or []):
+                    store.patch(
+                        "campaigns",
+                        campaign["id"],
+                        video_ids=[v for v in campaign["video_ids"] if v != identifier],
+                    )
         return {"deleted": identifier}
 
     def submit_source(identifier: str, kind: str, operation, **context):

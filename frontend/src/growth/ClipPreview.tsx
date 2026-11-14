@@ -15,11 +15,14 @@ export function ClipPreview({
   className,
   iconSize = 28,
   onReview,
+  onDiscard,
 }: {
   clip: Clip;
   className: string;
   iconSize?: number;
   onReview?: () => void;
+  /** Deletes the clip file; offered in the quick look where the screen can free space. */
+  onDiscard?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const title = clip.hook || clip.name;
@@ -50,6 +53,7 @@ export function ClipPreview({
           title={title}
           onClose={() => setOpen(false)}
           onReview={onReview}
+          onDiscard={onDiscard}
         />
       )}
     </>
@@ -62,11 +66,13 @@ export function QuickLook({
   onClose,
   onReview,
   reviewLabel = "Review",
+  onDiscard,
 }: {
   clip: Clip;
   title: string;
   onClose: () => void;
   onReview?: () => void;
+  onDiscard?: () => void;
   /** What the follow-up step is called; undirected clips are approved here rather than reviewed in the Studio. */
   reviewLabel?: string;
 }) {
@@ -121,6 +127,18 @@ export function QuickLook({
           >
             {reviewLabel}
             <Icon name="arrow" size={14} />
+          </button>
+        )}
+        {onDiscard && (
+          <button
+            type="button"
+            className="gf-button ghost compact"
+            onClick={() => {
+              onClose();
+              onDiscard();
+            }}
+          >
+            Discard
           </button>
         )}
         <button

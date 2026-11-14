@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { endpoint, put } from "../api";
-import { newestFirst } from "../pages/Home";
 import { clipMediaUrl } from "./productionApi";
 import type { Clip } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -11,7 +10,8 @@ import { Pill, formatTime } from "./parts";
 import type { LibraryView, OpenProduction } from "./FactoryHome";
 import { SourceDetails, sourceLabel } from "./sourcePresentation";
 import { ClipPreview, QuickLook } from "./ClipPreview";
-import { undirected } from "./productionState";
+import { newestFirst, undirected } from "./productionState";
+import { deleteEpisode, discardClips } from "./storage";
 import { SpeechlessChip } from "./SpeechSetup";
 
 export function Library({
@@ -60,6 +60,73 @@ export function Library({
       .toLocaleLowerCase()
       .includes(normalized),
   );
+  // Freeing space: deleting is the one thing here that cannot be undone, so each path asks first
+  // and says exactly what went and what the local service kept.
+  const [clearing, setClearing] = useState(false);
+  const [outcome, setOutcome] = useState<{ ok: boolean; text: string }>();
+  const locked = clearing || w.busy || w.loading || reviewPreview;
+  async function clear(task: () => Promise<{ ok: boolean; text: string }>) {
+    if (locked) return;
+    setClearing(true);
+    setOutcome(undefined);
+    try {
+      setOutcome(await task());
+    } catch (e) {
+      setOutcome({
+        ok: false,
+        text: e instanceof Error ? e.message : "Nothing was deleted.",
+      });
+    } finally {
+      // The brand's own list changes when footage goes, so it is read again with the clips.
+      await Promise.all([
+        factory.refresh(["clips", "videos", "factory"]),
+        w.campaign ? w.load(w.campaign.id).catch(() => undefined) : undefined,
+      ]);
+      setClearing(false);
+    }
+  }
+  const count = (n: number) => `${n} clip${n === 1 ? "" : "s"}`;
+  function discard(targets: Clip[]) {
+    if (!targets.length) return;
+    const one = targets.length === 1 ? targets[0] : undefined;
+    const question = one
+      ? `Discard “${one.hook || one.name}”? The clip file is deleted from this Mac.`
+      : `Discard ${count(targets.length)} that were not approved? Their files are deleted from this Mac. This cannot be undone.`;
+    if (!window.confirm(question)) return;
+    void clear(async () => {
+      const result = await discardClips(targets);
+      return result.kept
+        ? {
+            ok: false,
+            text: `${count(result.discarded)} discarded. ${result.kept} kept: ${result.reason}`,
+          }
+        : { ok: true, text: `${count(result.discarded)} discarded.` };
+    });
+  }
+  function deleteSource(sourceId: string) {
+    const label = sourceLabel(sourceId, ids);
+    // Everything made from the file goes with it, whichever brand or run made it.
+    const made = factory.data.clips.filter((c) => c.video_id === sourceId);
+    const approved = made.filter((c) => c.approved).length;
+    const question = made.length
+      ? `Delete ${label} and the ${count(made.length)} made from it${approved ? ` (${approved} approved)` : ""}? The footage and clip files are deleted from this Mac. This cannot be undone.`
+      : `Delete ${label}? The footage file is deleted from this Mac. This cannot be undone.`;
+    if (!window.confirm(question)) return;
+    void clear(async () => {
+      const result = await deleteEpisode(sourceId, made);
+      return result.deleted
+        ? {
+            ok: true,
+            text: made.length
+              ? `${label} and its ${count(made.length)} were deleted.`
+              : `${label} was deleted.`,
+          }
+        : {
+            ok: false,
+            text: `${label} was kept: ${result.kept} of its clips could not be deleted. ${result.reason}`,
+          };
+    });
+  }
   return (
     <section className="gf-library" aria-label="Library">
       <div className="gf-library-toolbar">
@@ -100,6 +167,14 @@ export function Library({
           />
         </label>
       </div>
+      {outcome && (
+        <p
+          className={`gf-message ${outcome.ok ? "success" : "error"}`}
+          role={outcome.ok ? "status" : "alert"}
+        >
+          {outcome.text}
+        </p>
+      )}
       {tab === "wall" ? (
         <div className="gf-review-wall">
           <ReviewWall
@@ -108,6 +183,8 @@ export function Library({
             sourceIds={ids}
             onReview={onReview}
             onFactory={onFactory}
+            onDiscard={discard}
+            locked={locked}
           />
         </div>
       ) : tab === "edits" ? (
@@ -121,6 +198,7 @@ export function Library({
                     className="gf-library-edit-art"
                     iconSize={24}
                     onReview={() => onReview(clip)}
+                    onDiscard={locked ? undefined : () => discard([clip])}
                   />
                   <button
                     type="button"
@@ -186,7 +264,8 @@ export function Library({
           {footage.length ? (
             <div className="gf-episode-grid">
               {footage.map((source) => {
-                const made = clips.filter((c) => c.video_id === source.id);
+                // Counted like the Factory screen does: clips made before a direction existed are this episode's too.
+                const made = [...clips, ...loose].filter((c) => c.video_id === source.id);
                 const waiting = made.filter((c) => !c.approved).length;
                 return (
                   <article className="gf-episode-card" key={source.id}>
@@ -249,6 +328,15 @@ export function Library({
                           Find clips
                           <Icon name="arrow" size={14} />
                         </button>
+                        <button
+                          type="button"
+                          className="gf-button ghost compact"
+                          disabled={locked}
+                          aria-label={`Delete ${sourceLabel(source.id, ids)}`}
+                          onClick={() => deleteSource(source.id)}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   </article>
@@ -306,12 +394,17 @@ function ReviewWall({
   sourceIds,
   onReview,
   onFactory,
+  onDiscard,
+  locked,
 }: {
   factory: FactoryState;
   clips: Clip[];
   sourceIds: string[];
   onReview: (clip: Clip) => void;
   onFactory: () => void;
+  /** Deletes the given clips' files after asking. */
+  onDiscard: (clips: Clip[]) => void;
+  locked: boolean;
 }) {
   const [filter, setFilter] = useState<WallFilter>("Needs review");
   const [hypothesis, setHypothesis] = useState("");
@@ -398,6 +491,16 @@ function ReviewWall({
             Approve all {approvable.length} shown
           </button>
         )}
+        {filter === "Needs review" && shown.length > 0 && (
+          <button
+            type="button"
+            className="gf-button ghost compact"
+            disabled={locked || factory.busy}
+            onClick={() => onDiscard(shown)}
+          >
+            Discard {shown.length} shown
+          </button>
+        )}
       </div>
       {shown.length ? (
         <div className="gf-wall-grid">
@@ -414,6 +517,7 @@ function ReviewWall({
                   "Clip approved.",
                 )
               }
+              onDiscard={locked ? undefined : () => onDiscard([clip])}
             />
           ))}
         </div>
@@ -448,12 +552,14 @@ function WallCard({
   source,
   onReview,
   onApprove,
+  onDiscard,
 }: {
   clip: Clip;
   source: string;
   /** Absent for clips with no direction: those open a quick look instead of the Studio. */
   onReview?: () => void;
   onApprove: () => void;
+  onDiscard?: () => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [looking, setLooking] = useState(false);
@@ -536,6 +642,7 @@ function WallCard({
           onClose={() => setLooking(false)}
           onReview={clip.approved ? undefined : onApprove}
           reviewLabel="Approve"
+          onDiscard={onDiscard}
         />
       )}
     </>

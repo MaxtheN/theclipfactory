@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Campaign, Clip, FactorySource, Video } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -52,6 +52,7 @@ function workspace(approved = true): Workspace {
     busy: false,
     loading: false,
     error: "",
+    load: vi.fn(async () => {}),
     run: vi.fn(async (task: () => Promise<unknown>) => {
       try {
         await task();
@@ -347,6 +348,104 @@ describe("review wall in the Library", () => {
         "/api/clips/b",
       ]),
     );
+  });
+
+  describe("freeing space", () => {
+    const deleted = () => requests.filter((r) => r.method === "DELETE").map((r) => r.url);
+    const library = (w: Workspace, f: FactoryState) =>
+      render(<Library w={w} factory={f} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} />);
+    /** The local service refuses to delete these clips, in its own words. */
+    function refuse(ids: string[], detail: string) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          requests.push({ url, method: init?.method ?? "GET" });
+          const refused = init?.method === "DELETE" && ids.some((id) => url === `/api/clips/${id}`);
+          return new Response(JSON.stringify(refused ? { detail } : {}), {
+            status: refused ? 409 : 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }),
+      );
+    }
+    let confirm: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    });
+    afterEach(() => confirm.mockRestore());
+
+    it("discards the clips nobody approved, revisions before the versions they build on", async () => {
+      const clips = [
+        made("a"),
+        made("b", { parent_clip_id: "a" } as Partial<Clip>),
+        made("kept", { approved: true }),
+      ];
+      const w = workspace();
+      const f = factory({}, { clips });
+      library(w, f);
+      fireEvent.click(screen.getByRole("button", { name: /Review wall/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Discard 2 shown" }));
+      expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/Discard 2 clips that were not approved\?/));
+      expect(await screen.findByText("2 clips discarded.")).toBeInTheDocument();
+      expect(deleted()).toEqual(["/api/clips/b", "/api/clips/a"]);
+      expect(f.refresh).toHaveBeenCalled();
+    });
+
+    it("deletes nothing when the question is declined", async () => {
+      confirm.mockReturnValue(false);
+      library(workspace(), factory({}, { clips: [made("a"), made("b")] }));
+      fireEvent.click(screen.getByRole("button", { name: /Review wall/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Discard 2 shown" }));
+      fireEvent.click(screen.getByRole("button", { name: /Episodes/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete Podcast 1" }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(deleted()).toEqual([]);
+    });
+
+    it("says which clips the local service kept, and why", async () => {
+      refuse(["b"], "This exact version was exported. It is kept so the export can be verified against it.");
+      library(workspace(), factory({}, { clips: [made("a"), made("b")] }));
+      fireEvent.click(screen.getByRole("button", { name: /Review wall/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Discard 2 shown" }));
+      const outcome = await screen.findByRole("alert");
+      expect(outcome).toHaveTextContent("1 clip discarded. 1 kept: This exact version was exported.");
+    });
+
+    it("discards one clip from its quick look", async () => {
+      library(workspace(), factory({}, { clips: [made("a"), made("b")] }));
+      fireEvent.click(screen.getByRole("button", { name: "Play Hook a" }));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Discard" }));
+      expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Discard “Hook a”?"));
+      expect(await screen.findByText("1 clip discarded.")).toBeInTheDocument();
+      expect(deleted()).toEqual(["/api/clips/a"]);
+    });
+
+    it("deletes an episode together with everything made from it, then reloads the brand", async () => {
+      // Clips of the same file from another campaign go too: the service keeps a source while any clip uses it.
+      const clips = [made("a"), made("done", { approved: true }), made("elsewhere", { campaign_id: "another" })];
+      const w = workspace();
+      library(w, factory({}, { clips }));
+      fireEvent.click(screen.getByRole("button", { name: /Episodes/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete Podcast 1" }));
+      expect(confirm).toHaveBeenCalledWith(
+        expect.stringContaining("Delete Podcast 1 and the 3 clips made from it (1 approved)?"),
+      );
+      expect(await screen.findByText("Podcast 1 and its 3 clips were deleted.")).toBeInTheDocument();
+      expect(deleted().slice(0, 3).sort()).toEqual(["/api/clips/a", "/api/clips/done", "/api/clips/elsewhere"]);
+      expect(deleted()[3]).toBe("/api/videos/v1");
+      expect(w.load).toHaveBeenCalledWith("c1");
+    });
+
+    it("keeps the footage when one of its clips must be kept", async () => {
+      refuse(["a"], "Later revisions build on this version.");
+      library(workspace(), factory({}, { clips: [made("a"), made("b")] }));
+      fireEvent.click(screen.getByRole("button", { name: /Episodes/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete Podcast 1" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Podcast 1 was kept: 1 of its clips could not be deleted. Later revisions build on this version.",
+      );
+      expect(deleted()).not.toContain("/api/videos/v1");
+    });
   });
 });
 
