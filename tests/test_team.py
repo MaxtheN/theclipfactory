@@ -319,6 +319,66 @@ def test_all_six_roles_observed_performance_keeps_actual_provenance(harness):
     assert all(task["status"] == "completed" for task in run["tasks"])
 
 
+def test_schema_correction_repairs_excess_evidence_refs_before_dependent_calls(harness):
+    outputs = script()
+    oversized = copy.deepcopy(outputs[1])
+    oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17
+    outputs.insert(1, oversized)
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    assert titles(harness.models) == ["Plan", "Footage", "Footage", "Strategy", "Edits", "Critique"]
+    correction = harness.models.calls[2]["data"]["format_correction"]
+    assert correction[0]["field"] == "moments.0.evidence_refs"
+    assert "at most 16" in correction[0]["problem"]
+    assert run["status"] == "needs_review"
+    assert len(harness.rendered) == 1
+    assert next(task for task in run["tasks"] if task["role"] == "footage_analyst")["output"] == footage()
+
+
+def test_schema_correction_stops_after_one_failed_retry(harness):
+    oversized = footage()
+    oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17
+    harness.models = ScriptedModels([plan(), oversized, oversized])
+    harness.engine.models = harness.models
+    run = harness.create()
+    with pytest.raises(WorkError, match="invalid structured handoff"):
+        harness.engine.execute(run["id"], "job")
+    assert titles(harness.models) == ["Plan", "Footage", "Footage"]
+    assert not harness.rendered
+    assert harness.engine.get(run["id"])["status"] == "failed"
+
+
+def test_footage_keeps_grounded_moments_when_other_citations_are_outside_the_range(harness):
+    outputs = script()
+    outputs[1]["moments"].append({
+        "start": 0, "end": 0.25, "summary": "Unsupported frame timing", "evidence_refs": ["frame:1"]
+    })
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    accepted = next(task for task in run["tasks"] if task["role"] == "footage_analyst")["output"]
+    assert accepted["moments"] == footage()["moments"]
+    assert "omitted" in accepted["limitations"]
+    assert harness.models.calls[2]["data"]["footage"] == accepted
+    assert run["status"] == "needs_review"
+    assert len(harness.rendered) == 1
+
+
+def test_schema_correction_honors_cancellation_before_retry(harness):
+    oversized = footage()
+    oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17
+    harness.models = ScriptedModels([plan(), oversized])
+    harness.engine.models = harness.models
+    harness.models.after_call = lambda calls: setattr(harness.jobs, "cancelled", calls == 2)
+    run = harness.create()
+    with pytest.raises(JobCancelled):
+        harness.engine.execute(run["id"], "job")
+    assert titles(harness.models) == ["Plan", "Footage"]
+    assert not harness.rendered
+    assert harness.engine.get(run["id"])["status"] == "cancelled"
+
+
 @pytest.mark.parametrize("metrics,account", [({"views": None}, "account"), ({"views": 10}, "other-account")])
 def test_unknown_or_wrong_account_metrics_do_not_invent_performance(harness, metrics, account):
     seed_observations(harness.store)

@@ -120,6 +120,20 @@ def test_real_render_preserves_audio_and_truthful_subtitles(tmp_path, sample):
         if audio:
             assert "Actual words" in output.with_suffix(".srt").read_text()
             assert final["result"]["warning"] is None
+            frame = subprocess.run(
+                ["ffmpeg", "-nostdin", "-v", "error", "-i", str(output), "-frames:v", "1",
+                 "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"],
+                capture_output=True, check=True, timeout=15,
+            ).stdout
+            # The source is solid blue; white pixels belong to the burned caption.
+            caption_rows = [
+                index // 1080
+                for index, rgb in enumerate(zip(frame[0::3], frame[1::3], frame[2::3]))
+                if min(rgb) > 220
+            ]
+            assert caption_rows
+            assert min(caption_rows) >= 1440
+            assert max(caption_rows) - min(caption_rows) < 120
         else:
             assert "without invented captions" in final["result"]["warning"]
             assert not output.with_suffix(".srt").exists()

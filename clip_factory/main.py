@@ -193,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 import webview
 
+                webview.settings["ALLOW_DOWNLOADS"] = True
                 startup_event(diagnostic_root, "native-window-starting")
                 window = webview.create_window(
                     "Clip Factory", bootstrap, width=1440, height=960, min_size=(900, 640)

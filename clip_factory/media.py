@@ -101,7 +101,11 @@ def render(
                 "This FFmpeg build lacks libass subtitles. Install full Homebrew FFmpeg or render without captions."
             )
         # cwd is output directory; filename consists exclusively of generated hexadecimal IDs.
-        vf += f",subtitles={srt.name}:force_style='FontName=Arial,FontSize=18,MarginV=60,Outline=2'"
+        # Use output-pixel coordinates instead of libass's small default script canvas.
+        vf += (
+            f",subtitles={srt.name}:force_style='PlayResX=1080,PlayResY=1920,"
+            "FontName=Arial,FontSize=52,MarginL=72,MarginR=72,MarginV=144,Outline=3,Shadow=0,Alignment=2'"
+        )
     temporary = output.with_name(output.stem + ".partial.mp4")
     jobs.update(job_id, progress=20, message="Rendering 1080 × 1920 H.264 clip")
     try:
