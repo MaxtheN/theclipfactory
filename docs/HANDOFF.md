@@ -188,3 +188,25 @@ everything else in the UI is free.
 6. Refresh `docs/submission/*` to match §4 (Strategist, editing craft, posting,
    website brief, OpenRouter, self-improving factory). Keep claims honest: no
    growth/causality claims, posting not yet exercised live.
+
+## 8. Founder-approved next focus: the visible closed loop (over raising the score)
+
+Goal: show strategy → agents produce → review/score → post → measure → learn →
+re-cut → post again, live in the product.
+1. **First real post** (blocker): sign in → Results → Instagram accounts →
+   Advanced → import `ca_dYkCuj6H5XDa` (@kartik._builds) → Approve & post one
+   clip; verify attempt states and the auto publication mapping.
+2. **Auto A/B**: after ranking, render 2 hook variants (one variable) for the
+   top 3 clips via the existing variants path (`craft.expand_variants`).
+3. **Taste labels**: every approve / reject / request-change becomes a label;
+   re-weight `ranking.py` per brand; show "matches your taste: N%".
+4. **"Apply learning → re-cut"**: when a Style-rules proposal (Strategist or
+   learning loop) is approved, one button re-renders the top clips under the new
+   rule, ready to post.
+5. **Loop view** on the Factory map / Results: Loop #1 → Loop #2 with what
+   changed, why (cited evidence) and outcomes; real data where available,
+   `demo_override` labels where the window has not elapsed.
+Ideas to raise clip quality later (70→90): Sonnet "head editor" second pass,
+laughter/crosstalk audio signals, diarization, question-creating teaser,
+breath/filler trimming, punch-ins on punchlines, self-critique re-render, a
+30-moment human benchmark across 3 episodes.
