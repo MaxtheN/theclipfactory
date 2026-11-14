@@ -32,9 +32,9 @@ Source: `clip_factory/strategist.py` (engine), `clip_factory/strategist_api.py`
                                                        │
                      ┌─────────────────────────────────┼──────────────────────────┐
                      ▼                                 ▼                          ▼
-          craft: PROPOSED Style-rules     selection: PROPOSED moment_selection   campaign: campaign_strategy_proposals
-          revision (Campaigns.propose,    guidance block (same path)             (human Approve/Reject)
-          source "strategist")                         │
+          craft: PROPOSED workspace       selection: PROPOSED moment_selection   campaign: campaign_strategy_proposals
+          Style-rules revision            guidance block (same path)             per campaign (human Approve/Reject)
+          (Campaigns.propose, "strategist")            │
                                                        ▼ only after a human approves the version
                        team.py: campaign_snapshot.strategy_snapshot → selection_guidance
                        → producer brief + swarm scene prompts (bounded, 600 chars)
@@ -50,9 +50,15 @@ Source: `clip_factory/strategist.py` (engine), `clip_factory/strategist_api.py`
 | Selection | moment_type (the swarm hypothesis), speaker_role | every ≥3 new tagged measured posts | Proposed revision whose `moment_selection` carries a bounded guidance block; once **approved**, team/swarm prompts receive it as `selection_guidance` |
 | Campaign | posting_window (UTC), day_type | every ≥8 new tagged measured posts, or manual run | `campaign_strategy_proposals` record; `POST /api/strategist/campaign-proposals/{id}/decision` records the human's choice |
 
-A manual "Run strategist" reviews all three layers. A pending or approved
-proposal for the same belief and campaign is not duplicated; a rejected one
-is not re-proposed until the belief has at least three more matching posts.
+A manual "Run strategist" reviews all three layers. Beliefs are per workspace
+(`profile_id`). Craft and selection write ONE proposal per layer to the
+workspace's Style-rules set (`Campaigns.propose_from_beliefs(profile_id, …)`,
+`scope: "workspace"`), rebased on its active approved version, so every
+campaign in the workspace inherits it once approved. Campaign-layer proposals
+stay per campaign (at most three active campaigns). A pending or approved
+proposal for the same belief (and, for the campaign layer, the same campaign)
+is not duplicated; a rejected one is not re-proposed until the belief has at
+least three more matching posts.
 
 ## Tags
 
@@ -74,8 +80,9 @@ Unknown is always null and is never matched.
 
 - **Baseline**: `learning.memory_digest()` baseline, which is the median per metric
   across each tracked post's LATEST cumulative snapshot. Unknown values are
-  null, never zero; snapshots are never summed. The target metric is the
-  profile's `primary_metric` when known, otherwise views → plays → reach → impressions → likes.
+  null, never zero; snapshots are never summed. Goals are campaign-scoped: the target
+  metric is the most recently updated active campaign's `primary_metric` when known, then
+  the workspace's legacy metric, otherwise views → plays → reach → impressions → likes.
 - **Per-post outcome**: for a belief "posts with variable=value tend to beat
   (or fall short of) the median", each matching post with a known value and
   known baseline is a success or a failure. Ties count as neither.
@@ -131,8 +138,9 @@ nothing is fabricated. Duplicates of existing beliefs are dropped.
 
 The API returns 404 for a missing profile. It returns 409 for an archived
 profile, when all of the profile's channels are archived, or when a run is
-already in progress. Proposals are never written to archived campaigns
-(`Campaigns.active_campaign`). If a job ends without finishing its receipt, the
+already in progress. Style-rule proposals are refused for an archived
+workspace (`Campaigns.active_workspace`); campaign-layer proposals are never
+written to archived campaigns. If a job ends without finishing its receipt, the
 receipt is closed as failed.
 
 ## Real vs simulated vs unproven

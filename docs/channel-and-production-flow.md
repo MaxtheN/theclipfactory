@@ -2,15 +2,23 @@
 
 ## Daily flow
 
-1. Set up the channel once: name, audience, outcome, voice and boundaries.
+1. Set up the workspace once: name, audience, voice and boundaries. Each campaign then sets its own outcome.
 2. Add footage in Factory. The import surface confirms storage and attachment separately; no guessed upload percentage.
 3. Start agent production, or choose a moment manually. The existing team engine transcribes, scouts, plans and renders using the selected source/model and approved editing rules.
 4. Review the exact generated clip. Technical checks and version history are available in the inspector. Approve and export that exact revision.
 5. Results connects an exact Instagram account and tracks a real post only after the creator confirms its matching approved clip. Three-/six-day measurements inform a bounded next draft; they do not establish causal lift.
 
+## Workspace → campaigns
+
+A **workspace** (backend `profile`: one person, channel or brand) owns its audience, voice and boundaries and ONE versioned **Style rules** set: `GET/POST /api/profiles/{id}/strategies`, then `…/{version}/approve|reject|restore`. Approval is explicit, refuses a stale base, and needs a complete rule set for that workspace. Every campaign in the workspace inherits the approved version; there is no campaign approval chain (campaign rule mutation routes return 410; `GET /api/campaigns/{id}/strategies` lists pre-workspace history read-only).
+
+A **campaign** is a goal-scoped push inside a workspace: its own `objective` + `primary_metric` (discovery needs no metric) and optional `notes`, appended to production prompts as `campaign_notes` within the workspace rules. A new campaign can produce immediately when its workspace has approved rules. Each production snapshot records the exact workspace rule version (`strategy_version_id`, `strategy_scope: "workspace"`), the campaign `goal` and `campaign_notes`; earlier snapshots are never rewritten.
+
+**Existing data (no migration step).** On read, a workspace with no active rules and no workspace versions adopts its most recently approved campaign version (unarchived campaigns first) as `active_strategy_id`, recording `strategy_migration.provenance: "migrated_from_campaign"` with the source version/campaign. The version itself, the campaign's legacy `active_strategy_id`, clips and snapshots are untouched, so earlier productions and published posts keep citing the same, still-current version. A campaign without `objective` inherits the profile's legacy goal once (`goal_provenance.source: "inherited_from_workspace"`). Both steps are idempotent. Pre-workspace drafts are listed but cannot be approved; restore one to propose it for the workspace.
+
 ## One place for context
 
-Channel settings edits the audience, goal and preferences. It does not require onboarding again or start an agent. Editing rules are a contextual advanced control: save a proposed version, then explicitly approve it. A metadata save never silently replaces approved strategy. Model/tool setup remains in Advanced tools.
+Workspace settings edits the workspace's audience, voice and preferences and the selected campaign's name, goal, metric and notes. It does not require onboarding again or start an agent. Workspace style rules are a contextual advanced control: save a proposed version, then explicitly approve it. A metadata save never silently replaces approved strategy. Model/tool setup remains in Advanced tools.
 
 ## Required controls retained
 
