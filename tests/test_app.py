@@ -232,7 +232,8 @@ def test_token_validation_never_echoes_credentials(client, body):
 def test_upload_mock_probe_public_redaction_and_media(client, monkeypatch):
     video = upload_mock(client, monkeypatch)
     assert video["name"] == "source.mp4"
-    assert "path" not in video and "has_audio" not in video
+    assert "path" not in video
+    assert video["has_audio"] is False  # Public capability metadata enables accurate Whisper preflight.
     assert client.get("/api/videos").json() == [video]
     assert client.get(f"/api/videos/{video['id']}/media").content == b"video"
     stored = client.app.state.store.get("videos", video["id"])

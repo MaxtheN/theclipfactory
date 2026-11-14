@@ -303,6 +303,7 @@ class TeamEngine:
     def _finish(self, run_id: str, status: str, reason: str | None) -> dict:
         with self.store.lock:
             run = self.store.get("team_runs", run_id)
+            self._collect_outputs(run)
             for task in run["tasks"]:
                 if task["status"] in ACTIVE:
                     task.update(
@@ -323,6 +324,39 @@ class TeamEngine:
             )
             return self.store.put("team_runs", run)
 
+    def _collect_outputs(self, run: dict):
+        retained = [c for c in self.store.all("clips") if c.get("team_run_id") == run["id"]]
+        for clip in retained:
+            if clip["id"] not in run["clip_ids"]:
+                run["clip_ids"].append(clip["id"])
+            for task in run["tasks"]:
+                if (
+                    task["id"] == clip.get("team_task_id")
+                    and task["role"] == "render"
+                    and task["status"] in ACTIVE
+                ):
+                    task.update(
+                        status="completed",
+                        output={"clip_id": clip["id"], "recovered_from_persisted_output": True},
+                        finished_at=now(),
+                    )
+
+    def record_clip(self, run_id: str, clip_id: str, *, baseline=False):
+        with self.store.lock:
+            run = self.store.get("team_runs", run_id)
+            clip = self.store.get("clips", clip_id)
+            if clip and baseline and not clip.get("team_run_id"):
+                self.store.patch(
+                    "clips",
+                    clip_id,
+                    team_run_id=run_id,
+                    team_review_status="not_applicable",
+                    team_findings=[],
+                )
+            if clip_id not in run["clip_ids"]:
+                run["clip_ids"].append(clip_id)
+            self.store.put("team_runs", run)
+
     def _operation(
         self, run_id: str, job_id: str, role: str, callback: Callable, *, iteration=0, refs=()
     ) -> dict:
@@ -332,11 +366,19 @@ class TeamEngine:
         self.jobs.update(job_id, message=f"{LABELS[role]} · round {iteration + 1}")
         try:
             result = callback()
-            self.jobs.check(job_id)
+            if role == "render" and result.get("clip_id"):
+                self.record_clip(run_id, result["clip_id"])
+            if role == "baseline":
+                for output in result.get("clips", []):
+                    self.record_clip(run_id, output["clip_id"], baseline=True)
             self._update_task(run_id, task["id"], status="completed", output=result, finished_at=now())
+            self.jobs.check(job_id)
             return result
         except JobCancelled:
-            self._update_task(run_id, task["id"], status="cancelled", finished_at=now())
+            latest = self.store.get("team_runs", run_id)
+            current = next(t for t in latest["tasks"] if t["id"] == task["id"])
+            if current["status"] != "completed":
+                self._update_task(run_id, task["id"], status="cancelled", finished_at=now())
             raise
         except Exception as exc:
             message = (
@@ -395,6 +437,27 @@ class TeamEngine:
         if not refs or any(ref not in evidence for ref in refs):
             raise WorkError("Agent cited unknown evidence. Handoff was rejected before rendering.")
 
+    @classmethod
+    def _source_refs(cls, refs: list[str], evidence: dict, start: float, end: float):
+        cls._refs(refs, evidence)
+        observed = False
+        for ref in refs:
+            item = evidence[ref]
+            if ref.startswith("frame:"):
+                if not start <= item["time"] <= end:
+                    raise WorkError("Frame evidence does not support the proposed source range.")
+                observed = True
+            elif ref.startswith("transcript:"):
+                if min(end, item["end"]) <= max(start, item["start"]):
+                    raise WorkError("Transcript evidence does not overlap the proposed source range.")
+                observed = True
+            elif not ref.startswith("source:"):
+                raise WorkError("Performance observations cannot ground footage or quoted speech.")
+        if not observed:
+            raise WorkError(
+                "Source metadata alone cannot ground a moment; cite sampled frames or time-associated speech."
+            )
+
     def _evidence(self, video: dict, frames: list[dict], context: dict) -> dict:
         result = {f"source:{video['id']}": context["source"]}
         # Bound transcript context without breaking JSON. Segment references remain inspectable.
@@ -440,19 +503,20 @@ class TeamEngine:
                     run_id,
                     job_id,
                     "baseline",
-                    lambda: self.baseline(job_id, video, run["model_id"], run["context"]["settings"]),
+                    lambda: self.baseline(
+                        job_id,
+                        video,
+                        run["model_id"],
+                        {
+                            **run["context"]["settings"],
+                            "_previous_observations": run["context"]["previous_observations"],
+                            "_team_run_id": run_id,
+                        },
+                    ),
                     refs=[f"source:{video['id']}"],
                 )
                 clip_ids = [c["clip_id"] for c in result.get("clips", [])]
                 self.store.patch("team_runs", run_id, clip_ids=clip_ids)
-                for clip_id in clip_ids:
-                    self.store.patch(
-                        "clips",
-                        clip_id,
-                        team_run_id=run_id,
-                        team_review_status="not_applicable",
-                        team_findings=[],
-                    )
                 self._finish(
                     run_id, "needs_review", "Baseline production finished; human review is required."
                 )
@@ -485,7 +549,7 @@ class TeamEngine:
                         or moment["end"] - moment["start"] > 180
                     ):
                         raise WorkError("Footage analyst proposed an invalid source range.")
-                    self._refs(moment["evidence_refs"], evidence)
+                    self._source_refs(moment["evidence_refs"], evidence, moment["start"], moment["end"])
 
             footage = self._agent(
                 run_id,
@@ -678,6 +742,7 @@ class TeamEngine:
                             **candidate,
                             "_team": {
                                 "team_run_id": run_id,
+                                "team_task_id": self._task(run_id, "render", index)["id"],
                                 "team_review_status": review_status,
                                 "team_findings": [
                                     f for f in critique["findings"] if f["candidate_index"] == index
@@ -691,15 +756,7 @@ class TeamEngine:
                 )
                 clip_ids.append(result["clip_id"])
                 self.store.patch("team_runs", run_id, clip_ids=list(clip_ids))
-                self.store.patch(
-                    "clips",
-                    result["clip_id"],
-                    team_run_id=run_id,
-                    team_review_status=review_status,
-                    team_findings=[f for f in critique["findings"] if f["candidate_index"] == index],
-                    team_checks=checks,
-                    approved=False,
-                )
+
             self._finish(run_id, "needs_review", stop)
             return {
                 "team_run_id": run_id,
@@ -721,6 +778,69 @@ class TeamEngine:
             )
             self._finish(run_id, "failed", reason)
             raise
+
+    def review_clip(self, job_id: str, clip_id: str) -> dict:
+        clip = self.store.get("clips", clip_id)
+        run = self.store.get("team_runs", clip["team_run_id"])
+        evidence = run["context"].get("evidence", {})
+        video = self.store.get("videos", clip["video_id"])
+        if not evidence or not video:
+            raise WorkError("Source review evidence is unavailable; produce a new corrected draft.")
+        self.models.require(run["model_id"], "llm")
+        sampled = self.frames(job_id, video)
+        iteration = max((t["iteration"] for t in run["tasks"] if t["role"] == "critic"), default=0) + 1
+        snapshot = {k: clip[k] for k in ["start", "end", "hook", "caption", "objective"]}
+
+        def validate(output):
+            for finding in output["findings"]:
+                if finding["candidate_index"] != 0:
+                    raise WorkError("Critic referenced another candidate during clip recheck.")
+                self._refs(finding["evidence_refs"], evidence)
+
+        critique = self._agent(
+            run["id"],
+            job_id,
+            "critic",
+            Critique,
+            {
+                "manual_recheck": True,
+                "candidates": [snapshot],
+                "evidence": evidence,
+                "limitations": "Text metadata changed since original critique; no approval authority.",
+            },
+            iteration=iteration,
+            refs=list(evidence),
+            images=[f["path"] for f in sampled],
+            validate=validate,
+        )
+        status = (
+            "pass"
+            if critique["verdict"] == "pass"
+            else (
+                "fail"
+                if "fail" in critique["checks"].values() or critique["verdict"] == "revise"
+                else "unknown"
+            )
+        )
+        with self.store.lock:
+            current = self.store.get("clips", clip_id)
+            if not current or {k: current[k] for k in snapshot} != snapshot:
+                raise WorkError("Clip content changed during recheck. Previous critique was not applied.")
+            self.jobs.check(job_id)
+            self.store.patch(
+                "clips",
+                clip_id,
+                team_review_status=status,
+                team_findings=critique["findings"],
+                team_checks=critique["checks"],
+                approved=False,
+            )
+        return {
+            "clip_id": clip_id,
+            "team_run_id": run["id"],
+            "review_status": status,
+            "requires_review": True,
+        }
 
     def comparisons(self, video_id: str) -> dict:
         runs = [r for r in self.all() if r["video_id"] == video_id]

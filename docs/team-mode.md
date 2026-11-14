@@ -58,6 +58,12 @@ Task status: `queued|running|completed|failed|cancelled|skipped`.
 Roles: `producer|footage_analyst|creative_strategist|performance_analyst|editor|
 critic|transcribe|render|baseline`.
 Inputs/outputs are untrusted text/data, rendered without executable markup.
+Footage and edit references must include an observed frame within the range or
+overlapping transcript speech; feedback and source metadata alone cannot ground
+content. Saving changed team metadata invalidates critique and approval.
+`POST /api/clips/{id}/team-review {}` queues an explicit single critic recheck
+using the original run model/evidence; a passing recheck still requires approval.
+Baseline `not_applicable` is explicitly distinct from unresolved team critique.
 Critic output:
 `{verdict:"pass"|"revise"|"unknown",findings:[{candidate_index,category,
  severity,evidence_refs:string[],message}],checks:{context,claims,captions,duplicates}}`.
