@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Campaign, Clip, FactorySource, Video } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -130,6 +130,17 @@ const swarm = {
   model_id: "qwen-small",
   strategy: "swarm",
 };
+// The test DOM has no modal dialogs; these are the two calls the quick look makes.
+const dialogApi = { showModal: HTMLDialogElement.prototype.showModal, close: HTMLDialogElement.prototype.close };
+beforeAll(() => {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.removeAttribute("open");
+  };
+});
+afterAll(() => Object.assign(HTMLDialogElement.prototype, dialogApi));
 let requests: { url: string; method: string }[];
 beforeEach(() => {
   vi.clearAllMocks();
@@ -278,6 +289,125 @@ describe("review wall in the Library", () => {
         "/api/clips/b",
       ]),
     );
+  });
+});
+
+describe("clips in the front door", () => {
+  const cut = (id: string, changes: Partial<Clip> = {}): Clip =>
+    ({
+      id,
+      name: `Cut ${id}`,
+      video_id: "v1",
+      campaign_id: "c1",
+      profile_id: "p1",
+      start: 0,
+      end: 20,
+      hook: `Hook ${id}`,
+      caption: "",
+      objective: "discovery",
+      approved: false,
+      ...changes,
+    }) as Clip;
+  // What the engine makes when it is run on a file directly: no workspace, no direction.
+  const engineMade = (id: string, changes: Partial<Clip> = {}) =>
+    cut(id, { campaign_id: null, profile_id: null, ...changes } as Partial<Clip>);
+
+  it("shows what was made from this footage before a direction was approved", () => {
+    const onReview = vi.fn();
+    const onLibrary = vi.fn();
+    const clips = [engineMade("x"), engineMade("y"), engineMade("elsewhere", { video_id: "v9" })];
+    render(
+      <FactoryHome
+        w={workspace(false)}
+        factory={factory({}, { clips })}
+        onProduce={vi.fn()}
+        onReview={onReview}
+        onLibrary={onLibrary}
+        onDirection={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Ready for your review 2" })).toBeInTheDocument();
+    expect(screen.getByText("2 clips ready for review")).toBeInTheDocument(); // on the footage row
+    expect(screen.queryByText("Hook elsewhere")).not.toBeInTheDocument();
+    // They have no direction to be reviewed against, so review happens on the wall.
+    fireEvent.click(screen.getAllByRole("button", { name: /Review this edit/ })[0]);
+    expect(onLibrary).toHaveBeenCalledWith("wall");
+    expect(onReview).not.toHaveBeenCalled();
+  });
+
+  it("plays a clip in place from its cover and keeps review a separate step", () => {
+    const onReview = vi.fn();
+    const clip = cut("a");
+    render(
+      <FactoryHome
+        w={workspace()}
+        factory={factory({}, { clips: [clip] })}
+        onProduce={vi.fn()}
+        onReview={onReview}
+        onLibrary={vi.fn()}
+        onDirection={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText("Playing Hook a")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Play Hook a" }));
+    const player = screen.getByLabelText("Playing Hook a");
+    expect(player.tagName).toBe("VIDEO");
+    expect(player).toHaveAttribute("src", "/api/clips/a/media");
+    expect(player).toHaveAttribute("controls");
+    expect(player.closest("dialog")).toHaveAttribute("open");
+    expect(onReview).not.toHaveBeenCalled();
+    fireEvent.click(within(player.closest("dialog")!).getByRole("button", { name: "Close" }));
+    expect(screen.queryByLabelText("Playing Hook a")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Review this edit/ }));
+    expect(onReview).toHaveBeenCalledWith(clip);
+  });
+
+  it("puts undirected clips on the Library's review wall and points to it from Edits", () => {
+    const onView = vi.fn();
+    const f = factory({}, { clips: [engineMade("x"), engineMade("y"), engineMade("elsewhere", { video_id: "v9" })] });
+    const library = (view: "edits" | "wall") => (
+      <Library
+        w={workspace(false)}
+        factory={f}
+        onReview={vi.fn()}
+        onProduce={vi.fn()}
+        onFactory={vi.fn()}
+        view={view}
+        onView={onView}
+      />
+    );
+    const { rerender } = render(library("edits"));
+    expect(screen.getByRole("button", { name: /Review wall\s*2/ })).toBeInTheDocument();
+    expect(
+      screen.getByText(/2 clips were made from this footage before a direction was approved/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Open the review wall/ }));
+    expect(onView).toHaveBeenCalledWith("wall");
+    rerender(library("wall"));
+    const wall = document.querySelector(".gf-review-wall") as HTMLElement;
+    expect(within(wall).getByDisplayValue("Hook x")).toBeInTheDocument();
+    expect(within(wall).getByDisplayValue("Hook y")).toBeInTheDocument();
+    expect(within(wall).queryByDisplayValue("Hook elsewhere")).not.toBeInTheDocument();
+  });
+
+  it("plays an edit from its cover in the Library list", () => {
+    const onReview = vi.fn();
+    const clip = cut("a");
+    render(
+      <Library
+        w={workspace()}
+        factory={factory({}, { clips: [clip] })}
+        onReview={onReview}
+        onProduce={vi.fn()}
+        onFactory={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Play Hook a" }));
+    const dialog = screen.getByLabelText("Playing Hook a").closest("dialog")!;
+    // From the quick look, review is one press away and closes the player.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
+    expect(onReview).toHaveBeenCalledWith(clip);
+    expect(screen.queryByLabelText("Playing Hook a")).not.toBeInTheDocument();
   });
 });
 

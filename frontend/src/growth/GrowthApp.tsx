@@ -11,7 +11,11 @@ import { Research } from "./Research";
 import { Studio } from "./Studio";
 import { Results } from "./Results";
 import { Onboarding } from "./Onboarding";
-import { FactoryHome, type OpenProduction } from "./FactoryHome";
+import {
+  FactoryHome,
+  type LibraryView,
+  type OpenProduction,
+} from "./FactoryHome";
 import { Library } from "./Library";
 import { AutomationPanel } from "./AutomationPanel";
 import { QuickActions, type QuickAction } from "./QuickActions";
@@ -90,6 +94,7 @@ export function GrowthApp() {
   const [preferredSource, setPreferredSource] = useState<string>();
   const [preferredMode, setPreferredMode] = useState<"manual" | "agent">();
   const [preferredClip, setPreferredClip] = useState<string>();
+  const [libraryView, setLibraryView] = useState<LibraryView>("edits");
   const [help, setHelp] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -566,7 +571,10 @@ export function GrowthApp() {
                   active={!tools && !onboarding && stage === "factory"}
                   onProduce={openProduction}
                   onReview={reviewClip}
-                  onLibrary={() => go("library")}
+                  onLibrary={(view) => {
+                    if (view) setLibraryView(view);
+                    go("library");
+                  }}
                   onDirection={() => go("research")}
                 />
               </div>
@@ -581,6 +589,8 @@ export function GrowthApp() {
                   onReview={reviewClip}
                   onProduce={openProduction}
                   onFactory={() => go("factory")}
+                  view={libraryView}
+                  onView={setLibraryView}
                 />
               </div>
               <div

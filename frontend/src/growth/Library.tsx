@@ -6,8 +6,10 @@ import type { FactoryState } from "../useFactory";
 import { reviewPreview } from "./workspaceApi";
 import { Icon } from "./Icon";
 import { Pill, formatTime } from "./parts";
-import type { OpenProduction } from "./FactoryHome";
+import type { LibraryView, OpenProduction } from "./FactoryHome";
 import { SourceDetails, sourceLabel } from "./sourcePresentation";
+import { ClipPreview } from "./ClipPreview";
+import { undirected } from "./productionState";
 
 export function Library({
   w,
@@ -15,14 +17,24 @@ export function Library({
   onReview,
   onProduce,
   onFactory,
+  view,
+  onView,
 }: {
   w: Workspace;
   factory: FactoryState;
   onReview: (clip: Clip) => void;
   onProduce: OpenProduction;
   onFactory: () => void;
+  /** The open tab, when the shell drives it (another screen can open the wall directly). */
+  view?: LibraryView;
+  onView?: (view: LibraryView) => void;
 }) {
-  const [tab, setTab] = useState<"edits" | "wall" | "footage">("edits");
+  const [own, setOwn] = useState<LibraryView>("edits");
+  const tab = view ?? own;
+  const setTab = (next: LibraryView) => {
+    setOwn(next);
+    onView?.(next);
+  };
   const [query, setQuery] = useState("");
   const ids = w.campaign?.video_ids || [];
   const sources = factory.data.videos.filter((v) => ids.includes(v.id));
@@ -32,6 +44,8 @@ export function Library({
       c.profile_id === w.profileId &&
       ids.includes(c.video_id),
   );
+  // Made from this footage by the engine with no direction: reviewed on the wall, not in the Studio.
+  const loose = factory.data.clips.filter((c) => undirected(c, ids));
   const normalized = query.trim().toLocaleLowerCase();
   const edits = clips.filter((c) =>
     `${c.name} ${c.hook} ${sourceLabel(c.video_id, ids)} ${sources.find((s) => s.id === c.video_id)?.name || ""}`
@@ -59,7 +73,10 @@ export function Library({
             aria-pressed={tab === "wall"}
             onClick={() => setTab("wall")}
           >
-            Review wall<span>{clips.filter((c) => !c.approved).length}</span>
+            Review wall
+            <span>
+              {[...clips, ...loose].filter((c) => !c.approved).length}
+            </span>
           </button>
           <button
             type="button"
@@ -93,9 +110,10 @@ export function Library({
             state={factory}
             navigate={onFactory}
             scope={(clip) =>
-              clip.campaign_id === w.campaign?.id &&
-              clip.profile_id === w.profileId &&
-              ids.includes(clip.video_id)
+              undirected(clip, ids) ||
+              (clip.campaign_id === w.campaign?.id &&
+                clip.profile_id === w.profileId &&
+                ids.includes(clip.video_id))
             }
           />
         </div>
@@ -104,35 +122,33 @@ export function Library({
           {edits.length ? (
             <div className="gf-library-edits">
               {edits.map((clip) => (
-                <button
-                  type="button"
-                  className="gf-library-edit"
-                  key={clip.id}
-                  onClick={() => onReview(clip)}
-                  aria-label={`Review ${clip.name}`}
-                >
-                  <span className="gf-library-edit-art">
-                    <Icon name="play" size={24} />
-                    <small>
-                      {reviewPreview ||
-                      clip.provenance_mode === "preview_fixture"
-                        ? "Illustrative edit"
-                        : formatTime(clip.end - clip.start)}
-                    </small>
-                  </span>
-                  <span className="gf-library-edit-copy">
-                    <strong>{clip.name}</strong>
-                    <span>{clip.hook || "Source-grounded edit"}</span>
-                    <small>
-                      {formatTime(clip.start)}–{formatTime(clip.end)} ·{" "}
-                      {sourceLabel(clip.video_id, ids)}
-                    </small>
-                  </span>
-                  <Pill tone={clip.approved ? "approved" : ""}>
-                    {clip.approved ? "Approved" : "Needs review"}
-                  </Pill>
-                  <Icon name="arrow" size={16} />
-                </button>
+                <div className="gf-library-edit" key={clip.id}>
+                  <ClipPreview
+                    clip={clip}
+                    className="gf-library-edit-art"
+                    iconSize={24}
+                    onReview={() => onReview(clip)}
+                  />
+                  <button
+                    type="button"
+                    className="gf-library-edit-open"
+                    onClick={() => onReview(clip)}
+                    aria-label={`Review ${clip.name}`}
+                  >
+                    <span className="gf-library-edit-copy">
+                      <strong>{clip.name}</strong>
+                      <span>{clip.hook || "Source-grounded edit"}</span>
+                      <small>
+                        {formatTime(clip.start)}–{formatTime(clip.end)} ·{" "}
+                        {sourceLabel(clip.video_id, ids)}
+                      </small>
+                    </span>
+                    <Pill tone={clip.approved ? "approved" : ""}>
+                      {clip.approved ? "Approved" : "Needs review"}
+                    </Pill>
+                    <Icon name="arrow" size={16} />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
@@ -144,18 +160,30 @@ export function Library({
               <p>
                 {normalized
                   ? "Try a different name or opening."
-                  : "Add footage in Factory, produce a few options, then review the exact versions you want to keep."}
+                  : loose.length
+                    ? `${loose.length} clip${loose.length === 1 ? " was" : "s were"} made from this footage before a direction was approved. Play and approve them on the review wall.`
+                    : "Add footage in Factory, produce a few options, then review the exact versions you want to keep."}
               </p>
-              {!normalized && (
-                <button
-                  type="button"
-                  className="gf-button secondary"
-                  onClick={onFactory}
-                >
-                  Go to Factory
-                  <Icon name="arrow" size={15} />
-                </button>
-              )}
+              {!normalized &&
+                (loose.length ? (
+                  <button
+                    type="button"
+                    className="gf-button secondary"
+                    onClick={() => setTab("wall")}
+                  >
+                    Open the review wall
+                    <Icon name="arrow" size={15} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="gf-button secondary"
+                    onClick={onFactory}
+                  >
+                    Go to Factory
+                    <Icon name="arrow" size={15} />
+                  </button>
+                ))}
             </div>
           )}
         </>

@@ -7,19 +7,21 @@ import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, reviewPreview } from "./workspaceApi";
 import { productionApi } from "./productionApi";
-import { jobInScope, object } from "./productionState";
+import { jobInScope, object, undirected } from "./productionState";
 import { activeJob } from "../productionPreflight";
 import { Icon } from "./Icon";
 import { FactoryWorkflow } from "./FactoryWorkflow";
 import { Disclosure, Pill, formatTime } from "./parts";
 import { JourneyProgress } from "./JourneyProgress";
 import { sourceLabel, SourceDetails } from "./sourcePresentation";
+import { ClipPreview } from "./ClipPreview";
 
 export type OpenProduction = (
   sourceId?: string,
   mode?: "manual" | "agent",
   clipId?: string,
 ) => void;
+export type LibraryView = "edits" | "wall" | "footage";
 
 // Metadata only, never File objects or footage bytes. A profile/route remount
 // must not lose a confirmed import whose campaign attachment still needs retry.
@@ -42,7 +44,7 @@ export function FactoryHome({
   factory: FactoryState;
   onProduce: OpenProduction;
   onReview: (clip: Clip) => void;
-  onLibrary: () => void;
+  onLibrary: (view?: LibraryView) => void;
   onDirection: () => void;
   active?: boolean;
 }) {
@@ -162,7 +164,14 @@ export function FactoryHome({
       c.profile_id === w.profileId &&
       campaign?.video_ids.includes(c.video_id),
   );
-  const review = clips.filter((c) => !c.approved);
+  // Clips made from this footage without a direction belong on this screen too.
+  const loose = factory.data.clips.filter((c) =>
+    undirected(c, campaign?.video_ids || []),
+  );
+  const review = [...clips, ...loose].filter((c) => !c.approved);
+  /** Directed edits are reviewed in the Studio; the rest on the Library's review wall. */
+  const openReview = (clip: Clip) =>
+    clip.campaign_id ? onReview(clip) : onLibrary("wall");
   const direction = w.versions.find(
     (v) => v.id === campaign?.active_strategy_id,
   )?.directions[w.profileId];
@@ -847,7 +856,7 @@ export function FactoryHome({
             <button
               type="button"
               className="gf-button ghost compact"
-              onClick={() => onReview(review[0])}
+              onClick={() => openReview(review[0])}
             >
               Review clips
               <Icon name="arrow" size={15} />
@@ -855,38 +864,25 @@ export function FactoryHome({
           </header>
           <div className="gf-cut-grid">
             {review.slice(0, 3).map((clip) => (
-              <button
-                type="button"
-                key={clip.id}
-                className="gf-cut-card"
-                onClick={() => onReview(clip)}
-              >
-                <span
+              <article key={clip.id} className="gf-cut-card">
+                <ClipPreview
+                  clip={clip}
                   className="gf-cut-art"
-                  style={
-                    reviewPreview || clip.provenance_mode === "preview_fixture"
-                      ? undefined
-                      : {
-                          backgroundImage: `url(${endpoint("clips", clip.id, "cover")})`,
-                        }
-                  }
+                  onReview={() => openReview(clip)}
+                />
+                <button
+                  type="button"
+                  className="gf-cut-copy"
+                  onClick={() => openReview(clip)}
                 >
-                  <Icon name="play" size={28} />
-                  <span>
-                    {reviewPreview || clip.provenance_mode === "preview_fixture"
-                      ? "Illustrative edit"
-                      : formatTime(clip.end - clip.start)}
-                  </span>
-                </span>
-                <span className="gf-cut-copy">
                   <strong>{clip.hook || clip.name}</strong>
                   <small>{clip.name}</small>
                   <span>
                     Review this edit
                     <Icon name="arrow" size={14} />
                   </span>
-                </span>
-              </button>
+                </button>
+              </article>
             ))}
           </div>
         </section>
@@ -908,7 +904,7 @@ export function FactoryHome({
             <button
               type="button"
               className="gf-button ghost compact"
-              onClick={onLibrary}
+              onClick={() => onLibrary()}
             >
               Open Library
               <Icon name="arrow" size={15} />
@@ -937,8 +933,11 @@ export function FactoryHome({
                 !!status?.can_produce &&
                 !w.busy &&
                 !w.loading;
-              // Counts are for this workspace: clips made elsewhere from the same file do not belong here.
-              const own = clips.filter((c) => c.video_id === source.id);
+              // Counts cover this workspace's edits and what the engine made from this file with no direction;
+              // another workspace's edits of the same file do not belong here.
+              const own = [...clips, ...loose].filter(
+                (c) => c.video_id === source.id,
+              );
               const waiting = own.filter((c) => !c.approved).length;
               const headline =
                 !status ||

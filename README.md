@@ -17,9 +17,13 @@ then drop footage on **Factory**. Each source shows where it is on the line
 button that starts a swarm under the approved direction, and *What the factory
 saw*. With **Autopilot** on (the default) and a direction approved, attaching
 new footage starts production by itself; clips always wait for your approval.
-**Library → Review wall** shows every edit side by side with bulk approval.
-**Advanced tools** (quick actions, ⌘K) holds the un-scoped tools: all footage
-and clips, Studio, Models and Settings.
+Pressing a clip's cover on **Factory** or in **Library** plays it in place,
+with sound; review is a separate step. **Library → Review wall** shows every
+edit side by side with bulk approval. Clips the engine made from a workspace's
+footage without a direction (from Advanced tools, or before a direction was
+approved) are counted on that workspace's Factory screen and reviewed on its
+wall. **Advanced tools** (quick actions, ⌘K) holds the un-scoped tools: all
+footage and clips, Studio, Models and Settings.
 
 1. **Listen.** Speech is transcribed locally. Recognizer output over noise is
    filtered (looping phrases, impossible timing, low confidence), and the source
