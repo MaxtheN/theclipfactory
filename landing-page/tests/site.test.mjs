@@ -84,3 +84,12 @@ test("the mobile menu keeps its accessible associations", () => {
 test("motion respects reduced-motion preferences", () => {
   assert.match(css, /prefers-reduced-motion: reduce/);
 });
+
+
+test("hero image preload and responsive source share the same selection hints", () => {
+  const preload = html.match(/<link[^>]*as="image"[^>]*>/)[0];
+  const hero = html.match(/<img[^>]*class="hero-photo"[^>]*>/)[0];
+  assert.match(preload, /fetchpriority="high"/);
+  assert.equal(preload.match(/imagesrcset="([^"]+)"/)[1], hero.match(/srcset="([^"]+)"/)[1]);
+  assert.equal(preload.match(/imagesizes="([^"]+)"/)[1], hero.match(/sizes="([^"]+)"/)[1]);
+});

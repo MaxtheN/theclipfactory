@@ -1461,7 +1461,7 @@ svg.fill {
 .filmstrip span {
   flex: 1 1 0;
   min-width: 0;
-  background-image: url("/assets/alpine-story.webp");
+  background-image: url("/assets/alpine-story-small.webp");
   background-size: 1200% auto;
   background-position-y: 50%;
   filter: saturate(0.5) brightness(0.6);

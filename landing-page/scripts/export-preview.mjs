@@ -21,11 +21,13 @@ let html = await readFile(new URL('index.html', root), 'utf8');
 let css = await readFile(new URL('styles.css', root), 'utf8');
 const js = await readFile(new URL('app.js', root), 'utf8');
 css = await inlineAssets(css, /url\("(\/assets\/[^"#]+)"\)/g);
-html = html.replace(/\s*<link rel="preload"[^>]+>/g, '')
+// Embedded variants add bytes without saving a network request; use each image's fallback.
+html = html.replace(/\s+(?:srcset|sizes)="[^"]*"/g, '')
+  .replace(/\s*<link rel="preload"[^>]+>/g, '')
   .replace('<link rel="stylesheet" href="/styles.css" />', () => `<style>${css}</style>`)
   .replace('    <script src="/app.js" defer></script>\n', '')
   .replace('</body>', () => `<script>${js.replaceAll('</script', '<\\/script')}</script>\n  </body>`);
-html = await inlineAssets(html, /(?:src|href)="(\/assets\/[^"#]+)"/g);
+html = await inlineAssets(html, /["\s(](\/assets\/[A-Za-z0-9._/-]+)/g);
 if (/<(?:script|img)\b[^>]*src="(?!data:)|<link\b[^>]*rel="stylesheet"/.test(html)) throw new Error('External render dependency in export');
 // Preserve the font's redistribution notice in the portable artifact as well.
 const license = await readFile(new URL('assets/BricolageGrotesque-OFL.txt', root), 'utf8');
