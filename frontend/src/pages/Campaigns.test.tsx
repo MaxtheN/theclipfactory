@@ -147,6 +147,7 @@ function harness(approved = false) {
   });
   vi.stubGlobal("fetch", fetch);
   const state = testState();
+  state.data.system = { ffmpeg: true, ffprobe: true, model_runtime: false };
   state.data.videos = [
     { id: "v1", name: "First source", duration: 120 },
     { id: "v2", name: "Second source", duration: 90 },

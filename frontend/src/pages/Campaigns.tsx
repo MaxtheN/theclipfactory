@@ -1146,7 +1146,12 @@ function ProductionForm({
   const [modelId, setModelId] = useState("qwen-small");
   const source = state.data.videos.find((v) => v.id === videoId);
   const busySource = sourceHasActiveJob(state.data.jobs, videoId);
+  const rendererReady =
+    !state.errors.system &&
+    state.data.system?.ffmpeg === true &&
+    state.data.system?.ffprobe === true;
   const ready =
+    rendererReady &&
     !blocked &&
     !state.loading &&
     !state.errors.videos &&
@@ -1277,8 +1282,9 @@ function ProductionForm({
         </p>
         {!ready && (
           <p className="render-warning">
-            Requires active approved direction, fresh source/queue data, and an
-            idle selected source.
+            Requires active approved direction, fresh source/queue data, an idle
+            selected source, and available FFmpeg/ffprobe. Check Models for
+            unavailable local prerequisites.
           </p>
         )}
         <button disabled={!ready || !rangeValid || (mode === "direct" && !end)}>
