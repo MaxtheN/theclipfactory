@@ -204,6 +204,8 @@ class LearningEngine:
 
     def _binding(self, policy):
         campaign = self._require("campaigns", policy["campaign_id"])
+        if campaign.get("archived_at"):
+            raise HTTPException(409, "This channel is archived. Restore it before enabling learning or tracking new posts.")
         profile = self._require("profiles", policy["profile_id"])
         account = self._require("connected_accounts", policy["account_id"])
         if profile["id"] not in campaign["profile_ids"] or account.get("profile_id") != profile["id"]:
@@ -589,6 +591,10 @@ class LearningEngine:
             with self.store.lock:
                 publication = self._require("learning_publications", publication["id"])
                 policy = self._require("learning_policies", publication["policy_id"])
+                # A missing campaign keeps the old path (_process records it as blocked) instead of aborting the tick.
+                campaign = self.store.get("campaigns", policy["campaign_id"]) or {}
+                if campaign.get("archived_at"):
+                    continue
                 if not policy["enabled"] or utc(publication["next_due_at"]) > self._now():
                     continue
                 work = self._claim(publication, policy)

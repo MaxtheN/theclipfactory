@@ -580,3 +580,33 @@ def test_timestamps_and_metric_values_remain_strict_and_unknown_not_zero():
         MetricSnapshotInput(account_id="a", media_id="m", metrics={"views": float("nan")}, collected_at="2026-01-02T00:00:00Z", window_start="2026-01-01T00:00:00Z", window_end="2026-01-02T00:00:00Z", source="fixture")
     with pytest.raises(ValidationError):
         AnalysisResult(status="insufficient_evidence", variable="hook", proposed_hook="An unsupported winner", rationale="No data", limitations="Unknown")
+
+
+def test_archived_campaign_rejects_policy_and_new_publication(domain):
+    d = domain
+    d.store.patch("campaigns", "campaign", archived_at="2026-01-01T00:00:00Z")
+    with pytest.raises(HTTPException) as error:
+        d.service.configure_policy({k: d.policy[k] for k in Policy.model_fields})
+    assert error.value.status_code == 409
+    with pytest.raises(HTTPException):
+        d.publish()
+    assert d.service.list_publications() == []
+
+
+def test_archived_campaign_never_claims_new_due_learning_even_if_policy_left_enabled(domain):
+    d = domain
+    d.publish()
+    d.clock.advance(days=4)
+    d.store.patch("campaigns", "campaign", archived_at="2026-01-01T00:00:00Z")
+    assert d.service.tick() == []
+    assert d.service.list_work() == []
+    assert d.service.list_snapshots() == []
+
+
+def test_tick_with_missing_campaign_does_not_abort(domain):
+    d = domain
+    d.publish()
+    d.clock.advance(days=4)
+    d.store.delete("campaigns", "campaign")
+    results = d.service.tick()
+    assert [w["status"] for w in results] == ["blocked"]

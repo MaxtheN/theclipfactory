@@ -429,3 +429,19 @@ def test_campaign_comparison_fingerprint_includes_profile_and_direction(client, 
     a, b, repeated = run(profiles[0]), run(profiles[1]), run(profiles[0])
     assert a["comparison_fingerprint"] != b["comparison_fingerprint"]
     assert a["comparison_fingerprint"] == repeated["comparison_fingerprint"]
+
+
+def test_archived_campaign_clip_cannot_publish_schedule_or_recheck(client):
+    store = client.app.state.store
+    store.put("campaigns", {"id": "old", "profile_ids": [], "video_ids": [], "archived_at": "2026-01-01T00:00:00+00:00"})
+    store.put("clips", {"id": "old-clip", "campaign_id": "old", "video_id": "v", "approved": True})
+    future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    url = "https://cdn.creator.com/actual.mp4"
+    for path, body in (
+        ("/api/clips/old-clip/publish", {"public_video_url": url}),
+        ("/api/clips/old-clip/schedule", {"public_video_url": url, "publish_at": future}),
+        ("/api/clips/old-clip/team-review", None),
+    ):
+        response = client.post(path, json=body) if body else client.post(path)
+        assert response.status_code == 409 and "archived" in response.json()["detail"], response.text
+    assert store.all("schedules") == [] and store.all("jobs") == []

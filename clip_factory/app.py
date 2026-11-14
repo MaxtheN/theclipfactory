@@ -1232,6 +1232,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def recheck_clip(identifier: str):
         with operations_lock:
             clip = require("clips", identifier)
+            campaigns.ensure_clip_campaign_active(clip)
             run = app.state.team.get(clip.get("team_run_id") or "")
             if not run or run["mode"] != "team" or run["status"] in {"queued", "running"}:
                 raise HTTPException(409, "Recheck requires a terminal team run with retained evidence.")
@@ -1579,6 +1580,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         validate_public_video_url(body.public_video_url)
         with operations_lock:
             clip = require("clips", identifier)
+            campaigns.ensure_clip_campaign_active(clip)
             if (
                 not clip["approved"]
                 or clip.get("team_review_status") in {"fail", "unknown"}
@@ -1652,6 +1654,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             raise HTTPException(422, "Choose a future timestamp including its timezone.") from None
         with operations_lock:
             clip = require("clips", identifier)
+            campaigns.ensure_clip_campaign_active(clip)
             account = connected_account()
             if (
                 not clip["approved"]

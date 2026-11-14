@@ -180,6 +180,147 @@ class Campaigns:
             raise HTTPException(404, f"{kind.replace('_', ' ').capitalize()} record not found.")
         return value
 
+    def active_campaign(self, identifier):
+        campaign = self.require("campaigns", identifier)
+        if campaign.get("archived_at"):
+            raise HTTPException(
+                409, "This campaign is archived. Restore it before making changes or producing clips."
+            )
+        return campaign
+
+    def list_campaigns(self, include_archived=False):
+        if type(include_archived) is not bool:
+            raise HTTPException(422, "include_archived must be a boolean.")
+        return [c for c in self.store.all("campaigns") if include_archived or not c.get("archived_at")]
+
+    @staticmethod
+    def _campaign_scopes(record):
+        if not isinstance(record, dict):
+            return set()
+        context = record.get("context")
+        context = context if isinstance(context, dict) else {}
+        settings = context.get("settings")
+        settings = settings if isinstance(settings, dict) else {}
+        candidates = [record, context, context.get("campaign_snapshot"), settings.get("_campaign_snapshot")]
+        return {
+            item["campaign_id"]
+            for item in candidates
+            if isinstance(item, dict)
+            and isinstance(item.get("campaign_id"), str)
+            and item["campaign_id"].strip()
+        }
+
+    def _has_active_work(self, campaign):
+        """Inspect current and legacy context shapes without attributing foreign shared-source work."""
+        kinds = ("clips", "team_runs", "learning_experiments", "learning_policies")
+        maps = {
+            kind: {
+                row["id"]: row
+                for row in self.store.all(kind)
+                if isinstance(row, dict) and isinstance(row.get("id"), str)
+            }
+            for kind in kinds
+        }
+        videos = campaign.get("video_ids")
+        video_ids = (
+            {value for value in videos if isinstance(value, str)} if isinstance(videos, list) else set()
+        )
+
+        def related(record, *, job=False):
+            context = record.get("context")
+            context = context if isinstance(context, dict) else {}
+            scopes = self._campaign_scopes(record)
+            links = []
+            for key, kind in (
+                ("clip_id", "clips"),
+                ("team_run_id", "team_runs"),
+                ("experiment_id", "learning_experiments"),
+                ("policy_id", "learning_policies"),
+            ):
+                for container in (record, context):
+                    identifier = container.get(key)
+                    if isinstance(identifier, str) and identifier in maps[kind]:
+                        links.append(maps[kind][identifier])
+            if job:
+                links.extend(
+                    run for run in maps["team_runs"].values() if run.get("job_id") == record.get("id")
+                )
+            clip_ids = record.get("clip_ids")
+            if isinstance(clip_ids, list):
+                links.extend(maps["clips"][i] for i in clip_ids if isinstance(i, str) and i in maps["clips"])
+            for linked in links:
+                scopes.update(self._campaign_scopes(linked))
+            if campaign["id"] in scopes:
+                return True
+            if scopes:
+                return False
+            return any(
+                isinstance(container.get("video_id"), str) and container["video_id"] in video_ids
+                for container in (record, context)
+            )
+
+        # Pending publish schedules are timed external effects (scheduler submits a publish job later).
+        active = {"queued", "running"}
+        for kind, statuses in (
+            ("jobs", active),
+            ("team_runs", active),
+            ("learning_work", active),
+            ("schedules", {"scheduled"}),
+        ):
+            for row in self.store.all(kind):
+                if (
+                    isinstance(row, dict)
+                    and isinstance(row.get("status"), str)
+                    and row["status"] in statuses
+                    and related(row, job=kind == "jobs")
+                ):
+                    return True
+        return False
+
+    def ensure_clip_campaign_active(self, clip):
+        """Block new clip-level effects (publish, schedule, re-review) for an archived campaign's clips."""
+        identifier = clip.get("campaign_id") if isinstance(clip, dict) else None
+        campaign = self.store.get("campaigns", identifier) if isinstance(identifier, str) else None
+        if campaign and campaign.get("archived_at"):
+            raise HTTPException(
+                409, "This clip belongs to an archived campaign. Restore the campaign before new work."
+            )
+
+    def archive(self, identifier):
+        with self.store.lock:
+            campaign = self.require("campaigns", identifier)
+            # Already archived: return the stable record (re-pausing any policy) without re-checking work.
+            if not campaign.get("archived_at") and self._has_active_work(campaign):
+                raise HTTPException(409, "Finish or cancel this campaign's active work before archiving it.")
+            changes = []
+            timestamp = campaign.get("archived_at") or now()
+            if not campaign.get("archived_at"):
+                campaign = {**campaign, "archived_at": timestamp, "updated_at": timestamp}
+                changes.append(("campaigns", campaign))
+            for policy in self.store.all("learning_policies"):
+                if (
+                    isinstance(policy, dict)
+                    and policy.get("campaign_id") == identifier
+                    and policy.get("enabled") is True
+                ):
+                    changes.append(
+                        ("learning_policies", {**policy, "enabled": False, "updated_at": timestamp})
+                    )
+            if changes:
+                self.store.put_many(changes)
+            return campaign
+
+    def restore_campaign(self, identifier):
+        with self.store.lock:
+            campaign = self.require("campaigns", identifier)
+            if not campaign.get("archived_at"):
+                return campaign
+            timestamp = now()
+            return self.store.put(
+                "campaigns",
+                {**campaign, "archived_at": None, "restored_at": timestamp, "updated_at": timestamp},
+            )
+
     def profile(self, identifier):
         profile = self.require("profiles", identifier)
         keys = ("id", "video_id", "campaign_id", "strategy_version_id", "created_at", "approved", "status")
@@ -208,7 +349,7 @@ class Campaigns:
 
     def save_campaign(self, body, identifier=None):
         with self.store.lock:
-            existing = self.require("campaigns", identifier) if identifier else {}
+            existing = self.active_campaign(identifier) if identifier else {}
             for profile in body.profile_ids:
                 self.require("profiles", profile)
             for video in body.video_ids:
@@ -258,7 +399,7 @@ class Campaigns:
 
     def propose(self, campaign_id, body: Proposal, *, hypothesis="", restored_from=None):
         with self.store.lock:
-            campaign = self.require("campaigns", campaign_id)
+            campaign = self.active_campaign(campaign_id)
             if body.base_version_id != campaign["active_strategy_id"]:
                 raise HTTPException(409, "Strategy changed. Reload and explicitly rebase the proposal.")
             active = self.require("strategy_versions", body.base_version_id) if body.base_version_id else None
@@ -294,7 +435,7 @@ class Campaigns:
 
     def decision(self, campaign_id, version_id, *, approve, reason=""):
         with self.store.lock:
-            campaign = self.require("campaigns", campaign_id)
+            campaign = self.active_campaign(campaign_id)
             version = self.require("strategy_versions", version_id)
             if version["campaign_id"] != campaign_id:
                 raise HTTPException(404, "Strategy version not found in campaign.")
@@ -319,7 +460,7 @@ class Campaigns:
 
     def restore(self, campaign_id, version_id, body):
         with self.store.lock:
-            campaign = self.require("campaigns", campaign_id)
+            campaign = self.active_campaign(campaign_id)
             version = self.require("strategy_versions", version_id)
             if version["campaign_id"] != campaign_id or version["status"] != "approved":
                 raise HTTPException(422, "Restore only an approved decision from this campaign.")
@@ -337,7 +478,7 @@ class Campaigns:
 
     def observe(self, campaign_id, body):
         with self.store.lock:
-            self.require("campaigns", campaign_id)
+            self.active_campaign(campaign_id)
             clip = self.require("clips", body.clip_id)
             if clip.get("campaign_id") != campaign_id or not clip.get("profile_id"):
                 raise HTTPException(422, "Observation requires a campaign-associated clip and profile.")
@@ -374,6 +515,7 @@ class Campaigns:
 
     def learn(self, campaign_id, body):
         with self.store.lock:
+            self.active_campaign(campaign_id)
             self._evidence(campaign_id, body.profile_id, body.observation_ids, known=True)
             refs = list(dict.fromkeys(body.proposed_direction.evidence_refs + body.observation_ids))
             self._evidence(campaign_id, body.profile_id, refs)
@@ -390,7 +532,7 @@ class Campaigns:
 
     def snapshot(self, campaign_id, profile_id, video_id, expected_strategy_version_id=None):
         with self.store.lock:
-            campaign = self.require("campaigns", campaign_id)
+            campaign = self.active_campaign(campaign_id)
             if profile_id not in campaign["profile_ids"] or video_id not in campaign["video_ids"]:
                 raise HTTPException(422, "Select a source and profile belonging to this campaign.")
             if (

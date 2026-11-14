@@ -34,8 +34,8 @@ def install(app: FastAPI, campaigns: Campaigns, *, render, produce):
         return campaigns.save_profile(body, identifier)
 
     @app.get("/api/campaigns")
-    def all_campaigns():
-        return campaigns.store.all("campaigns")
+    def all_campaigns(include_archived: bool = False):
+        return campaigns.list_campaigns(include_archived)
 
     @app.get("/api/campaigns/{identifier}")
     def campaign(identifier: str):
@@ -48,6 +48,14 @@ def install(app: FastAPI, campaigns: Campaigns, *, render, produce):
     @app.put("/api/campaigns/{identifier}")
     def update_campaign(identifier: str, body: Campaign):
         return campaigns.save_campaign(body, identifier)
+
+    @app.post("/api/campaigns/{identifier}/archive")
+    def archive_campaign(identifier: str):
+        return campaigns.archive(identifier)
+
+    @app.post("/api/campaigns/{identifier}/restore")
+    def restore_campaign(identifier: str):
+        return campaigns.restore_campaign(identifier)
 
     @app.get("/api/campaigns/{identifier}/strategies")
     def strategies(identifier: str):
@@ -83,8 +91,12 @@ def install(app: FastAPI, campaigns: Campaigns, *, render, produce):
 
     @app.post("/api/campaigns/{identifier}/render", status_code=202)
     def render_campaign(identifier: str, body: Production):
-        return render(identifier, body)
+        with campaigns.store.lock:
+            campaigns.active_campaign(identifier)
+            return render(identifier, body)
 
     @app.post("/api/campaigns/{identifier}/produce", status_code=202)
     def produce_campaign(identifier: str, body: AgentProduction):
-        return produce(identifier, body)
+        with campaigns.store.lock:
+            campaigns.active_campaign(identifier)
+            return produce(identifier, body)
