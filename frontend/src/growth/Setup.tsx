@@ -1,5 +1,5 @@
 import { AutoTextarea } from "../components/AutoTextarea";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../api";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -178,6 +178,8 @@ export function Setup({
       ? w.profiles.find((p) => p.id === w.profileId)
       : undefined;
   const [editor, setEditor] = useState<"identity" | "kit" | "account" | "goals" | "engine" | null>(null);
+  const [section, setSection] = useState<"identity" | "goals" | "kit" | "account">("identity");
+  const summaryId = useId();
   const handledGoalsRequest = useRef(0);
   const handledEngineRequest = useRef(0);
   useEffect(() => {
@@ -187,6 +189,7 @@ export function Setup({
       setEditor("engine");
     } else if (goals && goalsRequest > 0 && goalsRequest !== handledGoalsRequest.current) {
       handledGoalsRequest.current = goalsRequest;
+      setSection("goals");
       setEditor("goals");
     }
   }, [active, goalsRequest, engineRequest, goals]);
@@ -1021,38 +1024,64 @@ export function Setup({
   return (
     <>
     <div
-      className="gf-setup-grid gf-channel-settings-grid"
+      className={`gf-setup-grid gf-channel-settings-grid${part === "brand" ? " gf-brand-profile" : ""}`}
       id={part === "campaign" ? "gf-goals" : undefined}
     >
       {part === "brand" ? (
         <>
           <section className="gf-brand-overview" aria-label="Brand profile overview">
-            <div className="gf-brand-overview-heading">
-              <div><span className="gf-brand-eyebrow">Your brand</span><h2>{brandName || "Untitled brand"}</h2></div>
-              <span className="gf-brand-caption">A shared direction for every clip.</span>
-            </div>
-            <div className="gf-brand-settings-grid">
-              <button type="button" className="gf-brand-setting-row" onClick={() => setEditor("identity")}>
-                <span className="gf-brand-setting-icon"><Icon name="headphones" size={19} /></span>
-                <span><strong>Brand, audience & voice</strong><small>{audience.trim() || "Define who you’re speaking to and how you sound."}</small></span>
-                <span className="gf-brand-row-action">Edit details<Icon name="arrow" size={15} /></span>
-              </button>
-              {goals && <button type="button" className="gf-brand-setting-row" onClick={() => setEditor("goals")}>
-                <span className="gf-brand-setting-icon"><Icon name="results" size={19} /></span>
-                <span><strong>Goals & brief</strong><small>Your outcome, creative brief and episode sharing.</small></span>
-                <span className="gf-brand-row-action">Review direction<Icon name="arrow" size={15} /></span>
-              </button>}
-              <button type="button" className="gf-brand-setting-row" onClick={() => setEditor("kit")}>
-                <span className="gf-brand-setting-icon"><Icon name="studio" size={19} /></span>
-                <span><strong>Brand kit</strong><small>{(kitEdited || kitDirty) && kitError ? "Needs attention · " + kitError : `${fontFamily.trim() || "Default font"} · ${logo.trim() ? "Logo added" : "No logo yet"}`}</small></span>
-                <span className="gf-brand-row-action"><span className="gf-brand-swatches" aria-label="Brand colours"><i style={{ background: primary }} /><i style={{ background: accent }} /></span>Edit appearance<Icon name="arrow" size={15} /></span>
-              </button>
-              <button type="button" className="gf-brand-setting-row" onClick={() => setEditor("account")}>
-                <span className="gf-brand-setting-icon"><Icon name="settings" size={19} /></span>
-                <span><strong>Account & AI model</strong><small>Sign-in, model routing and processing preferences.</small></span>
-                <span className="gf-brand-row-action">Manage<Icon name="arrow" size={15} /></span>
-              </button>
-            </div>
+            <nav className="gf-profile-sections" aria-label="Profile sections">
+              {([
+                ["identity", "Brand & voice", "headphones"],
+                ...(goals ? [["goals", "Goals & brief", "results"]] : []),
+                ["kit", "Brand kit", "studio"],
+                ["account", "Account & model", "settings"],
+              ] as [typeof section, string, string][]).map(([key, label, icon]) => (
+                <button type="button" key={key} aria-current={section === key ? "page" : undefined} aria-controls={summaryId} onClick={() => setSection(key)}>
+                  <Icon name={icon} size={16} /><span>{label}</span>
+                </button>
+              ))}
+            </nav>
+            <section className="gf-profile-summary" id={summaryId} key={section} aria-label={section === "identity" ? "Brand and voice summary" : section === "goals" ? "Goals and brief summary" : section === "kit" ? "Brand kit summary" : "Account and model summary"}>
+              {section === "identity" && <>
+                <header><h2>Brand, audience & voice</h2><p>The foundation behind every edit.</p></header>
+                <dl>
+                  <div><dt>Brand name</dt><dd>{brandName || "Add your brand name"}</dd></div>
+                  <div><dt>Who it’s for</dt><dd>{audience.trim() || "Define who you’re speaking to."}</dd></div>
+                  <div><dt>Voice & boundaries</dt><dd>{voice.trim() || "Describe how your brand should sound."}</dd></div>
+                  {website.trim() && <div><dt>Website</dt><dd>{website.trim()}</dd></div>}
+                </dl>
+                <button type="button" className="gf-button secondary compact gf-profile-edit" onClick={() => setEditor("identity")}>Edit brand details<Icon name="arrow" size={15} /></button>
+              </>}
+              {section === "goals" && <>
+                <header><h2>Goals & brief</h2><p>A clear outcome and a shared direction for the editors.</p></header>
+                <dl>
+                  <div><dt>What we’re working toward</dt><dd>{objectiveLabels[(campaign.objective || "discovery") as keyof typeof objectiveLabels] || campaign.objective}</dd></div>
+                  <div><dt>Primary metric</dt><dd>{campaign.primary_metric || "No primary metric while exploring."}</dd></div>
+                  <div><dt>Creative brief</dt><dd>{campaign.brief.key_messages?.join("\n") || campaign.brief.constraints.join("\n") || "Add the messages and context every editor should know."}</dd></div>
+                </dl>
+                <button type="button" className="gf-button secondary compact gf-profile-edit" onClick={() => setEditor("goals")}>Edit goals & brief<Icon name="arrow" size={15} /></button>
+              </>}
+              {section === "kit" && <>
+                <header><h2>Brand kit</h2><p>The colours, typography and logo that make a clip yours.</p></header>
+                <dl>
+                  <div><dt>Typeface</dt><dd>{fontFamily.trim() || "System default"}</dd></div>
+                  <div><dt>Colours</dt><dd className="gf-profile-colours"><span><i style={{ background: primary }} aria-hidden="true" />{primary}</span><span><i style={{ background: accent }} aria-hidden="true" />{accent}</span></dd></div>
+                  <div><dt>Logo</dt><dd>{logo.trim() || "No logo added yet."}</dd></div>
+                </dl>
+                {(kitEdited || kitDirty) && kitError && <p className="gf-profile-validation">Brand kit needs attention. {kitError}</p>}
+                <button type="button" className="gf-button secondary compact gf-profile-edit" onClick={() => setEditor("kit")}>Edit brand kit<Icon name="arrow" size={15} /></button>
+              </>}
+              {section === "account" && <>
+                <header><h2>Account & model</h2><p>Your account and the way this factory processes footage.</p></header>
+                <dl>
+                  <div><dt>This workspace</dt><dd>{brandName || "Your brand"}</dd></div>
+                  <div><dt>Account access</dt><dd>Manage sign-in and device access.</dd></div>
+                  <div><dt>Model routing</dt><dd>Choose local or cloud processing and manage your model key.</dd></div>
+                </dl>
+                <button type="button" className="gf-button secondary compact gf-profile-edit" onClick={() => setEditor("account")}>Manage account & model<Icon name="arrow" size={15} /></button>
+              </>}
+            </section>
           </section>
           <div className="gf-brand-quick-links">
             <div className="gf-link-rows">

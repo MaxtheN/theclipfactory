@@ -1,35 +1,35 @@
-/* Strategist sections of Results: frosted glass on the app canvas, one accent per lane. */
+/* Pearl Studio insights: one quiet bronze identity; color reflects evidence state. */
 .gf-strategist {
-  --st-ink: var(--material-ink, #f3f1ec);
-  --st-muted: var(--material-metadata, #dedbd3);
-  --st-line: rgba(255, 255, 255, 0.16);
-  --st-glass: rgba(255, 255, 255, 0.07);
-  --st-craft: #f3c66f;
-  --st-selection: #8ccaff;
-  --st-campaign: #ff9f88;
-  --st-good: #7fe0b6;
-  --st-bad: #f0b9ac;
+  --st-ink: var(--material-ink, #293237);
+  --st-muted: var(--material-metadata, #616A6E);
+  --st-line: var(--material-divider, #DAD6CE);
+  --st-glass: #FCFBF7;
+  --st-craft: #8B6946;
+  --st-selection: #8B6946;
+  --st-campaign: #8B6946;
+  --st-good: #4B6656;
+  --st-bad: #925446;
   margin-top: 22px;
   padding: 26px 28px;
   border: 1px solid var(--st-line);
   border-radius: 24px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+  background: #FCFBF7;
   backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
   color: var(--st-ink);
-  box-shadow: 0 20px 60px -30px rgba(0, 0, 0, 0.6);
+  box-shadow: none;
 }
 .gf-strategist.is-simulated {
-  border-color: rgba(243, 198, 111, 0.7);
-  background: linear-gradient(160deg, rgba(243, 198, 111, 0.12), rgba(243, 198, 111, 0.04));
+  border-color: #B5A38B;
+  background: #F6F0E6;
 }
 .gf-strategist-banner {
   margin: -6px 0 18px;
   padding: 10px 14px;
   border-radius: 12px;
-  background: rgba(243, 198, 111, 0.2);
-  color: #ffe2a8;
-  border: 1px solid rgba(243, 198, 111, 0.6);
+  background: #F2EBDD;
+  color: #805E36;
+  border: 1px solid #B5A38B;
   font-weight: 600;
   font-size: 13px;
 }
@@ -66,7 +66,7 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--st-muted, var(--material-metadata));
-  opacity: 0.8;
+  opacity: 1;
 }
 .gf-strategist-actions {
   display: flex;
@@ -79,21 +79,21 @@
   min-height: 38px;
   padding: 9px 15px;
   border-radius: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid #978F84;
+  background: #F7F4ED;
   color: var(--st-ink);
   cursor: pointer;
   transition: background 160ms ease, transform 160ms ease;
 }
 .gf-strategist button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
+  background: #EEE9E0;
 }
 .gf-strategist button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 .gf-strategist :focus-visible {
-  outline: 2px solid var(--material-focus, #e2c49d);
+  outline: 2px solid var(--material-focus, #8B6946);
   outline-offset: 3px;
 }
 .gf-strategist-lanes {
@@ -108,7 +108,7 @@
   border-radius: 18px;
   border: 1px solid var(--st-line);
   border-top: 2px solid var(--lane);
-  background: rgba(255, 255, 255, 0.035);
+  background: #FCFBF7;
 }
 .gf-strategist-lane.is-selection {
   --lane: var(--st-selection);
@@ -129,14 +129,14 @@
   color: var(--st-muted);
 }
 .gf-strategist-empty {
-  opacity: 0.8;
+  opacity: 1;
 }
 .gf-strategist-belief {
   margin: 12px 0;
   padding: 14px;
   border: 1px solid var(--st-line);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
+  background: #F7F4ED;
 }
 .gf-strategist-belief header {
   display: flex;
@@ -160,19 +160,19 @@
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  background: rgba(140, 202, 255, 0.16);
-  color: #cfe8ff;
+  background: #F0EDE7;
+  color: var(--st-muted);
 }
 .gf-strategist-pill.is-supported {
-  background: rgba(127, 224, 182, 0.18);
+  background: #E9EEE8;
   color: var(--st-good);
 }
 .gf-strategist-pill.is-weakened {
-  background: rgba(240, 185, 172, 0.18);
+  background: #F5E9E4;
   color: var(--st-bad);
 }
 .gf-strategist-pill.is-retired {
-  background: rgba(255, 255, 255, 0.1);
+  background: #E3DFD7;
   color: var(--st-muted);
 }
 .gf-strategist-origin {
@@ -182,14 +182,14 @@
 .gf-strategist-meter {
   height: 7px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: #E3DFD7;
   overflow: hidden;
 }
 .gf-strategist-meter span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--lane, var(--st-good)) 55%, transparent), var(--lane, var(--st-good)));
+  background: var(--lane, var(--st-good));
   transition: width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .is-weakened .gf-strategist-meter span {
@@ -209,13 +209,13 @@
   font-size: 11px;
   padding: 3px 8px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.07);
+  background: #F0EDE7;
 }
 .gf-strategist-chip.is-supports {
-  background: rgba(127, 224, 182, 0.14);
+  background: #E9EEE8;
 }
 .gf-strategist-chip.is-contradicts {
-  background: rgba(240, 185, 172, 0.14);
+  background: #F5E9E4;
 }
 .gf-strategist-link {
   min-height: 32px !important;
@@ -225,7 +225,7 @@
   margin: 4px 0 0;
   font-size: 11.5px;
   color: var(--st-muted);
-  opacity: 0.85;
+  opacity: 1;
 }
 .gf-strategist-queue {
   display: grid;
@@ -241,7 +241,7 @@
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid var(--st-line);
-  background: rgba(255, 255, 255, 0.05);
+  background: #F7F4ED;
   font-size: 13px;
 }
 .gf-strategist-queue li strong {
@@ -251,7 +251,7 @@
   border-radius: 999px;
   font-size: 11px;
   text-align: center;
-  color: #10181d;
+  color: #FCFBF7;
   background: var(--st-good);
 }
 .gf-strategist-queue li.is-explore {
@@ -273,9 +273,9 @@
   justify-content: space-between;
   padding: 12px 14px;
   margin: 10px 0;
-  border: 1px solid rgba(249, 225, 191, 0.45);
+  border: 1px solid #B5A38B;
   border-radius: 12px;
-  background: rgba(249, 225, 191, 0.07);
+  background: #F6F0E6;
   font-size: 13px;
 }
 details.gf-strategist-proposal {
@@ -290,17 +290,17 @@ details.gf-strategist-proposal {
   font-size: 13px;
   padding: 10px 14px;
   border-radius: 10px;
-  background: rgba(140, 202, 255, 0.12);
-  color: #d8ecff;
+  background: #E7EDF0;
+  color: #506777;
 }
 .gf-strategist-model.is-held,
 .gf-strategist-model.is-abstained {
-  background: rgba(243, 198, 111, 0.15);
-  color: #ffe2a8;
+  background: #F2EBDD;
+  color: #805E36;
 }
 .gf-strategist-error {
-  color: #ffd5cc;
-  background: rgba(240, 185, 172, 0.15);
+  color: #925446;
+  background: #F5E9E4;
   padding: 10px 14px;
   border-radius: 10px;
 }
@@ -316,13 +316,13 @@ details.gf-strategist-proposal {
   flex: 1 1 260px;
 }
 .gf-strategist-sim button[aria-pressed="false"] {
-  border-color: rgba(243, 198, 111, 0.6);
-  color: #ffe2a8;
+  border-color: #B5A38B;
+  color: #805E36;
 }
 .gf-strategist-caveat {
   font-size: 11.5px;
   color: var(--st-muted);
-  opacity: 0.8;
+  opacity: 1;
   margin-top: 18px;
 }
 @media (max-width: 850px) {

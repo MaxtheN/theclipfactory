@@ -33,6 +33,7 @@ import "./landing.css";
 import "./desktop-shell.css";
 import "./navigation.css";
 import "./polish.css";
+import "./pearl-studio.css";
 import { cloudApi } from "./cloudApi";
 import { CLOUD_CHANGED } from "./appEvents";
 

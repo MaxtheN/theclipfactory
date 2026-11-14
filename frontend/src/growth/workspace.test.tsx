@@ -55,7 +55,8 @@ beforeEach(() => {
 });
 
 function openBrandEditor() {
-  fireEvent.click(screen.getByRole("button", { name: /^Brand, audience & voice/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Brand & voice" }));
+  fireEvent.click(screen.getByRole("button", { name: "Edit brand details" }));
   return screen.getByRole("dialog", { name: "Brand, audience & voice" });
 }
 function closeBrandEditor() {

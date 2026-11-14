@@ -1,40 +1,34 @@
-/* Shared material contract for the campaign shell, tools and command palette. */
+/* Pearl Studio: warm paper, graphite typography and restrained bronze. */
 .gf-app,
-.gf-operational,
 .gf-command-dialog {
   --material-font: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
-  --material-choice-fill: rgba(255, 255, 255, 0.045);
-  --material-choice-line: rgba(240, 236, 228, 0.7);
-  --material-choice-disabled-line: rgba(226, 196, 157, 0.5);
-  --material-canvas-top: #40515f;
-  --material-canvas-bottom: #594137;
-  --material-canvas:
-    linear-gradient(
-      160deg,
-      var(--material-canvas-top) 0%,
-      #495664 28%,
-      #665347 53%,
-      #724a34 75%,
-      var(--material-canvas-bottom) 100%
-    );
-  --material-pane: rgba(118, 128, 136, 0.22);
-  --material-pane-solid: #4b555d;
-  --material-shell: rgba(35, 43, 49, 0.18);
-  --material-ink: #f3f1ec;
-  --material-secondary: #e8e4dc;
-  --material-metadata: #dedbd3;
-  --material-line: rgba(255, 255, 255, 0.23);
-  --material-divider: rgba(255, 255, 255, 0.12);
-  --material-field-line: rgba(255, 255, 255, 0.24);
-  --material-field: rgba(255, 255, 255, 0.035);
-  --material-hover: rgba(255, 255, 255, 0.055);
-  --material-selected: rgba(255, 255, 255, 0.085);
-  --material-button: #f0ece4;
-  --material-button-ink: #292d2e;
-  --material-focus: #e2c49d;
-  --material-focus-ring: rgba(226, 196, 157, 0.14);
-  --material-warning: #f9e1bf;
-  --material-warning-fill: rgba(163, 109, 55, 0.14);
-  --material-danger: #f0b9ac;
-  --material-command: rgba(71, 79, 87, 0.35);
+  --material-canvas-top: #F2F0EB;
+  --material-canvas-bottom: #F2F0EB;
+  --material-canvas: #F2F0EB;
+  --material-pane: #FCFBF7;
+  --material-pane-solid: #FCFBF7;
+  --material-shell: rgba(234, 231, 224, .86);
+  --material-ink: #293237;
+  --material-secondary: #616A6E;
+  --material-metadata: #616A6E;
+  --material-line: #DAD6CE;
+  --material-divider: #DEDAD2;
+  --material-field-line: #90928A;
+  --material-field: #FFFEFB;
+  --material-hover: #ECE8E0;
+  --material-selected: #E8E1D6;
+  --material-button: #8B6946;
+  --material-button-ink: #FFFDF8;
+  --material-focus: #8B6946;
+  --material-focus-ring: rgba(139, 105, 70, .15);
+  --material-choice-fill: #FFFEFB;
+  --material-choice-line: #90928A;
+  --material-choice-disabled-line: #C7C3BA;
+  --material-success: #496552;
+  --material-success-fill: #E8EFE7;
+  --material-warning: #876136;
+  --material-warning-fill: #F2E9DA;
+  --material-danger: #994F42;
+  --material-danger-fill: #F4E6E0;
+  --material-command: rgba(252, 251, 247, .96);
 }

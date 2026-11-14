@@ -387,3 +387,42 @@
   .gf-app .gf-toggle-row input[role="switch"]::after,
   .gf-segmented span { transition: none; }
 }
+
+/* Pearl surrounds the post; video and its overlay retain their own dark canvas. */
+.gf-app .gf-post-instagram .gf-score-pills li {
+  background: var(--material-field, #f4f1eb);
+  border-color: var(--material-divider, #dad6ce);
+}
+.gf-app .gf-post-instagram .gf-score-pills li.is-good { border-color: #c5d0c1; background: var(--material-success-fill, #e8efe7); }
+.gf-app .gf-post-instagram .gf-score-pills li.is-good strong { color: var(--material-success, #496552); }
+.gf-app .gf-post-instagram .gf-score-pills li.is-low { border-color: #dfcfb7; background: var(--material-warning-fill, #f2e9da); }
+.gf-app .gf-post-instagram .gf-score-pills li.is-low strong { color: var(--material-warning, #876136); }
+.gf-app .gf-post-instagram .gf-score-pills span,
+.gf-app .gf-post-instagram .gf-score-pills small,
+.gf-app .gf-post-instagram .gf-score-pills li.is-unknown strong,
+.gf-app .gf-post-instagram .gf-quality-details > summary,
+.gf-app .gf-post-instagram .gf-caption-counters,
+.gf-app .gf-post-instagram .gf-post-note,
+.gf-app .gf-post-instagram .gf-cover-picked { opacity: 1; color: var(--material-secondary, #616a6e); }
+.gf-app .gf-post-instagram .gf-caption-counters .over { color: var(--material-danger, #994f42); }
+.gf-app .gf-post-instagram .gf-post-account {
+  background: var(--material-pane-solid, #fcfbf7);
+  border-color: var(--material-divider, #dad6ce);
+  color: var(--material-ink, #293237);
+}
+.gf-app .gf-post-instagram .gf-post-account:has(input:checked) { background: var(--material-selected, #eee8de); border-color: var(--material-accent, #8b6946); }
+.gf-app .gf-post-instagram .gf-post-account-avatar { background: #e8e1d7; color: #70563b; }
+.gf-app .gf-post-instagram .gf-text-button { color: var(--material-accent, #8b6946); }
+.gf-app .gf-post-instagram .gf-toggle-row { background: var(--material-field, #f4f1eb); border-color: var(--material-divider, #dad6ce); }
+.gf-app .gf-post-instagram .gf-toggle-row small { opacity: 1; color: var(--material-secondary, #616a6e); }
+.gf-app .gf-post-instagram .gf-toggle-row input[type="checkbox"][role="switch"]:not(:checked) { background: #c9c5bd; }
+.gf-app .gf-post-instagram .gf-toggle-row input[type="checkbox"][role="switch"]::after { background: #fffefa; box-shadow: 0 1px 3px rgba(49, 43, 32, .18); }
+.gf-app .gf-post-instagram .gf-segmented input:checked + span { background: var(--material-pane-solid, #fcfbf7); box-shadow: 0 1px 3px rgba(49, 43, 32, .09); }
+.gf-app .gf-post-instagram .gf-post-attempts > li,
+.gf-app .gf-post-instagram .gf-schedule-list > li { padding: 12px; border: 1px solid var(--material-divider, #dad6ce); border-radius: 8px; background: var(--material-field, #f4f1eb); }
+.gf-app .gf-post-preview .gf-phone { background: #171b1e; border-color: #30373b; box-shadow: 0 12px 28px rgba(37, 40, 38, .16); }
+.gf-app .gf-post-preview .gf-phone-screen { background: #101416; color: #fff; color-scheme: dark; }
+.gf-app .gf-post-preview .gf-phone-screen :is(.gf-reels-top, .gf-reels-rail, .gf-phone-account strong, .gf-phone-caption, .gf-reels-follow, .gf-reels-audio) { color: #fff; }
+.gf-app .gf-post-preview .gf-phone-more { color: rgba(255, 255, 255, .8); }
+.gf-app .gf-post-preview .gf-post-preview-meta small { opacity: 1; color: var(--material-secondary, #616a6e); }
+.gf-app .gf-quicklook .gf-reels-rail { color: #fff; }

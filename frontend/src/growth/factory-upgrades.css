@@ -1,17 +1,17 @@
-/* Factory upgrades (Results / Factory): same frosted glass as the Strategist, learn-lane accent. */
+/* Factory upgrades share Pearl Studio paper and restrained evidence colors. */
 .gf-upgrades {
-  --up-ink: var(--material-ink, #f3f1ec);
-  --up-muted: var(--material-metadata, #dedbd3);
-  --up-line: rgba(255, 255, 255, 0.16);
-  --up-accent: #ff9f88;
-  --up-good: #7fe0b6;
-  --up-bad: #f0b9ac;
-  --up-demo: #f3c66f;
+  --up-ink: var(--material-ink, #293237);
+  --up-muted: var(--material-metadata, #616A6E);
+  --up-line: var(--material-divider, #DAD6CE);
+  --up-accent: #8B6946;
+  --up-good: #4B6656;
+  --up-bad: #925446;
+  --up-demo: #805E36;
   margin-top: 22px;
   padding: 22px 24px;
   border: 1px solid var(--up-line);
   border-radius: 24px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+  background: #FCFBF7;
   backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
   color: var(--up-ink);
@@ -31,11 +31,11 @@
   border: 1px solid var(--up-line);
   border-radius: 16px;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: #F7F4ED;
   min-width: 0;
 }
-.gf-upgrade.is-ready_for_review { border-color: rgba(127, 224, 182, 0.55); }
-.gf-upgrade.is-building { border-color: rgba(255, 159, 136, 0.6); }
+.gf-upgrade.is-ready_for_review { border-color: #8F9F90; }
+.gf-upgrade.is-building { border-color: #B5A38B; }
 .gf-upgrade-summary {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%;
   background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
@@ -49,7 +49,7 @@
 .gf-upgrade-evidence { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; }
 .gf-upgrade-chip {
   font-size: 12px; line-height: 1.35; padding: 3px 9px; border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07); border: 1px solid var(--up-line); max-width: 100%;
+  background: #F0EDE7; border: 1px solid var(--up-line); max-width: 100%;
   overflow-wrap: anywhere;
 }
 .gf-upgrade-chip b { color: var(--up-accent); font-weight: 600; margin-right: 4px; }
@@ -59,7 +59,7 @@
 .gf-upgrade-order summary { cursor: pointer; font-size: 13px; color: var(--up-muted); }
 .gf-upgrade-order pre, .gf-upgrade-commands {
   max-height: 320px; overflow: auto; margin: 8px 0 0; padding: 10px 12px; border-radius: 10px;
-  background: rgba(0, 0, 0, 0.28); font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere;
+  background: #EDEAE4; font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .gf-upgrade-build {
   border-top: 1px solid var(--up-line); padding-top: 10px; display: grid; gap: 8px; font-size: 13px; min-width: 0;
@@ -67,7 +67,7 @@
 .gf-upgrade-build p { margin: 0; }
 .gf-upgrade-build code { font-size: 12px; overflow-wrap: anywhere; }
 .gf-upgrade-steps { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
-.gf-upgrade-steps li { font-size: 12px; padding: 2px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.06); }
+.gf-upgrade-steps li { font-size: 12px; padding: 2px 8px; border-radius: 8px; background: #F0EDE7; }
 .gf-upgrade-steps .is-ok { color: var(--up-good); }
 .gf-upgrade-steps .is-fail { color: var(--up-bad); }
 .gf-upgrade-sample { width: 160px; aspect-ratio: 9 / 16; border-radius: 12px; background: #000; }
