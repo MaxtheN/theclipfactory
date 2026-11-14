@@ -26,7 +26,7 @@ SQLite stores local profiles, campaigns, immutable direction versions, jobs, cli
 - **Idempotency:** observation and export creation are not server-idempotent. UI disables duplicate submission and reconciles uncertain writes; durable keys are later backend work.
 - **Live publication:** requires eligible connected account, exact approved clip, explicit enablement and reachable public HTTPS video URL. Local export does not supply public hosting.
 - **Paid execution:** insights/preflight exist; creating, activating, pausing or spending on ads is not implemented.
-- **Agent reliability:** a teammate branch has additional JSON/range/evidence-repair and caption fixes not present on audited master. Inspect/review and bring those changes into the shared code deliberately; branch existence is not tested proof on the intended model.
+- **Agent reliability:** the reviewed JSON/range/evidence-repair and caption fixes are merged from master4966544. Qwen4B and Whisper passed actual production, including a substantive15.1-second draft with fresh grounding. Human editorial acceptance and full-episode scale remain separate gates.
 
 ## Database decision
 
@@ -38,4 +38,4 @@ Record actual elapsed time, active human minutes, accepted outputs, revision cou
 
 ## Documentation state
 
-The shared Google Doc's MVP tab now describes onboarding and Factory/Library/Results, retaining the earlier detail mockups. Software Factory has tracked suggestions for Product Description, onboarding/recovery requirements, the results follow-up boundary, the campaign navigation blueprint and a populated Results learning blueprint. These suggestions remain pending review; they are not silently approved requirements. WO4 remains in progress until verification and handoff. Current integrated upstream is master4966544; the earlier700c907 audit remains a dated source snapshot.
+The shared Google Doc's MVP tab now describes onboarding and Factory/Library/Results, retaining the earlier detail mockups. Software Factory has tracked suggestions for Product Description, onboarding/recovery requirements, the results follow-up boundary, the campaign navigation blueprint and a populated Results learning blueprint. These suggestions remain pending review; they are not silently approved requirements. WO4 is In Review and linked to draftPR5 after verified handoff. Current integrated upstream is master4966544; the earlier700c907 audit remains a dated source snapshot.
