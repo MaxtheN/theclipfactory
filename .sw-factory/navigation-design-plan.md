@@ -1,0 +1,9 @@
+# WO-9 navigation follow-up
+
+This is the design-owned navigation part of WO-9 (013a252d-d98d-4ae1-afd2-9834378cbb83). The shared implementation plan existed before code. Campaign requirement/blueprint and Production blueprint were read through Software Factory; referenced Research/Results contracts were read in this ongoing implementation. Root owns Setup and the work-order harness; this chat owns GrowthApp, navigation.css and navigation-specific workspace/onboardingShell tests.
+
+Keep Factory, Library and Results primary. Put one Channel settings utility below them, with Editing rules reached explicitly from settings, the Factory prerequisite nudge or an advanced command. Move New workspace and technical tools into a labeled Advanced disclosure. Keep all mounted stages, state keys, preferred clip/source callbacks, #connections behavior, shortcuts, onboarding/write gates and account bindings. A Research return action goes to Channel settings; settings saves stay in settings through the unchanged Setup next callback contract. Show the local profile switcher only when more than one linked profile is actually selectable; no profile is removed or reselected.
+
+The teammate fbfe083 changes were read before nav work: save-draft then approve remains explicit, stale/profile coverage remains guarded, and contextual Studio direction/retry guidance will be integrated by the root merge owner. Do not merge or overwrite upstream Research/Studio here.
+
+Verify daily versus advanced navigation, accessible labels, retained drafts, explicit settings-save/Editing-rules routing, multi-profile scope, onboarding and Command-K gates, desktop/compact UI and build. Independent review is required. Commit only design-owned files after final checks; Setup/backend/archive work remains separately owned.

@@ -148,6 +148,9 @@ beforeEach(() => vi.restoreAllMocks());
 describe("selected profile goal control", () => {
   it("writes only selected-profile writable fields and keeps a failed draft", async () => {
     const { w, factory, profiles } = fixture();
+    vi.spyOn(workspaceApi, "campaigns").mockResolvedValue([w.campaign!]);
+    vi.spyOn(workspaceApi, "profiles").mockResolvedValue(profiles);
+    const save = vi.spyOn(workspaceApi, "save");
     const update = vi
       .spyOn(workspaceApi, "updateProfile")
       .mockRejectedValue(new Error("Profile save failed"));
@@ -160,20 +163,19 @@ describe("selected profile goal control", () => {
         onSaved={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByText("Production goal · All-In demo"));
-    expect(screen.getByLabelText("Campaign brief intent")).toHaveValue(
-      "Descriptive brief intent",
-    );
-    fireEvent.change(screen.getByLabelText("Production objective"), {
+    expect(screen.queryByLabelText("Campaign brief intent")).toBeNull();
+    fireEvent.change(screen.getByLabelText("What are we working toward?"), {
       target: { value: "traffic" },
     });
     expect(
-      screen.getByRole("button", { name: "Save profile goal" }),
+      screen.getByRole("button", { name: "Save channel settings" }),
     ).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Primary production metric"), {
+    fireEvent.change(screen.getByLabelText("Primary metric"), {
       target: { value: "full_episode_visits" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save profile goal" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save channel settings" }),
+    );
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith("profile-a", {
         name: profiles[0].name,
@@ -184,10 +186,11 @@ describe("selected profile goal control", () => {
         primary_metric: "full_episode_visits",
       }),
     );
-    expect(screen.getByLabelText("Production objective")).toHaveValue(
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("What are we working toward?")).toHaveValue(
       "traffic",
     );
-    expect(screen.getByLabelText("Primary production metric")).toHaveValue(
+    expect(screen.getByLabelText("Primary metric")).toHaveValue(
       "full_episode_visits",
     );
     expect(profiles[1].primary_metric).toBe("qualified_visits");

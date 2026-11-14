@@ -45,5 +45,11 @@ The compact screenshot also shows the existing enlarged white brand cropped at t
 
 Only this review note was added by the reviewer. No commits, pushes or other-chat messages were made. Parent owns final root verification, work-order status and delivery. Approval is scoped to the reviewed implementation and evidence, not production media/backend qualification.
 
+## Final verification and advisory resolution
+
+The reviewer independently viewed the updated `production-review-compact.jpg`: the white mark now fits inside the compact sidebar. Parent browser measurements report a 28×20px mark spanning x15.5–43.5 inside the 60px rail, with page width remaining 390px. The compact-brand advisory is resolved; **APPROVED with zero outstanding blockers or advisories**.
+
+Parent final checks passed: **312/312 frontend tests across 23 files**, including integration-owner tests, plus TypeScript/Vite build (632.25kB, gzip202.66kB). Parent subsequently reports selective journey commit `0c08dd2` pushed to the team feature branch. This reviewer made no Git/index changes.
+
 ## Final parent verification and compact chrome fix
 The final shared frontend suite passed312/312 across23files, and TypeScript/Vite build passed632.25kB/gzip202.66kB before the compact-only logo adjustment. The logo now measures28×20px within the60px rail (x15.5–43.5 at390px); pagewidth stays390px. This resolves the nonblocking crop above. The Mac fixture preview remains separate from the actual engine, with live Vite5179 updates. The user's latest explicit instruction authorizes selective commit and push of these design-owned files. No backend/AutomationPanel/docs changes are included.

@@ -1,124 +1,75 @@
 import { AutoTextarea } from "../components/AutoTextarea";
-import { useRef, useState, type DragEvent } from "react";
+import { useRef, useState } from "react";
+import { ApiError } from "../api";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
-import { workspaceApi, reviewPreview } from "./workspaceApi";
+import { workspaceApi, type CampaignInput } from "./workspaceApi";
 import {
   Disclosure,
   Empty,
   Field,
   FieldGroup,
-  Pill,
-  Poster,
   PrimaryAction,
   formatTime,
 } from "./parts";
 import { Icon } from "./Icon";
-import { objectives, type Profile } from "../types";
+import { objectives, type Campaign, type Profile } from "../types";
 import { profileGoalBody } from "./learningState";
 
-function ProfileGoalEditor({
-  profile,
-  w,
-  blocked,
-}: {
-  profile: Profile;
-  w: Workspace;
-  blocked: boolean;
-}) {
-  const [objective, setObjective] = useState(profile.objective);
-  const [primaryMetric, setPrimaryMetric] = useState(
-    profile.primary_metric || "",
-  );
-  const [validation, setValidation] = useState("");
-  const changed =
-    objective !== profile.objective ||
-    (objective === "discovery" ? null : primaryMetric.trim()) !==
-      profile.primary_metric;
-  async function saveGoal() {
-    if (blocked || !changed) return;
-    try {
-      const body = profileGoalBody(profile, objective, primaryMetric);
-      setValidation("");
-      await w.run(
-        () => workspaceApi.updateProfile(profile.id, body),
-        `Production goal saved for ${profile.name}. Earlier clip snapshots stay unchanged.`,
-      );
-    } catch (error) {
-      setValidation(
-        error instanceof Error ? error.message : "Check the profile goal.",
-      );
-    }
-  }
+/** Human-readable labels for the existing backend objective enum. */
+export const objectiveLabels: Record<(typeof objectives)[number], string> = {
+  discovery: "Explore and learn (discovery, no primary metric)",
+  awareness: "Reach new people (awareness)",
+  engagement: "Deeper engagement",
+  followers: "Grow followers",
+  traffic: "Drive visits, such as full episodes (traffic)",
+  leads: "Generate qualified leads",
+  sales: "Drive sales",
+  custom: "Something else (custom)",
+};
+
+type ProfileBody = ReturnType<typeof profileGoalBody>;
+type Attempt = { profileId: string; profile: ProfileBody; campaign: CampaignInput };
+type SaveState =
+  | { kind: "idle" }
+  | { kind: "saved"; message: string }
+  | { kind: "failed"; message: string }
+  // Something may have been written. Saving again is blocked until a readback.
+  | { kind: "partial" | "unknown"; message: string };
+
+const union = (a: string[], b: string[]) => [...new Set([...a, ...b])];
+const lines = (text: string) =>
+  text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+/** A definite 4xx rejection means nothing was written by that request. A lost
+ * connection, server error or unreadable success body leaves it unknown. */
+const uncertain = (error: unknown) =>
+  !(error instanceof ApiError) || error.status === 0 || error.status >= 500 || error.status < 400;
+const message = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
+function profileMatches(saved: Profile | undefined, body: ProfileBody) {
   return (
-    <Disclosure title={`Production goal · ${profile.name}`} icon="results">
-      <p>
-        This selected profile's saved goal guides future production. Campaign
-        brief intent is separate.
-      </p>
-      <Field label="Production objective">
-        {(id) => (
-          <select
-            id={id}
-            value={objective}
-            disabled={blocked}
-            onChange={(event) => {
-              setObjective(event.target.value);
-              setValidation("");
-            }}
-          >
-            {objectives.map((value) => (
-              <option key={value} value={value}>
-                {value === "discovery"
-                  ? "Discovery · explore without a primary outcome"
-                  : value.charAt(0).toUpperCase() + value.slice(1)}
-              </option>
-            ))}
-          </select>
-        )}
-      </Field>
-      <Field
-        label="Primary production metric"
-        hint={
-          objective === "discovery"
-            ? "Discovery keeps this metric unset; it does not select a winner."
-            : "Required for this profile's goal-directed work. No measured improvement is implied."
-        }
-      >
-        {(id) => (
-          <AutoTextarea
-            id={id}
-            rows={1}
-            maxLength={200}
-            value={primaryMetric}
-            disabled={blocked || objective === "discovery"}
-            placeholder="e.g. full_episode_visits"
-            onChange={(event) => {
-              setPrimaryMetric(event.target.value);
-              setValidation("");
-            }}
-          />
-        )}
-      </Field>
-      {validation && (
-        <p className="gf-help" role="alert">
-          {validation}
-        </p>
-      )}
-      <button
-        type="button"
-        className="gf-button secondary compact"
-        disabled={
-          blocked ||
-          !changed ||
-          (objective !== "discovery" && !primaryMetric.trim())
-        }
-        onClick={() => void saveGoal()}
-      >
-        Save profile goal
-        <Icon name="check" size={14} />
-      </button>
-    </Disclosure>
+    !!saved &&
+    saved.name === body.name &&
+    saved.audience === body.audience &&
+    saved.brand_context === body.brand_context &&
+    saved.creative_preferences === body.creative_preferences &&
+    saved.objective === body.objective &&
+    (saved.primary_metric ?? null) === body.primary_metric
+  );
+}
+function campaignMatches(saved: Campaign | undefined, body: CampaignInput) {
+  return (
+    !!saved &&
+    saved.name === body.name &&
+    saved.brief.audience === body.brief.audience &&
+    saved.brief.measurement_intent === body.brief.measurement_intent &&
+    JSON.stringify(saved.brief.constraints) ===
+      JSON.stringify(body.brief.constraints) &&
+    body.profile_ids.every((id) => saved.profile_ids.includes(id)) &&
+    body.video_ids.every((id) => saved.video_ids.includes(id))
   );
 }
 
@@ -136,98 +87,260 @@ export function Setup({
   onSaved: () => void;
 }) {
   const campaign = creating ? undefined : w.campaign;
+  // The profile being edited is fixed for this mount (GrowthApp keys Setup by
+  // campaign and profile). It is never silently replaced by another profile.
+  const profile =
+    campaign && campaign.profile_ids.includes(w.profileId)
+      ? w.profiles.find((p) => p.id === w.profileId)
+      : undefined;
   const [name, setName] = useState(campaign?.name || "");
-  const [audience, setAudience] = useState(campaign?.brief.audience || "");
-  const [constraints, setConstraints] = useState(
-    campaign?.brief.constraints.join("\n") ||
+  const [audience, setAudience] = useState(
+    campaign?.brief.audience || profile?.audience || "",
+  );
+  const [objective, setObjective] = useState(profile?.objective || "discovery");
+  const [metric, setMetric] = useState(profile?.primary_metric || "");
+  const [voice, setVoice] = useState(
+    profile?.brand_context ||
+      campaign?.brief.constraints.join("\n") ||
       "Preserve the speaker's meaning. Keep captions readable.",
   );
-  const [goal, setGoal] = useState(
-    campaign?.brief.measurement_intent || "Discovery",
+  const [creative, setCreative] = useState(
+    profile?.creative_preferences || "",
   );
-  const [selected, setSelected] = useState(
-    campaign?.profile_ids || w.profiles.slice(0, 1).map((p) => p.id),
-  );
-  const [sourceIds, setSourceIds] = useState(campaign?.video_ids || []);
+  const [linkProfiles, setLinkProfiles] = useState<string[]>([]);
+  const [attachSources, setAttachSources] = useState<string[]>([]);
   const [profileName, setProfileName] = useState("");
-  const [drag, setDrag] = useState(false);
-  const upload = useRef<HTMLInputElement>(null);
-  const historical = new Set(campaign?.video_ids || []);
+  const [state, setState] = useState<SaveState>({ kind: "idle" });
+  const [checking, setChecking] = useState(false);
+  const attempt = useRef<Attempt | null>(null);
+  const linked = new Set(campaign?.profile_ids || []);
+  const attached = new Set(campaign?.video_ids || []);
+  const needsReadback = state.kind === "partial" || state.kind === "unknown";
   const blocked =
-    w.busy || w.loading || factory.loading || !!factory.errors.videos;
-  async function importFiles(files: FileList | File[]) {
-    const list = Array.from(files);
-    if (!list.length || blocked) return;
-    if (list.some((f) => !/\.(mp4|mov|mkv|webm|m4v|avi)$/i.test(f.name))) {
-      await w.run(async () => {
-        throw new Error("Choose a supported video file, such as MP4 or MOV.");
-      }, "");
-      return;
-    }
-    await w.run(
-      async () => {
-        for (const file of list) {
-          const v = await workspaceApi.upload(file);
-          setSourceIds((old) => [...new Set([...old, v.id])]);
-        }
-      },
-      reviewPreview
-        ? "Source placeholders added. No file was uploaded or decoded in this preview."
-        : "Footage imported. Add it to your campaign when you save.",
-    );
+    w.busy || w.loading || checking || factory.loading || !campaign || !profile;
+  const metricNeeded = objective !== "discovery";
+  const valid = !!name.trim() && (!metricNeeded || !!metric.trim());
+
+  function edited() {
+    if (state.kind === "saved" || state.kind === "failed")
+      setState({ kind: "idle" });
   }
-  function drop(e: DragEvent) {
-    e.preventDefault();
-    setDrag(false);
-    void importFiles(e.dataTransfer.files);
-  }
-  async function save() {
-    if (!name.trim() || !selected.length || blocked) return;
-    const body = {
+
+  function bodies(latestCampaign: Campaign, latestProfile: Profile) {
+    const goal = profileGoalBody(latestProfile, objective, metric);
+    const constraints = lines(voice);
+    if (constraints.length > 30)
+      throw new Error("Use up to 30 voice and boundary lines.");
+    if (constraints.some((line) => line.length > 1200))
+      throw new Error("Keep each voice or boundary line within 1,200 characters.");
+    // Only writable fields; read-only production_history is never sent.
+    const profileBody: ProfileBody = {
+      ...goal,
+      audience: audience.trim(),
+      brand_context: voice.trim(),
+      creative_preferences: creative.trim(),
+    };
+    const label = objectiveLabels[objective as keyof typeof objectiveLabels];
+    const campaignBody: CampaignInput = {
       name: name.trim(),
       brief: {
-        audience,
-        constraints: constraints.split("\n").filter(Boolean),
-        requested_outputs: ["Two vertical hook variants"],
-        measurement_intent: goal,
+        audience: audience.trim(),
+        constraints,
+        requested_outputs: latestCampaign.brief.requested_outputs,
+        measurement_intent:
+          objective === "discovery" ? "Discovery" : `${label}: ${goal.primary_metric}`,
       },
-      profile_ids: [
-        ...new Set([...(campaign?.profile_ids || []), ...selected]),
-      ],
-      video_ids: sourceIds,
+      // Membership is a union with the latest saved record, so footage or
+      // profiles attached elsewhere since this screen loaded are retained.
+      profile_ids: union(latestCampaign.profile_ids, linkProfiles),
+      video_ids: union(latestCampaign.video_ids, attachSources),
     };
-    let savedId = campaign?.id;
+    return { profileBody, campaignBody };
+  }
+
+  async function save() {
+    if (blocked || needsReadback || !valid || !campaign || !profile) return;
+    const campaignId = campaign.id,
+      profileId = profile.id;
+    // Assigned inside the task; casts stop TypeScript narrowing them here.
+    let stage = "read" as "read" | "profile" | "campaign" | "readback";
+    let started = false as boolean,
+      unknownOutcome = false as boolean,
+      failure = "" as string;
     const ok = await w.run(async () => {
-      const c = await workspaceApi.save(body, campaign?.id);
-      savedId = c.id;
-      await w.load(c.id);
-    }, "Campaign saved. Let's give the next edit a direction.");
+      started = true;
+      try {
+        // 1. Latest saved state, never the possibly stale screen copy.
+        const [campaigns, profiles] = await Promise.all([
+          workspaceApi.campaigns(),
+          workspaceApi.profiles(),
+        ]);
+        const latestCampaign = campaigns.find((c) => c.id === campaignId);
+        if (!latestCampaign)
+          throw new Error("This channel is no longer available.");
+        // 2. The selected profile must still belong to this channel. There is
+        // no fallback to another profile.
+        const latestProfile = profiles.find((p) => p.id === profileId);
+        if (!latestProfile || !latestCampaign.profile_ids.includes(profileId))
+          throw new Error(
+            "The selected profile is no longer linked to this channel. Refresh and choose a profile.",
+          );
+        // 3. Strict writable bodies.
+        const { profileBody, campaignBody } = bodies(latestCampaign, latestProfile);
+        attempt.current = { profileId, profile: profileBody, campaign: campaignBody };
+        // 4. Exact selected profile by ID.
+        stage = "profile";
+        await workspaceApi.updateProfile(profileId, profileBody);
+        // 5. Channel metadata with preserved membership.
+        stage = "campaign";
+        await workspaceApi.save(campaignBody, campaignId);
+        // 6. Confirm by reading back.
+        stage = "readback";
+        const [savedCampaigns, savedProfiles] = await Promise.all([
+          workspaceApi.campaigns(),
+          workspaceApi.profiles(),
+        ]);
+        if (
+          !profileMatches(savedProfiles.find((p) => p.id === profileId), profileBody) ||
+          !campaignMatches(savedCampaigns.find((c) => c.id === campaignId), campaignBody)
+        )
+          throw new Error("Saved state did not match your edits.");
+      } catch (error) {
+        unknownOutcome = stage === "readback" || uncertain(error);
+        failure = message(error, "The save failed.");
+        throw error;
+      }
+    }, "Channel settings saved and confirmed. Approved editing rules and earlier clips are unchanged.");
+    if (!started) return;
     if (ok) {
-      if (savedId) await w.select(savedId);
+      setLinkProfiles([]);
+      setAttachSources([]);
+      setState({ kind: "saved", message: "Saved and confirmed." });
       onSaved();
-      next();
+      return;
+    }
+    // 7. Keep every draft and say exactly what may have been written.
+    if (!failure) {
+      // Writes were confirmed by readback, but the workspace refresh failed.
+      setState({
+        kind: "unknown",
+        message: "Your changes were confirmed, but the workspace could not refresh. Check saved state before saving again.",
+      });
+      return;
+    }
+    if (stage === "read")
+      setState({ kind: "failed", message: `${failure} Nothing was saved; your edits are still here.` });
+    else if (stage === "profile")
+      setState(
+        unknownOutcome
+          ? { kind: "unknown", message: `${failure} The profile save was not confirmed and may or may not have been written. Check saved state before saving again.` }
+          : { kind: "failed", message: `${failure} The profile was not saved, so nothing changed. Your edits are still here.` },
+      );
+    else if (stage === "campaign")
+      setState(
+        unknownOutcome
+          ? { kind: "unknown", message: `${failure} Profile settings saved; the channel details save was not confirmed. Check saved state before saving again.` }
+          : { kind: "partial", message: `${failure} Partially saved: profile settings saved, channel details were not. Check saved state before saving again.` },
+      );
+    else
+      setState({ kind: "unknown", message: `${failure} Your changes were sent but could not be confirmed. Check saved state before saving again.` });
+  }
+
+  async function checkSaved() {
+    const last = attempt.current;
+    if (!last || !campaign || checking) return;
+    setChecking(true);
+    try {
+      const [campaigns, profiles] = await Promise.all([
+        workspaceApi.campaigns(),
+        workspaceApi.profiles(),
+      ]);
+      const profileOk = profileMatches(
+        profiles.find((p) => p.id === last.profileId),
+        last.profile,
+      );
+      const campaignOk = campaignMatches(
+        campaigns.find((c) => c.id === campaign.id),
+        last.campaign,
+      );
+      setState(
+        profileOk && campaignOk
+          ? { kind: "saved", message: "Readback confirms every change is saved." }
+          : {
+              kind: "failed",
+              message: `Readback: profile settings ${profileOk ? "saved" : "not saved"}; channel details ${campaignOk ? "saved" : "not saved"}. Your edits are still here; saving again is now safe.`,
+            },
+      );
+      if (profileOk && campaignOk) {
+        setLinkProfiles([]);
+        setAttachSources([]);
+        onSaved();
+      }
+      await w.load().catch(() => {});
+    } catch (error) {
+      setState((old) => ({
+        kind: old.kind === "partial" ? "partial" : "unknown",
+        message: `Could not read saved state: ${message(error, "the service is unavailable")}. Try again before saving.`,
+      }));
+    } finally {
+      setChecking(false);
     }
   }
+
+  async function createProfile() {
+    const title = profileName.trim();
+    if (!title || blocked) return;
+    // Explicit, separate action. It creates one new local profile and only
+    // queues it for linking; the channel changes when settings are saved.
+    await w.run(async () => {
+      const created = await workspaceApi.profile({
+        name: title,
+        audience: audience.trim(),
+        objective: "discovery",
+        primary_metric: null,
+        brand_context: voice.trim(),
+        creative_preferences: creative.trim(),
+      });
+      setLinkProfiles((old) => union(old, [created.id]));
+      setProfileName("");
+    }, "Local profile created. Save channel settings to link it. No social account was connected.");
+  }
+
+  if (!campaign)
+    return (
+      <Empty title="No channel selected" icon="settings">
+        {w.loading
+          ? "Opening your channel…"
+          : "Choose a channel, or use New workspace under Advanced to set one up."}
+      </Empty>
+    );
+  if (!profile)
+    return (
+      <Empty title="Choose a linked profile" icon="settings">
+        The selected profile is not linked to this channel. Refresh and choose
+        one of its profiles; nothing is changed automatically.
+      </Empty>
+    );
+  const otherLinked = w.profiles.filter(
+    (p) => linked.has(p.id) && p.id !== profile.id,
+  );
   return (
-    <div className="gf-setup-grid">
-      <section className="gf-card gf-brief">
-        <div className="gf-card-header">
-          <div>
-            <span className="gf-overline">01 / CAMPAIGN BRIEF</span>
-            <h2>Campaign brief</h2>
-          </div>
-        </div>
+    <div className="gf-setup-grid gf-channel-settings-grid">
+      <section className="gf-card gf-brief" aria-label="Channel settings form">
         <div className="gf-form-fields">
-          <FieldGroup title="Campaign essentials">
-            <Field label="Campaign name">
+          <FieldGroup title="Your channel">
+            <Field label="Channel name">
               {(id) => (
                 <AutoTextarea
                   rows={1}
                   id={id}
                   maxLength={200}
-                  placeholder="e.g. Founder stories · November"
+                  placeholder="e.g. Founder stories"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    edited();
+                  }}
                 />
               )}
             </Field>
@@ -236,236 +349,235 @@ export function Setup({
                 <AutoTextarea
                   rows={1}
                   id={id}
+                  maxLength={3000}
                   placeholder="Builders, founders and curious minds"
                   value={audience}
-                  onChange={(e) => setAudience(e.target.value)}
+                  onChange={(e) => {
+                    setAudience(e.target.value);
+                    edited();
+                  }}
                 />
               )}
             </Field>
             <Field
-              label="Campaign brief intent"
-              hint="Describes this campaign. The selected profile's production goal is saved separately below."
+              label="What are we working toward?"
+              hint="Guides future production for this profile. Earlier clips keep the goal they were made with."
             >
               {(id) => (
                 <select
                   id={id}
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
+                  value={objective}
+                  onChange={(e) => {
+                    setObjective(e.target.value);
+                    edited();
+                  }}
                 >
-                  {![
-                    "Discovery",
-                    "Full episode visits",
-                    "Qualified engagement",
-                    "Brand awareness",
-                  ].includes(goal) && <option>{goal}</option>}
-                  <option>Discovery</option>
-                  <option>Full episode visits</option>
-                  <option>Qualified engagement</option>
-                  <option>Brand awareness</option>
+                  {objectives.map((value) => (
+                    <option key={value} value={value}>
+                      {objectiveLabels[value]}
+                    </option>
+                  ))}
                 </select>
               )}
             </Field>
-          </FieldGroup>
-          <FieldGroup title="Local profiles">
-            <div className="gf-field">
-              <div className="gf-profile-options">
-                {w.profiles.map((p) => (
-                  <label
-                    key={p.id}
-                    className={selected.includes(p.id) ? "selected" : ""}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(p.id)}
-                      disabled={blocked || campaign?.profile_ids.includes(p.id)}
-                      onChange={(e) =>
-                        setSelected((old) =>
-                          e.target.checked
-                            ? [...old, p.id]
-                            : old.filter((i) => i !== p.id),
-                        )
-                      }
-                    />
-                    <Icon name="headphones" size={14} />
-                    {p.name}
-                    {selected.includes(p.id) && <Icon name="check" size={13} />}
-                  </label>
-                ))}
-              </div>
-            </div>
-            {(() => {
-              const profile =
-                w.profiles.find((p) => p.id === w.profileId) ||
-                w.profiles.find((p) => selected.includes(p.id));
-              return profile ? (
-                <ProfileGoalEditor
-                  key={profile.id}
-                  profile={profile}
-                  w={w}
-                  blocked={blocked}
+            <Field
+              label="Primary metric"
+              hint={
+                metricNeeded
+                  ? "Required for goal-directed work. Naming it does not imply a measured improvement."
+                  : "Discovery keeps this unset; it does not pick a winner."
+              }
+            >
+              {(id) => (
+                <AutoTextarea
+                  id={id}
+                  rows={1}
+                  maxLength={200}
+                  value={metricNeeded ? metric : ""}
+                  disabled={!metricNeeded}
+                  placeholder={metricNeeded ? "e.g. full_episode_visits" : "Not needed for discovery"}
+                  onChange={(e) => {
+                    setMetric(e.target.value);
+                    edited();
+                  }}
                 />
-              ) : null;
-            })()}
-            <Disclosure title="Brand & profile settings" icon="settings">
-              <Field label="Profile name">
+              )}
+            </Field>
+            <Field
+              label="Voice and boundaries"
+              hint="One rule per line. Every edit should respect these."
+            >
+              {(id) => (
+                <AutoTextarea
+                  id={id}
+                  rows={3}
+                  maxLength={4000}
+                  value={voice}
+                  onChange={(e) => {
+                    setVoice(e.target.value);
+                    edited();
+                  }}
+                />
+              )}
+            </Field>
+            <Field label="Creative preferences">
+              {(id) => (
+                <AutoTextarea
+                  id={id}
+                  rows={2}
+                  maxLength={4000}
+                  placeholder="e.g. Lead with a clear claim; keep the context intact."
+                  value={creative}
+                  onChange={(e) => {
+                    setCreative(e.target.value);
+                    edited();
+                  }}
+                />
+              )}
+            </Field>
+            {otherLinked.length > 0 && (
+              <p className="gf-help">
+                Editing the goal and preferences of profile{" "}
+                <strong>{profile.name}</strong>. Other linked profiles are not
+                changed; switch profiles from the top bar.
+              </p>
+            )}
+          </FieldGroup>
+          <FieldGroup title="Advanced">
+            <Disclosure title="Footage in this channel" icon="folder">
+              <p>
+                Attach footage you already imported. To add new footage, use
+                Factory. Attached footage stays attached for production history.
+              </p>
+              {factory.data.videos.length === 0 && (
+                <p className="gf-help">No imported footage yet.</p>
+              )}
+              <div className="gf-profile-options">
+                {factory.data.videos.map((v) => {
+                  const on = attached.has(v.id) || attachSources.includes(v.id);
+                  return (
+                    <label key={v.id} className={on ? "selected" : ""}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Attach ${v.name}`}
+                        checked={on}
+                        disabled={blocked || attached.has(v.id)}
+                        onChange={(e) => {
+                          setAttachSources((old) =>
+                            e.target.checked
+                              ? union(old, [v.id])
+                              : old.filter((id) => id !== v.id),
+                          );
+                          edited();
+                        }}
+                      />
+                      <Icon name="studio" size={14} />
+                      {v.name}
+                      {typeof v.duration === "number" && (
+                        <small> · {formatTime(v.duration)}</small>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </Disclosure>
+            <Disclosure title="Linked profiles" icon="headphones">
+              <p>
+                Profiles are local planning identities, not social accounts.
+                Linked profiles stay linked for production history.
+              </p>
+              <div className="gf-profile-options">
+                {w.profiles.map((p) => {
+                  const on = linked.has(p.id) || linkProfiles.includes(p.id);
+                  return (
+                    <label key={p.id} className={on ? "selected" : ""}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Link ${p.name}`}
+                        checked={on}
+                        disabled={blocked || linked.has(p.id)}
+                        onChange={(e) => {
+                          setLinkProfiles((old) =>
+                            e.target.checked
+                              ? union(old, [p.id])
+                              : old.filter((id) => id !== p.id),
+                          );
+                          edited();
+                        }}
+                      />
+                      <Icon name="headphones" size={14} />
+                      {p.name}
+                    </label>
+                  );
+                })}
+              </div>
+              <Field label="New profile name">
                 {(id) => (
                   <AutoTextarea
                     rows={1}
                     id={id}
-                    placeholder="e.g. Founder stories"
+                    maxLength={200}
+                    placeholder="e.g. Founder stories · clips"
                     value={profileName}
                     onChange={(e) => setProfileName(e.target.value)}
                   />
                 )}
               </Field>
               <button
+                type="button"
                 className="gf-button secondary compact"
                 disabled={!profileName.trim() || blocked}
-                onClick={() =>
-                  void w.run(async () => {
-                    const p = await workspaceApi.profile({
-                      name: profileName.trim(),
-                      audience,
-                      objective: "discovery",
-                      primary_metric: null,
-                      brand_context: "",
-                      creative_preferences: constraints,
-                    });
-                    setSelected((old) => [...old, p.id]);
-                    setProfileName("");
-                  }, "Local profile created. No social account was connected.")
-                }
+                onClick={() => void createProfile()}
               >
                 Create profile
                 <Icon name="plus" size={14} />
               </button>
-
-              <Field label="What should every edit respect?">
-                {(id) => (
-                  <AutoTextarea
-                    id={id}
-                    value={constraints}
-                    onChange={(e) => setConstraints(e.target.value)}
-                    rows={3}
-                  />
-                )}
-              </Field>
+            </Disclosure>
+            <Disclosure title="Editing rules and technical tools" icon="settings">
+              <p>
+                Editing rules are versioned. Use Editing rules below to
+                propose a version and approve it explicitly; saving channel
+                settings never changes or approves them. Models and local
+                capabilities live under Advanced → Advanced tools.
+              </p>
             </Disclosure>
           </FieldGroup>
         </div>
       </section>
-      <section className="gf-card gf-sources">
-        <div className="gf-card-header">
-          <div>
-            <span className="gf-overline">02 / SOURCE FOOTAGE</span>
-            <h2>Your footage</h2>
-            <p>Select the sources for this campaign.</p>
-          </div>
-          <span className="gf-count">
-            {sourceIds.length.toString().padStart(2, "0")}
-          </span>
-        </div>
-        <div className="gf-source-list">
-          {factory.data.videos.length === 0 && (
-            <Empty title="Your next edit starts here">
-              Add a local video to begin. Your originals stay intact.
-            </Empty>
-          )}
-          {factory.data.videos.map((v, i) => (
-            <label
-              className={`gf-source ${sourceIds.includes(v.id) ? "selected" : ""}`}
-              key={v.id}
-            >
-              <div className="gf-source-cover">
-                {reviewPreview ? (
-                  <Poster compact variant={i % 2} />
-                ) : (
-                  <Icon name="studio" size={30} />
-                )}
-              </div>
-              <div className="gf-source-copy">
-                <strong>{v.name}</strong>
-                <span>
-                  {reviewPreview
-                    ? "Illustrative source"
-                    : `${formatTime(v.duration)} · Local video`}
-                </span>
-                <Pill tone="quiet">
-                  {reviewPreview ? "Sample" : "Imported"}
-                </Pill>
-              </div>
-              <input
-                aria-label={`Use ${v.name}`}
-                type="checkbox"
-                checked={sourceIds.includes(v.id)}
-                disabled={blocked || historical.has(v.id)}
-                onChange={(e) =>
-                  setSourceIds((old) =>
-                    e.target.checked
-                      ? [...old, v.id]
-                      : old.filter((id) => id !== v.id),
-                  )
-                }
-              />
-            </label>
-          ))}
-        </div>
-        <input
-          ref={upload}
-          type="file"
-          accept="video/*,.mp4,.mov,.mkv,.webm,.m4v,.avi"
-          multiple
-          hidden
-          onChange={(e) => {
-            if (e.target.files) void importFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-        <button
-          className={`gf-upload ${drag ? "dragging" : ""}`}
-          disabled={blocked}
-          onClick={() => upload.current?.click()}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDrag(true);
-          }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={drop}
-        >
-          <span className="gf-upload-icon">
-            <Icon name="upload" size={25} />
-          </span>
-          <strong>
-            {w.busy ? "Adding your footage…" : "Drop your footage here"}
-          </strong>
-          <span>
-            Drag a video here, or <u>browse files</u>
-          </span>
-          <small>
-            {reviewPreview
-              ? "Preview adds a placeholder; file contents stay unread"
-              : "MP4, MOV and other supported video formats"}
-          </small>
-        </button>
-        <div className="gf-source-footnote">
-          <Icon name="lock" size={13} />
-          {reviewPreview
-            ? "Sample workspace. No access to your Mac or social accounts."
-            : "Originals stay local. Nothing is published automatically."}
-        </div>
-      </section>
       <div className="gf-stage-action">
-        <span>
-          {sourceIds.length
-            ? `${sourceIds.length} source${sourceIds.length === 1 ? "" : "s"}. One clear direction.`
-            : "You can save the brief before adding footage."}
+        <span role={state.kind === "idle" ? undefined : state.kind === "saved" ? "status" : "alert"}>
+          {state.kind === "idle"
+            ? "Saving updates this channel only. It does not start production or publish anything."
+            : state.message}
         </span>
-        <PrimaryAction
-          label={w.busy ? "Saving…" : "Save & find direction"}
-          intent="advance"
-          disabled={blocked || !name.trim() || !selected.length}
-          onClick={() => void save()}
-        />
+        <div className="gf-channel-actions">
+          {needsReadback && (
+            <button
+              type="button"
+              className="gf-button secondary compact"
+              disabled={checking || w.busy}
+              onClick={() => void checkSaved()}
+            >
+              {checking ? "Checking…" : "Check saved state"}
+              <Icon name="refresh" size={14} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="gf-button secondary compact"
+            disabled={w.busy || checking}
+            onClick={next}
+          >
+            Editing rules
+            <Icon name="research" size={14} />
+          </button>
+          <PrimaryAction
+            label={w.busy ? "Saving…" : "Save channel settings"}
+            intent="approve"
+            disabled={blocked || needsReadback || !valid}
+            onClick={() => void save()}
+          />
+        </div>
       </div>
     </div>
   );

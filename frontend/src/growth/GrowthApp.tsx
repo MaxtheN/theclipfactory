@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CircleUserRound, PanelLeft } from "lucide-react";
+import { CircleUserRound, PanelLeft, Settings } from "lucide-react";
 import { App } from "../App";
 import { useFactory } from "../useFactory";
 import { useCampaignWorkspace } from "./useCampaignWorkspace";
@@ -26,6 +26,7 @@ import "./workspace-motion.css";
 import "./account-chrome.css";
 import "./factory-flow.css";
 import "./desktop-shell.css";
+import "./navigation.css";
 
 const views = {
   factory: {
@@ -47,14 +48,14 @@ const views = {
     icon: "results",
   },
   setup: {
-    label: "Workspace settings",
-    title: "Workspace settings",
+    label: "Channel settings",
+    title: "Channel settings",
     sub: "Audience, goals and the boundaries your edits should respect.",
     icon: "settings",
   },
   research: {
-    label: "Creative direction",
-    title: "Creative direction",
+    label: "Editing rules",
+    title: "Editing rules",
     sub: "Review the idea and the opening treatments before production.",
     icon: "research",
   },
@@ -99,13 +100,16 @@ export function GrowthApp() {
     !!w.campaign &&
     w.campaign.profile_ids.includes(w.profileId) &&
     w.profiles.some((p) => p.id === w.profileId);
+  const linkedProfiles = w.profiles.filter((p) =>
+    w.campaign?.profile_ids.includes(p.id),
+  );
   const onboarding =
     creating || onboardingBusy || (!w.loading && !w.error && !usable);
   const blocked = w.busy || onboardingBusy;
   const contextKey = `${w.campaign?.id || "empty"}-${w.profileId}`;
   const current = views[stage];
   const primaryStage =
-    stage === "studio" || stage === "research" ? "factory" : stage;
+    stage === "studio" ? "factory" : stage === "research" ? "setup" : stage;
 
   useEffect(() => {
     function shortcut(event: KeyboardEvent) {
@@ -166,23 +170,28 @@ export function GrowthApp() {
     void factory.refresh();
   }
   const quickActions: QuickAction[] = [
-    ...(["factory", "library", "results", "research", "setup"] as const).map(
-      (id) => ({
-        id,
-        label: `Go to ${views[id].label}`,
-        icon: views[id].icon,
-        group: "Workspace" as const,
-        keywords: `${id} ${views[id].sub}`,
-        disabled: blocked || onboarding || !usable,
-        hint:
-          id === "factory"
-            ? "Upload footage and review your cuts"
-            : id === "research"
-              ? "Advanced · review and approve direction"
-              : undefined,
-        run: () => go(id),
-      }),
-    ),
+    ...(["factory", "library", "results", "setup"] as const).map((id) => ({
+      id,
+      label: `Go to ${views[id].label}`,
+      icon: views[id].icon,
+      group: "Workspace" as const,
+      keywords: `${id} ${views[id].sub}`,
+      disabled: blocked || onboarding || !usable,
+      hint:
+        id === "factory" ? "Upload footage and review your cuts" : undefined,
+      run: () => go(id),
+    })),
+    {
+      id: "research",
+      label: "Editing rules",
+      icon: "research",
+      group: "Workspace",
+      disabled: blocked || onboarding || !usable,
+      keywords:
+        "research creative direction editing rules approval channel settings",
+      hint: "Advanced · Channel settings",
+      run: () => go("research"),
+    },
     {
       id: "new",
       label: "New workspace",
@@ -190,6 +199,7 @@ export function GrowthApp() {
       group: "Workspace",
       disabled: blocked,
       keywords: "podcast profile onboarding",
+      hint: "Advanced · create another workspace",
       run: newWorkspace,
     },
     {
@@ -199,6 +209,7 @@ export function GrowthApp() {
       group: "Workspace",
       disabled: blocked,
       keywords: "models runtime integrations settings",
+      hint: "Advanced · local capabilities",
       run: () => setTools(true),
     },
     {
@@ -325,29 +336,28 @@ export function GrowthApp() {
               ))}
             </nav>
             <div className="gf-sidebar-bottom" hidden={sidebarCollapsed}>
+              <button
+                type="button"
+                className="gf-channel-settings"
+                aria-label="Channel settings"
+                aria-current={primaryStage === "setup" ? "page" : undefined}
+                title="Channel settings"
+                disabled={blocked || !usable || onboarding}
+                onClick={() => go("setup")}
+              >
+                <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
+                <span>Channel settings</span>
+              </button>
               <details className="gf-nav-group gf-workspace-menu">
-                <summary aria-label="Workspace menu">
+                <summary
+                  aria-label="Advanced controls"
+                  title="Advanced controls"
+                >
                   <Icon name="settings" size={16} />
-                  <span>Workspace</span>
+                  <span>Advanced</span>
                   <Icon name="down" size={13} />
                 </summary>
-                <nav aria-label="Workspace navigation">
-                  <button
-                    type="button"
-                    disabled={blocked || !usable || onboarding}
-                    onClick={() => go("setup")}
-                  >
-                    <Icon name="settings" size={17} />
-                    Workspace settings
-                  </button>
-                  <button
-                    type="button"
-                    disabled={blocked || !usable || onboarding}
-                    onClick={() => go("research")}
-                  >
-                    <Icon name="research" size={17} />
-                    Creative direction
-                  </button>
+                <nav aria-label="Advanced navigation">
                   <button
                     type="button"
                     disabled={blocked}
@@ -402,34 +412,35 @@ export function GrowthApp() {
               </label>
               <div className="gf-top-right">
                 {commandTrigger}
-                {!tools && usable && !onboarding && (
-                  <label className="gf-profile-selector">
-                    <CircleUserRound
-                      size={20}
-                      strokeWidth={1.5}
-                      aria-hidden="true"
-                    />
-                    <select
-                      aria-label="Active account profile"
-                      value={w.profileId}
-                      disabled={blocked || w.loading}
-                      onChange={(e) => {
-                        setPreferredSource(undefined);
-                        setPreferredClip(undefined);
-                        setPreferredMode(undefined);
-                        w.setProfileId(e.target.value);
-                      }}
-                    >
-                      {w.profiles
-                        .filter((p) => w.campaign?.profile_ids.includes(p.id))
-                        .map((p) => (
+                {!tools &&
+                  usable &&
+                  !onboarding &&
+                  linkedProfiles.length > 1 && (
+                    <label className="gf-profile-selector">
+                      <CircleUserRound
+                        size={20}
+                        strokeWidth={1.5}
+                        aria-hidden="true"
+                      />
+                      <select
+                        aria-label="Active account profile"
+                        value={w.profileId}
+                        disabled={blocked || w.loading}
+                        onChange={(e) => {
+                          setPreferredSource(undefined);
+                          setPreferredClip(undefined);
+                          setPreferredMode(undefined);
+                          w.setProfileId(e.target.value);
+                        }}
+                      >
+                        {linkedProfiles.map((p) => (
                           <option value={p.id} key={p.id}>
                             {p.name}
                           </option>
                         ))}
-                    </select>
-                  </label>
-                )}
+                      </select>
+                    </label>
+                  )}
               </div>
             </header>
             <main id="growth-main" className="gf-main" tabIndex={-1}>
@@ -438,9 +449,9 @@ export function GrowthApp() {
                   <div className="gf-eyebrow">
                     {onboarding
                       ? "WELCOME TO GROWTH FACTORY"
-                      : stage === "setup"
-                        ? "WORKSPACE"
-                        : stage === "research" || stage === "studio"
+                      : stage === "setup" || stage === "research"
+                        ? "YOUR CHANNEL"
+                        : stage === "studio"
                           ? "FACTORY"
                           : "YOUR WORKSPACE"}
                   </div>
@@ -453,18 +464,17 @@ export function GrowthApp() {
                       : current.sub}
                   </p>
                 </div>
-                {(stage === "research" || stage === "setup") &&
-                  !onboarding && (
-                    <button
-                      type="button"
-                      className="gf-button secondary compact"
-                      disabled={blocked}
-                      onClick={() => go("factory")}
-                    >
-                      <Icon name="back" size={15} />
-                      Back to Factory
-                    </button>
-                  )}
+                {stage === "research" && !onboarding && (
+                  <button
+                    type="button"
+                    className="gf-button secondary compact"
+                    disabled={blocked}
+                    onClick={() => go("setup")}
+                  >
+                    <Icon name="back" size={15} />
+                    Back to Channel settings
+                  </button>
+                )}
               </header>
               {help && !onboarding && (
                 <div className="gf-message">
@@ -585,7 +595,7 @@ export function GrowthApp() {
                 hidden={onboarding || stage !== "setup"}
               >
                 <Setup
-                  key={w.campaign?.id || "empty"}
+                  key={contextKey}
                   creating={false}
                   onSaved={() => {}}
                   w={w}

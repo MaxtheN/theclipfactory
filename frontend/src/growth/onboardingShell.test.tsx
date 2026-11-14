@@ -88,7 +88,7 @@ async function enterOnboarding(viaQuickActions = false) {
     fireEvent.keyDown(search, { key: "Enter" });
   } else {
     screen
-      .getByLabelText("Workspace menu")
+      .getByLabelText("Advanced controls")
       .closest("details")
       ?.setAttribute("open", "");
     fireEvent.click(screen.getByRole("button", { name: "New workspace" }));
@@ -387,7 +387,7 @@ describe("standalone onboarding shell", () => {
     const search = screen.getByRole("combobox", {
       name: "Search quick actions",
     });
-    fireEvent.change(search, { target: { value: "workspace settings" } });
+    fireEvent.change(search, { target: { value: "channel settings" } });
     fireEvent.keyDown(search, { key: "Enter" });
     expect(
       screen.getByRole("textbox", { name: "Who are we speaking to?" }),
@@ -457,8 +457,9 @@ describe("standalone onboarding shell", () => {
       screen.getByRole("combobox", { name: "Current campaign" }),
     ).toHaveValue(saved.id);
     expect(
-      screen.getByRole("combobox", { name: "Active account profile" }),
-    ).toHaveValue(profile.id);
+      screen.queryByRole("combobox", { name: "Active account profile" }),
+    ).not.toBeInTheDocument();
+    expect(localStorage.getItem("growth-profile")).toBe(profile.id);
     expect(await previewRequest<Job[]>("/api/jobs")).toHaveLength(
       before[2].length,
     );

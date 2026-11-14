@@ -7,7 +7,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { previewRequest, resetPreview } from "./previewApi";
 import type { Campaign, Clip, Job, StrategyVersion } from "../types";
 
@@ -44,19 +44,75 @@ const send = <T,>(p: string, b: unknown = {}, method = "POST") =>
 beforeEach(() => {
   localStorage.clear();
   resetPreview();
-  // These regressions exercise editable workspace settings; the new daily
+  // These regressions exercise editable channel settings; the new daily
   // Factory/default/onboarding flow has separate coverage.
   localStorage.setItem("growth-view-v2", "setup");
 });
 
+function openEditingRules() {
+  fireEvent.keyDown(window, { key: "k", metaKey: true });
+  const search = screen.getByRole("combobox", { name: "Search quick actions" });
+  fireEvent.change(search, { target: { value: "editing rules" } });
+  fireEvent.keyDown(search, { key: "Enter" });
+}
+
 describe("Growth Factory interface", () => {
+  it("offers profile switching only when the channel has multiple selectable profiles and retains single-profile scope", async () => {
+    const original = await previewRequest<Campaign>(path);
+    const first = render(<GrowthApp />);
+    const profiles = await screen.findByRole("combobox", { name: "Active account profile" });
+    await waitFor(() => expect(profiles).toHaveValue("preview-profile-allin"));
+    expect(within(profiles).getAllByRole("option")).toHaveLength(2);
+    expect((await previewRequest<Campaign>(path)).profile_ids).toEqual(original.profile_ids);
+    first.unmount();
+    // Existing membership is append-only, so use a separate single-profile channel.
+    const single = await send<Campaign>("/api/campaigns", { name: "Single-profile channel", brief: original.brief, video_ids: [], profile_ids: ["preview-profile-allin"] });
+    localStorage.setItem("growth-campaign", single.id);
+    render(<GrowthApp />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Current campaign" })).toHaveValue(single.id));
+    expect(screen.queryByRole("combobox", { name: "Active account profile" })).not.toBeInTheDocument();
+    await waitFor(() => expect(localStorage.getItem("growth-profile")).toBe("preview-profile-allin"));
+    expect((await previewRequest<Campaign>(path)).profile_ids).toEqual(original.profile_ids);
+    expect((await previewRequest<Campaign>(`/api/campaigns/${single.id}`)).profile_ids).toEqual(["preview-profile-allin"]);
+  });
+  it("keeps daily navigation focused and opens editing rules only through an explicit channel or footage action", async () => {
+    localStorage.setItem("growth-view-v2", "factory");
+    render(<GrowthApp />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Current campaign" })).toHaveValue("preview-campaign"));
+    const daily = screen.getByRole("navigation", { name: "Main navigation" });
+    expect(within(daily).getAllByRole("button").map((button) => button.textContent?.trim())).toEqual(["Factory", "Library", "Results"]);
+    expect(screen.queryByRole("button", { name: "Workspace settings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Creative direction" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Channel settings" })).toBeVisible();
+    screen.getByLabelText("Advanced controls").closest("details")?.setAttribute("open", "");
+    const advanced = screen.getByRole("navigation", { name: "Advanced navigation" });
+    expect(within(advanced).getAllByRole("button").map((button) => button.textContent?.trim())).toEqual(["New workspace", "Advanced tools"]);
+    fireEvent.click(screen.getByRole("button", { name: "Channel settings" }));
+    expect(screen.getByRole("heading", { name: "Channel settings" })).toHaveFocus();
+    fireEvent.change(screen.getByRole("textbox", { name: "Who are we speaking to?" }), { target: { value: "Channel-specific founders" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save channel settings" }));
+    await waitFor(async () => expect((await previewRequest<Campaign>(path)).brief.audience).toBe("Channel-specific founders"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save channel settings" })).toBeEnabled());
+    expect(screen.getByRole("heading", { name: "Channel settings" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Editing rules" })).not.toBeInTheDocument();
+    expect((await previewRequest<Campaign>(path)).active_strategy_id).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Editing rules" }));
+    expect(screen.getByRole("heading", { name: "Editing rules" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Back to Channel settings" }));
+    expect(screen.getByRole("heading", { name: "Channel settings" })).toHaveFocus();
+    expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue("Channel-specific founders");
+    fireEvent.click(within(daily).getByRole("button", { name: "Factory" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review direction" }));
+    expect(screen.getByRole("heading", { name: "Editing rules" })).toHaveFocus();
+    expect((await previewRequest<Campaign>(path)).active_strategy_id).toBeNull();
+  });
   it("ignores the onboarding preview hash in the ordinary build", async () => {
     const originalUrl = window.location.pathname + window.location.search + window.location.hash;
     window.history.replaceState(null, "", "/#onboarding");
     try {
       render(<GrowthApp />);
       await waitFor(() =>
-        expect(screen.getByLabelText("Campaign name")).toHaveValue("All-In clips"),
+        expect(screen.getByLabelText("Channel name")).toHaveValue("All-In clips"),
       );
       expect(screen.getByRole("combobox", { name: "Current campaign" })).toHaveValue("preview-campaign");
       expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
@@ -68,10 +124,10 @@ describe("Growth Factory interface", () => {
   });
   it("collapses and restores the sidebar without discarding the brief", async () => {
     render(<GrowthApp />);
-    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    const menu = screen.getByLabelText("Advanced controls").closest("details");
     menu?.setAttribute("open", "");
     await waitFor(() =>
-      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+      expect(screen.getByLabelText("Channel name")).toHaveValue(
         "All-In clips",
       ),
     );
@@ -95,10 +151,10 @@ describe("Growth Factory interface", () => {
   });
   it("opens quick actions by keyboard or click and preserves drafts through navigation", async () => {
     render(<GrowthApp />);
-    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    const menu = screen.getByLabelText("Advanced controls").closest("details");
     menu?.setAttribute("open", "");
     await waitFor(() =>
-      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+      expect(screen.getByLabelText("Channel name")).toHaveValue(
         "All-In clips",
       ),
     );
@@ -128,10 +184,10 @@ describe("Growth Factory interface", () => {
   });
   it("keeps new-workspace onboarding isolated from quick actions and app navigation", async () => {
     render(<GrowthApp />);
-    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    const menu = screen.getByLabelText("Advanced controls").closest("details");
     menu?.setAttribute("open", "");
     await waitFor(() =>
-      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+      expect(screen.getByLabelText("Channel name")).toHaveValue(
         "All-In clips",
       ),
     );
@@ -146,7 +202,7 @@ describe("Growth Factory interface", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Podcast or workspace name")).toHaveValue("");
     expect(
-      screen.queryByRole("button", { name: "Creative direction" }),
+      screen.queryByRole("button", { name: "Editing rules" }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Who are we making this for?" }),
@@ -154,18 +210,21 @@ describe("Growth Factory interface", () => {
   });
   it("saves a campaign, requires explicit direction approval, then opens Studio", async () => {
     render(<GrowthApp />);
-    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    const menu = screen.getByLabelText("Advanced controls").closest("details");
     menu?.setAttribute("open", "");
     await waitFor(() =>
-      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+      expect(screen.getByLabelText("Channel name")).toHaveValue(
         "All-In clips",
       ),
     );
     fireEvent.click(
-      screen.getByRole("button", { name: /^Save & find direction\b/ }),
+      screen.getByRole("button", { name: "Save channel settings" }),
     );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save channel settings" })).toBeEnabled());
+    expect(screen.getByRole("heading", { name: "Channel settings" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Editing rules" }));
     await screen.findByRole("heading", {
-      name: "Creative direction",
+      name: "Editing rules",
     });
     const before = await previewRequest<Campaign>(path);
     expect(before.active_strategy_id).toBeNull();
@@ -187,18 +246,18 @@ describe("Growth Factory interface", () => {
   });
   it("preserves an unsaved brief when moving between stages", async () => {
     render(<GrowthApp />);
-    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    const menu = screen.getByLabelText("Advanced controls").closest("details");
     menu?.setAttribute("open", "");
     await waitFor(() =>
-      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+      expect(screen.getByLabelText("Channel name")).toHaveValue(
         "All-In clips",
       ),
     );
     fireEvent.change(screen.getByRole("textbox", { name: "Who are we speaking to?" }), {
       target: { value: "A very specific audience" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Creative direction" }));
-    fireEvent.click(screen.getByRole("button", { name: "Workspace settings" }));
+    openEditingRules();
+    fireEvent.click(screen.getByRole("button", { name: "Channel settings" }));
     expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
       "A very specific audience",
     );
@@ -208,14 +267,14 @@ describe("Growth Factory interface", () => {
 describe("approval transition regressions", () => {
   it("saves edited reference text before allowing direction approval", async () => {
     render(<GrowthApp />);
-    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    const menu = screen.getByLabelText("Advanced controls").closest("details");
     menu?.setAttribute("open", "");
     await waitFor(() =>
-      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+      expect(screen.getByLabelText("Channel name")).toHaveValue(
         "All-In clips",
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Creative direction" }));
+    openEditingRules();
     expect(
       screen.getByRole("button", { name: /^Approve direction\b/ }),
     ).toBeEnabled();
@@ -284,7 +343,7 @@ describe("approval transition regressions", () => {
     });
     localStorage.setItem("growth-view-v2", "results");
     render(<GrowthApp />);
-    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    const menu = screen.getByLabelText("Advanced controls").closest("details");
     menu?.setAttribute("open", "");
     await screen.findByRole("button", { name: /^Approve next test\b/ });
     fireEvent.change(screen.getByLabelText("Proposed source-selection rule"), {
@@ -320,16 +379,16 @@ describe("approval transition regressions", () => {
   });
   it("does not operate on the old campaign while a new campaign is unsaved", async () => {
     render(<GrowthApp />);
-    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    const menu = screen.getByLabelText("Advanced controls").closest("details");
     menu?.setAttribute("open", "");
     await waitFor(() =>
-      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+      expect(screen.getByLabelText("Channel name")).toHaveValue(
         "All-In clips",
       ),
     );
     fireEvent.click(screen.getByRole("button", { name: "New workspace" }));
     expect(screen.getByLabelText("Podcast or workspace name")).toHaveValue("");
-    expect(screen.queryByRole("button", { name: "Creative direction" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Editing rules" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Library" })).not.toBeInTheDocument();
   });
 });

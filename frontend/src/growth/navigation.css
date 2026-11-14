@@ -1,0 +1,57 @@
+/* Daily work stays primary; channel configuration has one quiet utility entry. */
+.gf-flow-app .gf-sidebar-bottom > .gf-channel-settings {
+  align-items: center;
+  min-height: 42px;
+  margin-bottom: 12px;
+  border: 0;
+  border-radius: 8px;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+.gf-flow-app .gf-sidebar-bottom > .gf-channel-settings[aria-current="page"] {
+  background: var(--material-selected);
+  color: var(--material-ink);
+}
+.gf-channel-settings > svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+.gf-channel-settings > span {
+  line-height: 1.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-flow-app .gf-sidebar-bottom > .gf-channel-settings {
+    transition: none;
+  }
+}
+
+/* Channel settings: one column, one primary save, explicit secondary actions. */
+.gf-app .gf-setup-grid.gf-channel-settings-grid {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 760px;
+}
+.gf-channel-settings-grid .gf-field-group + .gf-field-group {
+  margin-top: 8px;
+}
+.gf-channel-settings-grid .gf-profile-options small {
+  color: inherit;
+  opacity: 0.7;
+}
+.gf-channel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+@media (max-width: 720px) {
+  .gf-app .gf-channel-settings-grid > .gf-stage-action {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .gf-channel-actions {
+    justify-content: stretch;
+  }
+}
