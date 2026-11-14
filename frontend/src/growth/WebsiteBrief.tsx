@@ -306,23 +306,6 @@ export function WebsiteBrief({
           <button type="button" className="gf-wb-text-button" disabled={disabled} onClick={skip}>
             Skip
           </button>
-          <details
-            className="gf-wb-how"
-            onToggle={(e) => {
-              if ((e.currentTarget as HTMLDetailsElement).open) loadRoute();
-            }}
-          >
-            <summary>
-              How this works
-              <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" />
-            </summary>
-            <ul>
-              <li>Reads up to 6 public pages of your site.</li>
-              <li>Respects robots.txt. No scripts run.</li>
-              <li>{modelRouteText(route, routeFailed)}</li>
-              <li>Nothing is saved until you continue.</li>
-            </ul>
-          </details>
         </div>
       )}
 

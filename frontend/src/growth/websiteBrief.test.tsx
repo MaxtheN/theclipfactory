@@ -161,26 +161,12 @@ describe("WebsiteBrief", () => {
     expect(onSkip).toHaveBeenCalledOnce();
   });
 
-  it("keeps the details in one collapsed accordion that names the active model", async () => {
-    const cloud = vi.fn(async () => llmView("openrouter"));
+  it("has no extra details panel on the website step", () => {
     const { container } = render(
-      <WebsiteBrief onApply={vi.fn()} onSkip={vi.fn()} client={client([])} modelRoute={cloud} />,
+      <WebsiteBrief onApply={vi.fn()} onSkip={vi.fn()} client={client([])} />,
     );
-    const details = container.querySelector("details.gf-wb-how") as HTMLDetailsElement;
-    expect(details.open).toBe(false);
-    expect(screen.getByText("How this works")).toBeInTheDocument();
-    expect(cloud).not.toHaveBeenCalled(); // asked only when opened
-    details.open = true;
-    fireEvent(details, new Event("toggle"));
-    expect(
-      await screen.findByText(
-        "Drafted by Claude Haiku 5.5 via OpenRouter (page text is sent to OpenRouter).",
-      ),
-    ).toBeInTheDocument();
-    expect(details).toHaveTextContent("Reads up to 6 public pages of your site.");
-    expect(details).toHaveTextContent("Respects robots.txt. No scripts run.");
-    expect(details).toHaveTextContent("Nothing is saved until you continue.");
-    expect(cloud).toHaveBeenCalledOnce();
+    expect(container.querySelector("details")).toBeNull();
+    expect(screen.queryByText("How this works")).not.toBeInTheDocument();
   });
 
   it("describes the local route and an unknown route honestly", () => {
