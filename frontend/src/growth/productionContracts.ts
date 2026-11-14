@@ -98,7 +98,7 @@ export interface RenderReceipt {
   cost?: RenderCost | null;
 }
 export interface SourceSegment {
-  role: "cold_open" | "main";
+  role: "teaser" | "cold_open" | "main";
   start: number;
   end: number;
 }
@@ -482,7 +482,7 @@ export function parseProductionClip(
         v.every(
           (s) =>
             object(s) &&
-            ["cold_open", "main"].includes(String(s.role)) &&
+            ["teaser", "cold_open", "main"].includes(String(s.role)) &&
             nonnegative(s.start) &&
             finite(s.end) &&
             s.end > s.start,
