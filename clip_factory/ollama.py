@@ -155,6 +155,17 @@ class Ollama:
     def model(self, name: str) -> dict | None:
         return next((m for m in self.status()["models"] if m["name"] == name), None)
 
+    def unload(self, name: str) -> None:
+        """Release warm local weights without doing another inference."""
+        if not NAME.fullmatch(name) or ".." in name:
+            raise OllamaError("Invalid Ollama model name.")
+        try:
+            with self._client(5) as client:
+                response = client.post("/api/generate", json={"model": name, "keep_alive": 0})
+                response.raise_for_status()
+        except httpx.HTTPError:
+            raise OllamaError("Could not release the local model. Check Ollama memory usage.") from None
+
     def generate(
         self,
         name: str,
@@ -164,6 +175,7 @@ class Ollama:
         max_tokens: int = 1500,
         check=lambda: None,
         keep_alive: int | str = 0,
+        context_tokens: int | None = None,
     ) -> str:
         """Stream a chat completion so cancellation is honoured between chunks."""
         info = self.model(name)
@@ -193,6 +205,10 @@ class Ollama:
             "keep_alive": keep_alive,
             "options": {"temperature": 0.3, "num_predict": max_tokens},
         }
+        if context_tokens is not None:
+            if type(context_tokens) is not int or not 2048 <= context_tokens <= 16384:
+                raise OllamaError("Local context size must be between 2048 and 16384 tokens.")
+            body["options"]["num_ctx"] = context_tokens
         if info["thinking"]:
             body["think"] = False
         chunks: list[str] = []

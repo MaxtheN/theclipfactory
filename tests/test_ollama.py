@@ -190,3 +190,255 @@ def test_keep_warm_calls_keep_the_model_loaded_and_skip_generic_progress(models)
     models.run("job", "ollama:llama3.2:3b", "generate", prompt="p")
     assert [body["keep_alive"] for body in seen] == ["10m", 0]
     assert models.jobs.update.call_count == 1
+
+
+def test_unload_releases_weights_without_prompt_or_inference():
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json={"done": True})
+    model = Ollama(transport=httpx.MockTransport(handler))
+    model.unload("qwen3-vl:4b-instruct")
+    assert len(calls) == 1
+    assert calls[0].url.path == "/api/generate"
+    assert json.loads(calls[0].content) == {"model": "qwen3-vl:4b-instruct", "keep_alive": 0}
+
+
+def test_unload_failure_has_safe_error_without_provider_body():
+    def handler(request):
+        return httpx.Response(500, text="private provider detail")
+    model = Ollama(transport=httpx.MockTransport(handler))
+    with pytest.raises(OllamaError, match="Could not release") as error:
+        model.unload("qwen3-vl:4b-instruct")
+    assert "private provider detail" not in str(error.value)
+
+
+@pytest.mark.parametrize("context_tokens", [2048, 8192, 16384])
+def test_explicit_context_cap_reaches_actual_ollama_chat_json(models, context_tokens):
+    seen = []
+    models.ollama = fake(seen=seen)
+    result = models.run("context-job", "ollama:llama3.2:3b", "generate",
+        prompt="A bounded learning prompt", max_tokens=1500, context_tokens=context_tokens)
+    assert result == {"output": "hello"}
+    assert len(seen) == 1
+    assert seen[0]["options"] == {"temperature": 0.3, "num_predict": 1500, "num_ctx": context_tokens}
+    assert "context_tokens" not in seen[0]
+    assert seen[0]["messages"] == [{"role": "user", "content": "A bounded learning prompt"}]
+    models.jobs.process.assert_not_called()
+
+
+def test_default_context_does_not_override_existing_vision_behavior(models, tmp_path):
+    seen = []
+    models.ollama = fake(seen=seen)
+    image = tmp_path / "frame.jpg"
+    image.write_bytes(b"local-test-frame")
+    models.run("vision-job", "ollama:qwen3.6:35b-a3b", "generate", prompt="Inspect this frame", images=[str(image)])
+    assert "num_ctx" not in seen[0]["options"]
+    assert len(seen[0]["messages"][0]["images"]) == 1
+    assert seen[0]["keep_alive"] == 0
+
+
+@pytest.mark.parametrize("context_tokens", [True, False, 0, -1, 2047, 16385, 8192.0, "8192", float("nan")])
+def test_invalid_context_is_rejected_before_runtime_or_inference(models, context_tokens):
+    models.require = Mock()
+    models.ollama = Mock()
+    with pytest.raises(WorkError, match="context size"):
+        models.run("invalid-context", "ollama:llama3.2:3b", "generate", prompt="p", context_tokens=context_tokens)
+    models.require.assert_not_called()
+    models.ollama.generate.assert_not_called()
+    models.jobs.process.assert_not_called()
+
+
+@pytest.mark.parametrize("context_tokens", [True, 2047, 16385, "8192", 8192.0])
+def test_connector_rejects_invalid_context_without_sending_chat(context_tokens):
+    seen = []
+    with pytest.raises(OllamaError, match="context size"):
+        fake(seen=seen).generate("llama3.2:3b", "p", context_tokens=context_tokens)
+    assert seen == []
+
+
+def test_non_ollama_worker_never_silently_ignores_an_explicit_context_cap(models):
+    models.require = Mock()
+    with pytest.raises(WorkError, match="context"):
+        models.run("unsupported-context", "qwen-small", "generate", prompt="p", context_tokens=8192)
+    models.jobs.process.assert_not_called()
+
+
+def test_context_cap_is_not_a_transcription_or_narration_argument(models):
+    models.require = Mock()
+    with pytest.raises(WorkError, match="context"):
+        models.run("unsupported-action", "whisper-turbo", "transcribe", audio="missing", context_tokens=8192)
+    models.jobs.process.assert_not_called()
+
+
+def test_default_mlx_worker_request_has_no_ollama_context_fields(models):
+    models.require = Mock()
+    seen = []
+
+    def fake_process(_job_id, command, **_kwargs):
+        from pathlib import Path
+        request = json.loads(Path(command[-2]).read_text())
+        seen.append(request)
+        Path(command[-1]).write_text(json.dumps({"output": "offline fixture"}))
+
+    models.jobs.process.side_effect = fake_process
+    assert models.run("mlx-default", "qwen-small", "generate", prompt="p", max_tokens=64) == {"output": "offline fixture"}
+    assert set(seen[0]) == {"action", "model", "prompt", "max_tokens"}
+    assert "context_tokens" not in seen[0] and "num_ctx" not in seen[0]
+
+
+def learning_runtime(tmp_path):
+    """Synchronous fake jobs exercise the adapter without a lifespan, model or IO."""
+    from types import SimpleNamespace
+
+    from clip_factory.autonomy_runtime import AutonomyRuntime
+    from clip_factory.store import Store
+
+    store = Store(tmp_path / "runtime-context")
+    jobs = Mock()
+    jobs.busy.return_value = False
+    infer = Mock(return_value={"output": json.dumps({"status": "insufficient_evidence", "rationale": "Measured observations are limited.", "limitations": "No causal comparison."})})
+    runtime = AutonomyRuntime.__new__(AutonomyRuntime)
+    runtime.resource_check = Mock()  # Resource admission has separate hermetic integration tests.
+    runtime.store = store
+    runtime.stop = Mock()
+    runtime.stop.wait.return_value = False
+    runtime.app = SimpleNamespace(state=SimpleNamespace(jobs=jobs, models=SimpleNamespace(run=infer)))
+
+    def submit(kind, execute, **context):
+        store.put("jobs", {"id": "analysis-job", "kind": kind, "status": "queued", "context": context})
+        try:
+            result = execute("analysis-job")
+        except JobCancelled:
+            return store.patch("jobs", "analysis-job", status="cancelled", error="Cancelled by fixture", result=None)
+        except WorkError as exc:
+            return store.patch("jobs", "analysis-job", status="failed", error=str(exc), result=None)
+        return store.patch("jobs", "analysis-job", status="completed", result=result)
+
+    jobs.submit.side_effect = submit
+    jobs.update.side_effect = lambda job_id, **changes: store.patch("jobs", job_id, **changes)
+    context = {"snapshot": {"id": "snapshot", "metrics": {"views": 12}},
+        "policy": {"campaign_id": "campaign", "profile_id": "profile", "account_id": "account"},
+        "profile": {"id": "profile", "objective": "traffic"}, "publication": {"id": "publication"},
+        "clip": {"id": "clip", "start": 10, "end": 30, "hook": "A source-grounded opening"},
+        "source": {"id": "source", "duration": 5000, "transcript": {"segments": []}},
+        "strategy": {"directions": {"profile": {"framing": "fit"}}}}
+    return runtime, context, infer, jobs
+
+
+def test_learning_context_projects_only_timed_text_and_sets_explicit_8k_limit(tmp_path):
+    runtime, context, infer, jobs = learning_runtime(tmp_path)
+    context["source"]["transcript"]["segments"] = [
+        {"start": 0, "end": 1, "text": "outside range" * 6000},
+        {"start": 10, "end": 30, "text": "Actual complete thought.", "words": [{"word": "large word payload" * 6000}], "tokens": list(range(1000)), "probability": .9},
+    ]
+    assert runtime.analyze(context)["status"] == "insufficient_evidence"
+    kwargs = infer.call_args.kwargs
+    assert kwargs["context_tokens"] == 8192 and kwargs["max_tokens"] == 1500
+    assert len(kwargs["prompt"].encode("utf-8")) + 1500 <= 8192
+    payload = json.loads(kwargs["prompt"].split("Evidence:\n", 1)[1])
+    assert payload["source"]["timed_cues"] == [{"start": 10, "end": 30, "text": "Actual complete thought."}]
+    assert payload["snapshot"]["id"] == context["snapshot"]["id"]
+    assert payload["snapshot"]["metrics"] == context["snapshot"]["metrics"]
+    assert jobs.submit.call_args.kwargs["account_id"] == "account"
+    assert jobs.submit.call_count == infer.call_count == 1
+
+
+@pytest.mark.parametrize("text", ["x" * 8000, "漢" * 2000])
+def test_learning_rejects_ascii_or_utf8_oversize_before_any_job_or_model_call(tmp_path, text):
+    runtime, context, infer, jobs = learning_runtime(tmp_path)
+    context["source"]["transcript"]["segments"] = [{"start": 10, "end": 30, "text": text}]
+    with pytest.raises(WorkError, match="context budget"):
+        runtime.analyze(context)
+    jobs.submit.assert_not_called()
+    infer.assert_not_called()
+
+
+def learning_reply(**changes):
+    return {"status": "experiment", "variable": "hook", "proposed_hook": "A new source-grounded opening",
+        "proposed_duration_seconds": None, "evidence_ids": ["snapshot"],
+        "rationale": "Test a clearer opening against the measured count.",
+        "limitations": "One post does not establish causal lift.", **changes}
+
+
+@pytest.mark.parametrize("bad", [
+    {"proposed_duration_seconds": 15},
+    {"evidence_ids": ["different-account-snapshot"]},
+])
+def test_learning_repairs_one_invalid_handoff_then_returns_the_genuine_changed_hook(tmp_path, bad):
+    runtime, context, infer, jobs = learning_runtime(tmp_path)
+    invalid = learning_reply(**bad)
+    valid = learning_reply()
+    infer.side_effect = [{"output": json.dumps(invalid)}, {"output": json.dumps(valid)}]
+    assert runtime.analyze(context) == valid
+    assert infer.call_count == 2 and jobs.submit.call_count == 1
+    job = runtime.store.get("jobs", "analysis-job")
+    assert job["status"] == "completed" and job["agent_attempts"] == 2
+    assert len(job["validation_failures"]) == 1
+    first, second = [call.kwargs["prompt"] for call in infer.call_args_list]
+    assert second.startswith(first)
+    assert "One correction is allowed" in second
+    assert json.dumps(invalid) not in second  # No untrusted previous answer is promoted to instructions.
+    assert all(call.kwargs["context_tokens"] == 8192 for call in infer.call_args_list)
+    assert all(len(call.kwargs["prompt"].encode("utf-8")) + 1500 + 256 <= 8192 for call in infer.call_args_list)
+
+
+def test_learning_noop_can_repair_to_an_actual_insufficient_evidence_decision(tmp_path):
+    runtime, context, infer, _jobs = learning_runtime(tmp_path)
+    insufficient = {"status": "insufficient_evidence", "variable": None, "proposed_hook": None,
+        "proposed_duration_seconds": None, "evidence_ids": [],
+        "rationale": "A meaningful source-faithful alternative is unsupported.", "limitations": "No comparative evidence."}
+    infer.side_effect = [{"output": json.dumps(learning_reply(proposed_hook=f"  {context['clip']['hook']}  "))},
+        {"output": json.dumps(insufficient)}]
+    assert runtime.analyze(context) == insufficient
+    job = runtime.store.get("jobs", "analysis-job")
+    assert infer.call_count == 2 and job["agent_attempts"] == 2
+    assert "repeats" in job["validation_failures"][0]
+    assert job["result"]["rationale"] == insufficient["rationale"]
+
+
+def test_learning_invalid_twice_fails_the_analysis_job_without_inventing_insufficiency(tmp_path):
+    runtime, context, infer, jobs = learning_runtime(tmp_path)
+    infer.side_effect = [{"output": json.dumps(learning_reply(proposed_duration_seconds=15))},
+        {"output": json.dumps(learning_reply(proposed_hook=context["clip"]["hook"]))}]
+    with pytest.raises(WorkError, match="did not complete"):
+        runtime.analyze(context)
+    job = runtime.store.get("jobs", "analysis-job")
+    assert infer.call_count == 2 and jobs.submit.call_count == 1
+    assert job["status"] == "failed" and job["agent_attempts"] == 2
+    assert len(job["validation_failures"]) == 2 and job["result"] is None
+    assert "after one correction" in job["error"]
+
+
+def test_learning_cancellation_before_repair_prevents_a_second_model_call(tmp_path):
+    runtime, context, infer, jobs = learning_runtime(tmp_path)
+    infer.return_value = {"output": json.dumps(learning_reply(proposed_duration_seconds=15))}
+    jobs.check.side_effect = [None, JobCancelled()]
+    with pytest.raises(WorkError, match="did not complete"):
+        runtime.analyze(context)
+    job = runtime.store.get("jobs", "analysis-job")
+    assert infer.call_count == 1 and jobs.check.call_count == 2
+    assert job["status"] == "cancelled" and job["agent_attempts"] == 1
+    assert job["result"] is None
+
+
+def test_learning_repair_must_fit_budget_before_second_inference(tmp_path):
+    runtime, context, infer, jobs = learning_runtime(tmp_path)
+    # Calibrate using the real assembled schema/prompt, not a duplicated constant.
+    runtime.analyze(context)
+    base_bytes = len(infer.call_args.kwargs["prompt"].encode("utf-8"))
+    content_limit = 8192 - 1500 - 256
+    # Projected audience was null (4 bytes); the new ASCII string uses two quotes.
+    padding = content_limit - 10 - base_bytes + 2
+    assert padding > 0
+    context["profile"]["audience"] = "x" * padding
+    infer.reset_mock()
+    jobs.submit.reset_mock()
+    infer.side_effect = [{"output": json.dumps(learning_reply(proposed_duration_seconds=15))}]
+    with pytest.raises(WorkError, match="did not complete"):
+        runtime.analyze(context)
+    job = runtime.store.get("jobs", "analysis-job")
+    assert infer.call_count == 1 and jobs.submit.call_count == 1
+    assert job["status"] == "failed" and job["agent_attempts"] == 1
+    assert "repair exceeds" in job["error"]
+    assert len(infer.call_args.kwargs["prompt"].encode("utf-8")) <= content_limit

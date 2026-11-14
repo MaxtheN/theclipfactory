@@ -1,0 +1,37 @@
+.gf-brand-logo {
+  display: block;
+  width: 72px;
+  height: 40px;
+  flex: 0 0 72px;
+  overflow: hidden;
+  filter: brightness(0) invert(1);
+}
+.gf-app.gf-flow-app .gf-brand {
+  gap: 6px;
+  font-size: 20px;
+  letter-spacing: -0.65px;
+}
+.gf-onboarding-brand .gf-brand-logo {
+  width: 78px;
+  height: 43px;
+  flex-basis: 78px;
+}
+.gf-operational .tools-brand-row .gf-brand-logo {
+  width: 54px;
+  height: 30px;
+  flex-basis: 54px;
+}
+@media (max-width: 760px) {
+  .gf-onboarding-brand .gf-brand-logo {
+    width: 65px;
+    height: 36px;
+    flex-basis: 65px;
+  }
+}
+@media (max-width: 520px) {
+  .gf-onboarding-brand .gf-brand-logo {
+    width: 61px;
+    height: 34px;
+    flex-basis: 61px;
+  }
+}

@@ -51,12 +51,12 @@ def test_parse_scout_rejects_untrusted_output():
             {"start": 100, "end": 140, "hook": "ok", "score": 99},  # score clamped to 10
             {"start": 120, "end": 150},  # overlaps the first
             {"start": "x", "end": 5},
-            {"start": 700, "end": 720},  # outside the window: clamped to empty
-            {"start": 300, "end": 500, "hook": "long"},  # trimmed to 60 s
+            {"start": 700, "end": 720},  # outside the window: rejected
+            {"start": 300, "end": 500, "hook": "long"},  # overlong: rejected
         ]
     )
     out = scouts.parse_scout(raw, rows, 0, 600, limit=5)
-    assert [(m["start"], m["end"]) for m in out] == [(100, 140), (300, 360)]
+    assert [(m["start"], m["end"]) for m in out] == [(100, 140)]
     assert out[0]["score"] == 10
     assert scouts.parse_scout("```json\nnot json", rows, 0, 600) == []
 
@@ -102,3 +102,23 @@ def test_campaign_direction_and_brand_reach_scouts_as_data():
     )
     assert '"approved_campaign_direction": {"tone": "dry"}' in fake.prompts[0][0]
     assert "untrusted source data" in fake.prompts[0][0]
+
+
+def test_nested_selector_values_are_ignored_before_deduplication():
+    windows = {
+        lo: [{"start": lo + 10, "end": lo + 40, "score": 3 + i}]
+        for i, lo in enumerate(range(0, 3600, 600))
+    }
+    for picks in ([[0], {"candidate": 1}, True, "2"], [[0], {}, 2, 2, 1]):
+        result = scouts.scout(generate=Fake(windows, {"picks": picks}), video=video(), frames_for=frames, count=2)
+        assert len(result["moments"]) == 2
+        assert result["selector"] == ("selector" if 2 in picks else "scores")
+
+
+def test_outside_or_overlong_ranges_are_not_rewritten_with_stale_copy():
+    rows = scouts._rows(video())
+    for start, end in [(-10, 40), (590, 630), (100, 161), (-10000, 10000)]:
+        raw = json.dumps([{"start": start, "end": end, "hook": "Payoff from rejected range", "caption": "Do not transfer this copy"}])
+        assert scouts.parse_scout(raw, rows, 0, 600) == []
+    valid = scouts.parse_scout(json.dumps([{"start": 100.125, "end": 140.125}]), rows, 0, 600)
+    assert valid[0]["start"] == 100.12 and valid[0]["end"] == 140.12

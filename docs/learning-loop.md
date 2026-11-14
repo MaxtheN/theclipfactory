@@ -1,51 +1,35 @@
-# Learning loop: evidence to the next edit
+# Learning loop: evidence to a real next draft
 
-This is the integration target, with current capabilities and missing automation distinguished. It does not claim a deployed autonomous growth system or measured audience improvement.
+## Durable contract
 
-## Production loop
+Approved local clip + explicit connected account + provider media ID/time + user-confirmed clip mapping → saved publication →3/6-day due work → immutable cumulative metrics → bounded analyst → one experiment → actual unapproved render → verified receipt → human review.
 
-Saved campaign + selected profile/objective → creator-approved direction → local agent analysis or explicit edit plan → real render/checks → human-approved exact clip → verified export → publication record/real observations → analyst recommendation → proposed account-specific strategy → approval → next-source production with that version.
+SQLite remains the runtime store. Each record links campaign/profile/account/source/clip/base/snapshot/experiment/job identifiers. Published strategy remains unchanged until explicit human promotion. This is policy and experiment memory, not model-weight training.
 
-Every loop should expose the observation IDs, hypothesis, changed rule, proposal/base/version, approving decision and subsequent clip's immutable strategy snapshot. A receipt proves production happened; subsequent audience evidence is required to establish improved performance.
+## API and UI
 
-## What exists on merged main
+- Results / Connect an Instagram account: Keychain-backed settings, managed OAuth links, verified completion or exact existing-account import.
+- /api/automation/policies: exact campaign/profile/account policy,3/6days, allowed hook/duration fields, auto drafts, pause.
+- /api/automation/publications: exact approved clip hash and user mapping confirmation; server checks media ownership and obtains publication time from provider.
+- /api/automation/state: saved publications, snapshots, work and experiments; /check requests only due work, never advances the clock.
+- Local worker runs while app is open and catches up after reopening. Provider/model reads retry at most3times with bounded backoff. Invalid model handoffs receive at most one correction per analyst job; cancellation and failed validation do not become fabricated decisions.
 
-- Persistent scoped campaigns, profiles, approved strategy versions, observations and learning proposals.
-- An actual performance-analyst task inside campaign agent production when prior observations/feedback exist; otherwise it is explicitly skipped. Its typed output is recommendations with evidence references and limitations.
-- Campaign `/learning` can save a complete changed Direction from known-value account-scoped observations. It remains a proposal until explicitly approved.
-- Campaign `/produce` supplies approved direction and prior scoped evidence to local model roles, creates reviewable files and a task ledger. It is production, not an external precedent-research endpoint.
-- Instagram insights sync exists for configured eligible accounts; structured manual observation import is also available. Historical imports must keep publication/source/window and remain labeled historical.
-- Paid routes read insights and perform preflight only. There is no implemented ad-creation/activation/pause operation.
+## Evidence and edits
 
-## Applying a rule must change actual production
+Snapshots preserve unknown values and provenance. Cumulative counts are never summed; unchanged cumulative evidence is not repeatedly treated as new information. No goal/comparison/attribution means no overall winner or causal-lift claim. An experiment can be exploratory and must disclose limitations.
 
-| Approved direction field | Manual campaign render consumes it? | Agent campaign production receives it? |
-| --- | --- | --- |
-| hooks | Yes, defaults to first hook unless creator supplies override | Yes |
-| duration_seconds | Yes, when end is omitted; explicit range is a recorded override | Yes |
-| framing / caption_style | Yes | Yes |
-| moment_selection / angles / pacing / editing_preferences | Not interpreted as edit commands | Passed in approved campaign context to planning/editing roles |
+A hook experiment changes rendered text; duration changes require recorded transcript boundaries. Every request preserves parent source/profile/base and unrelated physical edit settings. Older optional opening metadata is resolved only from explicit saved render facts; raw parent plan and normalization notes remain in the receipt. Missing or contradictory proof is held for review.
 
-Therefore a selection-rule-only learning proposal must lead to **agent production** on the next source, or the creator must deliberately choose a concrete source/edit change. A manual render with the same explicit start/end/hook does not prove the selection rule was applied. Show the current-versus-proposed setting, production mode and the actual subsequent edit plan. A new strategy ID alone is insufficient proof.
+The renderer receives a frozen real Production request and tags its job/output with experiment_id. Unknown submissions are reconciled against exactly one scoped saved job; zero/multiple matches remain held. Exact job/result/hash/plan/lineage checks determine production completion. Outputs start unapproved; a later recorded human approval remains distinguishable from that initial state.
 
-## Smallest credible demo
+## Autonomy policy
 
-1. Produce two opening treatments from real local footage, inspect actual checks, request a concrete linked revision and approve/export the exact accepted output.
-2. Import a real historical observation with its account, publication and measurement window; do not fabricate a fresh audience result.
-3. Show a cited recommendation (actual analyst output when available, otherwise creator-proposed and labeled) and a single account-specific strategy change.
-4. Approve the changed strategy. Render the next source through a path that consumes that field, and show the changed edit decision plus preserved other-profile direction.
-5. Report actual elapsed time, human intervention, acceptance and direct processing receipts against a matched manual baseline. Unknown cost or audience lift remains unknown.
+Automatic drafts; human approval for each publication; no paid spending. Saving an experiment never promotes global strategy or grants permission to post. Composio is currently a read-only integration boundary. Public hosting and a complete approved-publication/reconciliation flow are separate implementation gates.
 
-This demonstrates an operational closed loop and explainable persistent learning. It does not establish causal lift, virality, self-training model weights or agency replacement.
+## Actual model qualification
 
-## Remaining automation to make explicit
+The1.7Btext model installed and fit memory but failed handoff/no-op validation in real tests.4Bwithold16Kcontext reached critical memory; the test stopped.8Kper-request context plus projected timed cues produced a valid4Bproposal and actual recovered FFmpeg variant. Prior failures and synthetic input labels remain preserved outsideGit in research/growth-factory/integration/learning-loop-smoke. A fresh all-current-code rehearsal is tracked there separately. Production proof is not audience improvement.
 
-- There is no standalone campaign learning-analysis trigger that turns new observations into a full proposed Direction. Existing `/learning` persists a supplied proposal; the performance analyst currently runs inside production. A future bounded trigger should take exact observation IDs/current version, run one analyst, validate scope and available evidence, and save a draft. Missing data should end as insufficient evidence, not an unbounded retry.
-- Reference/EvidenceBrief ingestion and external precedent research are separate missing backend capabilities. No URL-only “research complete” state.
-- Duplicate observation/export writes are not idempotent on the current server. Reconcile uncertain writes and disable double submission; do not auto-retry.
-- A brand/paid loop would add conversion attribution, currency/window, budget/action limits and separately authorized activation. Existing Reel preflight is a real gate, not an ad launch.
-- The local app must be running for its existing scheduler. Continuous unattended operation while the Mac app is closed is not implemented.
+## Cloud boundary
 
-## Autonomy boundary
-
-Agents may propose and execute local production within the selected approved campaign context. Output quality/critic checks do not grant human approval. Publishing and paid actions require their separate account/configuration/authorization gates. Future automatic strategy application needs explicit allowed fields, evidence conditions, rollback/versioning and an approved policy; it is not implied by a model recommendation.
+Supabase's3owner-private tables and7RLS policies were applied/tested; Mac state still remains local. Before sync: actual Auth session, safe metadata projection excluding credentials/local paths/raw logs, version conflict protocol and explicit team access. No service-role key belongs in the desktop app. Always-on collection requires a separately deployed worker.

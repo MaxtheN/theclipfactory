@@ -503,10 +503,24 @@ class Models:
                 "Not enough currently available memory. Close other apps or use the smaller model."
             )
 
-    def run(self, job_id: str, identifier: str, action: str, *, keep_warm: bool = False, **payload) -> dict:
+    def release_warm(self, identifier: str):
+        if is_ollama(identifier):
+            from .ollama import model_name
+
+            try:
+                self.ollama.unload(model_name(identifier))
+            except OllamaError:
+                return  # Cleanup must not erase a completed result or original task failure.
+
+    def run(self, job_id: str, identifier: str, action: str, *, keep_warm: bool = False,
+            context_tokens: int | None = None, **payload) -> dict:
         """keep_warm: one of many calls in a row (scout swarm); Ollama keeps weights loaded between them."""
         if action not in {"generate", "transcribe", "narrate"}:
             raise WorkError("Unsupported inference action.")
+        if context_tokens is not None and (type(context_tokens) is not int or not 2048 <= context_tokens <= 16384):
+            raise WorkError("Local context size must be between 2048 and 16384 tokens.")
+        if context_tokens is not None and (action != "generate" or not is_ollama(identifier)):
+            raise WorkError("Explicit context limits currently require an Ollama text-generation model.")
         from .inference_worker import validate_request
 
         data = {**payload, "action": action, "model": str(self.model_dir / identifier)}
@@ -516,7 +530,7 @@ class Models:
             raise WorkError("Inference input exceeds limits or is invalid.") from exc
         self.require(identifier, {"generate": "llm", "transcribe": "asr", "narrate": "tts"}[action])
         if is_ollama(identifier):
-            return self._run_ollama(job_id, identifier, data, keep_warm=keep_warm)
+            return self._run_ollama(job_id, identifier, data, keep_warm=keep_warm, context_tokens=context_tokens)
         worker = Path(__file__).with_name("inference_worker.py")
         if not worker.is_file():
             raise WorkError(
@@ -566,7 +580,8 @@ class Models:
         except (OSError, ValueError, TypeError) as exc:
             raise WorkError("Inference worker returned an invalid result.") from exc
 
-    def _run_ollama(self, job_id: str, identifier: str, data: dict, *, keep_warm: bool = False) -> dict:
+    def _run_ollama(self, job_id: str, identifier: str, data: dict, *, keep_warm: bool = False,
+                    context_tokens: int | None = None) -> dict:
         name = model_name(identifier)
         if not keep_warm:  # swarm callers report their own per-scout progress
             self.jobs.update(job_id, progress=35, message=f"Running {name} through local Ollama")
@@ -578,6 +593,7 @@ class Models:
                 max_tokens=data.get("max_tokens", 1500),
                 check=lambda: self.jobs.check(job_id),
                 keep_alive="10m" if keep_warm else 0,
+                **({"context_tokens": context_tokens} if context_tokens is not None else {}),
             )
         except OllamaError as exc:
             self._log_ollama(job_id, name, f"ERROR: {exc}")

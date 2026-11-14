@@ -69,3 +69,81 @@
   .gf-app .gf-disclosure-body,
   .gf-operational details > :not(summary) { animation: none !important; }
 }
+
+/* Daily workspace motion follows navigation and deliberate interaction.
+   Polling never restarts these view entrances or changes saved component state. */
+.gf-flow-app:not(.is-onboarding) .gf-stage:not([hidden]) {
+  animation: gf-workspace-enter 220ms cubic-bezier(.2, .7, .2, 1) both;
+}
+.gf-flow-app:not(.is-onboarding) .gf-nav-item,
+.gf-operational .nav-item {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 140ms ease;
+}
+.gf-flow-app:not(.is-onboarding) .gf-nav-item > svg {
+  transition: opacity 140ms ease;
+}
+.gf-flow-app:not(.is-onboarding) .gf-nav-item.active > svg {
+  opacity: 1;
+}
+.gf-flow-app:not(.is-onboarding) .gf-active-dot {
+  animation: gf-workspace-marker 180ms ease-out both;
+}
+.gf-flow-app:not(.is-onboarding) .gf-footage-row {
+  transition: background-color 140ms ease;
+}
+.gf-flow-app:not(.is-onboarding) .gf-footage-row:focus-within {
+  background: var(--material-field);
+}
+.gf-flow-app:not(.is-onboarding) .gf-library-edit > svg:last-child,
+.gf-flow-app:not(.is-onboarding) .gf-footage-row > .gf-button > svg:last-child,
+.gf-flow-app:not(.is-onboarding) .gf-cut-copy > span > svg {
+  transition: transform 150ms ease;
+}
+.gf-flow-app:not(.is-onboarding) .gf-library-edit:is(:hover, :focus-visible):not(:disabled) > svg:last-child,
+.gf-flow-app:not(.is-onboarding) .gf-footage-row > .gf-button:is(:hover, :focus-visible):not(:disabled) > svg:last-child,
+.gf-flow-app:not(.is-onboarding) .gf-cut-card:is(:hover, :focus-visible):not(:disabled) .gf-cut-copy > span > svg {
+  transform: translateX(2px);
+}
+@keyframes gf-workspace-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes gf-workspace-marker {
+  from { opacity: 0; transform: scale(.75); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-flow-app:not(.is-onboarding) .gf-stage,
+  .gf-flow-app:not(.is-onboarding) .gf-active-dot {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1;
+  }
+  .gf-flow-app:not(.is-onboarding) .gf-nav-item,
+  .gf-operational .nav-item,
+  .gf-flow-app:not(.is-onboarding) .gf-nav-item > svg,
+  .gf-flow-app:not(.is-onboarding) .gf-footage-row,
+  .gf-flow-app:not(.is-onboarding) .gf-library-edit > svg:last-child,
+  .gf-flow-app:not(.is-onboarding) .gf-footage-row > .gf-button > svg:last-child,
+  .gf-flow-app:not(.is-onboarding) .gf-cut-copy > span > svg {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* Let the complete workspace arrive after the launch confirmation fades. */
+.gf-flow-app:not(.is-onboarding) .gf-window {
+  animation: gf-factory-arrival 420ms cubic-bezier(.2, .7, .2, 1) both;
+}
+@keyframes gf-factory-arrival {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-flow-app:not(.is-onboarding) .gf-window {
+    animation: none !important;
+  }
+}

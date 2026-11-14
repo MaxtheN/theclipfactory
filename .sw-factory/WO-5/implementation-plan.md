@@ -1,0 +1,42 @@
+# Guided onboarding design plan
+
+## Summary
+Replace the single onboarding form with four deliberate stages: workspace/audience, outcome, creative voice, and review/launch. Preserve the existing local Profile/Campaign schema, validated request builders, successful-write receipts and ambiguous-write recovery. The explicit final launch is the first write. Remove the requested local-profile disclaimer.
+
+Latest user steering requires a standalone consumer-style onboarding board. GrowthApp hides its sidebar, topbar, outer heading, app notices and QuickActions while onboarding, while keeping existing campaign stages mounted for draft retention. Onboarding owns its brand and current h1 and receives an active flag for focus; final completion restores the normal Factory shell. The daily selector labels the actual campaign IDs as Campaign; New workspace remains a secondary action for entering the full setup flow. This does not introduce a backend client-isolation entity or change local media/account ownership.
+
+## Reuse and package structure
+Own Onboarding.tsx, its dedicated section in factory-flow.css, and onboarding-specific tests. Reuse AutoTextarea, Field, Disclosure, ApiError, workspaceApi and the existing glass/control/motion tokens. Keep GrowthApp props, natural black logo, all backend/media/API code, live preview5179 and actual backend processes unchanged. Root owns the work-order harness, integration and final delivery.
+
+## Components and flow
+Onboarding retains all draft values while only one semantic step is exposed. Progress, Back and review Edit actions move between steps; focus follows the new step heading. Outcomes map explicitly to saved objective/primary_metric (awareness/reach, traffic/full_episode_visits, leads/qualified_leads, Other custom/typed metric). Skip uses discovery/null. Creative voice uses three practical suggestions plus Other and writes to creative_preferences, while optional guardrails remain brand_context and campaign constraints. Final summary exposes the exact intended goal/metric/voice and the creator launches explicitly.
+
+The dedicated CTA uses a decorative rocket and orbital border trail on deliberate hover/focus, with a single launch cue on a valid actual click. Labels remain readable and stable, motion adds no write delay, and reduced motion removes movement. Step transitions are short, directional and finite. Native form/keyboard controls remain available. Validation and API recovery remain inspectable across navigation; known422 correction reuses/updates the confirmed profile, unknown writes reconcile before resubmission, refresh-only recovery reuses both confirmed records.
+
+## Implementation steps
+1. Read current source/constraints and record plan before implementation.
+2. Extend the existing validated body builder with optional natural-language outcome/creative voice without changing required semantics.
+3. Build step navigation, three-choice outcomes/voice plus Other, Discovery skip, review/edit and dedicated rocket CTA.
+4. Refine only onboarding CSS with responsive glass, readable progress, finite transitions and reduced-motion fallbacks.
+5. Adapt onboarding regressions and add meaningful step/no-early-write, goal/voice mapping, keyboard/focus, retained draft, validation and partial-failure recovery tests.
+6. Verify tests/typecheck/build and desktop/narrow/error/reduced-motion UI; send screenshots and handoff to root for independent review and feature-branch delivery. No commit/push/branch switch by design chat.
+
+## Testing
+Run focused onboarding and existing factoryFlow tests, TypeScript/Vite build, whitespace checks. Exercise Back/Edit/draft retention, Other/metric validation, Discovery/null, all backend field limits, no writes before review launch, double-submit lock, known422 recovery, ambiguous-write reconciliation and refresh-only retry. Inspect the existing live preview through CUA at1440 and390 widths, verify focus and screen-reader step visibility, orbital/launch cue, reduced motion and persistent errors. Keep actual backend/model/media jobs untouched and never send production model/render/publish calls during design verification.
+
+## User correction: open onboarding canvas
+The user rejected the enclosing glass card, sidebar introduction, misaligned vertical progress and orbiting rocket. Supersede those presentation choices with a full open canvas, brand in the top-left header, centered horizontal four-step progress with one animated track, and centered form at a readable width. Remove the outer gf-card and rail; preserve all request/validation/recovery semantics. Choice rows use distinct selected, hover and keyboard focus states; the CTA uses a restrained forward arrow and step changes carry the main transition. Progress communicates the actual current stage, with Back/Edit supported and no timer or false completion promises. Reverify desktop/narrow geometry, no enclosing card, selection and step motion/reduced-motion, and the existing onboarding tests. The previous review approval is superseded pending this revision.
+
+## Execution ownership note
+The design plan above existed before implementation in onboarding-redesign-plan.md while the integration owner held the shared harness. WO-5 files were initialized afterward to consolidate that existing plan and final review evidence. No backend changes or version-control delivery are owned by this design task.
+
+## White brand and direct preview follow-up
+Latest user instruction supersedes the earlier natural-black display requirement. Reuse the supplied transparent PNG unchanged, framed to its actual artwork bounds in a shared BrandMark SVG viewport and displayed white with a CSS filter. Match visible mark height to the two-line company wordmark across onboarding and sidebar, and replace the obsolete Tools monogram with the same mark. Inspect sidebar fit and compact layout.
+Add an explicit fixture-preview-only #onboarding entry that initializes the existing wizard at Audience without deleting campaigns, changing API transport, or forcing onboarding after completion. Extend the local native preview helper with --onboarding to open that entry directly; keep live Vite updates and the existing authenticated engine intact. Verify opt-in preview entry, cancel/launch exit and production isolation. Polish only identified app spacing/motion issues with finite, reduced-motion-aware CSS; preserve backend and request semantics.
+
+## Fixed desktop viewport and launch feedback
+User feedback requires a fixed desktop window throughout onboarding and daily app use. Bound root/window dimensions to the viewport; pin shell/header/navigation/actions and allow overflow only within the relevant content area. Preserve access to long text, custom choices, expanded disclosures and save-error recovery at short heights and zoom. Retain the four-step overview to communicate effort; explain why audience context is needed, following NN/g form cognitive-load guidance and GOV.UK question-page guidance. Give outcome/voice choices coherent muted accent colors with checked semantics and contrast independent of color.
+Add a clean launch interstitial with a forward arrow and track driven by confirmed profile/workspace/opening phases. Final ready state requires successful workspace refresh; settle visually for a finite 650ms (720ms timeout fallback) before entering Factory. Reduced motion completes immediately after the real requests. Retain submission lock through visual handoff; errors return to the intact review/recovery state. Natural first-run onboarding must remain visible through refresh and settle. No model, provider, media or publishing actions are added. Verify delayed requests, error paths, repeated submissions, reduced motion, first-run handoff, short/narrow/long-content geometry, and fixed shell/inner scrolling.
+
+## Slower launch and smoother Factory handoff
+User wants time to see the cue. Extend confirmed-ready sweep/check to 1500ms, then fade the launch content for 280ms before completing the handoff. Drive CSS timings from the same exported constants as the finite fallback timers (80ms safety padding per phase). Submission remains locked through exit; reduced motion still enters immediately after actual successful reload. Fade the app window in over420ms when returning from onboarding; preserve normal per-view behavior and static reduced motion. Check event and fallback paths, cancel timers on unmount, ensure arrival alone cannot bypass the exit phase, and keep the Mac fixture preview active.
