@@ -127,6 +127,8 @@ def test_queue_freezes_strategy_and_direct_selection_is_explicit(client, monkeyp
         return {"subtitles_burned": False}
 
     monkeypatch.setattr("clip_factory.media.render", render)
+    # Cover extraction is mocked too; this concurrency test must not require host FFmpeg.
+    monkeypatch.setattr("clip_factory.media.ffmpeg", lambda: "mock-ffmpeg")
     monkeypatch.setattr(client.app.state.jobs, "process", lambda *a, **k: b"")
     try:
         job = client.post(

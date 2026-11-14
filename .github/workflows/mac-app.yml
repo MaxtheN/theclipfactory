@@ -11,7 +11,7 @@ jobs:
     # GitHub's current public runner table maps macos-15 to arm64; Intel is macos-15-intel.
     # https://docs.github.com/en/actions/reference/runners/github-hosted-runners
     runs-on: macos-15
-    # Build saved campaign learning with scoped strategies, retaining native reopen and runtime checks.
+    # Build saved campaign learning with scoped strategies, retaining native reopen and host-independent queue regression checks.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
