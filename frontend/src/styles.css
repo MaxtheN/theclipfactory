@@ -1332,9 +1332,19 @@ textarea {
 }
 
 /* Campaign intent and evidence share the established local-studio system. */
-.campaign-workflow > .two-col { margin-top: 22px; align-items: start; }
-.campaign-workflow fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
-.campaign-direction, .campaign-version, .campaign-observation {
+.campaign-workflow > .two-col {
+  margin-top: 22px;
+  align-items: start;
+}
+.campaign-workflow fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.campaign-direction,
+.campaign-version,
+.campaign-observation {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
@@ -1343,8 +1353,21 @@ textarea {
   overflow-wrap: anywhere;
   background: #13191c;
 }
-.campaign-version-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
-.campaign-version h4 { margin: 0 0 12px; }
-.campaign-version p, .campaign-observation p { font-size: 12px; }
-.campaign-workflow fieldset:disabled { opacity: .65; }
-.campaign-workflow .clip-content > button { margin-top: 16px; }
+.campaign-version-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+}
+.campaign-version h4 {
+  margin: 0 0 12px;
+}
+.campaign-version p,
+.campaign-observation p {
+  font-size: 12px;
+}
+.campaign-workflow fieldset:disabled {
+  opacity: 0.65;
+}
+.campaign-workflow .clip-content > button {
+  margin-top: 16px;
+}

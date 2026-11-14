@@ -186,7 +186,9 @@ export function App() {
               </button>
             </div>
           )}
-          {tab === "Campaigns" && <Campaigns state={state} openFactory={() => setTab("Factory")} />}
+          {tab === "Campaigns" && (
+            <Campaigns state={state} openFactory={() => setTab("Factory")} />
+          )}
           {tab === "Dashboard" && <Dashboard state={state} navigate={setTab} />}
           {tab === "Library" && (
             <Library
