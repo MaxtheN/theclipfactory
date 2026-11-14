@@ -809,8 +809,11 @@ class Analyzer:
         return transcript
 
     def pattern(self, job_id: str, references: list[dict], observations: list[dict], *, brief_text: str,
-                brief: dict | None, own: dict | None, control: dict, generate: Callable[[str], str | None]) -> dict:
-        """ONE pattern from the 4B model, validated; one repair attempt; abstain otherwise."""
+                brief: dict | None, own: dict | None, control: dict, generate: Callable[[str], str | None],
+                admitted: bool = False) -> dict:
+        """ONE pattern from the model, validated; one repair attempt; abstain otherwise.
+
+        ``admitted``: the cloud model needs no local memory, so the admission guard is skipped."""
         variables = allowed_variables(own)
         if not observations:
             return {"status": "abstained", "reason": "No inspectable reference produced observations."}
@@ -818,7 +821,7 @@ class Analyzer:
                                 variables=variables)
         errors: list[str] = []
         for attempt in range(2):
-            if self._held():
+            if not admitted and self._held():
                 return {"status": "held", "reason": "; ".join(self.holds)[:400]}
             ask = prompt if attempt == 0 else (
                 prompt + "\nYour previous reply was rejected: " + " ".join(errors)[:600]
@@ -827,7 +830,7 @@ class Analyzer:
             try:
                 text = generate(ask)
             except WorkError as exc:
-                return {"status": "abstained", "reason": f"The local model failed: {str(exc)[:200]}"}
+                return {"status": "abstained", "reason": f"The model failed: {str(exc)[:200]}"}
             finally:
                 self._timed("pattern", clock)
             checked, errors = validate_pattern(parse_json(text), observations, variables=variables,

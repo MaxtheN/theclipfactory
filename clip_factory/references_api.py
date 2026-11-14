@@ -279,10 +279,13 @@ def install(app: FastAPI, campaigns: Campaigns, *, render):
         clock = time.monotonic()
         jobs = app.state.jobs
         guard = LocalModel(app, app.state.autonomy_runtime, job_id)
+        # Frame descriptions always run locally behind the admission guard; only the text-only pattern
+        # step may use the creator's cloud model.
+        writer = LocalModel(app, app.state.autonomy_runtime, job_id, role="reference_pattern")
         model = vision_model()
         settings = store.get("config", "settings") or {}
         analyzer = refs.Analyzer(
-            jobs=jobs, models=app.state.models, admit=guard.admit, vision_model=model,
+            jobs=jobs, models=app.state.models, admit=guard.admit_local, vision_model=model,
             whisper_ready=whisper_ready, language=(settings.get("value") or {}).get("language") or None,
         )
         folder, work = folder_of(item), Path(app.state.root) / "work" / job_id / "references"
@@ -312,17 +315,23 @@ def install(app: FastAPI, campaigns: Campaigns, *, render):
                         "brief_snapshot": brief, "campaign_notes": campaign.get("notes") or ""}
             jobs.update(job_id, progress=80, message="Naming one pattern from the observations")
 
-            def generate(prompt: str) -> str | None:
-                output = app.state.models.run(
+            def local_generate(prompt: str):
+                return app.state.models.run(
                     job_id, model, "generate", prompt=prompt, max_tokens=refs.PATTERN_TOKENS,
                     context_tokens=refs.CONTEXT_TOKENS, schema=refs.PatternDraft.model_json_schema(), temperature=0.2)
+
+            def generate(prompt: str) -> str | None:
+                if writer.cloud:
+                    return writer.complete(prompt, refs.PatternDraft.model_json_schema(), refs.PATTERN_TOKENS, 0.2,
+                                           (lambda: local_generate(prompt)) if model else None)
+                output = local_generate(prompt)
                 return output.get("output") if isinstance(output, dict) else None
 
-            if model:
+            if model or writer.cloud:
                 outcome = analyzer.pattern(
                     job_id, item["references"], observations,
                     brief_text=briefs.brief_block(snapshot, role="creative_strategist", compact=True),
-                    brief=brief, own=own, control=control, generate=generate)
+                    brief=brief, own=own, control=control, generate=generate, admitted=writer.cloud)
             else:
                 outcome = {"status": "abstained",
                            "reason": "No qualified local model (qwen3-vl:4b via Ollama) is installed; facts only."}
@@ -332,7 +341,8 @@ def install(app: FastAPI, campaigns: Campaigns, *, render):
                 plans=refs.build_plans(pattern, own, clip) if pattern else [],
                 limits=refs.limits_for(item["references"], pattern),
                 abstained=None if pattern else {"status": outcome["status"], "reason": outcome["reason"]},
-                status="ready" if pattern else "abstained", model_id=model, holds=analyzer.holds,
+                status="ready" if pattern else "abstained", model_id=writer.model_id if writer.cloud else model,
+                llm=writer.usage, holds=analyzer.holds,
                 timings={**analyzer.timings, "total": round(time.monotonic() - clock, 2)},
                 finished_at=now(), analysis_version=refs.VERSION,
             )

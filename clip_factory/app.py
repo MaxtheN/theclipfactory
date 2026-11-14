@@ -31,6 +31,8 @@ from .brief import brief_block, must_avoid_hits
 from .campaign_api import install as install_campaign_api
 from .campaigns import Campaigns, snapshot_goal
 from .jobs import Jobs, WorkError
+from .llm_provider import LlmGateway, RoutedModels
+from .llm_provider import install as install_llm_provider
 from .meta import MetaClient, MetaError, MetaOAuth, SecureTokenStore, validate_public_video_url
 from .models import Models, apple_silicon
 from .ollama import LlmId, is_ollama
@@ -323,7 +325,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         app.state.team = TeamEngine(
             store,
             app.state.jobs,
-            app.state.models,
+            RoutedModels(app.state.models, app.state.llm, "agents"),  # cloud only when opted in
             transcribe=transcribe_task,
             can_transcribe=whisper_ready,
             render_workers=3,
@@ -350,6 +352,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     app.state.campaigns = campaigns
     app.state.store = store
     app.state.root = root
+    # Optional cloud model (OpenRouter, the creator's own key in Keychain); local unless a key is saved.
+    app.state.llm = LlmGateway(store, jobs=lambda: app.state.jobs)
+    install_llm_provider(app, app.state.llm)
     app.state.desktop = False
     app.state.token_store = token_store
     app.state.meta_factory = MetaClient
@@ -2698,13 +2703,14 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     # Per-clip Instagram caption copy (model with a labelled template fallback); never posts.
     install_post_copy(app, store)
 
-    from .brand_research_api import BrandResearchService, LocalBrandModel
+    from .brand_research_api import BrandResearchService, LocalBrandModel, brand_model
     from .brand_research_api import install as install_brand_research_api
 
     # Onboarding "draft my brand from my website": guarded reads on a light thread, the admission-checked
     # local model on the heavy worker, drafts in memory only until the creator confirms them.
     app.state.brand_research = BrandResearchService(
-        lambda: app.state.jobs, model_factory=lambda job_id: LocalBrandModel(app, runtime, job_id)
+        lambda: app.state.jobs, model_factory=lambda job_id: brand_model(app, runtime, job_id),
+        local_factory=lambda job_id: LocalBrandModel(app, runtime, job_id),
     )
     install_brand_research_api(app, app.state.brand_research)
 

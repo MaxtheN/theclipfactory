@@ -33,6 +33,7 @@ from .brand_research import (
     read_site,
 )
 from .jobs import JobCancelled, WorkError
+from .llm_provider import CloudError, CloudKeyError, gateway_of, merge_usage
 from .ollama import is_ollama, model_name
 from .store import new_id, now
 
@@ -79,11 +80,40 @@ class LocalBrandModel:
         return output.get("output") if isinstance(output, dict) else None
 
 
+class CloudBrandModel:
+    """The creator's OpenRouter model: public website text only, no local memory needed, so no admission."""
+
+    def __init__(self, gateway, job_id: str):
+        self.gateway, self.job_id = gateway, job_id
+        self.model = gateway.route("brand_research")["model"]
+        self.usage: dict | None = None
+
+    def admit(self) -> list[str]:
+        return []
+
+    def generate(self, prompt: str) -> str | None:
+        result = self.gateway.complete_json(
+            "brand_research", "", prompt, DRAFT_SCHEMA, max_tokens=MAX_OUTPUT_TOKENS, temperature=0.2,
+            timeout=120, job_id=self.job_id)
+        self.usage = merge_usage(self.usage, result.provenance())
+        return result.text
+
+
+def brand_model(app, runtime, job_id: str):
+    """Cloud when a key is saved and brand reading is routed there; otherwise the local model."""
+    gateway = gateway_of(app)
+    if gateway is not None and gateway.uses_cloud("brand_research"):
+        return CloudBrandModel(gateway, job_id)
+    return LocalBrandModel(app, runtime, job_id)
+
+
 class BrandResearchService:
     def __init__(self, jobs: Callable[[], Any], model_factory: Callable[[str], Any],
-                 reader_factory: Callable[[Callable[[], None]], SiteReader] | None = None):
+                 reader_factory: Callable[[Callable[[], None]], SiteReader] | None = None,
+                 local_factory: Callable[[str], Any] | None = None):
         self.jobs = jobs
         self.model_factory = model_factory
+        self.local_factory = local_factory  # used only for the opted-in "fall back to local" setting
         self.reader_factory = reader_factory or (lambda check: SiteReader(check=check))
         self.lock = threading.Lock()
         self.sessions: dict[str, dict] = {}
@@ -235,8 +265,19 @@ class BrandResearchService:
         emit = lambda stage, label, **detail: self._emit(identifier, stage, label, **detail)
         try:
             model = self.model_factory(job_id)
-            draft = draft_brief(site, admit=model.admit, generate=self._cancellable(identifier, model.generate),
-                                emit=emit)
+            try:
+                draft = draft_brief(site, admit=model.admit, generate=self._cancellable(identifier, model.generate),
+                                    emit=emit)
+            except CloudKeyError:
+                gateway = getattr(model, "gateway", None)
+                if not (gateway and gateway.settings()["fallback_to_local"] and self.local_factory):
+                    raise
+                model = self.local_factory(job_id)  # opted-in fallback; the admission guard still applies
+                draft = draft_brief(site, admit=model.admit, generate=self._cancellable(identifier, model.generate),
+                                    emit=emit)
+            usage = getattr(model, "usage", None)
+            draft["provenance"] = ({**{k: usage.get(k) for k in ("provider", "model")}, "usage": usage}
+                                   if usage else {"provider": "local", "model": getattr(model, "model", None)})
         except Cancelled:
             raise JobCancelled() from None
         except ModelHeld as exc:
@@ -248,6 +289,13 @@ class BrandResearchService:
         except JobCancelled:
             self._fail(identifier, "Stopped. Nothing was saved.", "cancelled")
             raise
+        except CloudKeyError as exc:
+            self._fail(identifier, f"{exc} Your website was read.", "cloud_key")
+            raise WorkError("Brand research: the OpenRouter key was rejected or is out of credit.") from None
+        except CloudError as exc:
+            self._fail(identifier, f"The cloud model couldn't finish: {str(exc)[:300]} Try again, or type it instead.",
+                       "model")
+            raise WorkError("Brand research failed in the cloud model step.") from None
         except WorkError as exc:
             self._fail(identifier, f"The local model couldn't finish: {str(exc)[:300]}", "model")
             raise

@@ -7,6 +7,29 @@ def no_local_ollama(monkeypatch):
     monkeypatch.setenv("OLLAMA_HOST", "127.0.0.1:9")
 
 
+@pytest.fixture(autouse=True)
+def no_cloud_key(monkeypatch):
+    """Never read the developer's real OpenRouter key from Keychain or call OpenRouter in tests."""
+    from clip_factory import llm_provider
+
+    class Backend:
+        def __init__(self):
+            self.values = {}
+
+        def get_password(self, service, account):
+            return self.values.get((service, account))
+
+        def set_password(self, service, account, value):
+            self.values[(service, account)] = value
+
+        def delete_password(self, service, account):
+            self.values.pop((service, account), None)
+
+    backend = Backend()
+    monkeypatch.setattr(llm_provider.OpenRouterSecrets, "_backend", lambda self: backend)
+    return backend
+
+
 def board(video_id="source", duration=2.0, *, scenes=2, vision=True, **overrides) -> dict:
     """A deterministic storyboard of equal scenes; stands in for FFmpeg signals and the vision model."""
     span = duration / scenes

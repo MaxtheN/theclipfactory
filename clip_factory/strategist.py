@@ -670,6 +670,14 @@ class Strategist:
             return {"status": "abstained", "reasons": ["Evidence does not fit the 8,192-token budget."]}
         prompt, ids = built
         model = self.model_factory(job_id)
+        result = self._ask(model, prompt, ids, profile_id, layers, metric, existing, receipt)
+        if getattr(model, "usage", None):  # cloud calls: provider, model, tokens and cost on the receipt
+            result["llm"] = model.usage
+        if getattr(model, "cloud", False):
+            result["model_id"] = model.model_id
+        return result
+
+    def _ask(self, model, prompt, ids, profile_id, layers, metric, existing, receipt) -> dict:
         known = {(b["variable"], b["value"], b["direction"]) for b in existing}
         failures: list[str] = []
         for attempt in range(2):
@@ -677,7 +685,7 @@ class Strategist:
             if reasons:
                 return {"status": "held", "reasons": list(reasons)[:3], "attempts": attempt,
                         "label": "model held: insufficient memory", "validation_failures": failures}
-            self._receipt(receipt, progress=30 + 15 * attempt, message="Local model is drafting candidate beliefs")
+            self._receipt(receipt, progress=30 + 15 * attempt, message="The model is drafting candidate beliefs")
             repair = "" if not attempt else (
                 "\nYour previous answer failed validation; one correction is allowed. Use only allowed layer/variable/"
                 "value names, cite listed IDs, state no numbers. Failure: " + failures[-1][:300])

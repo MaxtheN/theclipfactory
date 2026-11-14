@@ -40,6 +40,7 @@ from .brief import (
 from .inference_worker import MAX_PROMPT
 from .jobs import JobCancelled, Jobs, WorkError
 from .learning import bound_digest, memory_digest
+from .llm_provider import merge_usage
 from .models import Models
 from .store import Store, new_id, now
 from .strategist import selection_guidance
@@ -764,6 +765,24 @@ class TeamEngine:
             self._update_task(run_id, task["id"], status="failed", error=message, finished_at=now())
             raise
 
+    def _count_llm(self, run_id: str, *outputs) -> None:
+        """Cloud calls (provider, model, tokens, cost) add up on the run; local calls carry no usage."""
+        items = [o["llm"] for o in outputs if isinstance(o, dict) and isinstance(o.get("llm"), dict)]
+        if not items:
+            return
+        with self.store.lock:
+            run = self.store.get("team_runs", run_id)
+            if not run:
+                return
+            usage = run.get("llm_usage")
+            for item in items:
+                usage = merge_usage(usage, item)
+            self.store.patch("team_runs", run_id, llm_usage=usage)
+
+    def _counted(self, run_id: str, output: dict) -> dict:
+        self._count_llm(run_id, output)
+        return output
+
     def _agent(
         self,
         run_id: str,
@@ -841,6 +860,7 @@ class TeamEngine:
                     if labels:
                         payload["image_labels"] = list(labels)
                 output = self.models.run(job_id, run["model_id"], "generate", **payload)
+                self._count_llm(run_id, output)
                 try:
                     accepted = decode_output(output.get("output"), schema)
                     # Every correction must pass the same source and permission guards.
@@ -1117,7 +1137,7 @@ class TeamEngine:
         settings, model_id = run["context"]["settings"], run["model_id"]
         try:
             found = scouts.scout(
-                generate=lambda prompt, images, max_tokens: self.models.run(
+                generate=lambda prompt, images, max_tokens: self._counted(run_id, self.models.run(
                     job_id,
                     model_id,
                     "generate",
@@ -1125,7 +1145,7 @@ class TeamEngine:
                     prompt=prompt,
                     images=list(images),
                     max_tokens=max_tokens,
-                )["output"],
+                ))["output"],
                 video=video,
                 frames_for=lambda index, times: (
                     self.frames(job_id, video, [(at, at) for at in times], 1) if self.models.vision(model_id) else []
@@ -1395,6 +1415,7 @@ class TeamEngine:
                         message=f"Finding clips: part {offset + 1} of {len(order)} · {state['rendered']} clips ready",
                     )
                     outputs = self.models.run_batch(job_id, model_id, [request(scene) for scene in group])
+                    self._count_llm(run_id, *outputs)
                     for scene, output in zip(group, outputs):
                         try:
                             ideas = decode_output(output.get("output"), Ideas)["ideas"]

@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from .jobs import WorkError
+from .llm_provider import cloud_model_id, gateway_of, merge_usage
 from .ollama import is_ollama, model_name
 from .store import now
 from .strategist import CONTEXT_TOKENS, MAX_OUTPUT_TOKENS, Layer, Strategist, simulate
@@ -37,14 +38,32 @@ class DecisionBody(BaseModel):
 
 
 class LocalModel:
-    """The existing local analyst path: admission guard before every call, bounded 8,192-token context."""
+    """The existing local analyst path: admission guard before every call, bounded 8,192-token context.
 
-    def __init__(self, app, runtime, job_id: str | None):
-        self.app, self.runtime, self.job_id = app, runtime, job_id
+    When the creator saved an OpenRouter key and ``role`` is routed to the cloud, ``admit`` skips the
+    memory guard (no local inference) and ``generate`` calls the cloud model; validation, the single
+    repair and abstention stay with the caller, unchanged. ``usage`` totals tokens and cost.
+    """
+
+    def __init__(self, app, runtime, job_id: str | None, role: str = "strategist_hypothesis"):
+        self.app, self.runtime, self.job_id, self.role = app, runtime, job_id, role
         config = runtime.store.get("automation_settings", "local") or {}
         self.model = config.get("model_id", "ollama:qwen3-vl:4b-instruct")
+        self.gateway = gateway_of(app)
+        self.cloud = bool(self.gateway and self.gateway.uses_cloud(role))
+        self.usage: dict | None = None
+
+    @property
+    def model_id(self) -> str:
+        """The id recorded on receipts: the cloud slug when routed there, else the local model."""
+        return cloud_model_id(self.gateway.route(self.role)["model"]) if self.cloud else self.model
 
     def admit(self) -> list[str]:
+        if self.cloud:
+            return [] if self.job_id is not None else ["The strategist model runs only inside a queued job."]
+        return self.admit_local()
+
+    def admit_local(self) -> list[str]:
         if not is_ollama(self.model) or not model_name(self.model).startswith(QUALIFIED_ANALYST):
             return ["Only the local qwen3-vl:4b analyst is qualified for strategist hypotheses."]
         if self.job_id is None:
@@ -58,9 +77,21 @@ class LocalModel:
         return []
 
     def generate(self, prompt: str) -> str:
+        if self.cloud:
+            return self.complete(prompt, None, MAX_OUTPUT_TOKENS, 0.3, lambda: self.app.state.models.run(
+                self.job_id, self.model, "generate", prompt=prompt, max_tokens=MAX_OUTPUT_TOKENS,
+                context_tokens=CONTEXT_TOKENS))
         output = self.app.state.models.run(self.job_id, self.model, "generate", prompt=prompt,
                                            max_tokens=MAX_OUTPUT_TOKENS, context_tokens=CONTEXT_TOKENS)
         return output.get("output") if isinstance(output, dict) else None
+
+    def complete(self, prompt: str, schema: dict | None, max_tokens: int, temperature: float, local) -> str | None:
+        """One cloud call for this role (local() only for the opted-in key-error fallback, admission first)."""
+        result = self.gateway.complete_json(self.role, "", prompt, schema, max_tokens=max_tokens,
+                                            temperature=temperature, job_id=self.job_id, local=local,
+                                            admit=self.admit_local)
+        self.usage = merge_usage(self.usage, result.provenance())
+        return result.text
 
 
 def reconcile_runs(store):

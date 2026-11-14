@@ -9,7 +9,7 @@ Two halves:
   ``extract`` turns HTML into visible text (scripts, styles, nav, footer and forms removed), title,
   meta description, Open Graph tags, theme colour, icons, links and up to three social profiles.
 
-* ``draft_brief`` asks the local model for a structured draft. The website text is framed as
+* ``draft_brief`` asks the model (local, or the creator's opted-in cloud model) for a structured draft. The website text is framed as
   UNTRUSTED DATA, the prompt has a deterministic budget, the reply is validated with pydantic and
   gets exactly one repair attempt, otherwise the run abstains. Every kept field must be backed by a
   quote that is verified, deterministically, to occur in the fetched text; unsupported fields are
@@ -910,4 +910,4 @@ def draft_brief(site: Site, *, admit: Callable[[], list[str]], generate: Callabl
                 attempts.append(repair_prompt(prompt, reply or "", problem))
             continue
         return verify(draft, site)
-    raise Abstain("The local model couldn't produce a valid brief from this site, so nothing was guessed.")
+    raise Abstain("The model couldn't produce a valid brief from this site, so nothing was guessed.")

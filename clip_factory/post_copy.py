@@ -241,7 +241,7 @@ def generate(ctx: dict, *, admit: Callable[[], list[str]], call: Callable[[str],
                                       + "\nReturn only the corrected JSON."))
                 draft = Draft.model_validate(raw or {})
             except WorkError as exc:
-                reason = f"The local model failed: {str(exc)[:200]}"
+                reason = f"The model failed: {str(exc)[:200]}"
                 break
             except ValidationError:
                 errors = ["The reply did not match {body, hashtags}."]
@@ -261,7 +261,9 @@ def generate(ctx: dict, *, admit: Callable[[], list[str]], call: Callable[[str],
 def record(caption, body, tags, ctx, *, source, model_id, attempts=0, fallback_reason=None) -> dict:
     return {
         "caption": caption, "body": body, "hashtags": tags, "source": source,
-        "label": "Written by the local model" if source == "model" else "Template (no model): hook, quote, CTA",
+        "label": ("Template (no model): hook, quote, CTA" if source != "model" else
+                  "Written by the cloud model" if str(model_id or "").startswith("openrouter:") else
+                  "Written by the local model"),
         "model_id": model_id, "version": VERSION, "attempts": attempts, "fallback_reason": fallback_reason,
         "checks": problems(caption, ctx), "cta_line": cta_line(ctx), "hashtags_allowed": ctx["hashtags_allowed"],
         "generated_at": now(),
@@ -335,22 +337,32 @@ def install(app: FastAPI, store):
                                                source="template", model_id=None,
                                                fallback_reason="Template requested."), clip)
                 return {"clip_id": identifier, "post_copy": copy, "job": None}
-            model = model_id()
+            local_model = model_id()
 
             def work(job_id: str) -> dict:
                 from .strategist_api import LocalModel
 
-                guard = LocalModel(app, app.state.autonomy_runtime, job_id)
-                app.state.jobs.update(job_id, progress=20, message="Writing post copy locally")
+                guard = LocalModel(app, app.state.autonomy_runtime, job_id, role="post_copy")
+                model = guard.model_id if guard.cloud else local_model
+                app.state.jobs.update(job_id, progress=20, message="Writing post copy with the cloud model"
+                                      if guard.cloud else "Writing post copy locally")
                 current, fresh = load(identifier)
 
+                def local_call(text: str):
+                    return app.state.models.run(job_id, local_model, "generate", prompt=text, max_tokens=500,
+                                                context_tokens=CONTEXT_TOKENS, schema=Draft.model_json_schema(),
+                                                temperature=0.4)
+
                 def call(text: str) -> str | None:
-                    out = app.state.models.run(job_id, model, "generate", prompt=text, max_tokens=500,
-                                               context_tokens=CONTEXT_TOKENS, schema=Draft.model_json_schema(),
-                                               temperature=0.4)
+                    if guard.cloud:
+                        return guard.complete(text, Draft.model_json_schema(), 500, 0.4,
+                                              (lambda: local_call(text)) if local_model else None)
+                    out = local_call(text)
                     return out.get("output") if isinstance(out, dict) else None
 
                 copy = generate(fresh, admit=guard.admit, call=call, model_id=model)
+                if guard.usage:
+                    copy["llm"] = guard.usage
                 save(identifier, copy, current)
                 return {"clip_id": identifier, "source": copy["source"]}
 

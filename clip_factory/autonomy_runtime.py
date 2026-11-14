@@ -18,6 +18,7 @@ from .campaigns import Production, migrate_campaign
 from .jobs import WorkError
 from .learning import ANALYST_TIMEOUT_SECONDS, bound_digest
 from .learning import AnalysisResult as LearningDecision
+from .llm_provider import gateway_of
 from .meta import MetaError, SecureTokenStore
 from .ollama import LlmId, is_ollama, model_name
 from .store import now
@@ -371,9 +372,20 @@ class AutonomyRuntime:
                 if len(current_prompt.encode("utf-8")) + 1500 + 256 > 8192:
                     raise WorkError("Learning repair exceeds the bounded model context; review the evidence manually.")
                 jobs.update(job_id, agent_attempts=attempt + 1, validation_failures=validation_failures)
-                self.resource_check(model, 8192)
-                output = self.app.state.models.run(job_id, model, "generate", prompt=current_prompt,
-                    max_tokens=1500, context_tokens=8192)
+                gateway = gateway_of(self.app)
+                if gateway is not None and gateway.uses_cloud("learning_analyst"):
+                    # Opted-in cloud analyst: no local memory needed, so no admission; same validation below.
+                    completion = gateway.complete_json(
+                        "learning_analyst", "", current_prompt, LearningDecision.model_json_schema(),
+                        max_tokens=1500, temperature=0.2, job_id=job_id,
+                        admit=lambda: (self.resource_check(model, 8192), [])[1],
+                        local=lambda text=current_prompt: self.app.state.models.run(job_id, model, "generate", prompt=text,
+                                                                max_tokens=1500, context_tokens=8192))
+                    output = {"output": completion.text}
+                else:
+                    self.resource_check(model, 8192)
+                    output = self.app.state.models.run(job_id, model, "generate", prompt=current_prompt,
+                        max_tokens=1500, context_tokens=8192)
                 try:
                     result = decode_output(output["output"], LearningDecision)
                     if not set(result["evidence_ids"]).issubset({context["snapshot"]["id"]}):
