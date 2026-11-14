@@ -11,7 +11,12 @@ import {
   type Profile,
   type StrategyVersion,
 } from "../types";
-import { sourceHasActiveJob } from "../productionPreflight";
+import {
+  installedLlms,
+  runtimeSatisfied,
+  sourceHasActiveJob,
+  usableModel,
+} from "../productionPreflight";
 
 const lines = (text: string) =>
   text
@@ -1143,7 +1148,9 @@ function ProductionForm({
   const [hook, setHook] = useState("");
   const [caption, setCaption] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [modelId, setModelId] = useState("qwen-small");
+  const [pickedModel, setModelId] = useState("qwen-small");
+  const llms = installedLlms(state.data.models, { needsVision: true });
+  const modelId = usableModel(pickedModel, llms);
   const source = state.data.videos.find((v) => v.id === videoId);
   const busySource = sourceHasActiveJob(state.data.jobs, videoId);
   const rendererReady =
@@ -1165,8 +1172,12 @@ function ProductionForm({
     ready &&
     !state.errors.models &&
     !state.errors.system &&
-    state.data.system?.model_runtime === true &&
-    state.data.models.some((m) => m.id === modelId && m.installed === true) &&
+    runtimeSatisfied(
+      state.data.system?.model_runtime,
+      modelId,
+      !!source?.has_audio && !source.transcript,
+    ) &&
+    llms.some((m) => m.id === modelId) &&
     (!source?.has_audio ||
       !!source.transcript ||
       state.data.models.some(
@@ -1295,8 +1306,14 @@ function ProductionForm({
           hint="Local agents select source-backed moments using this profile's approved direction. Direct range and free-text instructions above are not supplied to this action."
         >
           <select value={modelId} onChange={(e) => setModelId(e.target.value)}>
-            <option value="qwen-small">Qwen small</option>
-            <option value="qwen-large">Qwen large</option>
+            {!llms.some((m) => m.id === modelId) && (
+              <option value={modelId}>{modelId} (not installed)</option>
+            )}
+            {llms.map((m) => (
+              <option value={m.id} key={m.id}>
+                {m.name}
+              </option>
+            ))}
           </select>
         </Field>
         <button

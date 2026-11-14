@@ -13,6 +13,7 @@ from typing import Annotated, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .ollama import LlmId
 from .store import Store, new_id, now
 from .team import Objective
 
@@ -155,7 +156,7 @@ class AgentProduction(Body):
     expected_strategy_version_id: Identifier | None = None
     video_id: Identifier
     profile_id: Identifier
-    model_id: Literal["qwen-small", "qwen-large"] = "qwen-small"
+    model_id: LlmId = "qwen-small"
     revision_budget: int = Field(default=2, ge=0, le=2, strict=True)
 
 

@@ -702,3 +702,16 @@ def test_system_uses_a_single_runtime_snapshot(client, monkeypatch):
     assert response.json()["model_runtime"] is True
     assert response.json()["whisper"] is True
     ready.assert_called_once()
+
+
+def test_ollama_models_are_not_installed_or_removed_by_the_app(client):
+    assert client.post("/api/models/ollama:qwen3/download", json={"accept_license": True}).status_code == 409
+    assert client.delete("/api/models/ollama:qwen3").status_code == 409
+    assert client.get("/api/system").json()["ollama"] is False
+
+
+def test_llm_requests_accept_ollama_ids_and_reject_others(client):
+    rejected = client.post("/api/inference", json={"prompt": "hi", "model_id": "whisper-turbo"})
+    assert rejected.status_code == 422
+    stopped = client.post("/api/inference", json={"prompt": "hi", "model_id": "ollama:qwen3.6:35b-a3b"})
+    assert stopped.status_code == 400 and "Ollama is not running" in stopped.text
