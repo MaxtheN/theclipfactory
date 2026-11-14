@@ -16,5 +16,7 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: "./src/test-setup.ts",
     clearMocks: true,
+    // Keep full-app jsdom suites within laptop and CI runner memory/CPU budgets.
+    maxWorkers: 2,
   },
 });
