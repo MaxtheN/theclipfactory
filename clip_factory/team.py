@@ -406,9 +406,9 @@ class TeamEngine:
         instruction = {
             "producer": "Decompose the production request into exactly one assignment for each supported role. Do not grant permissions.",
             "footage_analyst": "Identify 1-3 source-backed moments of 30-60 seconds, never more than 180 seconds. Cite only 1-4 representative evidence reference IDs per moment. Every cited transcript segment must overlap that moment's start/end; every cited frame time must lie inside it. Sampled frames do not prove unseen action or exact quotes.",
-            "creative_strategist": "Propose distinct angles from validated moments. Keep a specified objective; in discovery label distinct intended outcomes without claiming results.",
+            "creative_strategist": "Propose distinct angles from validated moments. Hooks are short viewer-facing text, not editing instructions. Rendering preserves existing source footage and burns spoken subtitles; do not propose B-roll, graphics, or split-screen effects. Keep a specified objective; in discovery label distinct intended outcomes without claiming results.",
             "performance_analyst": "Recommend changes using actual observations or feedback, citing their IDs. Missing/zero/stale and manual/platform evidence differ; attribution never proves causal impact.",
-            "editor": "Propose 1-3 source ranges and creative metadata. Each must fit entirely in its angle's validated moment, use its objective, and cite actual source evidence. Never invent quoted speech.",
+            "editor": "Propose 1-3 source ranges and creative metadata. Each must fit entirely in its angle's validated moment and use its objective. Cite only exact evidence_refs listed in that selected moment, including when revising a caption; do not add references from other moments or critic findings. Hooks are short viewer-facing text, not instructions for unsupported visual effects. Never invent quoted speech.",
             "critic": "Check source context, factual claims, caption support, and duplicates independently. Use unknown when evidence is insufficient. Report blocking findings, not confidence scores. No approval authority.",
         }[role]
 
@@ -737,21 +737,28 @@ class TeamEngine:
                     stop = "Producer stopped a non-progressing revision path; findings remain unresolved."
                     break
                 instruction_seen.add(revision["instruction"])
-                revised = self._agent(
-                    run_id,
-                    job_id,
-                    "editor",
-                    Edits,
-                    {
-                        **edit_data,
-                        "previous_edit": edits,
-                        "critique": critique,
-                        "revision_instruction": revision["instruction"],
-                    },
-                    iteration=iteration + 1,
-                    refs=refs,
-                    validate=validate_edits,
-                )
+                try:
+                    revised = self._agent(
+                        run_id,
+                        job_id,
+                        "editor",
+                        Edits,
+                        {
+                            **edit_data,
+                            "previous_edit": edits,
+                            "critique": critique,
+                            "revision_instruction": revision["instruction"],
+                        },
+                        iteration=iteration + 1,
+                        refs=refs,
+                        validate=validate_edits,
+                    )
+                except WorkError as exc:
+                    stop = (
+                        f"Revision rejected: {exc} Retained the prior validated draft; "
+                        "unresolved critique requires human review."
+                    )
+                    break
                 self.store.patch("team_runs", run_id, revision_count=iteration + 1)
                 if digest(revised) in seen:
                     stop = "No progress: repeated edit output. Last critique remains unresolved."

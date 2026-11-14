@@ -520,6 +520,23 @@ def test_default_two_revisions_exhaust_budget_without_approval(harness):
     assert harness.rendered[0]["hook"] == "Third edit"
 
 
+def test_invalid_revision_retains_validated_draft_with_unresolved_review(harness):
+    invalid = edits(hook="Rejected revision")
+    invalid["candidates"][0]["evidence_refs"] = ["source:invented"]
+    harness.models = ScriptedModels(script(verdict="revise") + [revision(), invalid])
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review"
+    assert "Revision rejected" in run["stop_reason"]
+    assert result["review_status"] == "fail"
+    assert len(harness.rendered) == 1
+    assert harness.rendered[0]["hook"] == "See the source"
+    clip = harness.store.get("clips", result["clip_ids"][0])
+    assert clip["approved"] is False
+    assert clip["team_review_status"] == "fail"
+    assert any(t["role"] == "editor" and t["iteration"] == 1 and t["status"] == "failed" for t in run["tasks"])
+
+
 @pytest.mark.parametrize("stop", ["repeated_edit", "repeated_instruction", "producer_stop"])
 def test_non_progress_stops_dependent_calls(harness, stop):
     outputs = script(verdict="revise")
