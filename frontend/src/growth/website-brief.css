@@ -21,10 +21,14 @@
 /* No entrance animation for this step. */
 .gf-onboarding-step.gf-website-brief {
   animation: none;
+  margin-block: auto;
+  padding-block: clamp(32px, 12vh, 140px) clamp(24px, 6vh, 64px);
 }
 
 .gf-wb-step {
-  margin: 0 0 var(--gf-s3, 12px);
+  margin: 0 0 16px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px !important;
   color: var(--wb-muted);
   opacity: 0.7;
   text-align: center;
@@ -36,16 +40,16 @@
 .gf-website-brief > h1 {
   margin: 0;
   text-align: center;
-  font-size: clamp(26px, 2.6vw, 32px);
+  font-size: clamp(32px, 3.4vw, 44px);
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.6px;
+  line-height: 1.12;
+  letter-spacing: -0.9px;
 }
 .gf-website-brief > h1:focus {
   outline: 0;
 }
 .gf-wb-lede {
-  margin: var(--gf-s3, 12px) 0 var(--gf-s6, 32px);
+  margin: 14px 0 40px;
   color: var(--wb-muted);
   text-align: center;
   font-size: 14px;
@@ -55,7 +59,7 @@
 /* ------------------------------------------------------------------ input */
 .gf-wb-input {
   display: grid;
-  gap: var(--gf-s4, 16px);
+  gap: 20px;
 }
 .gf-wb-url-row {
   display: grid;

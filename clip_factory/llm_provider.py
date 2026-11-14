@@ -400,8 +400,12 @@ class LlmGateway:
             "usage": {"include": True},
             # Haiku/Sonnet 5.5 think by default on OpenRouter; thinking tokens would consume max_tokens and
             # leave no answer. The local path also runs with thinking off.
-            "reasoning": {"enabled": False},
+            # Sonnet 5.5 rejects disabled reasoning on OpenRouter (HTTP 400 "Reasoning is mandatory"),
+            # so it gets the lowest effort and extra room for its thinking tokens.
+            "reasoning": {"enabled": False} if "haiku" in model else {"effort": "low"},
         }
+        if "haiku" not in model:
+            body["max_tokens"] = int(max_tokens) + 4096
         if schema is not None:
             body["response_format"] = {"type": "json_schema",
                                        "json_schema": {"name": "output", "strict": False, "schema": schema}}
