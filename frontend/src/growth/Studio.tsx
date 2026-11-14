@@ -9,6 +9,8 @@ import { Disclosure, Empty, Field, FieldGroup, Pill, Poster, PreviewNote, Primar
 import { Icon } from "./Icon";
 import { ClipEvidence } from "./ClipEvidence";
 import { SourceTranscript } from "./SourceTranscript";
+import { JourneyProgress } from "./JourneyProgress";
+import { SourceDetails, sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
 import { parseProductionClip, type CampaignRenderRequest, type ExportRecord, type ProductionClip } from "./productionContracts";
 import { changedEditFields, clipInScope, editErrors, jobInScope, object, readiness, retryBlocker, reviewBlocker } from "./productionState";
@@ -61,6 +63,48 @@ export function Studio({ w, factory, next, preferredSource, preferredMode, prefe
   const reviewReason = selected ? reviewBlocker(selected, factory.data.jobs, stale) : "Select a clip first.";
   const reviewReady = !!selected && !reviewReason && !busy && !playbackError && (reviewPreview || playbackReady);
   const outputVersion = w.versions.find(v => v.id === selected?.strategy_version_id);
+  const illustrativeSelected = reviewPreview || selected?.provenance_mode === "preview_fixture";
+  // This is a presentation of scoped worker receipts, not a second production state machine.
+  const submittedHere = submitted?.scope === scopeKey ? submitted : undefined;
+  const visibleSourceId = selected?.video_id || sourceId;
+  const sourceJobs = jobs.filter(j => object(j.context)?.video_id === visibleSourceId)
+    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+  const journeyJob = jobs.find(j => j.id === submittedHere?.id)
+    || sourceJobs.find(activeJob)
+    || (freshProduction ? sourceJobs[0] : undefined);
+  const journeyContext = object(journeyJob?.context);
+  const journeyRun = runs.find(r => r.id === journeyContext?.team_run_id || r.job_id === journeyJob?.id);
+  const journeySourceId = typeof journeyContext?.video_id === "string" ? journeyContext.video_id : submittedHere?.source || visibleSourceId;
+  const currentTask = journeyRun?.tasks.find(task => task.status === "running");
+  const jobResult = object(journeyJob?.result);
+  const resultIds = [jobResult?.clip_id, ...(Array.isArray(jobResult?.clip_ids) ? jobResult.clip_ids : [])]
+    .filter((id): id is string => typeof id === "string");
+  const confirmedOutputs = clips.filter(clip => resultIds.includes(clip.id) && clip.video_id === journeySourceId);
+  const journey = (journeyJob || submittedHere) && stale ? {
+    state: "uncertain" as const, step: 1 as const, title: "Production status needs a refresh",
+    message: "Queue or output data is unavailable. Check the production ledger before starting another run.",
+  } : journeyJob && ["failed", "cancelled"].includes(journeyJob.status) ? {
+    state: "error" as const, step: 1 as const,
+    title: journeyJob.status === "cancelled" ? "Production was cancelled" : "Production needs attention",
+    message: journeyJob.error || journeyJob.message || journeyRun?.stop_reason || "Open the production ledger below to inspect this attempt and its available next steps.",
+  } : journeyJob && activeJob(journeyJob) ? {
+    state: "working" as const, step: 1 as const,
+    title: journeyJob.status === "queued" ? "Your edit is in the queue" : currentTask?.label || (journeyJob.kind === "render" ? "Rendering your edit" : "Working on your footage"),
+    message: journeyJob.message || (journeyJob.status === "queued" ? "The local worker has not started this job yet." : "Follow the confirmed agent tasks in the production ledger below."),
+  } : journeyJob?.status === "completed" ? confirmedOutputs.length ? {
+    state: "review" as const, step: 2 as const,
+    title: confirmedOutputs.length === 1 ? "Your edit is ready to review" : `${confirmedOutputs.length} edits are ready to review`,
+    message: "Choose a produced version below. Review the exact output before approving or exporting it.",
+  } : {
+    state: "uncertain" as const, step: 1 as const, title: "Production finished; the output is not available yet",
+    message: "The worker reported completion, but its exact output is not in this workspace. Check the ledger; another edit has not been selected in its place.",
+  } : journeyJob ? {
+    state: "uncertain" as const, step: 1 as const, title: "Check the latest production status",
+    message: journeyJob.error || journeyJob.message || `The worker reported ${journeyJob.status}. Inspect its saved ledger before starting another run.`,
+  } : submittedHere ? {
+    state: "working" as const, step: 1 as const, title: "Your production request was received",
+    message: "Waiting for this exact job to appear in the local queue.",
+  } : undefined;
 
   useEffect(() => {
     let live = true;
@@ -186,14 +230,15 @@ export function Studio({ w, factory, next, preferredSource, preferredMode, prefe
   const exportRows = exportsState.clipId === selected?.id ? exportsState.rows : [];
   return <div className="gf-studio-grid">
     <section className="gf-card gf-edit-surface">
-      <div className="gf-card-header"><div><span className="gf-overline">YOUR CREATIVE WORKBENCH</span><h2>{selected ? "Current version" : "Output preview"}</h2></div><Pill tone={selected?.approved ? "mint" : "quiet"}>{selected?.approved ? "Human approved" : selected ? "Needs your eyes" : "Awaiting first render"}</Pill></div>
+      <div className="gf-card-header"><div><span className="gf-overline">YOUR CREATIVE WORKBENCH</span><h2>{selected ? "Current version" : "Output preview"}</h2></div><Pill tone={selected?.approved && !illustrativeSelected ? "mint" : "quiet"}>{selected && illustrativeSelected ? "Illustrative edit" : selected?.approved ? "Human approved" : selected ? "Needs your eyes" : "Awaiting first render"}</Pill></div>
+      {journey && <JourneyProgress {...journey} source={sourceLabel(journeySourceId, w.campaign.video_ids)} progress={journeyJob?.progress} receipts={journey?.state === "working" && !ledgerError ? journeyRun?.tasks.filter(task => task.status === "completed").slice(-3).map(task => task.label) : []} label="Current production" />}
       <div className="gf-studio-media">
         {reviewPreview ? <div className="gf-preview-film"><Poster /><div className="gf-film-caption"><Pill>ILLUSTRATIVE EDIT</Pill><strong>{selected?.hook || "The next great idea is in here."}</strong><small>Preview artwork · not rendered footage</small></div></div> : selected ? <video key={selected.id} ref={video} controls preload="metadata" src={clipMediaUrl(selected.id)} aria-label={`Review ${selected.name}`} onLoadedData={() => setPlaybackReady(true)} onError={() => { setPlaybackReady(false); setPlaybackError("This video could not be played. Check the output file in the local service before approval."); }} /> : <div className="gf-empty-film"><Icon name="studio" size={38} /><h3>From conversation to creation.</h3><p>Select a source moment. Your first rendered clip will appear here.</p></div>}
-        <div className="gf-media-context"><span className="gf-overline">{selected ? "CURRENT OUTPUT" : "OUTPUT PREVIEW"}</span><h3>{selected?.name || "Your first vertical edit"}</h3><p>{selected ? `${formatTime(selected.start)} — ${formatTime(selected.end)}` : "9:16 · Original audio · Your chosen captions"}</p><div className="gf-media-rule" /><span>STRATEGY</span><strong>{selected ? outputVersion ? `Version ${outputVersion.version}` : "Version unavailable" : active ? `Version ${active.version}` : "Not approved yet"}</strong><span>PROFILE</span><strong>{w.profiles.find(p => p.id === w.profileId)?.name}</strong>{reviewPreview && <PreviewNote />}</div>
+        <div className="gf-media-context"><span className="gf-overline">{selected ? "CURRENT OUTPUT" : "OUTPUT PREVIEW"}</span><h3>{selected?.name || "Your first vertical edit"}</h3><p>{selected ? `${formatTime(selected.start)} — ${formatTime(selected.end)}` : "9:16 · Original audio · Your chosen captions"}</p><div className="gf-media-rule" /><span>SOURCE</span><strong>{sourceLabel(visibleSourceId, w.campaign.video_ids)}</strong><span>STRATEGY</span><strong>{selected ? outputVersion ? `Version ${outputVersion.version}` : "Version unavailable" : active ? `Version ${active.version}` : "Not approved yet"}</strong><span>PROFILE</span><strong>{w.profiles.find(p => p.id === w.profileId)?.name}</strong>{reviewPreview && <PreviewNote />}</div>
       </div>
       {(playbackError || actionError) && <div className="gf-inline-error" role="alert">{playbackError || actionError}</div>}
       {!!clipErrors.length && <div className="gf-inline-error" role="alert">Some versions could not be verified: {clipErrors.join(" ")}</div>}
-      <div className="gf-clip-strip">{clips.length > 0 && <button onClick={newCut}><Icon name="plus" size={14} /><strong>New cut</strong></button>}{clips.length ? clips.map((c, i) => <button className={selected?.id === c.id ? "selected" : ""} key={c.id} onClick={() => { setSelectedId(c.id); setRevisionParent(undefined); setFreshProduction(false); }}><span>{String(i + 1).padStart(2, "0")}</span><div><strong>{c.name}</strong><small>{c.approved ? "Approved" : "Ready for review"}</small></div><Icon name={c.approved ? "check" : "play"} size={15} /></button>) : <span className="gf-small-note">Completed versions will stay here. Revisions never replace the original.</span>}</div>
+      <div className="gf-clip-strip">{clips.length > 0 && <button onClick={newCut}><Icon name="plus" size={14} /><strong>New cut</strong></button>}{clips.length ? clips.map((c, i) => <button className={selected?.id === c.id ? "selected" : ""} key={c.id} onClick={() => { setSelectedId(c.id); setRevisionParent(undefined); setFreshProduction(false); }}><span>{String(i + 1).padStart(2, "0")}</span><div><strong>{c.name}</strong><small>{reviewPreview || c.provenance_mode === "preview_fixture" ? "Illustrative edit" : c.approved ? "Approved" : "Ready for review"}</small></div><Icon name={c.approved ? "check" : "play"} size={15} /></button>) : <span className="gf-small-note">Completed versions will stay here. Revisions never replace the original.</span>}</div>
       {ledgerError && <p className="gf-inline-error" role="alert">Team ledger: {ledgerError}</p>}
       {jobs.length > 0 && <Disclosure title="Production queue & agent ledger" icon="clock" open>
         {jobs.map(job => {
@@ -211,7 +256,8 @@ export function Studio({ w, factory, next, preferredSource, preferredMode, prefe
       <div className="gf-card-header"><div><span className="gf-overline">{selected && !revisionParent ? "THE HUMAN TOUCH" : "THE EDIT PLAN"}</span><h2>{selected && !revisionParent ? "Review this version" : revisionParent ? "Revise the edit" : "Select a moment"}</h2><p>{selected && !revisionParent ? "Review this version before approving or exporting." : "A clear moment, with its meaning intact."}</p></div></div>
       {!selected || revisionParent ? <div className="gf-form-fields">
         {!revisionParent && <Field label="Production mode">{id => <select id={id} value={mode} onChange={e => setMode(e.target.value as Mode)}><option value="manual">Choose the edit</option><option value="agent">Let agents produce</option></select>}</Field>}
-        <FieldGroup title="Source & moment"><Field label="Source footage">{id => <select id={id} value={sourceId} disabled={!!revisionParent || busy} onChange={e => { setSourceId(e.target.value); setStart("0"); const s = sources.find(v => v.id === e.target.value); setEnd(String(Math.min(direction?.duration_seconds || 30, s?.duration || 30))); }}><option value="" disabled>Choose a source</option>{sources.map(s => <option value={s.id} key={s.id}>{s.name}</option>)}</select>}</Field>
+        <FieldGroup title="Source & moment"><Field label="Source footage">{id => <select id={id} value={sourceId} disabled={!!revisionParent || busy} onChange={e => { setSourceId(e.target.value); setStart("0"); const s = sources.find(v => v.id === e.target.value); setEnd(String(Math.min(direction?.duration_seconds || 30, s?.duration || 30))); }}><option value="" disabled>Choose a source</option>{sources.map(s => <option value={s.id} key={s.id}>{sourceLabel(s.id, w.campaign!.video_ids)}</option>)}</select>}</Field>
+        {source && <SourceDetails source={source} />}
         {mode === "manual" && <div className="gf-form-pair"><Field label="Start (seconds)">{id => <input id={id} type="number" min="0" step="0.1" value={start} onChange={e => setStart(e.target.value)} />}</Field><Field label="End (seconds)">{id => <input id={id} type="number" min="0" step="0.1" value={end} onChange={e => setEnd(e.target.value)} />}</Field></div>}</FieldGroup>
         {source && <SourceTranscript source={source} factory={factory} run={w.run} disabled={busy} />}
         {mode === "agent" ? <FieldGroup title="Agent production"><Field label="Installed vision model">{id => <select id={id} value={modelId} onChange={e => setModelId(e.target.value)}><option value="" disabled>Choose a model</option>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>}</Field><Field label="Correction budget">{id => <select id={id} value={budget} onChange={e => setBudget(+e.target.value)}>{[0, 1, 2].map(n => <option value={n} key={n}>{n} corrections</option>)}</select>}</Field><p className="gf-help">Agents inspect the source, choose an edit, render and critique. Human approval is still required. No publishing or ad spend.</p></FieldGroup> : <Disclosure title="Opening & output settings" icon="settings" open={!!revisionParent}>
@@ -227,18 +273,23 @@ export function Studio({ w, factory, next, preferredSource, preferredMode, prefe
         <PrimaryAction full label={busy ? "Queuing…" : mode === "agent" ? "Start agent production" : revisionParent ? "Render a new revision" : "Make the first cut"} intent="produce" disabled={busy || blockers.length > 0} onClick={() => void render()} />
         {revisionParent && <button className="gf-button ghost full" onClick={() => setRevisionParent(undefined)}>Back to review</button>}
       </div> : <>
-        <ClipEvidence clip={selected} />
-        {selected.warning && <p className="gf-help">{selected.warning}</p>}
-        {reviewReason && <p className="gf-help">{reviewReason}</p>}
-        {!reviewPreview && !playbackReady && !playbackError && <p className="gf-help">Load and review this exact output before accepting it.</p>}
-        {selected.team_run_id && <button className="gf-button ghost full" disabled={busy || stale || factory.data.jobs.some(j => activeJob(j) && object(j.context)?.video_id === selected.video_id) || reviewPreview} onClick={() => void perform(async () => { const exact = selected.approved ? await productionApi.review(selected, false) : selected; await productionApi.recheck(exact); }, "Recheck queued. This version requires fresh human approval after critique.")}>Recheck technical critique</button>}
-        <div className="gf-inspector-footer">
-          {selected.approved ? <><button className="gf-button full" disabled={!reviewReady || reviewPreview || uncertainExports.has(selected.id)} onClick={() => void exportClip(selected)}><Icon name="download" size={16} />{reviewPreview ? "Export · native app only" : "Export approved MP4"}</button><button className="gf-button ghost full" onClick={next}>Review the results<Icon name="arrow" size={15} /></button></> : <PrimaryAction full label="Approve this clip" intent="approve" disabled={!reviewReady} onClick={() => void perform(() => productionApi.review(selected, true), reviewPreview ? "Illustrative sample accepted; no real media approval recorded." : "This exact version is human approved. Create a verified export when ready.")} />}
-          <button className="gf-button secondary full" disabled={busy} onClick={() => revise(selected)}>Request a change<Icon name="settings" size={15} /></button>
+        <div className="gf-review-action-panel">
+          {selected.warning && <p className="gf-help">{selected.warning}</p>}
+          {reviewReason && <p className="gf-help">{reviewReason}</p>}
+          {!reviewPreview && !playbackReady && !playbackError && <p className="gf-help">Load and review this exact output before accepting it.</p>}
+          <div className="gf-inspector-footer">
+            {selected.approved ? <><button className="gf-button full" disabled={!reviewReady || reviewPreview || uncertainExports.has(selected.id)} onClick={() => void exportClip(selected)}><Icon name="download" size={16} />{reviewPreview ? "Export · native app only" : "Export approved MP4"}</button><button className="gf-button ghost full" onClick={next}>Review the results<Icon name="arrow" size={15} /></button></> : <PrimaryAction full label="Approve this clip" intent="approve" disabled={!reviewReady} onClick={() => void perform(() => productionApi.review(selected, true), reviewPreview ? "Illustrative sample accepted; no real media approval recorded." : "This exact version is human approved. Create a verified export when ready.")} />}
+            <button className="gf-button secondary full" disabled={busy} onClick={() => revise(selected)}>Request a change<Icon name="settings" size={15} /></button>
+          </div>
+
+          {selected.team_run_id && <button className="gf-button ghost full" disabled={busy || stale || factory.data.jobs.some(j => activeJob(j) && object(j.context)?.video_id === selected.video_id) || reviewPreview} onClick={() => void perform(async () => { const exact = selected.approved ? await productionApi.review(selected, false) : selected; await productionApi.recheck(exact); }, "Recheck queued. This version requires fresh human approval after critique.")}>Recheck technical critique</button>}
         </div>
-        <Disclosure title="Verified export history" icon="download">
-          {reviewPreview ? <p>Connect the native service to create a real MP4 and provenance manifest.</p> : <><button className="gf-button ghost" disabled={busy} onClick={() => void reconcile(selected)}>Refresh export history</button>{exportsState.error && <p role="alert">{exportsState.error}</p>}{uncertainExports.has(selected.id) && <p className="gf-help">An export was submitted for this version. Check history before any further export; it will not be posted again automatically.</p>}{!exportRows.length && <p>No verified export found.</p>}{exportRows.map(record => <div key={record.id}><strong>{record.created_at}</strong><p>{record.location}</p><a className="gf-button ghost" href={exportMediaUrl(record.id)} download>Download MP4</a><a className="gf-button ghost" href={exportManifestUrl(record.id)} download>Download manifest</a></div>)}</>}
-        </Disclosure>
+        <ClipEvidence clip={selected} />
+        <div className="gf-review-details">
+          <Disclosure title="Verified export history" icon="download">
+            {reviewPreview ? <p>Connect the native service to create a real MP4 and provenance manifest.</p> : <><button className="gf-button ghost" disabled={busy} onClick={() => void reconcile(selected)}>Refresh export history</button>{exportsState.error && <p role="alert">{exportsState.error}</p>}{uncertainExports.has(selected.id) && <p className="gf-help">An export was submitted for this version. Check history before any further export; it will not be posted again automatically.</p>}{!exportRows.length && <p>No verified export found.</p>}{exportRows.map(record => <div key={record.id}><strong>{record.created_at}</strong><p>{record.location}</p><a className="gf-button ghost" href={exportMediaUrl(record.id)} download>Download MP4</a><a className="gf-button ghost" href={exportManifestUrl(record.id)} download>Download manifest</a></div>)}</>}
+          </Disclosure>
+        </div>
       </>}
     </aside>
   </div>;

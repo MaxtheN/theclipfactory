@@ -453,9 +453,7 @@ export function GrowthApp() {
                       : current.sub}
                   </p>
                 </div>
-                {(stage === "studio" ||
-                  stage === "research" ||
-                  stage === "setup") &&
+                {(stage === "research" || stage === "setup") &&
                   !onboarding && (
                     <button
                       type="button"
