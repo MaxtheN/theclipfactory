@@ -65,8 +65,9 @@ if (menuButton && mobileNav) {
   document.addEventListener("focusin", (event) => {
     if (!event.target.closest(".site-header")) setMenu(false);
   });
-  desktop.addEventListener("change", () => {
-    if (desktop.matches) setMenu(false);
+  desktop.addEventListener("change", (event) => {
+    // Use the delivered transition, not a newer viewport state.
+    if (event.matches) setMenu(false);
   });
 }
 

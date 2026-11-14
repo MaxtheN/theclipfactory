@@ -118,6 +118,9 @@ test('mobile menu closes accessibly on Escape, navigation, outside click, and de
   await expect(nav).toBeHidden();
   await menu.click();
   await page.setViewportSize({ width: 1200, height: 900 });
+  // WebKit delivers media-query changes asynchronously after resize. Assert the
+  // desktop transition before issuing a second, contradictory viewport change.
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(nav).toBeHidden();
   await expect(menu).toHaveAttribute('aria-expanded', 'false');
