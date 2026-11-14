@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f7f2" />
+    <title>Growth Factory — Make more of what you make.</title>
+    <meta
+      name="description"
+      content="A local AI creative team for your Mac. Turn raw footage into considered first cuts, explore new angles, and keep the final say."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="canonical" href="https://growth-factory-landing.vercel.app/" />
+    <meta
+      property="og:url"
+      content="https://growth-factory-landing.vercel.app/"
+    />
+    <meta
+      property="og:title"
+      content="Growth Factory — Make more of what you make."
+    />
+    <meta
+      property="og:description"
+      content="From raw footage to your next favorite cut. Meet your local AI creative team."
+    />
+    <meta
+      property="og:image"
+      content="https://growth-factory-landing.vercel.app/assets/social-card.jpg"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Growth Factory. Make more of what you make."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link
+      rel="preload"
+      href="/assets/dm-sans-regular.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/assets/instrument-serif-italic.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <svg
+      class="icon-library"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <defs>
+        <symbol id="i-arrow" viewBox="0 0 24 24">
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </symbol>
+        <symbol id="i-up-right" viewBox="0 0 24 24">
+          <path d="M6 18 18 6M6 6h12v12" />
+        </symbol>
+        <symbol id="i-down" viewBox="0 0 24 24">
+          <path d="M12 4v16m-6-6 6 6 6-6" />
+        </symbol>
+        <symbol id="i-spark" viewBox="0 0 24 24">
+          <path
+            d="m12 3 2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6L12 3Z"
+          />
+        </symbol>
+        <symbol id="i-film" viewBox="0 0 24 24">
+          <rect x="4" y="3" width="16" height="18" rx="2" />
+          <path d="M8 3v18M16 3v18M4 8h4m8 0h4M4 16h4m8 0h4" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24">
+          <path d="m5 12 4 4L19 6" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24">
+          <rect x="5" y="10" width="14" height="11" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2" />
+        </symbol>
+        <symbol id="i-sliders" viewBox="0 0 24 24">
+          <path d="M4 7h8m4 0h4M4 17h3m4 0h9" />
+          <circle cx="14" cy="7" r="2" />
+          <circle cx="9" cy="17" r="2" />
+        </symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24">
+          <path
+            d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"
+          />
+        </symbol>
+        <symbol id="i-wave" viewBox="0 0 24 24">
+          <path d="M3 10v4m4-8v12m5-15v18m5-15v12m4-8v4" />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </symbol>
+        <symbol id="i-apple" viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            stroke="none"
+            d="M15.2 5.1c.7-.9 1.2-2.1 1.1-3.3-1.1.1-2.4.8-3.1 1.6-.7.8-1.3 2-1.1 3.2 1.2.1 2.4-.6 3.1-1.5ZM18.8 13.2c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-2-1-3.3-.9-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.6 1.3 10.2.9 1.2 1.9 2.5 3.2 2.4 1.3 0 1.8-.8 3.4-.8s2.1.8 3.4.8c1.4 0 2.3-1.2 3.1-2.4.9-1.3 1.3-2.6 1.4-2.7-.1 0-3.1-1.2-3.1-4.6Z"
+          />
+        </symbol>
+        <symbol id="i-menu" viewBox="0 0 24 24">
+          <path d="M4 8h16M4 16h16" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24">
+          <path d="m6 6 12 12M6 18 18 6" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header shell">
+      <a class="wordmark" href="#" aria-label="Growth Factory home">
+        <span class="brand-mark" aria-hidden="true"
+          ><span></span><span></span><span></span><span></span
+        ></span>
+        Growth Factory<span class="brand-period">.</span>
+      </a>
+      <nav class="desktop-nav" aria-label="Main navigation">
+        <a href="#workflow">The workflow</a>
+        <a href="#local">Why local?</a>
+        <a href="#faq">Good questions</a>
+      </nav>
+      <a
+        class="button button-small button-outline header-cta"
+        href="https://theclipfactory-frontend-two.vercel.app"
+        target="_blank"
+        rel="noopener"
+        >Explore the demo <svg class="icon"><use href="#i-up-right" /></svg
+      ></a>
+      <button
+        class="menu-toggle"
+        aria-label="Open navigation"
+        aria-controls="mobile-nav"
+        aria-expanded="false"
+      >
+        <svg class="icon"><use href="#i-menu" /></svg>
+      </button>
+      <nav
+        id="mobile-nav"
+        class="mobile-nav"
+        aria-label="Mobile navigation"
+        hidden
+      >
+        <a href="#workflow">The workflow <span>01</span></a>
+        <a href="#local">Why local? <span>02</span></a>
+        <a href="#faq">Good questions <span>03</span></a>
+        <a
+          href="https://theclipfactory-frontend-two.vercel.app"
+          target="_blank"
+          rel="noopener"
+          >Explore the demo <svg class="icon"><use href="#i-up-right" /></svg
+        ></a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero shell" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <div class="eyebrow hero-eyebrow">
+            <span class="status-dot"></span> YOUR IDEAS. A LITTLE EXTRA
+            MOMENTUM.
+          </div>
+          <h1 id="hero-title">Make more of<br /><em>what you make.</em></h1>
+          <p class="hero-description">
+            Your local AI creative team. From raw footage to your next favorite
+            cut,<br class="wide-break" />
+            with your vision in the director’s chair.
+          </p>
+          <div class="hero-actions">
+            <a
+              class="button button-dark"
+              href="https://theclipfactory-frontend-two.vercel.app"
+              target="_blank"
+              rel="noopener"
+              >Explore the workspace
+              <svg class="icon"><use href="#i-up-right" /></svg
+            ></a>
+            <button class="text-button" data-open-tour>
+              See how it comes together
+              <svg class="icon"><use href="#i-arrow" /></svg>
+            </button>
+          </div>
+          <p class="platform-note">
+            <svg class="icon apple-icon"><use href="#i-apple" /></svg> Designed
+            for Apple Silicon <span></span> Currently in development
+          </p>
+        </div>
+
+        <div class="preview-wrap">
+          <div class="preview-sticker" aria-hidden="true">
+            <svg viewBox="0 0 90 100">
+              <path d="M16 10c58 3 54 39 36 54M38 51l13 16 19-7" /></svg
+            ><span>Good things<br /><em>in the making.</em></span>
+          </div>
+          <div
+            class="app-preview"
+            aria-label="Interactive illustration of the Growth Factory workflow"
+          >
+            <div class="preview-titlebar">
+              <span class="window-dots" aria-hidden="true"
+                ><i></i><i></i><i></i
+              ></span>
+              <div class="preview-title">
+                <svg class="icon"><use href="#i-folder" /></svg> Weekend
+                somewhere <span>/</span> Campaign workspace
+              </div>
+              <span class="sample-label">ILLUSTRATIVE PREVIEW</span>
+            </div>
+            <div class="preview-body">
+              <aside class="preview-sidebar">
+                <span class="mini-brand"
+                  ><span class="brand-mark" aria-hidden="true"
+                    ><span></span><span></span><span></span><span></span
+                  ></span>
+                  Growth Factory.</span
+                >
+                <span class="sidebar-label">YOUR CREATIVE LOOP</span>
+                <div
+                  class="preview-tabs"
+                  role="tablist"
+                  aria-label="Preview workflow steps"
+                  aria-orientation="vertical"
+                >
+                  <button
+                    id="tab-brief"
+                    role="tab"
+                    aria-controls="preview-panel"
+                    aria-selected="false"
+                    tabindex="-1"
+                    data-step="0"
+                  >
+                    <svg class="icon"><use href="#i-folder" /></svg
+                    ><span>Bring your idea</span
+                    ><span class="tab-number">01</span>
+                  </button>
+                  <button
+                    id="tab-direction"
+                    role="tab"
+                    aria-controls="preview-panel"
+                    aria-selected="false"
+                    tabindex="-1"
+                    data-step="1"
+                  >
+                    <svg class="icon"><use href="#i-spark" /></svg
+                    ><span>Find your angle</span
+                    ><span class="tab-number">02</span>
+                  </button>
+                  <button
+                    id="tab-studio"
+                    role="tab"
+                    aria-controls="preview-panel"
+                    aria-selected="true"
+                    tabindex="0"
+                    data-step="2"
+                  >
+                    <svg class="icon"><use href="#i-film" /></svg
+                    ><span>Make it yours</span
+                    ><span class="tab-number">03</span>
+                  </button>
+                </div>
+                <div class="sidebar-bottom">
+                  <span class="online-dot"></span> A little creative
+                  momentum.<br /><span>Right on your Mac.</span>
+                </div>
+              </aside>
+              <div
+                id="preview-panel"
+                class="preview-content"
+                role="tabpanel"
+                aria-labelledby="tab-studio"
+                tabindex="0"
+              >
+                <div class="preview-content-top">
+                  <span id="preview-eyebrow">03 / THE STUDIO</span
+                  ><span class="workspace-chip"
+                    ><span></span> YOUR VISION. YOUR CALL.</span
+                  >
+                </div>
+                <div class="preview-workspace">
+                  <div class="preview-direction">
+                    <h2 id="preview-heading">
+                      A little further<br />from ordinary.
+                    </h2>
+                    <p id="preview-description">
+                      The big feeling. The small details.<br />A first cut
+                      that’s ready for your perspective.
+                    </p>
+                    <div class="direction-card">
+                      <span class="direction-label"
+                        ><svg class="icon"><use href="#i-spark" /></svg
+                        ><span id="direction-label"
+                          >YOUR CREATIVE DIRECTION</span
+                        ></span
+                      >
+                      <p id="direction-text">
+                        Open with the feeling of getting away. Let the landscape
+                        do the talking.
+                      </p>
+                      <span class="direction-tag" id="direction-tag"
+                        >Warm. Unhurried. A little unexpected.</span
+                      >
+                    </div>
+                    <div class="preview-team">
+                      <div class="team-avatar">
+                        <svg class="icon"><use href="#i-sliders" /></svg>
+                      </div>
+                      <div>
+                        <strong id="preview-role"
+                          >Your editor has a first cut.</strong
+                        ><span id="preview-role-note"
+                          >You bring the finishing touch.</span
+                        >
+                      </div>
+                      <svg class="icon team-check"><use href="#i-check" /></svg>
+                    </div>
+                  </div>
+                  <div class="preview-film">
+                    <img
+                      src="/assets/alpine-story.webp"
+                      alt="Illustrative footage: an orange-jacketed hiker looking across a dramatic alpine valley"
+                      width="1536"
+                      height="1024"
+                      fetchpriority="high"
+                    />
+                    <span class="film-corner">WEEKEND SOMEWHERE</span>
+                    <span class="film-caption"
+                      >A little further<br /><em>from ordinary.</em></span
+                    >
+                    <span class="film-format"
+                      >9:16 <span>·</span> STORY CONCEPT</span
+                    >
+                    <span class="film-counter">01 <span>/</span> 03</span>
+                  </div>
+                </div>
+                <div class="preview-timeline">
+                  <svg class="icon"><use href="#i-film" /></svg
+                  ><span class="timeline-time">00:00</span>
+                  <div class="timeline-track">
+                    <span></span><span></span><span></span><span></span
+                    ><span></span><span></span><span></span><i></i>
+                  </div>
+                  <span class="timeline-time">00:30</span
+                  ><span class="timeline-note">YOUR STORY, TAKING SHAPE</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="preview-under">
+            <span>ONE IDEA. A WHOLE CREATIVE LOOP.</span
+            ><span
+              >Sample campaign · Real possibilities
+              <svg class="icon"><use href="#i-up-right" /></svg
+            ></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="manifesto shell reveal" aria-label="Our approach">
+        <p>
+          For the one-person studio.<span> The small-but-mighty team.</span
+          ><br />The people with <em>more ideas than hours.</em>
+        </p>
+        <div class="manifesto-rule">
+          <span></span><svg class="icon"><use href="#i-spark" /></svg
+          ><span></span>
+        </div>
+      </section>
+
+      <section
+        id="workflow"
+        class="workflow shell section-space"
+        aria-labelledby="workflow-title"
+      >
+        <div class="section-heading reveal">
+          <div>
+            <p class="eyebrow">LESS FRICTION. MORE FLOW.</p>
+            <h2 id="workflow-title">
+              From the first spark<br />to <em>“that’s the one.”</em>
+            </h2>
+          </div>
+          <p>
+            Your creative process deserves a better rhythm. Bring the idea.
+            We’ll help with the moving parts.
+          </p>
+        </div>
+        <div class="workflow-grid">
+          <article class="workflow-step reveal">
+            <div class="step-visual brief-visual">
+              <div class="paper paper-back"></div>
+              <div class="paper paper-front">
+                <span class="paper-clip"></span
+                ><span class="tiny-label">THE NEXT GOOD IDEA</span
+                ><strong
+                  >Let’s make<br />something<br /><em
+                    >worth a pause.</em
+                  ></strong
+                >
+                <div class="paper-lines"><span></span><span></span></div>
+                <span class="paper-sign">A brief. A beginning.</span>
+              </div>
+              <span class="visual-stamp"
+                ><svg class="icon"><use href="#i-folder" /></svg> YOUR STARTING
+                POINT</span
+              >
+            </div>
+            <div class="step-title">
+              <span>01</span>
+              <h3>Start with your world.</h3>
+            </div>
+            <p>
+              Your footage, your audience, your point of view. Give every
+              campaign a clear place to begin.
+            </p>
+          </article>
+          <article class="workflow-step reveal">
+            <div class="step-visual angle-visual">
+              <div class="angle-card angle-card-back">
+                <span>ANOTHER WAY IN</span
+                ><strong>What if we<br />started here?</strong>
+              </div>
+              <div class="angle-card angle-card-front">
+                <svg class="icon"><use href="#i-spark" /></svg
+                ><span>A FRESH PERSPECTIVE</span
+                ><strong
+                  >Find the feeling.<br /><em>Then find the words.</em></strong
+                >
+                <div class="angle-card-bottom">
+                  <span>CREATIVE DIRECTION</span
+                  ><svg class="icon"><use href="#i-arrow" /></svg>
+                </div>
+              </div>
+            </div>
+            <div class="step-title">
+              <span>02</span>
+              <h3>Find an angle that’s you.</h3>
+            </div>
+            <p>
+              Explore openings, pacing, and creative direction. Choose the idea
+              you believe in before a cut begins.
+            </p>
+          </article>
+          <article class="workflow-step reveal">
+            <div class="step-visual cut-visual">
+              <div class="cut-frame">
+                <img
+                  src="/assets/alpine-story.webp"
+                  alt=""
+                  loading="lazy"
+                  width="1536"
+                  height="1024"
+                /><span>Take the<br /><em>scenic route.</em></span>
+              </div>
+              <span class="review-chip"
+                ><svg class="icon"><use href="#i-check" /></svg> YOUR FINAL
+                SAY</span
+              ><span class="cut-cursor" aria-hidden="true"
+                ><svg viewBox="0 0 24 28">
+                  <path d="m2 2 19 13-10 2-5 9Z" />
+                </svg>
+                You</span
+              >
+            </div>
+            <div class="step-title">
+              <span>03</span>
+              <h3>Shape it. Make it yours.</h3>
+            </div>
+            <p>
+              Review a first cut, ask for a revision, and approve the version
+              you love. Carry what you learn into the next one.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="local" class="local-section" aria-labelledby="local-title">
+        <div class="shell local-layout">
+          <div class="local-copy reveal">
+            <p class="eyebrow">
+              <span class="status-dot"></span> BIG CREATIVE ENERGY. SMALL
+              DIGITAL FOOTPRINT.
+            </p>
+            <h2 id="local-title">
+              A whole creative team.<br /><em>Right at home.</em>
+            </h2>
+            <p>
+              Good work needs room to happen. Growth Factory is being built for
+              your Mac, with local models and media that stay on your machine.
+            </p>
+            <p>
+              No footage upload to get started. Just your ideas, a thoughtful
+              workflow, and the tools to move them along.
+            </p>
+            <div class="local-footnote">
+              <svg class="icon"><use href="#i-apple" /></svg
+              ><span
+                >Designed for Apple Silicon.<br /><small
+                  >Native desktop app in development.</small
+                ></span
+              >
+            </div>
+          </div>
+          <div
+            class="local-art reveal"
+            aria-label="Local-first creative workflow on a Mac"
+          >
+            <div class="orbit orbit-outer"></div>
+            <div class="orbit orbit-inner"></div>
+            <span class="orbit-dot orbit-dot-one"></span
+            ><span class="orbit-dot orbit-dot-two"></span>
+            <div class="floating-note note-footage">
+              <svg class="icon"><use href="#i-film" /></svg
+              ><span>Your footage</span><span class="note-dot"></span>
+            </div>
+            <div class="floating-note note-ideas">
+              <svg class="icon"><use href="#i-spark" /></svg
+              ><span>Your ideas</span><span class="note-dot"></span>
+            </div>
+            <div class="floating-note note-control">
+              <svg class="icon"><use href="#i-lock" /></svg
+              ><span>Your control</span><span class="note-dot"></span>
+            </div>
+            <div class="macbook">
+              <div class="macbook-screen">
+                <div class="screen-camera"></div>
+                <span class="brand-mark large-mark" aria-hidden="true"
+                  ><span></span><span></span><span></span><span></span></span
+                ><strong>A little more possible.</strong
+                ><span class="screen-caption"
+                  >GROWTH FACTORY. ON YOUR MAC.</span
+                >
+              </div>
+              <div class="macbook-base"></div>
+            </div>
+            <div class="local-art-caption">
+              <svg class="icon"><use href="#i-lock" /></svg> LOCAL BY DESIGN.
+              CREATIVE BY NATURE.
+            </div>
+          </div>
+        </div>
+        <div class="shell principles">
+          <div>
+            <svg class="icon"><use href="#i-folder" /></svg>
+            <h3>Your media stays yours.</h3>
+            <p>Keep source footage on your machine.</p>
+          </div>
+          <div>
+            <svg class="icon"><use href="#i-spark" /></svg>
+            <h3>Help with the heavy lifting.</h3>
+            <p>Local AI roles help plan, edit, and critique.</p>
+          </div>
+          <div>
+            <svg class="icon"><use href="#i-check" /></svg>
+            <h3>You hold the final cut.</h3>
+            <p>Human review is part of the process.</p>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="control-section shell section-space"
+        aria-labelledby="control-title"
+      >
+        <div
+          class="control-art reveal"
+          aria-label="Illustrative creative review notes"
+        >
+          <div class="review-sheet">
+            <div class="review-sheet-top">
+              <span class="tiny-label">THE CREATIVE REVIEW</span
+              ><svg class="icon"><use href="#i-sliders" /></svg>
+            </div>
+            <h3>Good start.<br /><em>Now make it feel like us.</em></h3>
+            <div class="review-note">
+              <span class="annotation-dot"></span>
+              <p>
+                Keep the quiet opening.<br />Give that final shot a little more
+                room.
+              </p>
+            </div>
+            <div class="review-change">
+              <span>VERSION 01</span
+              ><svg class="icon"><use href="#i-arrow" /></svg
+              ><span>YOUR NEXT CUT</span>
+            </div>
+            <div class="approval-line">
+              <svg class="icon"><use href="#i-check" /></svg
+              ><span>Made with AI. Approved by you.</span>
+            </div>
+          </div>
+          <div class="handwritten-note">
+            Taste is still<br /><em>a human thing.</em
+            ><svg viewBox="0 0 100 60">
+              <path d="M8 9C60-4 90 15 78 43m-8-10 8 13 12-8" />
+            </svg>
+          </div>
+        </div>
+        <div class="control-copy reveal">
+          <p class="eyebrow">THE TOOLS GET SMARTER. THE VISION STAYS YOURS.</p>
+          <h2 id="control-title">
+            More possibilities.<br /><em>Still your point of view.</em>
+          </h2>
+          <p>
+            AI can find the moment, suggest an opening, and help build a first
+            cut. But knowing when something feels right? That part belongs to
+            you.
+          </p>
+          <ul class="control-list">
+            <li>
+              <svg class="icon"><use href="#i-check" /></svg> Approve the
+              direction before production.
+            </li>
+            <li>
+              <svg class="icon"><use href="#i-check" /></svg> Review the cut,
+              not just a model’s score.
+            </li>
+            <li>
+              <svg class="icon"><use href="#i-check" /></svg> Learn from real
+              observations, one idea at a time.
+            </li>
+          </ul>
+          <a
+            class="inline-link"
+            href="https://theclipfactory-frontend-two.vercel.app"
+            target="_blank"
+            rel="noopener"
+            >Take a look around the workspace
+            <svg class="icon"><use href="#i-up-right" /></svg
+          ></a>
+        </div>
+      </section>
+
+      <section
+        id="faq"
+        class="faq-section shell section-space"
+        aria-labelledby="faq-title"
+      >
+        <div class="faq-heading reveal">
+          <p class="eyebrow">A FEW THINGS YOU MIGHT BE WONDERING.</p>
+          <h2 id="faq-title">Good <em>questions.</em></h2>
+          <p>A little clarity before the next creative leap.</p>
+        </div>
+        <div class="faq-list reveal">
+          <details>
+            <summary>
+              What is Growth Factory?<svg class="icon">
+                <use href="#i-plus" />
+              </svg>
+            </summary>
+            <div>
+              <p>
+                A local-first creative workspace for turning source footage into
+                short-form video. It brings campaign planning, creative
+                direction, production, human review, and learning into one loop,
+                with AI roles helping along the way.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>
+              Can I try it right now?<svg class="icon">
+                <use href="#i-plus" />
+              </svg>
+            </summary>
+            <div>
+              <p>
+                Yes — you can
+                <a
+                  href="https://theclipfactory-frontend-two.vercel.app"
+                  target="_blank"
+                  rel="noopener"
+                  >explore the interactive workspace demo</a
+                >. It uses illustrative sample data so you can get a feel for
+                the workflow. The native Mac app is still in development; the
+                hosted demo does not run models, render video, or publish
+                content.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>
+              Does my footage leave my Mac?<svg class="icon">
+                <use href="#i-plus" />
+              </svg>
+            </summary>
+            <div>
+              <p>
+                The native workflow is designed to keep your source footage and
+                model processing on your machine. External services, such as
+                Instagram, require separate connection and authorization. This
+                website and the hosted demo do not connect to your local media
+                library.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>
+              Does it publish content automatically?<svg class="icon">
+                <use href="#i-plus" />
+              </svg>
+            </summary>
+            <div>
+              <p>
+                No. AI critique and human approval are separate steps. You
+                review the creative direction and final output. Connecting an
+                external account and publishing require their own deliberate
+                authorization.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>
+              What Mac do I need?<svg class="icon"><use href="#i-plus" /></svg>
+            </summary>
+            <div>
+              <p>
+                Growth Factory is being developed for Apple Silicon Macs. Model
+                availability and performance depend on your hardware, memory,
+                and selected model. Final system requirements and a public
+                release date have not been announced.
+              </p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section
+        class="closing-section shell reveal"
+        aria-labelledby="closing-title"
+      >
+        <div class="closing-inner">
+          <div class="closing-spark" aria-hidden="true">✳</div>
+          <p class="eyebrow">THAT IDEA YOU’VE BEEN SITTING ON?</p>
+          <h2 id="closing-title">
+            Let’s give it<br /><em>a little momentum.</em>
+          </h2>
+          <a
+            class="button button-dark"
+            href="https://theclipfactory-frontend-two.vercel.app"
+            target="_blank"
+            rel="noopener"
+            >Meet your creative workspace
+            <svg class="icon"><use href="#i-up-right" /></svg
+          ></a>
+          <p class="closing-note">
+            Explore the demo. Imagine the possibilities.
+          </p>
+          <div class="closing-orbit" aria-hidden="true"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer shell">
+      <div class="footer-main">
+        <a class="wordmark" href="#" aria-label="Growth Factory home"
+          ><span class="brand-mark" aria-hidden="true"
+            ><span></span><span></span><span></span><span></span></span
+          >Growth Factory<span class="brand-period">.</span></a
+        ><span>A little intelligence. A lot of possibility.</span
+        ><a href="#hero-title" class="back-top"
+          >Back to the good stuff
+          <svg class="icon"><use href="#i-up-right" /></svg
+        ></a>
+      </div>
+      <div class="footer-bottom">
+        <span>© <span id="year">2026</span> Growth Factory</span
+        ><span>Made for the work you want to make.</span
+        ><span class="footer-status"
+          ><span class="status-dot"></span> A work in progress. Like all good
+          things.</span
+        >
+      </div>
+    </footer>
+
+    <dialog id="workflow-tour" aria-labelledby="tour-title">
+      <div class="tour-shell">
+        <div class="tour-top">
+          <span class="eyebrow">A QUICK LOOK AROUND</span
+          ><button class="dialog-close" aria-label="Close walkthrough">
+            <svg class="icon"><use href="#i-close" /></svg>
+          </button>
+        </div>
+        <div class="tour-image">
+          <img
+            src="/assets/alpine-story.webp"
+            alt="Illustrative campaign footage of an alpine adventure"
+            width="1536"
+            height="1024"
+          /><span id="tour-number">01 / 03</span>
+        </div>
+        <div class="tour-copy">
+          <p id="tour-kicker" class="eyebrow">BRING YOUR IDEA</p>
+          <h2 id="tour-title">Every story starts somewhere.</h2>
+          <p id="tour-description">
+            Add your footage and define the audience, the feeling, and the point
+            of the campaign. Give your creative team something to work toward.
+          </p>
+          <div class="tour-controls">
+            <div class="tour-dots" aria-label="Walkthrough progress">
+              <span class="active"></span><span></span><span></span>
+            </div>
+            <button id="tour-next" class="button button-dark button-small">
+              Find your angle
+              <svg class="icon"><use href="#i-arrow" /></svg></button
+            ><a
+              id="tour-explore"
+              class="button button-dark button-small"
+              href="https://theclipfactory-frontend-two.vercel.app"
+              target="_blank"
+              rel="noopener"
+              hidden
+              >Explore the demo
+              <svg class="icon"><use href="#i-up-right" /></svg
+            ></a>
+          </div>
+        </div>
+        <p class="tour-disclaimer">
+          An introduction to the workflow. The workspace demo uses sample data.
+        </p>
+      </div>
+    </dialog>
+  </body>
+</html>
