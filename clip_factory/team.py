@@ -37,6 +37,7 @@ LABELS = {
     "critic": "Critic",
     "transcribe": "Source transcription",
     "render": "Deterministic rendering",
+    "reuse_footage": "Revalidate saved source analysis",
     "baseline": "Baseline pipeline",
 }
 
@@ -580,6 +581,49 @@ class TeamEngine:
                 result[f"event:{event['id']}"] = event
         return result
 
+    def _saved_footage(self, video: dict, evidence: dict) -> dict | None:
+        analysis = video.get("analysis")
+        if not isinstance(analysis, dict) or analysis.get("video_id") != video["id"]:
+            return None
+        candidates = analysis.get("candidates")
+        if not isinstance(candidates, list):
+            return None
+        moments = []
+        for candidate in candidates[:3]:
+            if not isinstance(candidate, dict):
+                continue
+            try:
+                moment = Moment.model_validate({
+                    "start": candidate["start"],
+                    "end": candidate["end"],
+                    "summary": candidate.get("reason") or candidate.get("hook"),
+                    "evidence_refs": [
+                        ref for ref, item in evidence.items()
+                        if (
+                            ref.startswith("frame:")
+                            and candidate["start"] <= item["time"] <= candidate["end"]
+                        ) or (
+                            ref.startswith("transcript:")
+                            and min(candidate["end"], item["end"]) > max(candidate["start"], item["start"])
+                        )
+                    ][:4],
+                }).model_dump()
+                if (
+                    not 0 <= moment["start"] < moment["end"] <= video["duration"]
+                    or moment["end"] - moment["start"] > 180
+                ):
+                    continue
+                self._source_refs(moment["evidence_refs"], evidence, moment["start"], moment["end"])
+            except (KeyError, TypeError, ValueError, WorkError):
+                continue
+            moments.append(moment)
+        if moments:
+            return {
+                "moments": moments,
+                "limitations": "The new footage proposal was rejected. Reused saved analysis ranges after source and evidence validation; human review is required.",
+            }
+        return None
+
     def execute(self, run_id: str, job_id: str) -> dict:
         run = self.store.get("team_runs", run_id)
         self.store.patch(
@@ -670,16 +714,28 @@ class TeamEngine:
                     )
                 output["moments"] = valid
 
-            footage = self._agent(
-                run_id,
-                job_id,
-                "footage_analyst",
-                Footage,
-                {"assignment": assignments["footage_analyst"], "context": context},
-                refs=refs,
-                images=[f["path"] for f in sampled],
-                validate=validate_footage,
-            )
+            reused_footage = False
+            try:
+                footage = self._agent(
+                    run_id,
+                    job_id,
+                    "footage_analyst",
+                    Footage,
+                    {"assignment": assignments["footage_analyst"], "context": context},
+                    refs=refs,
+                    images=[f["path"] for f in sampled],
+                    validate=validate_footage,
+                )
+            except WorkError:
+                saved = self._saved_footage(video, evidence)
+                if saved is None:
+                    raise
+                footage = self._operation(
+                    run_id, job_id, "reuse_footage",
+                    lambda: saved,
+                    refs=[ref for moment in saved["moments"] for ref in moment["evidence_refs"]],
+                )
+                reused_footage = True
             performance_refs = [r for r in refs if r.startswith(("feedback:", "observation:", "event:"))]
             performance = None
             if performance_refs:
@@ -945,6 +1001,8 @@ class TeamEngine:
                 stop = f"{stop or 'Human review is required.'} Omitted {sum(omitted_edits)} invalid editor candidates."
             if sum(omitted_angles):
                 stop = f"{stop or 'Human review is required.'} Omitted {sum(omitted_angles)} invalid creative angles."
+            if reused_footage:
+                stop = f"{stop or 'Human review is required.'} Reused revalidated saved source analysis after the footage proposal was rejected."
             self._finish(run_id, "needs_review", stop)
             return {
                 "team_run_id": run_id,

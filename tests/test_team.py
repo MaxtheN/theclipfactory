@@ -380,6 +380,39 @@ def test_footage_keeps_valid_moments_when_another_row_violates_the_schema(harnes
     assert len(harness.rendered) == 1
 
 
+@pytest.mark.parametrize("case", ["valid", "wrong_source", "out_of_bounds", "no_evidence"])
+def test_rejected_footage_can_only_reuse_same_source_time_grounded_analysis(harness, case):
+    analysis = {"video_id": "source", "candidates": [{
+        "start": 0, "end": 2,
+        "reason": "Previously analyzed source window"
+    }]}
+    if case == "wrong_source":
+        analysis["video_id"] = "another-source"
+    elif case == "out_of_bounds":
+        analysis["candidates"][0]["end"] = 3
+    elif case == "no_evidence":
+        analysis["candidates"][0]["end"] = 0.25
+    harness.store.patch("videos", "source", analysis=analysis)
+    rejected = footage("source:invented")
+    harness.models = ScriptedModels([plan(), rejected, rejected] + script()[2:])
+    harness.engine.models = harness.models
+    if case != "valid":
+        run = harness.create()
+        with pytest.raises(WorkError):
+            harness.engine.execute(run["id"], "job")
+        assert not harness.rendered
+        return
+    run, _ = harness.execute()
+    assert run["status"] == "needs_review"
+    assert "Reused revalidated saved source analysis" in run["stop_reason"]
+    assert next(t for t in run["tasks"] if t["role"] == "footage_analyst")["status"] == "failed"
+    reused = next(t for t in run["tasks"] if t["role"] == "reuse_footage")
+    assert reused["kind"] == "tool" and reused["status"] == "completed"
+    assert reused["output"]["moments"][0]["evidence_refs"] == ["frame:0", "frame:1"]
+    assert len(harness.rendered) == 1
+    assert not harness.store.all("clips")[0]["approved"]
+
+
 def test_schema_correction_honors_cancellation_before_retry(harness):
     oversized = footage()
     oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17
