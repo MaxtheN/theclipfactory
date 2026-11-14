@@ -112,6 +112,17 @@ describe("Studio production integration", () => {
     await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("camp", { expected_strategy_version_id: "strategy", video_id: "v1", profile_id: "profile", model_id: "ollama:vision:latest", revision_budget: 2 }));
     expect(productionApi.campaignRender).not.toHaveBeenCalled();
   });
+  it("sends the optional 'what to look for' text with this agent run only", async () => {
+    const run = { id: "run-1", tasks: [], job_id: "agent-1" } as unknown as TeamRun;
+    vi.mocked(productionApi.campaignProduce).mockResolvedValue({ job: { ...queued("agent-1"), kind: "team" } as never, run });
+    render(<Studio w={workspace()} factory={factory()} next={() => {}} preferredMode="agent" />);
+    await waitFor(() => expect(screen.getByLabelText("Installed vision model")).toHaveValue("ollama:vision:latest"));
+    const box = screen.getByLabelText("What should the agents look for? (optional)");
+    expect(box).toHaveAttribute("maxlength", "500");
+    fireEvent.change(box, { target: { value: "  the spiciest takes on AI policy, under 40s  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Let agents find clips" }));
+    await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("camp", expect.objectContaining({ direction: "the spiciest takes on AI policy, under 40s" })));
+  });
   it("does not run agents in the illustrative hosted preview", () => {
     mode.preview = true;
     render(<Studio w={workspace()} factory={factory()} next={() => {}} preferredMode="agent" />);

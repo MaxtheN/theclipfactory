@@ -383,8 +383,23 @@ export function Results({
     Date.parse(to) > Date.parse(from) &&
     Date.parse(to) <= Date.now();
   return (
-    <div className="gf-results-grid">
-      <section className="gf-card gf-evidence">
+    <>
+      {!observations.length && (
+        <div className="gf-first-step" role="note">
+          <Icon name="results" size={18} />
+          <strong>Post a clip to start learning.</strong>
+          <button
+            type="button"
+            className="gf-button secondary compact"
+            onClick={() => next(undefined, "agent")}
+          >
+            Open Studio
+            <Icon name="arrow" size={15} />
+          </button>
+        </div>
+      )}
+      <div className="gf-results-grid">
+        <section className="gf-card gf-evidence">
         <div className="gf-card-header">
           <div>
             <span className="gf-overline">01 / REVIEW EVIDENCE</span>
@@ -798,6 +813,7 @@ export function Results({
           </p>
         </Disclosure>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

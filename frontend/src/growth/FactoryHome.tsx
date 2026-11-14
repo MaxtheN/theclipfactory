@@ -949,6 +949,10 @@ export function FactoryHome({
                         <Icon name="arrow" size={16} />
                       </button>
                     )}
+                    {!(status || unreviewed.length > 0) && (
+                      // Keeps every row's main action on the same right edge.
+                      <span className="gf-row-open-spacer" aria-hidden="true" />
+                    )}
                   </div>
                   {status && (
                     <div className="gf-footage-line">

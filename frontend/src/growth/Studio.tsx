@@ -14,7 +14,7 @@ import { JourneyProgress } from "./JourneyProgress";
 import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
 import { PostToInstagram } from "./PostToInstagram";
-import { parseProductionClip, type CampaignRenderRequest, type ExportRecord, type ProductionClip } from "./productionContracts";
+import { DIRECTION_MAX, parseProductionClip, type CampaignRenderRequest, type ExportRecord, type ProductionClip } from "./productionContracts";
 import { changedEditFields, clipInScope, editErrors, jobInScope, object, readiness, retryBlocker, reviewBlocker } from "./productionState";
 
 type Mode = "manual" | "agent";
@@ -38,6 +38,8 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const [focusX, setFocusX] = useState(.5), [subtitles, setSubtitles] = useState(true);
   const [feedback, setFeedback] = useState(""), [revisionParent, setRevisionParent] = useState<ProductionClip>();
   const [modelId, setModelId] = useState(""), [budget, setBudget] = useState(1);
+  // Optional per-run guidance for the agents ("what to look for"), sent with this run only.
+  const [lookFor, setLookFor] = useState("");
   const [runs, setRuns] = useState<TeamRun[]>([]), [ledgerError, setLedgerError] = useState("");
   const [actionError, setActionError] = useState(""), [pending, setPending] = useState(false);
   const [submitted, setSubmitted] = useState<{ id: string; scope: string; source: string }>();
@@ -170,7 +172,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     if (mode === "agent") {
       if (!ready.canProduce || reviewPreview || ledgerError) return;
       await perform(async () => {
-        const result = await productionApi.campaignProduce(w.campaign!.id, { expected_strategy_version_id: active.id, video_id: source.id, profile_id: w.profileId, model_id: modelId, revision_budget: budget });
+        const result = await productionApi.campaignProduce(w.campaign!.id, { expected_strategy_version_id: active.id, video_id: source.id, profile_id: w.profileId, model_id: modelId, revision_budget: budget, ...(lookFor.trim() ? { direction: lookFor.trim() } : {}) });
         setRuns(old => [result.run, ...old.filter(r => r.id !== result.run.id)]);
         setSubmitted({ id: result.job.id, scope: scopeKey, source: source.id }); setFreshProduction(true);
       }, "Agent production queued. Follow the real tasks and inspect the resulting version before approval.");
@@ -284,6 +286,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
         {sources.length > 1 && <Field label="Episode">{id => <select id={id} value={sourceId} disabled={!!revisionParent || busy} onChange={e => { setSourceId(e.target.value); setStart("0"); const s = sources.find(v => v.id === e.target.value); setEnd(String(Math.min(direction?.duration_seconds || 30, s?.duration || 30))); }}><option value="" disabled>Choose an episode</option>{sources.map(s => <option value={s.id} key={s.id}>{sourceLabel(s.id, w.campaign!.video_ids)}</option>)}</select>}</Field>}
         {revisionParent && <Field label="What would make it better?">{id => <AutoTextarea id={id} value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="What should change, and why?" rows={3} />}</Field>}
         {/* One reason at a time: the first thing to fix. */}
+        {mode === "agent" && !revisionParent && <Field label="What should the agents look for? (optional)" hint="Used for this run only, within your style rules.">{id => <AutoTextarea id={id} rows={2} maxLength={DIRECTION_MAX} value={lookFor} disabled={busy} placeholder="e.g. the spiciest takes on AI policy, under 40s" onChange={e => setLookFor(e.target.value)} />}</Field>}
         {!direction && onDirection ? <button type="button" className="gf-button ghost full" onClick={onDirection}>Approve style rules first</button> : blockers[0] && <p className="gf-help">{blockers[0]}</p>}
         <PrimaryAction full label={busy ? "Queuing…" : mode === "agent" ? "Let agents find clips" : revisionParent ? "Render a new revision" : "Make this clip"} intent="produce" disabled={busy || blockers.length > 0} onClick={() => void render()} />
         {revisionParent && <button className="gf-button ghost full" onClick={() => setRevisionParent(undefined)}>Back to review</button>}
