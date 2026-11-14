@@ -35,6 +35,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Build Apple Silicon desktop bundle and run backend tests
         run: bash scripts/build-mac-app.sh
+      - name: Verify app-owned Python bootstrap without Homebrew
+        run: python scripts/smoke-managed-python.py
       - name: Smoke packaged executable without GUI
         run: python scripts/smoke-headless.py --executable 'dist/Clip Factory.app/Contents/MacOS/Clip Factory'
       - uses: actions/upload-artifact@v4

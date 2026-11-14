@@ -335,8 +335,11 @@ def test_setup_rejects_non_native_or_wrong_python(models, monkeypatch, probe):
     monkeypatch.setattr(
         "clip_factory.models.subprocess.run", Mock(return_value=SimpleNamespace(stdout=probe))
     )
-    with pytest.raises(WorkError, match="native Python 3.12"):
+    fallback = Mock(side_effect=WorkError("Private Python download unavailable"))
+    monkeypatch.setattr("clip_factory.models.bootstrap_python", fallback)
+    with pytest.raises(WorkError, match="Private Python download unavailable"):
         models.setup("job")
+    fallback.assert_called_once()
     models.jobs.process.assert_not_called()
 
 

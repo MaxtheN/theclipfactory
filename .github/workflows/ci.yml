@@ -34,5 +34,8 @@ jobs:
           python -m pip install '.[test]' 'setuptools>=75' wheel
           python -m pytest tests scripts/tests -q
           python -m ruff check clip_factory scripts
+      - name: Native private Python bootstrap smoke
+        if: runner.os == 'macOS'
+        run: python scripts/smoke-managed-python.py
       - name: Headless bootstrap smoke (not a native desktop test)
         run: python scripts/smoke-headless.py

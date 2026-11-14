@@ -6,11 +6,14 @@ import hashlib
 import json
 import os
 import shutil
+import ssl
 import subprocess
 import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path, PurePosixPath
+
+import certifi
 
 from .jobs import Jobs, WorkError
 
@@ -46,7 +49,12 @@ def native_python(executable: Path | str, env: dict) -> bool:
 def _download(archive: Path, jobs: Jobs, job_id: str):
     digest, downloaded = hashlib.sha256(), 0
     request = urllib.request.Request(PYTHON_URL, headers={"User-Agent": "ClipFactory-runtime-setup"})
-    with urllib.request.urlopen(request, timeout=30) as response, archive.open("xb") as output:
+    with (
+        urllib.request.urlopen(
+            request, timeout=30, context=ssl.create_default_context(cafile=certifi.where())
+        ) as response,
+        archive.open("xb") as output,
+    ):
         if not response.geturl().startswith("https://"):
             raise WorkError("Python download must use a secure connection.")
         while True:

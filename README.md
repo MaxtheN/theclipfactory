@@ -95,10 +95,20 @@ This is **not** a supported Linux MLX/native desktop installation claim.
   The catalogue is not a license grant. Larger models compete with macOS, video
   processing, and other applications for unified memory; start with a small model.
 - The parent's runtime setup installs inference dependencies in a **separate
-  data-directory venv**, not into the packaged app. This can require network
-  access and a compatible native Python/toolchain. A PyInstaller bundle is not
-  itself a usable system Python for building that runtime. A standalone `.app`
-  does not bundle MLX, model weights, ffmpeg, or Homebrew.
+  data-directory venv**, not into the packaged app. Clicking **Set up runtime**
+  continues automatically if native Python 3.12 is missing: the app downloads a
+  private Apple Silicon Python into its data directory, verifies its pinned
+  SHA-256 and native architecture, then installs the inference dependencies.
+  **No Homebrew, terminal command, administrator access, or app restart is needed
+  for Python.** A working native Python already installed on the machine can be
+  reused. Downloads require a network connection; partial/failed downloads are
+  not activated. The private Python is reused on later setup attempts.
+  The pinned distribution is CPython 3.12.16 from Astral's
+  [20261110 python-build-standalone release](https://github.com/astral-sh/python-build-standalone/releases/tag/20261110).
+  The standalone `.app` does not bundle MLX, model weights, ffmpeg, or Homebrew;
+  **FFmpeg remains a separate media-tool prerequisite.** This app-owned bootstrap
+  applies to the packaged app; launching a source checkout still needs its setup
+  prerequisites.
 - Missing runtime/models/ffmpeg must show an unavailable state or a real failed
   job, never simulated model output. Manual editing does not require a language
   model; actual export still requires media tools. A serial worker limits heavy
@@ -211,8 +221,10 @@ local socket. They do not assert real model inference or Meta permissions.
   freezing. The launcher itself does not run a dev server or fetch remote UI.
 - **ffmpeg unavailable from Finder:** install native Homebrew ffmpeg; check both
   `ffmpeg` and `ffprobe` in `/api/system`. No Linux package command is run on Mac.
-- **Runtime/model job fails:** verify a compatible external Python, license,
-  network/disk/memory and the actual job error. No claim that MLX works on Linux.
+- **Runtime/model job fails:** retry **Set up runtime** after checking network,
+  disk space, license and the actual job error. The app handles missing native
+  Python itself; it does not install Homebrew or change system Python. MLX still
+  requires native Apple Silicon macOS; no claim that MLX works on Linux.
 - **Meta action fails:** inspect account eligibility/scopes/expiry/public URL;
   never blindly retry a publish with an unknown upstream write outcome.
 - Hardware/native acceptance, real model quality/performance, approved Meta app

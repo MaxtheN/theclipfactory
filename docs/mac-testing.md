@@ -65,8 +65,12 @@ below are **manual acceptance work**, not claims of tests already passed.
 - [ ] Cocoa window opens and packaged `clip_factory/ui/index.html` serves. Test
   shell/Finder with minimal PATH; installed `/opt/homebrew/bin/ffmpeg` is found.
 - [ ] Writable data is outside the app bundle; app replacement preserves data.
-  Runtime setup uses external native Python and a separate venv, not the frozen
-  executable as a Python interpreter. Missing external Python gives instructions.
+  Runtime setup uses a native Python and separate venv, not the frozen executable
+  as a Python interpreter. With no Python/Homebrew installed, clicking **Set up
+  runtime** downloads checksum-verified private Python, creates the venv, and
+  continues without terminal commands, administrator access, or restart. Cancel
+  during download: no partial install is selected; retry succeeds. Existing
+  app-owned Python is reused. Download failure remains visible and retryable.
 - [ ] Keychain permits secure token storage/retrieval; locked/denied Keychain fails
   safely with no plaintext fallback. The artifact must include native backend.
 - [ ] Launch packaged executable with `--headless` using
