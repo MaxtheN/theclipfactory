@@ -1,0 +1,165 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { api } from "../api";
+import type { TeamRun } from "../types";
+import type { FactoryState } from "../useFactory";
+import { FactoryMap, FactoryMiniMap } from "./FactoryMap";
+import { strategistApi } from "./strategistApi";
+import type { Workspace } from "./useCampaignWorkspace";
+import { workspaceApi } from "./workspaceApi";
+
+vi.mock("../api", () => ({ api: vi.fn(), post: vi.fn(), put: vi.fn() }));
+
+const NOW = Date.now();
+const at = (m: number) => new Date(NOW + m * 60000).toISOString();
+const w = {
+  campaign: { id: "c", video_ids: ["v1"], brief: { audience: "", constraints: [], requested_outputs: [], measurement_intent: "" } },
+  profileId: "p",
+  profiles: [{ id: "p", active_strategy_id: null }],
+  versions: [],
+} as unknown as Workspace;
+function factory(working: boolean): FactoryState {
+  return {
+    loading: false,
+    errors: {},
+    data: {
+      clips: [],
+      jobs: working
+        ? [{ id: "job", kind: "team", status: "running", progress: 30, message: "Finding clips: part 1 of 4 · 0 clips ready" }]
+        : [],
+      factory: {
+        autopilot: false,
+        model_id: null,
+        ready: true,
+        blockers: [],
+        sources: [
+          {
+            video_id: "v1",
+            name: "Episode",
+            duration: 600,
+            state: working ? "working" : "idle",
+            headline: "",
+            progress: null,
+            stages: [
+              { key: "listen", label: "Listen", status: working ? "active" : "done", detail: "" },
+            ],
+            job_id: working ? "job" : null,
+            run_id: null,
+            clip_ids: [],
+            unreviewed: 0,
+            approved: 0,
+            error: null,
+            can_produce: true,
+            blocked_reason: null,
+            storyboard: null,
+            thumbnail: null,
+          },
+        ],
+      },
+    },
+  } as unknown as FactoryState;
+}
+const finishedRun = {
+  id: "run",
+  video_id: "v1",
+  mode: "swarm",
+  model_id: "m",
+  objective: "o",
+  status: "needs_review",
+  job_id: "job",
+  revision_budget: 0,
+  revision_count: 0,
+  stop_reason: null,
+  created_at: at(-20),
+  started_at: at(-20),
+  finished_at: at(-5),
+  elapsed_seconds: 900,
+  resource_observations: null,
+  clip_ids: [],
+  plan: null,
+  context: {},
+  permissions: { publish: false, ads: false },
+  tasks: [
+    { id: "t", role: "watch", label: "Watch", kind: "tool", status: "completed", iteration: 0, input_refs: [], output: null, error: null, started_at: at(-20), finished_at: at(-10) },
+  ],
+} as TeamRun;
+
+function motion(reduce: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockReturnValue({ matches: reduce, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
+  );
+}
+beforeEach(() => {
+  // jsdom has no layout: give every station a box so wires (and tokens) can be drawn.
+  let n = 0;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => {
+    const left = (n++ % 12) * 120;
+    return { left, top: 0, width: 100, height: 60, right: left + 100, bottom: 60, x: left, y: 0, toJSON: () => ({}) } as DOMRect;
+  });
+  vi.mocked(api).mockRejectedValue(new Error("offline"));
+  vi.spyOn(strategistApi, "view").mockRejectedValue(new Error("offline"));
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("FactoryMap", () => {
+  it("disables Demo replay with an explanation when no run was recorded", async () => {
+    motion(false);
+    const runs = vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([]);
+    render(<FactoryMap w={w} factory={factory(false)} />);
+    await waitFor(() => expect(runs).toHaveBeenCalled());
+    const button = screen.getByRole("button", { name: "Demo replay" });
+    expect(button).toBeDisabled();
+    expect(button.getAttribute("title")).toMatch(/No finished run yet/);
+    expect(screen.getByText(/Demo replay is unavailable/)).toBeTruthy();
+    // Honest empty state for missing data, never invented numbers.
+    expect(screen.getByRole("button", { name: /Strategist: Resting\. Unavailable right now/ })).toBeTruthy();
+    expect(screen.getByText(/No run recorded for this campaign yet/)).toBeTruthy();
+  });
+
+  it("enables Demo replay for a finished, timestamped run", async () => {
+    motion(false);
+    vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([finishedRun]);
+    render(<FactoryMap w={w} factory={factory(false)} />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Demo replay" })).not.toBeDisabled(),
+    );
+  });
+
+  it("moves tokens only while real work happens", async () => {
+    motion(false);
+    vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([]);
+    const idle = render(<FactoryMap w={w} factory={factory(false)} />);
+    await waitFor(() =>
+      expect(idle.container.querySelector(".gf-fmap-live")!.textContent).toBe("Resting"),
+    );
+    expect(idle.container.querySelectorAll(".gf-fmap-wire").length).toBeGreaterThan(0);
+    expect(screen.queryAllByTestId("flow-token")).toHaveLength(0);
+    idle.unmount();
+    render(<FactoryMap w={w} factory={factory(true)} />);
+    expect(await screen.findByText("Working now")).toBeTruthy();
+    expect(screen.getAllByTestId("flow-token").length).toBeGreaterThan(0);
+  });
+
+  it("is a still map with state badges under reduced motion", async () => {
+    motion(true);
+    vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([]);
+    const { container } = render(<FactoryMap w={w} factory={factory(true)} />);
+    expect(await screen.findByText("Working now")).toBeTruthy();
+    expect(container.querySelector(".gf-fmap-wire.is-flowing")).toBeTruthy();
+    expect(container.querySelector(".gf-fmap")!.getAttribute("data-reduced")).toBe("true");
+    expect(screen.queryAllByTestId("flow-token")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: /^Listen: Working\./ })).toBeTruthy();
+  });
+});
+
+describe("FactoryMiniMap", () => {
+  it("names the working station", () => {
+    motion(false);
+    render(<FactoryMiniMap w={w} factory={factory(true)} runs={[]} />);
+    expect(screen.getByRole("status").textContent).toMatch(/Listen/);
+  });
+});

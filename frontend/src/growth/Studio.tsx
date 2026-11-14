@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { activeJob, installedLlms } from "../productionPreflight";
 import type { Job, TeamRun } from "../types";
 import type { FactoryState } from "../useFactory";
+import { FactoryMiniMap } from "./FactoryMap";
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { reviewPreview, workspaceApi } from "./workspaceApi";
 import { endpoint } from "../api";
@@ -280,6 +281,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     <section className="gf-card gf-edit-surface">
       <div className="gf-card-header"><div><h2>{selected?.name || (source ? visibleLabel : "Choose an episode")}</h2>{selected && <p>{formatTime(selected.start)} — {formatTime(selected.end)} · {visibleLabel}</p>}</div>{selected && <Pill tone={selected.approved && !illustrativeSelected ? "mint" : "quiet"}>{illustrativeSelected ? "Illustrative edit" : selected.approved ? "Approved" : "Needs review"}</Pill>}</div>
       {journey && <JourneyProgress {...journey} source={sourceLabel(journeySourceId, w.campaign.video_ids)} progress={journeyJob?.progress} receipts={journey?.state === "working" && !ledgerError ? journeyRun?.tasks.filter(task => task.status === "completed").slice(-3).map(task => task.label) : []} label="Current production" />}
+      {journeyJob && activeJob(journeyJob) && <FactoryMiniMap w={w} factory={factory} runs={runs} />}
       <div className="gf-studio-media is-simple">
         {reviewPreview ? <div className="gf-preview-film"><Poster /><div className="gf-film-caption"><Pill>ILLUSTRATIVE</Pill><strong>{selected?.hook || "Sample episode"}</strong><small>Preview artwork · not rendered footage</small></div></div>
           : selected ? <video key={selected.id} ref={video} controls preload="metadata" src={clipMediaUrl(selected.id)} aria-label={`Review ${selected.name}`} onLoadedData={() => setPlaybackReady(true)} onError={() => { setPlaybackReady(false); setPlaybackError("This clip could not be played. Check the output file before approving."); }} />

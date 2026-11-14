@@ -13,6 +13,7 @@ import type {
 
 import type { ProductionClip } from "./productionContracts";
 import { normalizeBrief } from "./briefModel";
+import { flowFixture } from "./previewFlowFixtures";
 
 /** Explicit review-only transport. Never calls fetch or the desktop service. */
 const STORAGE_KEY = "growth-factory-preview-v2";
@@ -751,6 +752,9 @@ export async function previewRequest<T>(
   options: RequestInit = {},
 ): Promise<T> {
   if (!path.startsWith("/api/")) fail("Only preview API routes are supported.");
+  // Opt-in, clearly labelled design fixtures for the Factory map and Results (?fixtures=flow).
+  const fixture = flowFixture(path, (options.method ?? "GET").toUpperCase());
+  if (fixture !== undefined) return fixture as T;
   if (path === "/api/factory")
     return {
       autopilot: false,
