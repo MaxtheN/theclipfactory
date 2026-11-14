@@ -1,11 +1,14 @@
 """Truthful inference prerequisites, without model downloads or runtime installation."""
+
+import json
+import subprocess
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
-from clip_factory.jobs import WorkError
-from clip_factory.models import CATALOG, Models
+from clip_factory.jobs import JobCancelled, WorkError
+from clip_factory.models import CATALOG, RUNTIME_VERSIONS, Models, child_env
 
 
 @pytest.fixture
@@ -15,16 +18,40 @@ def models(tmp_path):
     return Models(tmp_path, jobs)
 
 
+SHA = "a" * 40
+
+
+def manifest(models, identifier, files):
+    repo = next(m["repo"] for m in CATALOG if m["id"] == identifier)
+    return {
+        "repo": repo,
+        "revision": SHA,
+        "files": [{"name": n, "size": len(data)} for n, data in files.items()],
+    }
+
+
 def installed(models, identifier):
     directory = models.model_dir / identifier
-    directory.mkdir()
-    (directory / ".complete").write_text("{}")
+    directory.mkdir(exist_ok=True)
+    files = {"config.json": b"{}", "weights.npz": b"tiny mock weights"}
+    if identifier == "kokoro":
+        files = {"config.json": b"{}", "kokoro-v1_0.pth": b"weights", "voices/af_heart.pt": b"voice"}
+    for name, data in files.items():
+        path = directory / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    (directory / ".complete").write_text(json.dumps(manifest(models, identifier, files)))
 
 
-def runtime_ready(models):
-    models.python.parent.mkdir(parents=True)
+def runtime_ready(models, monkeypatch):
+    models.python.parent.mkdir(parents=True, exist_ok=True)
     models.python.touch()
-    (models.runtime / ".ready").touch()
+    marker = {"python": [3, 12], "machine": "arm64", "packages": RUNTIME_VERSIONS}
+    (models.runtime / ".ready").write_text(json.dumps(marker))
+    monkeypatch.setattr(
+        "clip_factory.models.subprocess.run",
+        Mock(return_value=SimpleNamespace(stdout=json.dumps({**marker, "system": "Darwin"}))),
+    )
 
 
 def test_catalog_does_not_invent_installations(models):
@@ -38,7 +65,9 @@ def test_catalog_does_not_invent_installations(models):
         models.item("../../escape")
 
 
-@pytest.mark.parametrize("identifier,kind", [("qwen-small", "llm"), ("whisper-turbo", "asr"), ("kokoro", "tts")])
+@pytest.mark.parametrize(
+    "identifier,kind", [("qwen-small", "llm"), ("whisper-turbo", "asr"), ("kokoro", "tts")]
+)
 def test_require_missing_weights_has_no_simulation(models, identifier, kind):
     with pytest.raises(WorkError, match="Download and accept"):
         models.require(identifier, kind)
@@ -54,19 +83,27 @@ def test_require_installed_weights_still_needs_runtime(models):
     models.jobs.process.assert_not_called()
 
 
-def test_ready_requires_both_markers(models):
+def test_ready_verifies_interpreter_and_packages(models, monkeypatch):
     models.python.parent.mkdir(parents=True)
     models.python.touch()
     assert not models.ready()
     (models.runtime / ".ready").touch()
+    assert not models.ready()
+    runtime_ready(models, monkeypatch)
     assert models.ready()
+    monkeypatch.setattr("clip_factory.models.subprocess.run", Mock(return_value=SimpleNamespace(stdout="{}")))
+    assert not models.ready()
+    monkeypatch.setattr(
+        "clip_factory.models.subprocess.run", Mock(side_effect=subprocess.TimeoutExpired("probe", 90))
+    )
+    assert not models.ready()
     models.python.unlink()
     assert not models.ready()
 
 
 def test_require_platform_and_available_memory(models, monkeypatch):
     installed(models, "qwen-small")
-    runtime_ready(models)
+    runtime_ready(models, monkeypatch)
     monkeypatch.setattr("clip_factory.models.apple_silicon", lambda: False)
     with pytest.raises(WorkError, match="Apple Silicon"):
         models.require("qwen-small", "llm")
@@ -74,7 +111,9 @@ def test_require_platform_and_available_memory(models, monkeypatch):
     monkeypatch.setattr("clip_factory.models.psutil.virtual_memory", lambda: SimpleNamespace(available=1))
     with pytest.raises(WorkError, match="memory"):
         models.require("qwen-small", "llm")
-    monkeypatch.setattr("clip_factory.models.psutil.virtual_memory", lambda: SimpleNamespace(available=100 * 10**9))
+    monkeypatch.setattr(
+        "clip_factory.models.psutil.virtual_memory", lambda: SimpleNamespace(available=100 * 10**9)
+    )
     assert models.require("qwen-small", "llm") is None
     models.jobs.process.assert_not_called()
 
@@ -92,3 +131,191 @@ def test_non_apple_setup_never_runs_installation(models, monkeypatch):
     with pytest.raises(WorkError, match="Manual editing works"):
         models.setup("job")
     models.jobs.process.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "damage", ["empty", "repo", "revision", "size", "missing", "traversal", "reserved", "symlink", "shard"]
+)
+def test_installed_rejects_unsafe_or_incomplete_manifests(models, tmp_path, damage):
+    installed(models, "qwen-small")
+    directory = models.model_dir / "qwen-small"
+    marker = directory / ".complete"
+    data = json.loads(marker.read_text())
+    if damage == "empty":
+        data = {}
+    elif damage == "repo":
+        data["repo"] = "other/repo"
+    elif damage == "revision":
+        data["revision"] = "main"
+    elif damage == "size":
+        data["files"][0]["size"] += 1
+    elif damage == "missing":
+        (directory / "weights.npz").unlink()
+    elif damage in {"traversal", "reserved"}:
+        data["files"].append({"name": "../escape" if damage == "traversal" else ".complete", "size": 1})
+    elif damage == "symlink":
+        weight = directory / "weights.npz"
+        other = tmp_path / "elsewhere"
+        other.write_bytes(weight.read_bytes())
+        weight.unlink()
+        weight.symlink_to(other)
+    else:
+        index = directory / "model.safetensors.index.json"
+        index.write_text(json.dumps({"weight_map": {"w": "missing.safetensors"}}))
+        data["files"].append({"name": index.name, "size": index.stat().st_size})
+    marker.write_text(json.dumps(data))
+    assert not models.item("qwen-small")["installed"]
+
+
+@pytest.fixture
+def hub(models, monkeypatch):
+    import huggingface_hub
+
+    files = {"config.json": b"{}", "model.safetensors": b"fake weights"}
+    info = SimpleNamespace(
+        sha=SHA, siblings=[SimpleNamespace(rfilename=n, size=len(b)) for n, b in files.items()]
+    )
+    info.siblings.append(SimpleNamespace(rfilename=".gitattributes", size=3))
+    api = Mock()
+    api.model_info.return_value = info
+    monkeypatch.setattr(huggingface_hub, "HfApi", lambda: api)
+    monkeypatch.setattr("clip_factory.models.shutil.disk_usage", lambda p: SimpleNamespace(free=10**10))
+
+    def download(repo, name, *, revision, local_dir, tqdm_class):
+        assert revision == SHA
+        bar = tqdm_class(total=len(files[name]))
+        bar.update(len(files[name]))
+        bar.close()
+        (local_dir / name).write_bytes(files[name])
+
+    transfer = Mock(side_effect=download)
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", transfer)
+    return api, transfer, info
+
+
+def test_download_uses_immutable_metadata_and_atomic_manifest(models, hub):
+    api, transfer, _ = hub
+    assert models.download("job", "qwen-small")["installed"]
+    api.model_info.assert_called_once_with(CATALOG[0]["repo"], revision=None, files_metadata=True)
+    target = models.model_dir / "qwen-small"
+    assert json.loads((target / ".complete").read_text()) == {
+        "repo": CATALOG[0]["repo"],
+        "revision": SHA,
+        "files": [{"name": "config.json", "size": 2}, {"name": "model.safetensors", "size": 12}],
+    }
+    assert models.item("qwen-small")["installed"]
+    assert transfer.call_count == 2
+    assert not (target / ".download.json").exists()
+    assert any(
+        c.kwargs.get("message") == "Downloading model weights (bytes)"
+        for c in models.jobs.update.call_args_list
+    )
+
+
+def test_failed_transfer_resumes_pinned_revision(models, hub):
+    api, transfer, _ = hub
+    original = transfer.side_effect
+    transfer.side_effect = OSError("network")
+    with pytest.raises(WorkError, match="pinned revision"):
+        models.download("job", "qwen-small")
+    assert not models.item("qwen-small")["installed"]
+    transfer.side_effect = original
+    models.download("job", "qwen-small")
+    assert api.model_info.call_args.kwargs == {"revision": SHA, "files_metadata": True}
+
+
+def test_download_checks_disk_before_each_file(models, hub, monkeypatch):
+    _, transfer, _ = hub
+    monkeypatch.setattr(
+        "clip_factory.models.shutil.disk_usage",
+        Mock(side_effect=[SimpleNamespace(free=10**10), SimpleNamespace(free=0)]),
+    )
+    with pytest.raises(WorkError, match="disk"):
+        models.download("job", "qwen-small")
+    assert transfer.call_count == 1
+    assert not models.item("qwen-small")["installed"]
+
+
+def test_download_cancels_inside_http_progress(models, hub):
+    _, transfer, _ = hub
+    cancelled = False
+
+    def check(job):
+        if cancelled:
+            raise JobCancelled()
+
+    def download(repo, name, *, revision, local_dir, tqdm_class):
+        nonlocal cancelled
+        bar = tqdm_class(total=2)
+        cancelled = True
+        bar.update(1)
+
+    models.jobs.check.side_effect = check
+    transfer.side_effect = download
+    with pytest.raises(JobCancelled):
+        models.download("job", "qwen-small")
+    assert not models.item("qwen-small")["installed"]
+
+
+@pytest.mark.parametrize("name,size", [("../outside.json", 2), (".complete", 2), ("config.json", None)])
+def test_download_rejects_unsafe_or_missing_metadata(models, hub, name, size):
+    _, transfer, info = hub
+    info.siblings = [SimpleNamespace(rfilename=name, size=size)]
+    with pytest.raises(WorkError, match="verification failed"):
+        models.download("job", "qwen-small")
+    transfer.assert_not_called()
+
+
+def test_run_sequential_tasks_never_reuse_response(models, monkeypatch):
+    installed(models, "qwen-small")
+    runtime_ready(models, monkeypatch)
+    monkeypatch.setattr("clip_factory.models.apple_silicon", lambda: True)
+    monkeypatch.setattr(
+        "clip_factory.models.psutil.virtual_memory", lambda: SimpleNamespace(available=100 * 10**9)
+    )
+    monkeypatch.setenv("CLIP_META_APP_SECRET", "private")
+    monkeypatch.setenv("PROVIDER_API_KEY", "private")
+    monkeypatch.setenv("SOME_TOKEN", "private")
+    results = iter([{"output": "first"}, {"output": "second"}, None])
+
+    def process(job, command, **kwargs):
+        request, response = map(__import__("pathlib").Path, command[-2:])
+        assert not response.exists()
+        assert json.loads(request.read_text())["model"] == str(models.model_dir / "qwen-small")
+        assert Path(command[1]).is_file()
+        assert kwargs["env"]["HF_HUB_OFFLINE"] == "1"
+        assert "PATH" in kwargs["env"]
+        assert not any(k in kwargs["env"] for k in ("CLIP_META_APP_SECRET", "PROVIDER_API_KEY", "SOME_TOKEN"))
+        result = next(results)
+        if result:
+            response.write_text(json.dumps(result))
+
+    from pathlib import Path
+
+    models.jobs.process.side_effect = process
+    assert models.run("samejob", "qwen-small", "generate", prompt="first")["output"] == "first"
+    assert models.run("samejob", "qwen-small", "generate", prompt="second")["output"] == "second"
+    with pytest.raises(WorkError, match="no result"):
+        models.run("samejob", "qwen-small", "generate", prompt="third")
+    assert not (models.root / "work" / "samejob" / "request.json").exists()
+
+
+def test_run_bounds_before_starting_worker(models):
+    with pytest.raises(WorkError, match="input"):
+        models.run("job", "qwen-small", "generate", prompt="x" * 64_001)
+    with pytest.raises(WorkError, match="input"):
+        models.run("job", "qwen-small", "generate", prompt="x", max_tokens=5000)
+    models.jobs.process.assert_not_called()
+
+
+def test_child_env_removes_credentials_but_keeps_runtime_settings(monkeypatch):
+    for key in ("HF_TOKEN", "API_KEY", "CLIP_META_APP_SECRET", "AWS_ACCESS_KEY_ID", "SERVICE_PASSWORD"):
+        monkeypatch.setenv(key, "secret")
+    monkeypatch.setenv("PATH", "/local/bin")
+    env = child_env()
+    assert env["PATH"] == "/local/bin"
+    assert env["HF_HUB_OFFLINE"] == "1"
+    assert not any(
+        env.get(k)
+        for k in ("HF_TOKEN", "API_KEY", "CLIP_META_APP_SECRET", "AWS_ACCESS_KEY_ID", "SERVICE_PASSWORD")
+    )
