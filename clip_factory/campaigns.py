@@ -150,6 +150,16 @@ class Production(Body):
     subtitles: bool = True
     mode: Literal["direct", "strategy"] = "direct"
     instructions: str = Field(default="", max_length=4000)
+    # Opening variants: omitted keeps the strategy hook as a text overlay (when one exists).
+    opening_treatment: Literal["text_overlay", "cold_open"] | None = None
+    cold_open_start: float | None = Field(default=None, ge=0)
+    cold_open_end: float | None = Field(default=None, gt=0)
+    focus_x: float = Field(default=0.5, ge=0, le=1)
+    changed_variable: str = Field(default="", max_length=120)
+    # Revision of an earlier campaign clip, and explicit retry of a failed render.
+    parent_clip_id: Identifier | None = None
+    change_reason: str = Field(default="", max_length=2000)
+    retry_of_job_id: Identifier | None = None
 
 
 class AgentProduction(Body):

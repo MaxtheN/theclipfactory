@@ -492,7 +492,9 @@ def verify(
             "audio_stream",
             "AAC source audio",
             "pass" if audio and audio["codec"] == "aac" else "fail",
-            f"{audio['codec']}, {audio['channels']} ch" if audio else "Source has audio but the output has none.",
+            f"{audio['codec']}, {audio['channels']} ch"
+            if audio
+            else "Source has audio but the output has none.",
         )
         if audio:
             level = peak_level(jobs, job_id, path)
@@ -545,7 +547,9 @@ def verify(
             f"{len(entries)} cues, verbatim transcript text; no generated words.",
         )
         limit = (measured or expected) + boundary
-        out_of_range = [e for e in entries if e["start"] < -1e-6 or e["end"] <= e["start"] or e["end"] > limit]
+        out_of_range = [
+            e for e in entries if e["start"] < -1e-6 or e["end"] <= e["start"] or e["end"] > limit
+        ]
         ordered = sorted(entries, key=lambda e: e["start"])
         overlaps = sum(1 for a, b in itertools.pairwise(ordered) if b["start"] < a["end"] - 1e-3)
         add(
@@ -629,7 +633,9 @@ def render(
             "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
         )
     else:
-        crop = "crop=1080:1920" if focus_x == 0.5 else f"crop=1080:1920:(iw-ow)*{float(focus_x):.4f}:(ih-oh)/2"
+        crop = (
+            "crop=1080:1920" if focus_x == 0.5 else f"crop=1080:1920:(iw-ow)*{float(focus_x):.4f}:(ih-oh)/2"
+        )
         layout = f"scale=1080:1920:force_original_aspect_ratio=increase:force_divisible_by=2,{crop},setsar=1"
     overlays = ""
     filters = subprocess.run(
@@ -761,7 +767,9 @@ def render(
             failed = "; ".join(
                 f"{c['label']}: {c['detail']}" for c in checks["playback_format"] if c["status"] == "fail"
             )
-            raise WorkError(f"Rendered file failed playback/format checks, so no clip was saved. {failed}"[:1200])
+            raise WorkError(
+                f"Rendered file failed playback/format checks, so no clip was saved. {failed}"[:1200]
+            )
         jobs.check(job_id)
         temporary.replace(output)
         completed = True
