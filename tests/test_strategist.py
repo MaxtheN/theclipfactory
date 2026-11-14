@@ -305,6 +305,9 @@ def test_supported_beliefs_are_proposed_never_approved(tmp_path):
     versions = [v for v in store.all("strategy_versions") if v.get("source") == "strategist"]
     assert versions and all(v["status"] == "proposed" and v["approved_at"] is None for v in versions)
     assert store.get("campaigns", "c")["active_strategy_id"] == "v1"
+    # Craft/selection proposals target the workspace rule set, rebased on the adopted active version.
+    assert all(v["scope"] == "workspace" and v["profile_id"] == "p" and v["base_version_id"] == "v1" for v in versions)
+    assert store.get("profiles", "p")["active_strategy_id"] == "v1"
     selection = next(v for v in versions if v["learning"]["layer"] == "selection")
     text = selection["directions"]["p"]["moment_selection"]
     assert text.startswith("Complete thoughts.") and GUIDANCE_OPEN in text and "story" in text
@@ -312,6 +315,21 @@ def test_supported_beliefs_are_proposed_never_approved(tmp_path):
     assert all(r["status"] == "proposed" and r["approved"] is False for r in campaign_records)
     again = engine.run("p")
     assert not [p for p in again["proposals"] if p["status"] == "proposed"]  # pending proposals are not duplicated
+
+
+def test_rule_proposals_are_one_per_workspace_and_campaign_layer_stays_per_campaign(tmp_path):
+    store, engine, _ = supported_world(tmp_path)
+    store.put("campaigns", {"id": "c2", "name": "C2", "profile_ids": ["p"], "video_ids": [], "brief": {},
+                            "objective": "traffic", "primary_metric": "views", "updated_at": "2026-12-01T00:00:00+00:00"})
+    receipt = engine.run("p")
+    assert receipt["target_metric"] == "views"
+    rules = [p for p in receipt["proposals"] if p["layer"] in ("craft", "selection") and p["status"] == "proposed"]
+    assert rules and len({p["layer"] for p in rules}) == len(rules)
+    assert all(p["scope"] == "workspace" and p["profile_id"] == "p" for p in rules)
+    campaign = [p for p in receipt["proposals"] if p["layer"] == "campaign" and p["status"] == "proposed"]
+    assert {p["campaign_id"] for p in campaign} == {"c", "c2"}
+    pending = engine.pending("p")
+    assert {r["scope"] for r in pending["style_rules"]} == {"workspace"}
 
 
 def test_archived_campaign_and_profile_are_rejected(tmp_path):

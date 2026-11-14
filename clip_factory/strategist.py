@@ -1,7 +1,7 @@
 """The Strategist: a three-layer, proposal-only learning agent over measured posts.
 
 Layers (each with its own cadence and write target):
-  craft      per new measured snapshot   -> PROPOSED Style-rules (strategy) revision
+  craft      per new measured snapshot   -> PROPOSED workspace Style-rules (strategy) revision
   selection  every >=3 new tagged posts  -> PROPOSED moment-selection guidance (same path)
   campaign   every >=8 new tagged posts  -> campaign_strategy_proposals record (human decides)
 
@@ -194,11 +194,14 @@ def account_baseline(store, profile_id: str) -> dict:
             "known_posts": {name: row.get("known_posts", 0) for name, row in metrics.items()}}
 
 
-def target_metric(profile: dict | None, baseline: dict) -> str | None:
+def target_metric(profile: dict | None, baseline: dict, campaigns: list[dict] = ()) -> str | None:
+    """Goals are campaign-scoped: the most recently updated active campaign's known metric wins,
+    then the workspace's legacy metric, then views -> plays -> reach -> impressions -> likes."""
     known = [name for name, value in baseline["metrics"].items() if value is not None]
-    preferred = (profile or {}).get("primary_metric")
-    if preferred in known:
-        return preferred
+    ordered = sorted(campaigns, key=lambda c: str(c.get("updated_at") or ""), reverse=True)
+    for preferred in [c.get("primary_metric") for c in ordered] + [(profile or {}).get("primary_metric")]:
+        if preferred in known:
+            return preferred
     return next((name for name in DEFAULT_METRICS if name in known), known[0] if known else None)
 
 
@@ -445,7 +448,7 @@ class MemoryStore:
 class Strategist:
     """Callbacks are injected: no network, renderer or approval exists here.
 
-    propose_rules(campaign_id, profile_id, layer, changes, beliefs) -> saved PROPOSED strategy version
+    propose_rules(profile_id, layer, changes, beliefs) -> saved PROPOSED workspace Style-rules version
     model_factory(job_id) -> object with admit() -> list[str] (empty = admitted) and generate(prompt) -> str
     """
 
@@ -551,7 +554,7 @@ class Strategist:
         posts = measured_posts(self.store, profile_id)
         tagged = [p for p in posts if p["tagged"]]
         baseline = account_baseline(self.store, profile_id)
-        metric = target_metric(profile, baseline)
+        metric = target_metric(profile, baseline, self.campaigns_for(profile_id)[0])
         due = list(layers) if layers else (list(LAYERS) if receipt["trigger"] == "manual" else self.due_layers(profile_id, posts))
         self._receipt(receipt, status="running", layers=due, progress=10, message="Reading measured posts",
                       target_metric=metric, measured_posts=len(posts), tagged_posts=len(tagged),
@@ -698,9 +701,10 @@ class Strategist:
         return self.store.put("beliefs", current)
 
     # ---- proposals (never approved here)
-    def _proposal_open(self, belief, campaign_id) -> bool:
+    def _proposal_open(self, belief, campaign_id=None) -> bool:
+        """Campaign-layer proposals are per campaign; Style-rule proposals are per workspace."""
         for record in belief.get("proposals", []):
-            if record.get("campaign_id") != campaign_id:
+            if belief["layer"] == "campaign" and record.get("campaign_id") != campaign_id:
                 continue
             kind = "campaign_strategy_proposals" if belief["layer"] == "campaign" else "strategy_versions"
             saved = self.store.get(kind, record.get("id") or "") or {}
@@ -710,38 +714,50 @@ class Strategist:
                 return True  # the creator said no; wait for materially more evidence
         return False
 
+    def _record_proposal(self, beliefs, record, **scope):
+        for belief in beliefs:
+            saved = self.store.get("beliefs", belief["id"])
+            saved["proposals"] = (saved.get("proposals", []) + [{"id": record["id"], **scope,
+                                  "matching": saved["counts"]["matching"], "layer": record["layer"]}])[-10:]
+            self.store.put("beliefs", saved)
+
     def _propose(self, profile_id, layer, beliefs, receipt) -> list[dict]:
         supported = [b for b in beliefs if b["status"] == "supported"]
         if not supported:
             return []
-        active, _ = self.campaigns_for(profile_id)
         results = []
-        for campaign in active[:3]:
-            fresh = [b for b in supported if not self._proposal_open(b, campaign["id"])]
-            if not fresh:
-                continue
-            if layer == "campaign":
+        if layer == "campaign":
+            active, _ = self.campaigns_for(profile_id)
+            for campaign in active[:3]:
+                fresh = [b for b in supported if not self._proposal_open(b, campaign["id"])]
+                if not fresh:
+                    continue
                 record = self._campaign_proposal(profile_id, campaign, fresh)
-            elif self.propose_rules is None:
-                record = {"status": "not_proposed", "detail": "Style-rule proposals are not wired."}
-            else:
-                changes = rule_changes(layer, fresh)
-                try:
-                    version = self.propose_rules(campaign["id"], profile_id, layer, changes, copy.deepcopy(fresh))
-                    record = {"status": "proposed", "id": version["id"], "version": version.get("version"), "approved": False}
-                except HTTPException as exc:
-                    record = {"status": "not_proposed", "detail": str(exc.detail)[:300]}
-                except Exception as exc:  # noqa: BLE001 - advisory; never break a run
-                    record = {"status": "not_proposed", "detail": f"{type(exc).__name__}: proposal could not be saved."}
-            record.update(layer=layer, campaign_id=campaign["id"], belief_ids=[b["id"] for b in fresh], at=self._now())
-            if record["status"] == "proposed":
-                for belief in fresh:
-                    saved = self.store.get("beliefs", belief["id"])
-                    saved["proposals"] = (saved.get("proposals", []) + [{"id": record["id"], "campaign_id": campaign["id"],
-                                          "matching": saved["counts"]["matching"], "layer": layer}])[-10:]
-                    self.store.put("beliefs", saved)
-            results.append(record)
-        return results
+                record.update(layer=layer, campaign_id=campaign["id"], belief_ids=[b["id"] for b in fresh], at=self._now())
+                if record["status"] == "proposed":
+                    self._record_proposal(fresh, record, campaign_id=campaign["id"])
+                results.append(record)
+            return results
+        # Craft and selection target the workspace's ONE Style-rules set.
+        fresh = [b for b in supported if not self._proposal_open(b)]
+        if not fresh:
+            return []
+        if self.propose_rules is None:
+            record = {"status": "not_proposed", "detail": "Style-rule proposals are not wired."}
+        else:
+            changes = rule_changes(layer, fresh)
+            try:
+                version = self.propose_rules(profile_id, layer, changes, copy.deepcopy(fresh))
+                record = {"status": "proposed", "id": version["id"], "version": version.get("version"), "approved": False}
+            except HTTPException as exc:
+                record = {"status": "not_proposed", "detail": str(exc.detail)[:300]}
+            except Exception as exc:  # noqa: BLE001 - advisory; never break a run
+                record = {"status": "not_proposed", "detail": f"{type(exc).__name__}: proposal could not be saved."}
+        record.update(layer=layer, scope="workspace", profile_id=profile_id, belief_ids=[b["id"] for b in fresh],
+                      at=self._now())
+        if record["status"] == "proposed":
+            self._record_proposal(fresh, record, profile_id=profile_id, scope="workspace")
+        return [record]
 
     def _campaign_proposal(self, profile_id, campaign, beliefs) -> dict:
         stamp = self._now()
@@ -773,7 +789,8 @@ class Strategist:
             return self.store.put("campaign_strategy_proposals", record)
 
     def pending(self, profile_id: str) -> dict:
-        rules = sorted(({"id": v["id"], "campaign_id": v.get("campaign_id"), "version": v.get("version"),
+        rules = sorted(({"id": v["id"], "campaign_id": v.get("campaign_id"), "scope": v.get("scope", "campaign"),
+                         "version": v.get("version"),
                          "layer": (v.get("learning") or {}).get("layer"), "reason": v.get("reason", "")[:400]}
                         for v in self.store.all("strategy_versions")
                         if v.get("source") == "strategist" and v.get("status") == "proposed"
@@ -791,7 +808,8 @@ class Strategist:
         beliefs = self.beliefs(profile_id)
         runs = sorted((r for r in self.store.all("strategist_runs") if r.get("profile_id") == profile_id),
                       key=lambda r: r["created_at"], reverse=True)[:5]
-        return {"profile_id": profile_id, "target_metric": target_metric(profile, baseline), "baseline": baseline,
+        return {"profile_id": profile_id, "target_metric": target_metric(profile, baseline, self.campaigns_for(profile_id)[0]),
+                "baseline": baseline,
                 "beliefs": beliefs, "lanes": {layer: [b["id"] for b in beliefs if b["layer"] == layer] for layer in LAYERS},
                 "tagged_posts": [{k: p[k] for k in ("publication_id", "snapshot_id", "clip_id", "published_at", "tags", "trigger")}
                                  for p in posts if p["tagged"]][-30:],
@@ -857,14 +875,16 @@ def simulate(profile: dict, *, seed: int = 7, steps: int = 16) -> dict:
     profile_id = "sim-profile"
     store.put("profiles", {"id": profile_id, "name": f"Synthetic copy of {str(profile.get('name') or 'profile')[:60]}",
                            "primary_metric": "views"})
-    store.put("campaigns", {"id": "sim-campaign", "profile_ids": [profile_id], "video_ids": [], "active_strategy_id": "sim-v1"})
+    store.put("profiles", {**store.get("profiles", profile_id), "active_strategy_id": "sim-v1"})
+    store.put("campaigns", {"id": "sim-campaign", "profile_ids": [profile_id], "video_ids": [], "objective": "awareness",
+                            "primary_metric": "views"})
     store.put("learning_policies", {"id": "sim-policy", "profile_id": profile_id, "campaign_id": "sim-campaign",
                                     "account_id": "sim-account", "enabled": True})
     versions = []
 
-    def propose(campaign_id, pid, layer, changes, beliefs):
+    def propose(pid, layer, changes, beliefs):
         version = {"id": f"sim-v{len(versions) + 2}", "version": len(versions) + 2, "status": "proposed",
-                   "campaign_id": campaign_id, "source": "strategist", "simulated": True,
+                   "scope": "workspace", "profile_id": pid, "campaign_id": None, "source": "strategist", "simulated": True,
                    "learning": {"profile_id": pid, "layer": layer, "belief_ids": [b["id"] for b in beliefs]},
                    "reason": changes["guidance"]}
         versions.append(version)

@@ -249,9 +249,15 @@ class LearningEngine:
             raise HTTPException(422, "Publication clip is outside this campaign/profile.")
         source = self._require("videos", clip["video_id"])
         strategy = self._require("strategy_versions", clip.get("strategy_version_id") or "")
-        if source["id"] not in campaign["video_ids"] or strategy.get("campaign_id") != campaign["id"] or profile["id"] not in strategy.get("directions", {}):
+        from .campaigns import migrate_workspace  # lazy: campaigns -> team -> learning
+
+        # Style rules are workspace-scoped; versions saved before that stay scoped to their campaign.
+        in_scope = (strategy.get("profile_id") == profile["id"] if strategy.get("scope") == "workspace"
+                    else strategy.get("campaign_id") == campaign["id"])
+        if source["id"] not in campaign["video_ids"] or not in_scope or profile["id"] not in strategy.get("directions", {}):
             raise HTTPException(422, "Publication source or strategy is outside its saved scope.")
-        if strategy.get("status") != "approved" or campaign.get("active_strategy_id") != strategy["id"]:
+        workspace = migrate_workspace(self.store, profile["id"]) or profile
+        if strategy.get("status") != "approved" or workspace.get("active_strategy_id") != strategy["id"]:
             raise HTTPException(409, "The publication's approved base is stale; review the new strategy before another experiment.")
         if clip.get("approved") is not True or clip.get("sha256", "").lower() != publication["sha256"].lower():
             raise HTTPException(409, "Register only the exact approved clip hash.")
@@ -794,7 +800,8 @@ def memory_digest(store: Store, profile_id: str, account_id: str | None = None, 
          for v in store.all("strategy_versions")
          if v.get("source") == "learning_experiment" and v.get("status") == "proposed"
          and (v.get("learning") or {}).get("profile_id") == profile_id
-         and (campaign_id is None or v.get("campaign_id") == campaign_id)),
+         # Workspace proposals (campaign_id None) apply to every campaign in the workspace.
+         and (campaign_id is None or v.get("campaign_id") in (None, campaign_id))),
         key=lambda v: (v["campaign_id"] or "", v["version"] or 0, v["id"]))[:5]
     digest = {
         "profile_id": profile_id, "account_id": account_id, "campaign_id": campaign_id,

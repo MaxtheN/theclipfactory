@@ -39,20 +39,31 @@ def setup_campaign(client, videos, *, duration=1):
     assert response.status_code == 201, response.text
     campaign = response.json()
     path = f"/api/campaigns/{campaign['id']}"
-    proposal = client.post(
-        path + "/strategies",
-        json={
-            "reason": "Initial testable direction",
-            "directions": {
-                p["id"]: Direction(hooks=["Original hook"], duration_seconds=duration).model_dump()
-                for p in profiles
-            },
-        },
+    versions = [
+        approve_rules(client, p["id"], Direction(hooks=["Original hook"], duration_seconds=duration))
+        for p in profiles
+    ]
+    return profiles, campaign, versions[0], path
+
+
+def rules_path(profile_id):
+    return f"/api/profiles/{profile_id}/strategies"
+
+
+def propose_rules(client, profile_id, direction, base=None, reason="Initial testable direction"):
+    return client.post(
+        rules_path(profile_id),
+        json={"reason": reason, "base_version_id": base, "direction": direction.model_dump()},
     )
+
+
+def approve_rules(client, profile_id, direction, base=None):
+    proposal = propose_rules(client, profile_id, direction, base)
     assert proposal.status_code == 201, proposal.text
     version = proposal.json()
-    assert client.post(path + f"/strategies/{version['id']}/approve").status_code == 200
-    return profiles, campaign, version, path
+    response = client.post(rules_path(profile_id) + f"/{version['id']}/approve")
+    assert response.status_code == 200, response.text
+    return response.json()
 
 
 def observation(clip_id, value=40):
@@ -77,9 +88,20 @@ def test_campaign_api_requires_auth_and_valid_membership(client, monkeypatch):
         client.post(path + "/render", json={"video_id": video["id"], "profile_id": "other"}).status_code
         == 422
     )
-    for route in ("/api/profiles", "/api/campaigns", path + "/strategies", path + "/observations"):
+    for route in ("/api/profiles", "/api/campaigns", path + "/strategies", path + "/observations",
+                  rules_path(profiles[0]["id"])):
         assert client.get(route, headers={"X-Clip-Token": "wrong"}).status_code == 401
     assert client.post("/api/profiles", json={"name": "Sales", "objective": "sales"}).status_code == 422
+    body = {"name": "Goal", "profile_ids": [profiles[0]["id"]], "objective": "sales"}
+    assert client.post("/api/campaigns", json=body).status_code == 422
+    goal = client.post("/api/campaigns", json={**body, "primary_metric": "orders", "notes": "Holiday angle"})
+    assert goal.status_code == 201, goal.text
+    assert {k: goal.json()[k] for k in ("objective", "primary_metric", "notes")} == {
+        "objective": "sales", "primary_metric": "orders", "notes": "Holiday angle"}
+    # Rules are no longer saved or approved on a campaign.
+    for route in (path + "/strategies", path + "/strategies/any/approve", path + "/strategies/any/restore"):
+        assert client.post(route, json={}).status_code == 410
+    assert client.get(path + "/strategies").json() == []
     assert (
         client.post(
             "/api/profiles", json={"name": "Hidden permission", "publishing_enabled": True}
@@ -99,18 +121,15 @@ def test_pending_strategy_blocks_production_and_cross_campaign_versions(client, 
     path = f"/api/campaigns/{campaign['id']}"
     response = client.post(path + "/render", json={"video_id": video["id"], "profile_id": profile["id"]})
     assert response.status_code == 409
-    other_profiles, _, version, _ = setup_campaign(client, [video])
-    assert client.post(path + f"/strategies/{version['id']}/approve").status_code == 404
-    assert (
-        client.post(
-            path + "/strategies",
-            json={
-                "reason": "Forged profile",
-                "directions": {other_profiles[0]["id"]: Direction().model_dump()},
-            },
-        ).status_code
-        == 422
-    )
+    _, _, version, _ = setup_campaign(client, [video])
+    # Another workspace's version cannot be decided or used as a base here.
+    assert client.post(rules_path(profile["id"]) + f"/{version['id']}/approve").status_code == 404
+    assert propose_rules(client, profile["id"], Direction(), base=version["id"], reason="Forged").status_code == 409
+    pending = propose_rules(client, profile["id"], Direction()).json()
+    assert client.post(path + "/render", json={"video_id": video["id"], "profile_id": profile["id"]}).status_code == 409
+    approved = client.post(rules_path(profile["id"]) + f"/{pending['id']}/approve").json()
+    assert client.get(f"/api/profiles/{profile['id']}").json()["active_strategy_id"] == approved["id"]
+    assert [v["id"] for v in client.get(rules_path(profile["id"])).json()] == [approved["id"]]
 
 
 def test_queue_freezes_strategy_and_direct_selection_is_explicit(client, monkeypatch):
@@ -141,19 +160,12 @@ def test_queue_freezes_strategy_and_direct_selection_is_explicit(client, monkeyp
                 "instructions": "Exact range, keep my wording",
             },
         ).json()
-        revised = client.post(
-            path + "/strategies",
-            json={
-                "base_version_id": version["id"],
-                "reason": "Change after queueing",
-                "directions": {
-                    profiles[0]["id"]: Direction(
-                        duration_seconds=2, hooks=["New hook"], framing="fill"
-                    ).model_dump()
-                },
-            },
-        ).json()
-        assert client.post(path + f"/strategies/{revised['id']}/approve").status_code == 200
+        approve_rules(
+            client,
+            profiles[0]["id"],
+            Direction(duration_seconds=2, hooks=["New hook"], framing="fill"),
+            base=version["id"],
+        )
     finally:
         release.set()
     wait_job(client, blocker["id"])
@@ -194,11 +206,19 @@ def test_agent_context_uses_only_its_profile_and_campaign(client, monkeypatch):
         return {}
 
     monkeypatch.setattr(client.app.state.team, "execute", execute)
+    update = {k: campaign[k] for k in ("name", "brief", "profile_ids", "video_ids")}
+    saved = client.put(path, json={**update, "objective": "traffic", "primary_metric": "episode_visits",
+                                   "notes": "Favour the guest's founding story."})
+    assert saved.status_code == 200, saved.text
     response = client.post(path + "/produce", json={"video_id": video["id"], "profile_id": profiles[0]["id"]})
     assert response.status_code == 202, response.text
     wait_job(client, response.json()["job"]["id"])
     context = seen[0]["context"]
     assert context["campaign_snapshot"]["strategy_version_id"] == version["id"]
+    assert context["campaign_snapshot"]["strategy_scope"] == "workspace"
+    assert context["campaign_snapshot"]["goal"] == {"objective": "traffic", "primary_metric": "episode_visits"}
+    assert context["campaign_snapshot"]["campaign_notes"] == "Favour the guest's founding story."
+    assert seen[0]["objective"] == "traffic"
     assert [p["clip_id"] for p in context["previous_observations"]] == ["clip0"]
     legacy = client.app.state.team.create(
         video, {"brand": "", "language": "en", "objective": "discovery"}, "qwen-small"
@@ -311,13 +331,14 @@ def test_real_cross_source_learning_loop_and_restart(client, tmp_path):
     assert proposal.status_code == 201, proposal.text
     learned = proposal.json()
     assert learned["status"] == "proposed"
-    assert client.get(path).json()["active_strategy_id"] == initial["id"]
-    assert client.post(path + f"/strategies/{learned['id']}/approve").status_code == 200
+    workspace = f"/api/profiles/{profiles[0]['id']}"
+    assert client.get(workspace).json()["active_strategy_id"] == initial["id"]
+    assert client.post(rules_path(profiles[0]["id"]) + f"/{learned['id']}/approve").status_code == 200
     fourth = render(videos[1])
     assert fourth["strategy_version_id"] == learned["id"]
     assert fourth["hook"] == "Evidence informed next hook" and fourth["framing"] == "fill"
     assert fourth["strategy_snapshot"]["evidence_refs"] == [known.json()["id"]]
-    assert learned["directions"][profiles[1]["id"]] == initial["directions"][profiles[1]["id"]]
+    assert set(learned["directions"]) == {profiles[0]["id"]}
     assert first["strategy_version_id"] == revision["strategy_version_id"] == initial["id"]
     for clip in (second, revision, fourth):
         assert client.put(f"/api/clips/{clip['id']}", json={"approved": True}).status_code == 200
@@ -326,7 +347,7 @@ def test_real_cross_source_learning_loop_and_restart(client, tmp_path):
     with TestClient(
         create_app(root, token=SESSION), base_url="http://127.0.0.1", headers={"X-Clip-Token": SESSION}
     ) as reopened:
-        assert reopened.get(path).json()["active_strategy_id"] == learned["id"]
+        assert reopened.get(workspace).json()["active_strategy_id"] == learned["id"]
         assert len(reopened.get(path + "/observations").json()) == 2
         assert len(reopened.get("/api/clips").json()) == 4
         assert len(reopened.get(f"/api/profiles/{profiles[0]['id']}").json()["production_history"]) == 4
@@ -336,15 +357,7 @@ def test_real_cross_source_learning_loop_and_restart(client, tmp_path):
 def test_displayed_strategy_mismatch_requires_reload(client, monkeypatch):
     video = upload_mock(client, monkeypatch)
     profiles, _, initial, path = setup_campaign(client, [video])
-    revision = client.post(
-        path + "/strategies",
-        json={
-            "base_version_id": initial["id"],
-            "reason": "Another session changed direction",
-            "directions": {profiles[0]["id"]: Direction(hooks=["Changed"]).model_dump()},
-        },
-    ).json()
-    assert client.post(path + f"/strategies/{revision['id']}/approve").status_code == 200
+    approve_rules(client, profiles[0]["id"], Direction(hooks=["Changed"]), base=initial["id"])
     for action in ("render", "produce"):
         response = client.post(
             path + "/" + action,

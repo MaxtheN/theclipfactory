@@ -132,6 +132,8 @@ def test_due_three_days_persists_frozen_one_field_draft_and_never_promotes_strat
     assert experiment["raw_parent_edit_plan"] == experiment["parent_edit_plan"]
     assert experiment["render_request"] == {"campaign_id": "campaign", "profile_id": "profile", "video_id": "source", "expected_strategy_version_id": "base", "start": 0., "end": 30., "hook": "Try a clearer point", "caption": "Source context", "subtitles": True, "opening_treatment": "text_overlay", "focus_x": .5, "parent_clip_id": "parent", "change_reason": "Test the opening against measured observations.", "changed_variable": "hook"}
     assert d.store.get("campaigns", "campaign")["active_strategy_id"] == "base"
+    # The workspace adopted the campaign's approved base on read; learning never promotes a version.
+    assert d.store.get("profiles", "profile")["active_strategy_id"] == "base"
     assert d.store.get("clips", "parent")["approved"] is True
     assert d.calls == {"collect": 1, "analyze": 1, "produce": 1}
     assert d.engine().tick() == []
@@ -221,7 +223,7 @@ def test_stale_strategy_or_revoked_account_blocks_before_collection(domain):
     d = domain
     d.publish()
     d.clock.advance(days=3)
-    d.store.patch("campaigns", "campaign", active_strategy_id="new-base")
+    d.store.patch("profiles", "profile", active_strategy_id="new-base")
     assert d.service.tick()[0]["status"] == "blocked"
     assert d.calls["collect"] == 0
 
@@ -232,7 +234,7 @@ def test_base_change_or_policy_disable_during_analysis_blocks_before_production(
     d.clock.advance(days=3)
 
     def changed(context):
-        d.store.patch("campaigns", "campaign", active_strategy_id="another-base")
+        d.store.patch("profiles", "profile", active_strategy_id="another-base")
         return d.analyze(context)
 
     assert d.engine(analyze=changed).tick()[0]["status"] == "blocked"

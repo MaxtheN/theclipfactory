@@ -9,7 +9,7 @@ import time
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from .campaigns import Production
+from .campaigns import Production, migrate_campaign
 from .jobs import WorkError
 from .learning import ANALYST_TIMEOUT_SECONDS, bound_digest
 from .learning import AnalysisResult as LearningDecision
@@ -17,6 +17,14 @@ from .meta import MetaError, SecureTokenStore
 from .ollama import LlmId, is_ollama, model_name
 from .store import now
 from .team import decode_output
+
+
+def campaign_goal(store, campaign_id, profile) -> dict:
+    campaign = store.get("campaigns", campaign_id) if isinstance(campaign_id, str) else None
+    if campaign:
+        campaign = migrate_campaign(store, campaign)
+        return {"objective": campaign.get("objective"), "primary_metric": campaign.get("primary_metric")}
+    return {k: (profile or {}).get(k) for k in ("objective", "primary_metric")}
 
 
 class ConnectionSettings(BaseModel):
@@ -175,8 +183,10 @@ class AutonomyRuntime:
         evidence = {"snapshot": {k: context["snapshot"].get(k) for k in
                 ("id", "metrics", "units", "window_start", "window_end", "collected_at", "source", "cumulative")},
             "policy": {k: context["policy"].get(k) for k in ("allowed_changes", "cadence_days")},
-            "profile": {k: context["profile"].get(k) for k in
-                ("objective", "primary_metric", "audience", "brand_context", "creative_preferences")},
+            # Workspace context plus THIS campaign's goal (goals are campaign-scoped).
+            "profile": {**{k: context["profile"].get(k) for k in
+                ("audience", "brand_context", "creative_preferences")}, **campaign_goal(
+                    self.store, context["policy"].get("campaign_id"), context["profile"])},
             "publication": {k: context["publication"].get(k) for k in ("media_id", "published_at", "mapping_source")},
             "parent_clip": {k: clip.get(k) for k in ("id", "start", "end", "hook", "caption")},
             "source": {"id": source["id"], "duration": source["duration"], "timed_cues": cues},

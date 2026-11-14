@@ -179,35 +179,44 @@ def test_produced_draft_auto_proposes_an_unapproved_learning_rule_and_guards_sti
     assert "not proof" in learning["caveat"] and "Observational" in version["reason"]
     assert version["directions"]["profile"]["hooks"][0] == "Try a clearer point"
     assert version["directions"]["profile"]["confidence"] == "low"
-    # Never auto-approved; the campaign still runs on the old base.
+    # A workspace proposal, traced to the campaign whose experiment produced it.
+    assert (version["scope"], version["profile_id"], version["campaign_id"]) == ("workspace", "profile", None)
+    assert learning["campaign_id"] == "campaign" and set(version["directions"]) == {"profile"}
+    # Never auto-approved; the workspace still runs on the old base (adopted from the campaign).
+    assert d.store.get("profiles", "profile")["active_strategy_id"] == "base"
     assert d.store.get("campaigns", "campaign")["active_strategy_id"] == "base"
     # Idempotent per experiment.
     assert d.engine._propose_rule(experiment["id"])["strategy_version_id"] == version["id"]
     assert len([v for v in d.store.all("strategy_versions") if v.get("source") == "learning_experiment"]) == 1
     # Existing stale-parent guard: once another revision is approved first, this one cannot be.
-    manual = d.store.put("strategy_versions", {**d.store.get("strategy_versions", "base"), "id": "manual", "version": 3,
-        "status": "proposed", "base_version_id": "base", "source": "manual"})
-    d.campaigns.decision("campaign", manual["id"], approve=True)
+    manual = d.store.put("strategy_versions", {**version, "id": "manual", "version": 3, "source": "manual"})
+    d.campaigns.decision("profile", manual["id"], approve=True)
     with pytest.raises(HTTPException) as stale:
-        d.campaigns.decision("campaign", version["id"], approve=True)
+        d.campaigns.decision("profile", version["id"], approve=True)
     assert stale.value.status_code == 409
 
 
-def test_learning_rule_respects_profile_coverage_guard_and_explicit_approval(domain):
+def test_learning_rule_respects_workspace_coverage_guard_and_explicit_approval(domain):
     d = domain
     d.clock.advance(days=3)
     d.engine.tick()
     d.complete()
     version_id = d.engine.list_experiments()[0]["strategy_proposal"]["strategy_version_id"]
+    version = d.store.get("strategy_versions", version_id)
+    # Coverage: a version that does not carry exactly this workspace's rules cannot be approved.
+    d.store.put("strategy_versions", {**version, "id": "partial", "directions": {"late": version["directions"]["profile"]}})
+    with pytest.raises(HTTPException) as coverage:
+        d.campaigns.decision("profile", "partial", approve=True)
+    assert coverage.value.status_code == 409
+    # Adding another workspace to the campaign does not touch this workspace's chain.
     campaign = d.store.get("campaigns", "campaign")
     d.store.put("profiles", {"id": "late"})
     d.store.put("campaigns", {**campaign, "profile_ids": ["profile", "late"]})
-    with pytest.raises(HTTPException) as coverage:
-        d.campaigns.decision("campaign", version_id, approve=True)
-    assert coverage.value.status_code == 409
-    d.store.put("campaigns", campaign)
-    approved = d.campaigns.decision("campaign", version_id, approve=True)
+    assert d.store.get("profiles", "profile")["active_strategy_id"] == "base"
+    approved = d.campaigns.decision("profile", version_id, approve=True)
     assert approved["status"] == "approved"
+    assert d.store.get("profiles", "profile")["active_strategy_id"] == version_id
+    assert d.store.get("campaigns", "campaign")["active_strategy_id"] == "base"
 
 
 def test_stale_base_records_not_proposed_without_undoing_the_draft(domain):
@@ -215,11 +224,10 @@ def test_stale_base_records_not_proposed_without_undoing_the_draft(domain):
     d.clock.advance(days=3)
     d.engine.tick()
     d.store.put("strategy_versions", {**d.store.get("strategy_versions", "base"), "id": "newer", "version": 2})
-    original = d.store.get("campaigns", "campaign")
     experiment = d.engine.list_experiments()[0]
-    d.store.put("campaigns", {**original, "active_strategy_id": "newer"})
+    d.store.patch("profiles", "profile", active_strategy_id="newer")
     proposal = d.engine._propose_rule(experiment["id"])
-    assert proposal["status"] == "not_proposed" and "Strategy changed" in proposal["detail"]
+    assert proposal["status"] == "not_proposed" and "rules changed" in proposal["detail"]
     assert not [v for v in d.store.all("strategy_versions") if v.get("source") == "learning_experiment"]
 
 

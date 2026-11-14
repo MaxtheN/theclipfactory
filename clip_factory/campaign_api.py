@@ -1,8 +1,9 @@
 """Authenticated local campaign endpoints installed on the existing application."""
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from .campaigns import (
+    RULES_MOVED,
     AgentProduction,
     Campaign,
     Campaigns,
@@ -12,7 +13,6 @@ from .campaigns import (
     Production,
     Profile,
     Proposal,
-    Restore,
 )
 
 
@@ -57,25 +57,36 @@ def install(app: FastAPI, campaigns: Campaigns, *, render, produce):
     def restore_campaign(identifier: str):
         return campaigns.restore_campaign(identifier)
 
-    @app.get("/api/campaigns/{identifier}/strategies")
+    # Workspace Style rules: one propose -> approve chain per profile, inherited by campaigns.
+    @app.get("/api/profiles/{identifier}/strategies")
     def strategies(identifier: str):
         return campaigns.versions(identifier)
 
-    @app.post("/api/campaigns/{identifier}/strategies", status_code=201)
+    @app.post("/api/profiles/{identifier}/strategies", status_code=201)
     def propose(identifier: str, body: Proposal):
         return campaigns.propose(identifier, body)
 
-    @app.post("/api/campaigns/{identifier}/strategies/{version_id}/approve")
+    @app.post("/api/profiles/{identifier}/strategies/{version_id}/approve")
     def approve(identifier: str, version_id: str):
         return campaigns.decision(identifier, version_id, approve=True)
 
-    @app.post("/api/campaigns/{identifier}/strategies/{version_id}/reject")
+    @app.post("/api/profiles/{identifier}/strategies/{version_id}/reject")
     def reject(identifier: str, version_id: str, body: Decision):
         return campaigns.decision(identifier, version_id, approve=False, reason=body.reason)
 
-    @app.post("/api/campaigns/{identifier}/strategies/{version_id}/restore", status_code=201)
-    def restore(identifier: str, version_id: str, body: Restore):
+    @app.post("/api/profiles/{identifier}/strategies/{version_id}/restore", status_code=201)
+    def restore(identifier: str, version_id: str, body: Decision):
         return campaigns.restore(identifier, version_id, body)
+
+    # Read-only history of rules saved on a campaign before rules moved to the workspace.
+    @app.get("/api/campaigns/{identifier}/strategies")
+    def campaign_strategies(identifier: str):
+        return campaigns.campaign_versions(identifier)
+
+    @app.post("/api/campaigns/{identifier}/strategies")
+    @app.post("/api/campaigns/{identifier}/strategies/{version_id}/{action}")
+    def campaign_rules_moved(identifier: str, version_id: str = "", action: str = ""):
+        raise HTTPException(410, RULES_MOVED)
 
     @app.get("/api/campaigns/{identifier}/observations")
     def observations(identifier: str):

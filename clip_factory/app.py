@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from . import media, scouts
 from .ads import AdsClient
 from .campaign_api import install as install_campaign_api
-from .campaigns import Campaigns
+from .campaigns import Campaigns, snapshot_goal
 from .jobs import Jobs, WorkError
 from .meta import MetaClient, MetaError, MetaOAuth, SecureTokenStore, validate_public_video_url
 from .models import Models, apple_silicon
@@ -1422,7 +1422,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 profile = campaign_snapshot["profile_snapshot"]
                 config.update(
                     brand=profile["brand_context"],
-                    objective=profile["objective"],
+                    objective=snapshot_goal(campaign_snapshot)["objective"],
                     _campaign_snapshot=campaign_snapshot,
                 )
             run = app.state.team.create(video, config, model_id, mode=mode, revision_budget=revision_budget)
@@ -2473,7 +2473,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 end=end,
                 hook=body.hook if body.hook is not None else (direction["hooks"] or [""])[0],
                 caption=body.caption,
-                objective=snapshot["profile_snapshot"]["objective"],
+                objective=snapshot_goal(snapshot)["objective"],
                 subtitles=body.subtitles,
                 framing=direction["framing"],
                 caption_style=direction["caption_style"],

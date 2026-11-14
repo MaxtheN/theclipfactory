@@ -1,4 +1,12 @@
-"""Local campaign context, immutable approved strategy revisions, and scoped evidence.
+"""Workspaces, campaigns, immutable approved Style-rules revisions, and scoped evidence.
+
+A workspace is a backend ``profile`` (one person, channel or brand). It owns ONE versioned
+Style-rules set (propose -> explicit approve), inherited by every campaign in it. A campaign
+is a goal-scoped push inside a workspace: it owns its objective/primary metric and optional
+free-text notes appended to production prompts. It never has its own approval chain.
+
+Records saved before this model (rules on campaigns, goal on the profile) are adopted on
+read, idempotently, without rewriting any version or production snapshot.
 
 No social connection, model call, publication or spending permission is granted here.
 Legacy clips stay unassigned. Every new campaign production captures its context.
@@ -36,9 +44,13 @@ class Body(BaseModel):
 
 
 class Profile(Body):
+    """A workspace: who it speaks to, its voice and boundaries. Goals live on campaigns."""
+
     name: str = Field(min_length=1, max_length=200)
     audience: str = Field(default="", max_length=3000)
     brand_context: str = Field(default="", max_length=4000)
+    # Legacy workspace-wide goal. Only backfills campaigns saved before campaigns had goals;
+    # an update that omits these keeps the stored values.
     objective: Objective = "discovery"
     primary_metric: str | None = Field(default=None, max_length=200)
     creative_preferences: str = Field(default="", max_length=4000)
@@ -64,11 +76,20 @@ class Campaign(Body):
     brief: Brief = Field(default_factory=Brief)
     profile_ids: list[Identifier] = Field(min_length=1, max_length=30)
     video_ids: list[Identifier] = Field(default_factory=list, max_length=100)
+    # The campaign's own goal. Discovery (no metric) stays valid. An update that omits
+    # these keeps the stored goal.
+    objective: Objective = "discovery"
+    primary_metric: str | None = Field(default=None, max_length=200)
+    # Campaign-specific note appended to production prompts. Not a rule set: it is never
+    # approved separately and cannot replace the workspace's approved Style rules.
+    notes: str = Field(default="", max_length=2000)
 
     @model_validator(mode="after")
     def unique_members(self):
         if not self.name.strip():
             raise ValueError("Campaign name must not be blank.")
+        if self.objective != "discovery" and not (self.primary_metric or "").strip():
+            raise ValueError("Select a primary metric for goal-directed work.")
         for members in (self.profile_ids, self.video_ids):
             if len(set(members)) != len(members):
                 raise ValueError("Campaign membership must not contain duplicates.")
@@ -96,17 +117,15 @@ class Direction(Body):
 
 
 class Proposal(Body):
-    directions: dict[Identifier, Direction] = Field(min_length=1, max_length=30)
+    """A complete proposed workspace Style-rules set, built on the active approved version."""
+
+    direction: Direction
     reason: str = Field(min_length=1, max_length=4000)
     base_version_id: Identifier | None = None
 
 
 class Decision(Body):
     reason: str = Field(default="", max_length=4000)
-
-
-class Restore(Decision):
-    profile_id: Identifier
 
 
 class Observation(Body):
@@ -183,6 +202,126 @@ class AgentProduction(Body):
     strategy: Literal["team", "swarm"] = "team"
 
 
+LEGACY_GOAL_KEYS = ("objective", "primary_metric")
+MIGRATED_FROM_CAMPAIGN = "migrated_from_campaign"
+INHERITED_FROM_WORKSPACE = "inherited_from_workspace"
+RULES_MOVED = (
+    "Style rules belong to the workspace now. Use /api/profiles/{profile_id}/strategies; "
+    "campaign goals and notes are saved on the campaign."
+)
+
+
+def is_workspace_version(version: dict | None, profile_id: str | None = None) -> bool:
+    return (
+        isinstance(version, dict)
+        and version.get("scope") == "workspace"
+        and (profile_id is None or version.get("profile_id") == profile_id)
+    )
+
+
+def migrate_workspace(store: Store, profile_id: str) -> dict | None:
+    """Adopt a pre-workspace campaign rule version as this workspace's active one. Idempotent.
+
+    Runs only when the workspace has no active rules and no workspace versions yet. It
+    points the workspace at the most recently approved campaign version that carries this
+    profile's direction (unarchived campaigns first) and records the provenance. No version,
+    campaign pointer, clip or production snapshot is changed, so earlier productions keep
+    citing the exact version they used and that version stays the current approved base.
+    """
+    with store.lock:
+        profile = store.get("profiles", profile_id)
+        if not isinstance(profile, dict) or profile.get("active_strategy_id"):
+            return profile
+        versions = store.all("strategy_versions")
+        if any(is_workspace_version(v, profile_id) for v in versions):
+            return profile
+        campaigns = {
+            c["id"]: c
+            for c in store.all("campaigns")
+            if isinstance(c, dict) and profile_id in (c.get("profile_ids") or [])
+        }
+        candidates = [
+            v
+            for v in versions
+            if isinstance(v, dict)
+            and v.get("campaign_id") in campaigns
+            and v.get("status") == "approved"
+            and isinstance(v.get("directions"), dict)
+            and profile_id in v["directions"]
+        ]
+        if not candidates:
+            return profile
+        actives = {c.get("active_strategy_id") for c in campaigns.values()}
+
+        def rank(version):
+            campaign = campaigns[version["campaign_id"]]
+            return (
+                not campaign.get("archived_at"),
+                str(version.get("approved_at") or ""),
+                version["id"] in actives,
+                version.get("version") or 0,
+                str(version.get("created_at") or ""),
+                version["id"],
+            )
+
+        chosen = max(candidates, key=rank)
+        profile = {
+            **profile,
+            "active_strategy_id": chosen["id"],
+            "strategy_migration": {
+                "provenance": MIGRATED_FROM_CAMPAIGN,
+                "version_id": chosen["id"],
+                "version": chosen.get("version"),
+                "campaign_id": chosen["campaign_id"],
+                "approved_at": chosen.get("approved_at"),
+                "candidate_version_ids": sorted(v["id"] for v in candidates),
+                "migrated_at": now(),
+            },
+        }
+        store.put("profiles", profile)
+        return profile
+
+
+def migrate_campaign(store: Store, campaign: dict) -> dict:
+    """Give a pre-goal campaign its workspace's legacy goal once. Idempotent."""
+    if not isinstance(campaign, dict) or "objective" in campaign:
+        return campaign
+    with store.lock:
+        current = store.get("campaigns", campaign.get("id") or "")
+        if not isinstance(current, dict) or "objective" in current:
+            return current or campaign
+        source = None
+        for profile_id in current.get("profile_ids") or []:
+            profile = store.get("profiles", profile_id)
+            if isinstance(profile, dict) and profile.get("objective"):
+                source = profile
+                break
+        objective = (source or {}).get("objective") or "discovery"
+        metric = (source or {}).get("primary_metric") if objective != "discovery" else None
+        if objective != "discovery" and not (metric or "").strip():
+            objective, metric = "discovery", None
+        current = {
+            **current,
+            "objective": objective,
+            "primary_metric": metric,
+            "goal_provenance": {
+                "source": INHERITED_FROM_WORKSPACE,
+                "profile_id": (source or {}).get("id"),
+                "at": now(),
+            },
+        }
+        return store.put("campaigns", current)
+
+
+def snapshot_goal(snapshot: dict) -> dict:
+    """The campaign goal captured in a production snapshot; old snapshots carried it on the profile."""
+    goal = snapshot.get("goal") if isinstance(snapshot.get("goal"), dict) else None
+    if goal is None:
+        profile = snapshot.get("profile_snapshot") or {}
+        goal = {"objective": profile.get("objective"), "primary_metric": profile.get("primary_metric")}
+    return {"objective": goal.get("objective") or "discovery", "primary_metric": goal.get("primary_metric")}
+
+
 class Campaigns:
     def __init__(self, store: Store):
         self.store = store
@@ -191,7 +330,17 @@ class Campaigns:
         value = self.store.get(kind, identifier)
         if not value:
             raise HTTPException(404, f"{kind.replace('_', ' ').capitalize()} record not found.")
+        if kind == "profiles":
+            value = migrate_workspace(self.store, identifier) or value
+        elif kind == "campaigns":
+            value = migrate_campaign(self.store, value)
         return value
+
+    def active_workspace(self, identifier):
+        profile = self.require("profiles", identifier)
+        if profile.get("archived_at"):
+            raise HTTPException(409, "This workspace is archived. Restore it before changing its style rules.")
+        return profile
 
     def active_campaign(self, identifier):
         campaign = self.require("campaigns", identifier)
@@ -204,7 +353,11 @@ class Campaigns:
     def list_campaigns(self, include_archived=False):
         if type(include_archived) is not bool:
             raise HTTPException(422, "include_archived must be a boolean.")
-        return [c for c in self.store.all("campaigns") if include_archived or not c.get("archived_at")]
+        return [
+            migrate_campaign(self.store, c)
+            for c in self.store.all("campaigns")
+            if include_archived or not c.get("archived_at")
+        ]
 
     @staticmethod
     def _campaign_scopes(record):
@@ -346,14 +499,22 @@ class Campaigns:
             ],
         }
 
+    @staticmethod
+    def _merge(existing, body, keep):
+        """Strict body over the saved record; omitted ``keep`` fields retain their saved values."""
+        data = body.model_dump()
+        for key in keep:
+            if key not in body.model_fields_set and key in existing:
+                data[key] = existing[key]
+        return {**existing, **data}
+
     def save_profile(self, body, identifier=None):
         with self.store.lock:
             existing = self.require("profiles", identifier) if identifier else {}
             return self.store.put(
                 "profiles",
                 {
-                    **existing,
-                    **body.model_dump(),
+                    **self._merge(existing, body, LEGACY_GOAL_KEYS),
                     "id": identifier or new_id(),
                     "created_at": existing.get("created_at", now()),
                     "updated_at": now(),
@@ -375,25 +536,67 @@ class Campaigns:
                     409,
                     "Existing campaign membership is retained for provenance; create a new campaign to narrow scope.",
                 )
+            record = self._merge(existing, body, (*LEGACY_GOAL_KEYS, "notes"))
+            if record.get("objective") != "discovery" and not (record.get("primary_metric") or "").strip():
+                raise HTTPException(422, "Select a primary metric for goal-directed work.")
+            if record.get("objective") == "discovery":
+                record["primary_metric"] = None
             return self.store.put(
                 "campaigns",
                 {
-                    **existing,
-                    **body.model_dump(),
+                    **record,
                     "id": identifier or new_id(),
                     "created_at": existing.get("created_at", now()),
                     "updated_at": now(),
-                    "active_strategy_id": existing.get("active_strategy_id"),
                 },
             )
 
-    def versions(self, campaign_id):
-        self.require("campaigns", campaign_id)
+    def versions(self, profile_id):
+        """Workspace Style-rules history, newest first.
+
+        Pre-workspace campaign versions that carry this workspace's direction are listed
+        read-only (``scope: "campaign"``) so their history and provenance stay visible.
+        """
+        self.require("profiles", profile_id)
+        campaigns = {
+            c["id"] for c in self.store.all("campaigns") if profile_id in (c.get("profile_ids") or [])
+        }
+        rows = []
+        for version in self.store.all("strategy_versions"):
+            if is_workspace_version(version, profile_id):
+                rows.append(version)
+            elif (
+                not is_workspace_version(version)
+                and version.get("campaign_id") in campaigns
+                and profile_id in (version.get("directions") or {})
+            ):
+                rows.append({**version, "scope": "campaign"})
         return sorted(
-            (v for v in self.store.all("strategy_versions") if v["campaign_id"] == campaign_id),
-            key=lambda v: v["version"],
+            rows,
+            key=lambda v: (v.get("scope") == "workspace", v.get("version") or 0, str(v.get("created_at") or "")),
             reverse=True,
         )
+
+    def campaign_versions(self, campaign_id):
+        """Read-only legacy history of rules saved on this campaign before workspace rules."""
+        self.require("campaigns", campaign_id)
+        return sorted(
+            (
+                {**v, "scope": "campaign"}
+                for v in self.store.all("strategy_versions")
+                if v.get("campaign_id") == campaign_id and not is_workspace_version(v)
+            ),
+            key=lambda v: v.get("version") or 0,
+            reverse=True,
+        )
+
+    def _workspace_version(self, profile_id, version_id):
+        version = self.require("strategy_versions", version_id)
+        if is_workspace_version(version, profile_id):
+            return version
+        if any(v["id"] == version_id for v in self.versions(profile_id)):
+            return {**version, "scope": "campaign"}
+        raise HTTPException(404, "Style-rules version not found in this workspace.")
 
     def observations(self, campaign_id):
         self.require("campaigns", campaign_id)
@@ -410,36 +613,44 @@ class Campaigns:
             if known and observation["value"] is None:
                 raise HTTPException(422, "Unavailable metrics cannot establish a measured learning change.")
 
-    def propose(self, campaign_id, body: Proposal, *, hypothesis="", restored_from=None,
+    def _workspace_evidence(self, profile_id, refs):
+        for identifier in refs:
+            observation = self.require("campaign_observations", identifier)
+            if observation.get("profile_id") != profile_id:
+                raise HTTPException(
+                    422,
+                    "Evidence must belong to this workspace; transfers require a separate explicit experiment.",
+                )
+
+    def propose(self, profile_id, body: Proposal, *, hypothesis="", restored_from=None,
                 source: StrategySource = "manual", learning: dict | None = None):
+        """Save a PROPOSED workspace Style-rules version. Never approves it."""
         if source not in ("manual", "learning_experiment", "strategist") or (source != "manual") != (learning is not None):
             raise HTTPException(422, "Unsupported strategy proposal source.")
         with self.store.lock:
-            campaign = self.active_campaign(campaign_id)
-            if body.base_version_id != campaign["active_strategy_id"]:
-                raise HTTPException(409, "Strategy changed. Reload and explicitly rebase the proposal.")
-            active = self.require("strategy_versions", body.base_version_id) if body.base_version_id else None
-            directions = deepcopy(active["directions"]) if active else {}
-            for profile_id, direction in body.directions.items():
-                if profile_id not in campaign["profile_ids"]:
-                    raise HTTPException(422, "Strategy direction must belong to a campaign profile.")
-                self._evidence(campaign_id, profile_id, direction.evidence_refs)
-                directions[profile_id] = direction.model_dump()
-            if set(directions) != set(campaign["profile_ids"]):
-                raise HTTPException(422, "Save initial direction for every campaign profile.")
+            profile = self.active_workspace(profile_id)
+            if body.base_version_id != profile.get("active_strategy_id"):
+                raise HTTPException(409, "Style rules changed. Reload and explicitly rebase the proposal.")
+            if body.base_version_id:
+                base = self.require("strategy_versions", body.base_version_id)
+                if profile_id not in (base.get("directions") or {}):
+                    raise HTTPException(409, "The approved base has no direction for this workspace.")
             if not body.reason.strip():
                 raise HTTPException(422, "Explain the proposed strategy change.")
-            existing = self.versions(campaign_id)
+            self._workspace_evidence(profile_id, body.direction.evidence_refs)
+            existing = self.versions(profile_id)
             return self.store.put(
                 "strategy_versions",
                 {
                     "id": new_id(),
-                    "campaign_id": campaign_id,
-                    "version": (existing[0]["version"] + 1) if existing else 1,
+                    "scope": "workspace",
+                    "profile_id": profile_id,
+                    "campaign_id": None,
+                    "version": max((v.get("version") or 0 for v in existing), default=0) + 1,
                     "status": "proposed",
                     "base_version_id": body.base_version_id,
-                    "directions": directions,
-                    "changed_profile_ids": list(body.directions),
+                    "directions": {profile_id: body.direction.model_dump()},
+                    "changed_profile_ids": [profile_id],
                     "reason": body.reason,
                     "hypothesis": hypothesis,
                     "restored_from": restored_from,
@@ -453,11 +664,11 @@ class Campaigns:
             )
 
     def propose_from_experiment(self, experiment: dict):
-        """Turn one produced learning experiment into a PROPOSED editing-rule revision.
+        """Turn one produced learning experiment into a PROPOSED workspace Style-rules revision.
 
-        It rebases on the experiment's own approved base, so the existing stale-parent
-        and profile-coverage guards apply both here and again at approval. Idempotent
-        per experiment. Nothing is approved and no evidence is invented.
+        It rebases on the experiment's own approved base, so the stale-parent guard applies
+        both here and again at approval. The campaign must still be active. Idempotent per
+        experiment. Nothing is approved and no evidence is invented.
         """
         with self.store.lock:
             for version in self.store.all("strategy_versions"):
@@ -466,8 +677,13 @@ class Campaigns:
             campaign = self.active_campaign(experiment["campaign_id"])
             base = self.require("strategy_versions", experiment["base_strategy_version_id"])
             profile_id = experiment["profile_id"]
-            if base.get("campaign_id") != campaign["id"] or profile_id not in base.get("directions", {}):
-                raise HTTPException(422, "Experiment base is outside this campaign's saved direction.")
+            in_scope = (
+                is_workspace_version(base, profile_id)
+                if base.get("scope") == "workspace"
+                else base.get("campaign_id") == campaign["id"]
+            )
+            if profile_id not in campaign["profile_ids"] or not in_scope or profile_id not in base.get("directions", {}):
+                raise HTTPException(422, "Experiment base is outside this workspace's saved direction.")
             direction = deepcopy(base["directions"][profile_id])
             variable, before, after = experiment["variable"], experiment["before"], experiment["after"]
             if variable == "hook":
@@ -481,7 +697,7 @@ class Campaigns:
             direction["confidence"] = "low"
             evidence = list(dict.fromkeys([experiment["snapshot_id"], *experiment.get("evidence_ids", [])]))[:20]
             learning = {
-                "experiment_id": experiment["id"], "profile_id": profile_id,
+                "experiment_id": experiment["id"], "profile_id": profile_id, "campaign_id": campaign["id"],
                 "account_id": experiment.get("account_id"), "publication_id": experiment.get("publication_id"),
                 "variable": variable, "before": before, "after": after,
                 "snapshot_ids": evidence, "parent_clip_id": experiment.get("parent_clip_id"),
@@ -494,30 +710,29 @@ class Campaigns:
                 f"{shown(after)}; cited snapshot {experiment['snapshot_id']}. Observational, not causal."
             )[:4000]
             return self.propose(
-                campaign["id"],
-                Proposal(directions={profile_id: Direction.model_validate(direction)}, reason=reason,
-                         base_version_id=base["id"]),
+                profile_id,
+                Proposal(direction=Direction.model_validate(direction), reason=reason, base_version_id=base["id"]),
                 hypothesis=f"Changing the {variable} may improve the profile's measured outcome."[:4000],
                 source="learning_experiment",
                 learning=learning,
             )
 
-    def propose_from_beliefs(self, campaign_id: str, profile_id: str, layer: str, changes: dict, beliefs: list[dict]):
-        """Turn supported strategist beliefs into a PROPOSED Style-rules revision on the active base.
+    def propose_from_beliefs(self, profile_id: str, layer: str, changes: dict, beliefs: list[dict]):
+        """Turn supported strategist beliefs into a PROPOSED workspace Style-rules revision.
 
-        Same propose() path as learning experiments: stale-base and profile-coverage guards apply
-        here and again at approval. Only existing Direction fields change; text guidance is a
-        bounded, replaceable block. Nothing is approved and the evidence IDs are the beliefs' own.
+        Same propose() path as learning experiments: the stale-base guard applies here and
+        again at approval. Only existing Direction fields change; text guidance is a bounded,
+        replaceable block. Nothing is approved and the evidence IDs are the beliefs' own.
         """
         from .strategist import merge_guidance
 
         with self.store.lock:
-            campaign = self.active_campaign(campaign_id)
-            if profile_id not in campaign["profile_ids"] or not campaign.get("active_strategy_id"):
-                raise HTTPException(409, "Approve Style rules for this profile before strategist proposals.")
-            base = self.require("strategy_versions", campaign["active_strategy_id"])
+            profile = self.active_workspace(profile_id)
+            if not profile.get("active_strategy_id"):
+                raise HTTPException(409, "Approve this workspace's Style rules before strategist proposals.")
+            base = self.require("strategy_versions", profile["active_strategy_id"])
             if profile_id not in base.get("directions", {}):
-                raise HTTPException(409, "Approve Style rules for this profile before strategist proposals.")
+                raise HTTPException(409, "Approve this workspace's Style rules before strategist proposals.")
             direction = deepcopy(base["directions"][profile_id])
             direction.update(changes.get("structured") or {})
             field = changes["guidance_field"]
@@ -533,52 +748,56 @@ class Campaigns:
                                      "confidence", "status")} for b in beliefs][:10]}
             statements = " ".join(b["statement"] for b in beliefs)
             return self.propose(
-                campaign["id"],
-                Proposal(directions={profile_id: Direction.model_validate(direction)},
+                profile_id,
+                Proposal(direction=Direction.model_validate(direction),
                          reason=f"Strategist ({layer}) proposal: {statements} Observational, not causal."[:4000],
                          base_version_id=base["id"]),
                 hypothesis=statements[:4000], source="strategist", learning=learning,
             )
 
-    def decision(self, campaign_id, version_id, *, approve, reason=""):
+    def decision(self, profile_id, version_id, *, approve, reason=""):
         with self.store.lock:
-            campaign = self.active_campaign(campaign_id)
-            version = self.require("strategy_versions", version_id)
-            if version["campaign_id"] != campaign_id:
-                raise HTTPException(404, "Strategy version not found in campaign.")
+            profile = self.active_workspace(profile_id)
+            version = self._workspace_version(profile_id, version_id)
+            if version.get("scope") != "workspace":
+                raise HTTPException(
+                    409,
+                    "This version was saved on one campaign before Style rules moved to the workspace. "
+                    "Restore it to propose it for the workspace.",
+                )
             if version["status"] != "proposed":
                 raise HTTPException(409, "Only a proposed strategy can be approved or rejected.")
             if approve:
-                if version["base_version_id"] != campaign["active_strategy_id"]:
+                if version["base_version_id"] != profile.get("active_strategy_id"):
                     raise HTTPException(
-                        409, "Strategy changed; stale proposals cannot replace current direction."
+                        409, "Style rules changed; stale proposals cannot replace current direction."
                     )
-                if set(version["directions"]) != set(campaign["profile_ids"]):
-                    raise HTTPException(
-                        409, "Campaign membership changed; propose direction for every profile first."
-                    )
-                version.update(status="approved", approved_at=now())
-                campaign.update(active_strategy_id=version_id, updated_at=now())
-                self.store.put_many([("strategy_versions", version), ("campaigns", campaign)])
+                if set(version["directions"]) != {profile_id}:
+                    raise HTTPException(409, "Propose a complete rule set for this workspace first.")
+                stamp = now()
+                version.update(status="approved", approved_at=stamp)
+                profile.update(active_strategy_id=version_id, updated_at=stamp)
+                self.store.put_many([("strategy_versions", version), ("profiles", profile)])
             else:
                 version.update(status="rejected", rejection_reason=reason, rejected_at=now())
                 self.store.put("strategy_versions", version)
             return version
 
-    def restore(self, campaign_id, version_id, body):
+    def restore(self, profile_id, version_id, body: Decision):
         with self.store.lock:
-            campaign = self.active_campaign(campaign_id)
-            version = self.require("strategy_versions", version_id)
-            if version["campaign_id"] != campaign_id or version["status"] != "approved":
-                raise HTTPException(422, "Restore only an approved decision from this campaign.")
-            if body.profile_id not in version["directions"]:
-                raise HTTPException(422, "Earlier strategy has no direction for this profile.")
+            profile = self.active_workspace(profile_id)
+            version = self._workspace_version(profile_id, version_id)
+            legacy_draft = version.get("scope") == "campaign" and version["status"] == "proposed"
+            if version["status"] != "approved" and not legacy_draft:
+                raise HTTPException(422, "Restore only an approved decision from this workspace.")
+            if profile_id not in version["directions"]:
+                raise HTTPException(422, "Earlier strategy has no direction for this workspace.")
             return self.propose(
-                campaign_id,
+                profile_id,
                 Proposal(
-                    base_version_id=campaign["active_strategy_id"],
-                    directions={body.profile_id: version["directions"][body.profile_id]},
-                    reason=body.reason or "Restore earlier account-specific direction.",
+                    base_version_id=profile.get("active_strategy_id"),
+                    direction=version["directions"][profile_id],
+                    reason=body.reason or "Restore earlier workspace direction.",
                 ),
                 restored_from=version_id,
             )
@@ -628,41 +847,39 @@ class Campaigns:
             self._evidence(campaign_id, body.profile_id, refs)
             direction = body.proposed_direction.model_copy(update={"evidence_refs": refs})
             return self.propose(
-                campaign_id,
-                Proposal(
-                    directions={body.profile_id: direction},
-                    reason=body.reason,
-                    base_version_id=body.base_version_id,
-                ),
+                body.profile_id,
+                Proposal(direction=direction, reason=body.reason, base_version_id=body.base_version_id),
                 hypothesis=body.hypothesis,
             )
 
     def snapshot(self, campaign_id, profile_id, video_id, expected_strategy_version_id=None):
+        """Immutable production context: the workspace's exact approved rule version + campaign goal."""
         with self.store.lock:
             campaign = self.active_campaign(campaign_id)
             if profile_id not in campaign["profile_ids"] or video_id not in campaign["video_ids"]:
                 raise HTTPException(422, "Select a source and profile belonging to this campaign.")
-            if (
-                expected_strategy_version_id
-                and expected_strategy_version_id != campaign["active_strategy_id"]
-            ):
+            profile = self.require("profiles", profile_id)
+            active = profile.get("active_strategy_id")
+            if expected_strategy_version_id and expected_strategy_version_id != active:
                 raise HTTPException(
                     409, "Active strategy changed since it was displayed. Reload before production."
                 )
-            if not campaign["active_strategy_id"]:
-                raise HTTPException(409, "Approve a campaign strategy before starting production.")
-            strategy = self.require("strategy_versions", campaign["active_strategy_id"])
-            if profile_id not in strategy["directions"]:
-                raise HTTPException(409, "Approve direction for this profile before production.")
-            profile = self.require("profiles", profile_id)
+            if not active:
+                raise HTTPException(409, "Approve this workspace's Style rules before starting production.")
+            strategy = self.require("strategy_versions", active)
+            if strategy.get("status") != "approved" or profile_id not in strategy["directions"]:
+                raise HTTPException(409, "Approve direction for this workspace before production.")
             return {
                 "campaign_id": campaign_id,
                 "profile_id": profile_id,
                 "video_id": video_id,
                 "strategy_version_id": strategy["id"],
                 "strategy_version": strategy["version"],
+                "strategy_scope": "workspace",
                 "strategy_snapshot": deepcopy(strategy["directions"][profile_id]),
-                "profile_snapshot": deepcopy(profile),
+                "profile_snapshot": {k: deepcopy(v) for k, v in profile.items() if k not in LEGACY_GOAL_KEYS},
+                "goal": {"objective": campaign["objective"], "primary_metric": campaign.get("primary_metric")},
+                "campaign_notes": campaign.get("notes") or "",
                 "brief_snapshot": deepcopy(campaign["brief"]),
                 "captured_at": now(),
             }

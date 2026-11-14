@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from clip_factory.campaign_api import install
-from clip_factory.campaigns import Campaign, Campaigns, Direction, Proposal, Restore
+from clip_factory.campaigns import Campaign, Campaigns, Decision, Direction, Proposal
 from clip_factory.store import Store
 
 
@@ -47,6 +47,7 @@ def domain(tmp_path):
                 "profile_ids": ["profile"],
                 "video_ids": ["source"],
                 "active_strategy_id": "strategy",
+                "objective": "discovery",
                 "brief": {},
                 "created_at": "old",
                 "updated_at": "old",
@@ -60,6 +61,7 @@ def domain(tmp_path):
                 "profile_ids": ["profile"],
                 "video_ids": ["source"],
                 "active_strategy_id": None,
+                "objective": "discovery",
                 "brief": {},
             },
         ),
@@ -170,7 +172,7 @@ def test_archive_is_idempotent_and_preserves_all_evidence_and_media(domain):
     assert (d.root / "source.mp4").read_bytes() == b"preserve exact source bytes"
     assert (d.root / "clip.mp4").read_bytes() == b"preserve exact rendered bytes"
     assert d.service.archive("campaign") == first and snapshot(d.store) == after
-    assert [v["id"] for v in d.service.versions("campaign")] == ["pending", "strategy"]
+    assert [v["id"] for v in d.service.campaign_versions("campaign")] == ["pending", "strategy"]
     assert d.service.observations("campaign")[0]["id"] == "observation"
 
 
@@ -284,13 +286,11 @@ def test_terminal_jobs_and_malformed_status_do_not_crash_archive(domain):
         lambda d: d.service.save_campaign(
             Campaign(name="Rename", profile_ids=["profile"], video_ids=["source"]), "campaign"
         ),
-        lambda d: d.service.propose(
-            "campaign",
-            Proposal(directions={"profile": Direction()}, reason="change", base_version_id="strategy"),
+        lambda d: d.service.propose_from_experiment(
+            {"id": "experiment", "campaign_id": "campaign", "profile_id": "profile",
+             "base_strategy_version_id": "strategy", "variable": "hook", "before": "Original", "after": "New",
+             "snapshot_id": "snapshot"}
         ),
-        lambda d: d.service.decision("campaign", "pending", approve=True),
-        lambda d: d.service.decision("campaign", "pending", approve=False, reason="reject"),
-        lambda d: d.service.restore("campaign", "strategy", Restore(profile_id="profile")),
         lambda d: d.service.observe("campaign", SimpleNamespace()),
         lambda d: d.service.learn("campaign", SimpleNamespace()),
         lambda d: d.service.snapshot("campaign", "profile", "source", "strategy"),
@@ -320,6 +320,21 @@ def api(domain):
     install(app, domain.service, render=render, produce=produce)
     with TestClient(app) as client:
         yield client, calls
+
+
+def test_archiving_one_campaign_never_freezes_the_workspace_rules(domain):
+    d = domain
+    d.service.archive("campaign")
+    # The workspace adopted the archived campaign's approved rules; its other campaigns keep them.
+    assert d.service.profile("profile")["active_strategy_id"] == "strategy"
+    assert d.service.snapshot("foreign", "profile", "source", "strategy")["strategy_version_id"] == "strategy"
+    proposed = d.service.propose(
+        "profile", Proposal(direction=Direction(hooks=["Next"]), reason="change", base_version_id="strategy")
+    )
+    approved = d.service.decision("profile", proposed["id"], approve=True)
+    assert d.service.profile("profile")["active_strategy_id"] == approved["id"]
+    assert d.store.get("campaigns", "campaign")["active_strategy_id"] == "strategy"
+    assert d.service.restore("profile", "strategy", Decision())["restored_from"] == "strategy"
 
 
 def test_api_default_filter_explicit_recovery_and_readable_history(domain, api):

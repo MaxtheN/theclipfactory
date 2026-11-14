@@ -722,7 +722,9 @@ class TeamEngine:
                 request = (
                     f"You are the {LABELS[role]} in a local video-production team. {instruction}\n"
                     "If approved_campaign_direction or campaign_snapshot is supplied, use the account-scoped "
-                    "selection/editing constraints and target duration. You cannot approve or replace saved strategy. "
+                    "selection/editing constraints and target duration (the workspace's approved Style rules), and treat "
+                    "its campaign_notes as this campaign's extra guidance within those rules. You cannot approve or "
+                    "replace saved strategy. "
                     "learning_memory, when supplied, is earlier measured experiments (experiment:/comparison: IDs) "
                     "and an account median baseline; it is observational, so cite its IDs and never call it proof. "
                     "selection_guidance, when supplied, is approved scouting criteria (which moment types to prefer "
