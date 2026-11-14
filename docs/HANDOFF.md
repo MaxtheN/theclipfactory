@@ -1,6 +1,6 @@
 # Growth Factory — engineering handoff
 
-Snapshot: 2026-11-14, ~10:30 America/Los_Angeles. Supersedes the earlier pasted
+Snapshot: 2026-11-14, updated ~11:15 America/Los_Angeles (master e869666). Supersedes the earlier pasted
 handoff for current state. Read this first, then `docs/engine.md`.
 
 ## 1. Where the code is
@@ -119,27 +119,53 @@ human approve → post to Instagram → measure → learn → better next clips.
   Clips were visual-only, 11–17 s (style said 30 s), hooks described visuals,
   title card over faces. All of this is being fixed (§6).
 
-## 6. In flight at handoff (four background agents; check `git log`/`git status`)
+## 6. Status of the last wave (updated after master `e869666`)
 
-Uncommitted edits in the working tree belong to these agents. If they did not
-finish, review their diffs before committing.
+Landed and pushed to master:
+- **Never run speechless** (`5db5fcf`, `ad385ac`): `clip_factory/speech.py`;
+  `asr_missing`/`asr_damaged` blockers (409) before any work; one-click
+  `POST /api/speech/setup` (runtime + Whisper, single progress bar);
+  integrity probe in `/api/system`; storyboards record `speech_available` and
+  rebuild; "Made without speech" chip, forced below the bar; "Setting up your
+  engine" card; Episode card follows real job state; Library 2-up grid.
+- **Factory map redesign** (`b6c3135`, `0f48c2c`): five calm phases, fixed
+  status palette (Idle/Working/Done/Needs you/Held), run-picker dropdown.
+- **Review screen** (`99ed875`, `1920b0a`, `564c99f`, `e869666`): fixed
+  380–420px inspector column; status → quality pills → post panel; Reels-style
+  phone preview (`PostPreview.tsx`, `review-panel.css`, `post-preview.css`);
+  title card placed off the face (Apple Vision face box in `craft.py`, IG safe
+  areas, receipt `hook.placement`). Verified on a real render.
 
-1. **Never run speechless** — ASR missing/damaged blocker with one-click setup +
-   progress, integrity probe (runtime metallib, whisper files), storyboard
-   rebuilt once speech exists, "Made without speech" chip; also FactoryHome
-   "Episode added" card shows the real job state, Library 2-per-row grid.
-   Files: app.py, models.py, storyboard.py, team.py gating, FactoryHome,
-   Library, Models page, types.
-2. **Engine quality** — honour style duration (±25%, sentence-snapped),
-   speech-first selection (claims, humor/punchlines, stories, quotables),
-   punchline-as-teaser hook-first, hooks ≤8 words from speech, captions
-   required; iterates with REAL Haiku runs in scratch data dirs, writes
-   `docs/engine-eval.md`. Files: team.py, ranking.py, storyboard, craft.
-3. **Review screen** — clean right column, Instagram-Reels-style phone preview,
-   no truncated pills; title card placed off faces using reframe data, inside IG
-   safe areas. Files: Studio, PostToInstagram, PostPreview, craft.py.
-4. **Factory map redesign** — phased, calm, fixed status palette, no truncation,
-   proper run selector. Files: FactoryMap, factory-map.css.
+Still in flight at this update (uncommitted in the working tree, owned by the
+**engine-quality** agent): `clip_factory/team.py`, `ranking.py`, `craft.py`,
+`media.py`, `app.py`, `docs/engine.md`, tests (`test_craft.py`,
+`test_ranking.py`, `test_team.py`), plus `docs/engine-eval.md` when done.
+Goals: honour style duration (30 s ±25%, sentence-snapped, extend across
+scenes), speech-first selection (claims, punchlines, stories, quotables),
+punchline-as-teaser hook-first, hooks ≤8 words from speech, captions required.
+It iterates with REAL Haiku runs in scratch data dirs (≤6 runs, ≤$1). If it did
+not finish: review its diff, run those pytest files one by one + `ruff`, check
+`docs/engine-eval.md`, commit, push.
+
+### Why the founder's first clips showed none of the craft
+All craft is applied at **render time, before review/posting** (not after
+analytics): hook-first teaser (`structure=auto` → `hook_first` when a payoff
+sentence exists), title card, emphasis word captions, jump cuts on silences,
+−14 LUFS, smart cover, face-follow crop, CTA end card when the brief has a CTA.
+The founder's test run had **no transcript**, so: no payoff → no hook-first; no
+word timestamps → no jump cuts and no captions. Punch-in zooms are off by
+default. **A/B variants are opt-in** (Fine-tune "A/B", Reference research "Use
+this direction", Strategist/learning experiments) — not produced by default.
+Possible next step: render 2 hook variants automatically for the top picks.
+
+### For a UI-only agent
+Frontend: `frontend/src/growth/` (React/TS/Vite). Shared tokens in
+`polish.css`. Review preview with sample data:
+`cd frontend && VITE_REVIEW_PREVIEW=true npx vite --host 127.0.0.1 --port 5179 --strictPort`
+(`?fixtures=flow` adds Factory-map sample data). Tests: `npx vitest run <file>`
+(1–2 files at a time), `npx tsc --noEmit`, `npm run build`. Coordinate with the
+engine agent on `Studio.tsx`/`CraftControls.tsx` only if it is still running;
+everything else in the UI is free.
 
 ## 7. Next steps (priority)
 
