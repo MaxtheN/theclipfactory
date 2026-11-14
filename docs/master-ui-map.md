@@ -1,5 +1,7 @@
 # Master UI → Growth Factory integration map
 
+> **Later change (2026-11-14):** the stand-alone screens this map points to (Factory, Clips, Footage, Campaigns, Results, Instagram, Studio, and the components only they used) were removed from `frontend/src/`. Advanced tools now holds only Models and Settings. The file references below are valid at the pinned revision; the server endpoints they name are unchanged.
+
 Verified against `origin/master` **700c90725a9e126238d9fc47716bd78bd845ad52** on 2026-11-14 using `git show origin/master:<file>`. Master references below use that revision's line numbers. New-interface notes describe the isolated integration checkout while its shell/Studio work is still underway; they are not claims about a shipped build. Read-only inspection: no providers, models, publishing, or ad jobs were run.
 
 ## Product flow

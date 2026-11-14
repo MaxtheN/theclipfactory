@@ -5,7 +5,7 @@ import { ClipStyleSheet } from "./ClipStyle";
 import type { Clip, Job, TeamRun, Video } from "../types";
 import { ApiError, endpoint, post } from "../api";
 import { Storyboard } from "../components/Storyboard";
-import { Stages } from "../pages/Home";
+import { Stages } from "../components/Stages";
 import type { FactoryState } from "../useFactory";
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, reviewPreview } from "./workspaceApi";

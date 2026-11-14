@@ -3,17 +3,13 @@ import {
   fireEvent,
   render,
   screen,
-  waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TeamLedger } from "./TeamLedger";
-import { TeamComparisons } from "./TeamComparisons";
 import { StructuredData } from "./StructuredData";
-import { ClipReview } from "./ClipReview";
-import { Studio } from "../pages/Studio";
 import { editableSettings, SettingsPage } from "../pages/Settings";
-import { clip, settings, testState } from "../test-state";
+import { settings, testState } from "../test-state";
 import type { TeamRun } from "../types";
 const source = { id: "v1", name: "Source", duration: 60 };
 const run: TeamRun = {
@@ -75,85 +71,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-function readyState() {
-  const state = testState();
-  state.data.videos = [source];
-  state.data.system = { model_runtime: true };
-  state.data.models = [{ id: "qwen-small", name: "Qwen", installed: true }];
-  return state;
-}
 describe("team production contract", () => {
-  it.each([0, 1, 2])(
-    "posts an explicit team run with bounded budget %s and same-origin authentication",
-    async (budget) => {
-      const fetch = vi.fn(async (path: string) =>
-        json(path === "/api/team/runs" ? [] : { job: { id: "j1" }, run }),
-      );
-      vi.stubGlobal("fetch", fetch);
-      const user = userEvent.setup();
-      render(<Studio state={readyState()} />);
-      expect(screen.getByLabelText("Team revision budget")).toHaveValue("2");
-      await user.selectOptions(
-        screen.getByLabelText("Team revision budget"),
-        String(budget),
-      );
-      await user.click(screen.getByRole("button", { name: "Start team run" }));
-      const call = fetch.mock.calls.find(
-        ([path]) => path === "/api/videos/v1/team",
-      ) as unknown as [string, RequestInit];
-      expect(JSON.parse(call[1].body as string)).toEqual({
-        model_id: "qwen-small",
-        revision_budget: budget,
-      });
-      expect(call[1]).toMatchObject({
-        method: "POST",
-        credentials: "same-origin",
-      });
-      expect(
-        fetch.mock.calls.filter(([path]) =>
-          path.startsWith("/api/team/comparisons"),
-        ),
-      ).toHaveLength(0);
-    },
-  );
-  it("switches source without duplicated editors or retaining a comparison snapshot", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json([])),
-    );
-    const state = readyState();
-    state.data.videos.push({ id: "v2", name: "Other" });
-    render(<Studio state={state} />);
-    await userEvent.selectOptions(screen.getByLabelText("Source video"), "v2");
-    expect(
-      screen.getAllByRole("button", { name: "Start team run" }),
-    ).toHaveLength(1);
-    expect(
-      screen.getAllByRole("button", { name: "Load comparisons" }),
-    ).toHaveLength(1);
-    expect(screen.getByLabelText("Source editor preview")).toHaveAttribute(
-      "src",
-      "/api/videos/v2/media",
-    );
-    expect(screen.getByLabelText("Ledger source filter")).toHaveValue("v2");
-  });
-  it("posts comparative baseline independently of the saved team strategy", async () => {
-    const fetch = vi.fn(async (path: string) =>
-      json(path === "/api/team/runs" ? [] : { id: "j1" }),
-    );
-    vi.stubGlobal("fetch", fetch);
-    render(<Studio state={readyState()} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Run comparative baseline" }),
-    );
-    const call = fetch.mock.calls.find(([path]) =>
-      path.endsWith("/baseline"),
-    ) as unknown as [string, RequestInit];
-    expect(call[0]).toBe("/api/videos/v1/baseline");
-    expect(JSON.parse(call[1].body as string)).toEqual({
-      model_id: "qwen-small",
-    });
-  });
   it("defaults untyped settings to the swarm and saves a deliberate baseline option", async () => {
     expect(editableSettings(settings).production_strategy).toBe("swarm");
     expect(
@@ -173,49 +91,6 @@ describe("team production contract", () => {
     expect(JSON.parse(call[1].body as string).production_strategy).toBe(
       "baseline",
     );
-  });
-  it.each(["fail", "unknown", undefined] as const)(
-    "blocks approval for unresolved team status %s",
-    (status) => {
-      render(
-        <ClipReview
-          state={testState()}
-          clip={{
-            ...clip,
-            team_run_id: "r1",
-            team_review_status: status,
-            team_findings: [{ message: "Unsupported claim" }],
-          }}
-        />,
-      );
-      expect(
-        screen.getByRole("button", { name: "Approve clip" }),
-      ).toBeDisabled();
-      expect(screen.getByRole("alert")).toHaveTextContent("Unresolved critic");
-    },
-  );
-  it("permits human approval after critic pass and removal even after failed review", () => {
-    const view = render(
-      <ClipReview
-        state={testState()}
-        clip={{ ...clip, team_run_id: "r1", team_review_status: "pass" }}
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Approve clip" })).toBeEnabled();
-    view.rerender(
-      <ClipReview
-        state={testState()}
-        clip={{
-          ...clip,
-          approved: true,
-          team_run_id: "r1",
-          team_review_status: "fail",
-        }}
-      />,
-    );
-    expect(
-      screen.getByRole("button", { name: "Remove approval" }),
-    ).toBeEnabled();
   });
 });
 describe("safe ledger and cancellation", () => {
@@ -349,89 +224,5 @@ describe("safe ledger and cancellation", () => {
     expect(
       await screen.findByText("No runs reported for this source."),
     ).toBeInTheDocument();
-  });
-});
-describe("honest comparisons", () => {
-  it("loads explicitly, renders every run and source snapshot, unknown metrics, mismatch warnings and stale results", async () => {
-    let missing = false;
-    const fetch = vi.fn(async (path: string) =>
-      path.startsWith("/api/team/comparisons")
-        ? missing
-          ? json({}, 404)
-          : json({
-              video_id: "v1",
-              runs: [
-                {
-                  ...run,
-                  comparable: false,
-                  feedback: [{ notes: "Creator says: <b>needs context</b>" }],
-                  outcomes: { views: null },
-                  resource_observations: {
-                    model: { loaded: "qwen-small" },
-                    memory: null,
-                  },
-                },
-                {
-                  ...run,
-                  id: "r2",
-                  mode: "baseline",
-                  comparable: null,
-                  feedback: [],
-                  outcomes: null,
-                },
-              ],
-              notes: ["Snapshots differ; no causal inference."],
-            })
-        : json({ ...run, id: path.split("/").pop() }),
-    );
-    vi.stubGlobal("fetch", fetch);
-    const { container } = render(<TeamComparisons videoId="v1" />);
-    expect(fetch).not.toHaveBeenCalled();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Load comparisons" }),
-    );
-    await screen.findByText(/Comparable: No/);
-    expect(screen.getByText(/Comparable: Unknown/)).toBeInTheDocument();
-    expect(screen.getAllByText("source-hash")).toHaveLength(2);
-    expect(
-      screen.getByText("Creator says: <b>needs context</b>"),
-    ).toBeInTheDocument();
-    expect(container.querySelector("b")).toBeNull();
-    expect(screen.getByText("views").nextElementSibling).toHaveTextContent(
-      "Unknown",
-    );
-    expect(fetch.mock.calls[0][0]).toBe("/api/team/comparisons?video_id=v1");
-    missing = true;
-    await userEvent.click(
-      screen.getByRole("button", { name: "Load comparisons" }),
-    );
-    await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent("stale"),
-    );
-    expect(screen.getAllByText("source-hash")).toHaveLength(2);
-  });
-  it("reports missing per-run snapshots without dropping comparison observations", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (path: string) =>
-        path.includes("comparisons")
-          ? json({
-              video_id: "v1",
-              runs: [
-                { ...run, comparable: true, feedback: [], outcomes: null },
-              ],
-              notes: [],
-            })
-          : json({}, 404),
-      ),
-    );
-    render(<TeamComparisons videoId="v1" />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Load comparisons" }),
-    );
-    expect(
-      await screen.findByText(/Snapshot unavailable:/),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Comparable: Yes/)).toBeInTheDocument();
   });
 });

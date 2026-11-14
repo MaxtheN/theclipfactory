@@ -24,11 +24,21 @@ itself, and footage attached before a direction existed starts the moment one
 is approved; clips always wait for your approval.
 Pressing a clip's cover on **Factory** or in **Library** plays it in place,
 with sound; review is a separate step. **Library → Review wall** shows every
-edit side by side with bulk approval. Clips the engine made from a workspace's
-footage without a direction (from Advanced tools, or before a direction was
-approved) are counted on that workspace's Factory screen and reviewed on its
-wall. **Advanced tools** (quick actions, ⌘K) holds the un-scoped tools: all
-footage and clips, Studio, Models and Settings.
+edit side by side with bulk approval. Clips the engine made from a brand's
+footage before a direction was approved are counted on that brand's Factory
+screen and reviewed on its wall.
+
+**Library** is also where space is freed: *Discard* on the review wall (all
+unapproved clips shown) or in a clip's quick look deletes clip files, and
+*Delete* on an episode removes the footage with everything made from it. Each
+asks first; a clip that was exported, or that a later revision builds on, is
+kept and named.
+
+**Advanced tools** (quick actions, ⌘K) holds local setup only: **Models**
+(install and remove local models, narration) and **Settings** (autopilot,
+default model, clips per source). The earlier stand-alone screens (Factory,
+Clips, Footage, Campaigns, Results, Instagram, Studio) were removed; the shell
+is the whole app.
 
 1. **Listen.** Speech is transcribed locally. Recognizer output over noise is
    filtered (looping phrases, impossible timing, low confidence), and the source
@@ -54,9 +64,9 @@ footage and clips, Studio, Models and Settings.
    measured action over a blurred backdrop instead of black bars; HDR (HLG/PQ)
    footage is tone-mapped; captions are burned only where someone is actually
    speaking.
-5. **Review.** Approve, edit, download or discard on **Clips**. Swarm clips
-   can be filtered by hypothesis and approved in bulk. Where a self-check
-   flagged something you can still approve explicitly; the decision is recorded.
+5. **Review.** Approve in bulk or discard on **Library → Review wall**, where
+   swarm clips can be filtered by hypothesis; open a clip to edit, revise or
+   download it in Production & review.
 
 Models choose and describe; code measures. Roles refer to storyboard scenes by
 ID, source ranges are computed from those scenes, and model output is
@@ -306,4 +316,4 @@ local socket. They do not assert real model inference or Meta permissions.
 
 ### Saved campaigns and learning
 
-Start new work in **Campaigns**: save independent offline account profiles, attach source videos and an editable brief, and explicitly approve a saved strategy. Direct rendering and local agent teams capture the active campaign/profile/strategy version. Import real account-scoped observations, propose an evidence-backed change, approve it, and apply the revised direction to another source without changing the other profile. Approval/rejection/history and profile-specific restoration persist across reopening. See [campaign workflow and verified boundaries](docs/campaigns.md).
+Each brand in the shell is a saved account profile with one campaign: attach source videos and an editable brief, and explicitly approve its style rules. Direct rendering and local agent teams capture the active campaign/profile/strategy version. Import real account-scoped observations, propose an evidence-backed change, approve it, and apply the revised direction to another source without changing the other profile. Approval/rejection/history and profile-specific restoration persist across reopening. See [campaign workflow and verified boundaries](docs/campaigns.md).
