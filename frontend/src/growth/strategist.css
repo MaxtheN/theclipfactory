@@ -26,6 +26,12 @@
   align-items: start;
   gap: 24px;
 }
+/* A light card inside the dark shell: its headings must not inherit the
+   shell's near-white heading ink. */
+.gf-flow-app .gf-strategist :is(h2, h3, h4),
+.gf-flow-app .gf-automation :is(h2, h3, h4) {
+  color: #1d2a33;
+}
 .gf-strategist h2 {
   margin: 0 0 6px;
   font-size: 24px;

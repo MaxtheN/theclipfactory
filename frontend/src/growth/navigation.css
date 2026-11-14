@@ -19,7 +19,28 @@
   flex-shrink: 0;
 }
 .gf-channel-settings > span {
+  min-width: 0;
+  overflow: hidden;
   line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Narrow windows: keep the sidebar label and the brand on one line each,
+   clear of the collapse toggle. */
+@media (max-width: 1190px) {
+  .gf-flow-app .gf-sidebar-bottom > .gf-channel-settings {
+    padding-inline: 10px;
+  }
+  .gf-flow-app .gf-brand-row .gf-brand {
+    min-width: 0;
+    padding-left: 4px;
+    font-size: 17px;
+  }
+  .gf-flow-app .gf-brand-row .gf-brand .gf-brand-logo {
+    width: 54px;
+    height: 30px;
+    flex-basis: 54px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .gf-flow-app .gf-sidebar-bottom > .gf-channel-settings {

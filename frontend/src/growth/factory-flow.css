@@ -939,6 +939,12 @@
 .gf-cloud-sign-in .gf-cloud-tabs {
   margin: 0;
 }
+.gf-flow-app .gf-cloud-sign-in .gf-cloud-fields {
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
 .gf-cloud-actions {
   display: flex;
   justify-content: flex-end;
@@ -1463,6 +1469,10 @@
 .gf-row-open:hover:not(:disabled) {
   opacity: 1;
 }
+.gf-row-open-spacer {
+  flex: 0 0 36px;
+  width: 36px;
+}
 .gf-footage-copy .gf-row-note {
   display: block;
   margin-top: 4px;
@@ -1539,6 +1549,13 @@
   text-overflow: ellipsis;
   max-width: 260px;
 }
+/* Same box height as the workspace select, so both read on one line. */
+.gf-campaign-name {
+  line-height: 30px;
+}
+.gf-campaign-switcher {
+  min-height: 30px;
+}
 .gf-campaign-switcher select {
   max-width: 240px;
   border: 0;
@@ -1559,4 +1576,31 @@
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 6px;
+}
+
+/* First-run hint: one sentence, one button. */
+.gf-flow-app .gf-first-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 14px 16px 14px 18px;
+  border: 1px dashed var(--material-field-line);
+  border-radius: 12px;
+  background: var(--material-field);
+  color: var(--material-ink);
+}
+.gf-flow-app .gf-first-step > svg {
+  flex: 0 0 auto;
+  color: var(--material-focus);
+}
+.gf-flow-app .gf-first-step > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.gf-flow-app .gf-first-step > .gf-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
