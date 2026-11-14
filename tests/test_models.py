@@ -605,3 +605,17 @@ def test_asr_probe_is_independent_of_optional_vision_and_narration_imports(model
     assert len(calls) == 2
     assert "import mlx.core, mlx_whisper" in calls[1] and "import mlx.core, mlx_vlm" not in calls[1]
     assert not models.ready()  # Successful speech probe must not mark the full bundle healthy.
+
+
+def test_inference_children_get_the_bundled_ffmpeg_on_path(tmp_path, monkeypatch):
+    from clip_factory import media, models
+
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    for name in ("ffmpeg", "ffprobe"):
+        (tools / name).write_text("#!/bin/sh\nexit 0\n")
+        (tools / name).chmod(0o755)
+    monkeypatch.setattr(media, "FULL_FFMPEG_DIRS", (str(tools),))
+    monkeypatch.setenv("PATH", "")  # a double-clicked app
+    path = models.child_env()["PATH"].split(":")
+    assert path[0] == str(tools)  # MLX Whisper runs `ffmpeg` from PATH to decode audio

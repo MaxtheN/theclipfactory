@@ -44,6 +44,23 @@ ASR_RUNTIME_PROBE = RUNTIME_PROBE.replace(
 )
 
 
+def tool_path() -> str:
+    """PATH for inference children: MLX Whisper shells out to `ffmpeg` to decode audio.
+
+    A double-clicked app starts with a bare PATH, so put the FFmpeg the app found (Homebrew or the copy
+    bundled in the app) first; otherwise transcription fails with "No such file or directory: 'ffmpeg'".
+    """
+    from .media import find_tool  # local import: media is heavier and must not load for every caller
+
+    dirs = []
+    for name in ("ffmpeg", "ffprobe"):
+        found = find_tool(name)
+        if found and (parent := str(Path(found).parent)) not in dirs:
+            dirs.append(parent)
+    base = os.environ.get("PATH") or "/usr/bin:/bin:/usr/sbin:/sbin"
+    return os.pathsep.join([*dirs, base])
+
+
 def child_env() -> dict:
     """Do not pass application/API credentials to third-party inference packages."""
     return {
@@ -68,6 +85,7 @@ def child_env() -> dict:
                 "LD_LIBRARY_PATH",
             }
         },
+        "PATH": tool_path(),
         "HF_HUB_OFFLINE": "1",
         "HF_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
