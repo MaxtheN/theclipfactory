@@ -4,6 +4,7 @@ import type { FactoryState } from "../useFactory";
 import type { Clip } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
 import { reviewPreview } from "./workspaceApi";
+import { ConnectInstagram } from "./ConnectInstagram";
 import "./automation.css";
 
 type Row = Record<string, unknown> & { id: string };
@@ -296,8 +297,7 @@ export function AutomationPanel({
   const [posts, setPosts] = useState<Post[]>([]),
     [postAccount, setPostAccount] = useState(""),
     [postLimits, setPostLimits] = useState("");
-  const [link, setLink] = useState(""),
-    [intent, setIntent] = useState("");
+  const [advanced, setAdvanced] = useState(false);
   const [clipId, setClipId] = useState(""),
     [mediaId, setMediaId] = useState(""),
     [confirmedMapping, setConfirmedMapping] = useState(false);
@@ -566,93 +566,71 @@ export function AutomationPanel({
         <p className="gf-automation-help">
           {selectedAccounts.length
             ? "Choose your verified Instagram account to enable Start the loop."
-            : "First save connection settings and verify an account below. Then Start the loop becomes available."}
+            : "Connect your Instagram account below. Then Start the loop becomes available."}
         </p>
       )}
       <details open={selectedAccounts.length === 0 || undefined}>
         <summary>Connect an Instagram account</summary>
-        <p>
-          This is a one-time developer setup for the demo. Your API key stays in
-          macOS Keychain. Once saved, choose a new sign-in or verify an account
-          you already connected.
-        </p>
-        <div className="gf-automation-controls">
-          <label>
-            Auth Config ID (starts with ac_)
-            <input
-              value={authConfig}
-              onChange={(e) => setAuthConfig(e.target.value)}
-              placeholder="ac_…"
-              autoComplete="off"
-            />
-          </label>
-          <label>
-            Composio project API key
-            <input
-              type="password"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              autoComplete="off"
-            />
-          </label>
-          <button
-            disabled={
-              blocked || !authConfig.trim() || (!configured && !key.trim())
-            }
-            onClick={() =>
-              void act(async () => {
-                await put("/api/automation/settings", {
-                  auth_config_id: authConfig.trim(),
-                  ...(key ? { api_key: key } : {}),
-                });
-                setKey("");
-                setConfigured(true);
-                setNotice(
-                  "Settings saved. Now verify an existing account below, or connect a new one.",
-                );
-              })
-            }
-          >
-            Save connection settings
-          </button>
-          <button
-            disabled={blocked || !configured || !w.profileId}
-            onClick={() =>
-              void act(async () => {
-                const result = await post<Record<string, unknown>>(
-                  "/api/automation/connections",
-                  { profile_id: w.profileId },
-                );
-                const url = text(result.redirect_url);
-                if (
-                  !url.startsWith("https://") ||
-                  !text(result.connected_account_id)
-                )
-                  throw new Error("Connection could not be verified.");
-                setLink(url);
-                setIntent(text(result.connected_account_id));
-              })
-            }
-          >
-            Connect this workspace
-          </button>
-        </div>
-        {configured && (
-          <p className="gf-automation-help">
-            Connection settings are saved securely. You do not need to paste the
-            API key again.
-          </p>
-        )}
-        {!configured && (
-          <p className="gf-automation-help">
-            Save the Auth Config ID and project API key above before continuing.
-          </p>
-        )}
-        <details>
-          <summary>Already connected in Composio?</summary>
+        <ConnectInstagram
+          profileId={w.profileId}
+          ready={configured}
+          disabled={blocked}
+          onConnected={(id) => {
+            setAccountId(id);
+            setNotice("Instagram connected. Choose how often to check results, then start the loop.");
+            void refresh().catch(() => undefined);
+          }}
+          onNeedsDashboard={() => setAdvanced(true)}
+        />
+        <details
+          open={advanced || !configured || undefined}
+          onToggle={(e) => setAdvanced(e.currentTarget.open)}
+        >
+          <summary>Advanced</summary>
+          <p>Your API key stays in macOS Keychain.</p>
+          <div className="gf-automation-controls">
+            <label>
+              Auth Config ID (starts with ac_)
+              <input
+                value={authConfig}
+                onChange={(e) => setAuthConfig(e.target.value)}
+                placeholder="ac_…"
+                autoComplete="off"
+              />
+            </label>
+            <label>
+              Composio project API key
+              <input
+                type="password"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                autoComplete="off"
+                placeholder={configured ? "Saved in Keychain" : ""}
+              />
+            </label>
+            <button
+              disabled={
+                blocked || !authConfig.trim() || (!configured && !key.trim())
+              }
+              onClick={() =>
+                void act(async () => {
+                  await put("/api/automation/settings", {
+                    auth_config_id: authConfig.trim(),
+                    ...(key ? { api_key: key } : {}),
+                  });
+                  setKey("");
+                  setConfigured(true);
+                  setNotice("Settings saved. Now press Connect Instagram.");
+                })
+              }
+            >
+              Save connection settings
+            </button>
+          </div>
           <p>
-            Paste the connected account ID (starts with ca_). We find the owner
-            and verify the actual Instagram identity for you.
+            Already connected in Composio? Paste the connected account ID
+            (starts with ca_). We check the real Instagram account before
+            adding it.
           </p>
           <div className="gf-automation-controls">
             <label>
@@ -685,34 +663,10 @@ export function AutomationPanel({
                 })
               }
             >
-              Verify this Instagram account
+              Import this account
             </button>
           </div>
         </details>
-        {link && (
-          <p>
-            <a href={link} target="_blank" rel="noreferrer">
-              Open secure Instagram sign-in ↗
-            </a>{" "}
-            <button
-              disabled={blocked}
-              onClick={() =>
-                void act(async () => {
-                  await post(
-                    `/api/automation/connections/${encodeURIComponent(intent)}/verify`,
-                  );
-                  setLink("");
-                  setIntent("");
-                  setNotice(
-                    "Account identity verified and connected to this workspace.",
-                  );
-                })
-              }
-            >
-              I've signed in · Verify account
-            </button>
-          </p>
-        )}
       </details>
       {!!selectedAccounts.length && (
         <details>

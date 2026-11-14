@@ -111,7 +111,7 @@ it("disables mutations when state cannot be refreshed", async () => {
   render(<AutomationPanel w={workspace} factory={factory} visible />);
   await screen.findByRole("alert");
   expect(
-    screen.getByRole("button", { name: "Connect this workspace" }),
+    screen.getByRole("button", { name: "Connect Instagram" }),
   ).toBeDisabled();
   expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
   expect(post).not.toHaveBeenCalled();
