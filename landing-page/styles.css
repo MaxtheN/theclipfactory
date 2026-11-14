@@ -816,161 +816,6 @@ svg.fill {
   font-weight: 600;
 }
 
-/* Orbit: clips swirl around the source footage as you scroll */
-.orbit {
-  position: relative;
-  height: 320vh;
-  background: var(--ink);
-  color: var(--white);
-  border-radius: clamp(28px, 4vw, 56px) clamp(28px, 4vw, 56px) 0 0;
-}
-
-.orbit-sticky {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  overflow: hidden;
-  border-radius: inherit;
-  background:
-    radial-gradient(circle at 50% 54%, rgba(255, 90, 31, 0.28) 0, rgba(255, 90, 31, 0.08) 26%, transparent 52%),
-    radial-gradient(1.2px 1.2px at 18px 24px, rgba(255, 255, 255, 0.5) 50%, transparent 52%) 0 0 / 140px 160px,
-    radial-gradient(1px 1px at 70px 96px, rgba(255, 255, 255, 0.35) 50%, transparent 52%) 0 0 / 190px 170px,
-    radial-gradient(1.4px 1.4px at 120px 40px, rgba(255, 200, 170, 0.45) 50%, transparent 52%) 0 0 / 260px 230px,
-    var(--ink);
-}
-
-.orbit-stage {
-  position: absolute;
-  inset: 0;
-  top: 40px;
-}
-
-.orbit-rings {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: min(92vw, 1400px);
-  height: auto;
-  transform: translate(-50%, -50%);
-  overflow: visible;
-}
-
-.orbit-planet {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 100;
-  width: min(30vmin, 300px);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  overflow: hidden;
-  transform: translate(-50%, -50%);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.12),
-    0 0 60px 10px rgba(255, 90, 31, 0.35),
-    0 0 160px 40px rgba(255, 90, 31, 0.18),
-    inset -30px -40px 80px rgba(0, 0, 0, 0.6);
-}
-
-.orbit-planet img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 62% 40%;
-  transform: scale(1.4);
-  animation: planet 40s linear infinite alternate;
-}
-
-.orbit-planet::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.28), transparent 42%),
-    radial-gradient(circle at 70% 78%, rgba(23, 18, 14, 0.65), transparent 60%);
-}
-
-.orbit-card {
-  --cw: clamp(76px, 8.6vw, 136px);
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: var(--cw);
-  aspect-ratio: 9 / 16;
-  border-radius: clamp(12px, 1.3vw, 18px);
-  overflow: hidden;
-  background: var(--ink);
-  outline: 2px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 24px 40px -10px rgba(0, 0, 0, 0.7);
-  transform: translate(-50%, -50%);
-  will-change: transform, opacity;
-}
-
-.orbit-card.clip-hot {
-  outline-color: var(--signal);
-  box-shadow: 0 0 30px rgba(255, 90, 31, 0.5), 0 24px 40px -10px rgba(0, 0, 0, 0.7);
-}
-
-.orbit-card > img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.orbit-card .clip-dur {
-  left: 6px;
-  top: 6px;
-  height: 20px;
-  padding: 0 7px;
-  font-size: 10px;
-}
-
-.orbit-copy {
-  position: relative;
-  z-index: 300;
-  padding-top: clamp(96px, 12vh, 140px);
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  pointer-events: none;
-}
-
-.orbit-copy .h-display {
-  font-size: clamp(40px, 5.4vw, 80px);
-  text-shadow: 0 4px 30px rgba(23, 18, 14, 0.7);
-}
-
-.orbit-copy .lead {
-  max-width: 340px;
-}
-
-@keyframes planet {
-  from { transform: scale(1.4) translateX(-8%); }
-  to { transform: scale(1.4) translateX(8%); }
-}
-
-@media (max-width: 760px) {
-  .orbit {
-    height: 260vh;
-  }
-  .orbit-copy {
-    padding-top: 88px;
-  }
-  .orbit-rings {
-    width: 150vw;
-  }
-  .orbit-card {
-    --cw: 60px;
-    border-radius: 10px;
-  }
-  .orbit-card .clip-dur {
-    display: none;
-  }
-  .orbit-copy .lead {
-    display: none;
-  }
-}
-
 /* Agents */
 .agents {
   position: relative;
@@ -2284,6 +2129,58 @@ svg.fill {
   position: absolute;
   inset: 0;
   background: linear-gradient(180deg, rgba(23, 18, 14, 0.92) 0%, rgba(23, 18, 14, 0.7) 45%, rgba(23, 18, 14, 0.25) 100%);
+}
+
+/* A ring of clips turning slowly behind the closing headline */
+.cta-orbit {
+  --cw: clamp(64px, 7vw, 112px);
+  --r: clamp(240px, 36vw, 560px);
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1800px;
+  pointer-events: none;
+}
+
+.cta-tilt {
+  transform-style: preserve-3d;
+  transform: rotateZ(-16deg) rotateX(-12deg);
+}
+
+.cta-ring {
+  position: relative;
+  width: var(--cw);
+  aspect-ratio: 9 / 16;
+  transform-style: preserve-3d;
+  animation: ring 60s linear infinite;
+}
+
+.ring-card {
+  position: absolute;
+  inset: 0;
+  border-radius: clamp(10px, 1.1vw, 16px);
+  overflow: hidden;
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  opacity: 0.38;
+  transform: rotateY(calc(var(--i) * 30deg)) translateZ(var(--r));
+}
+
+.ring-card.hot {
+  outline-color: var(--signal);
+  opacity: 0.55;
+}
+
+.ring-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@keyframes ring {
+  to { transform: rotateY(-360deg); }
 }
 
 .cta-copy {

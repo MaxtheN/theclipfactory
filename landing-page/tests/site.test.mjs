@@ -55,11 +55,10 @@ test("download CTAs are real buttons and the old demo link is gone", () => {
   assert.doesNotMatch(html, new RegExp(DEMO.replace(/[.]/g, "\\.")));
 });
 
-test("the orbit section is decorative apart from its heading", () => {
-  const orbit = html.split('id="orbit"')[1].split("</section>")[0];
-  assert.match(orbit, /class="orbit-stage" aria-hidden="true"/);
-  assert.ok((orbit.match(/class="orbit-card/g) || []).length >= 10);
-  assert.match(orbit, /<h2 id="orbit-title"/);
+test("the rotating clip ring behind the closing section is decorative", () => {
+  const cta = html.split('id="get"')[1].split("</section>")[0];
+  assert.match(cta, /class="cta-orbit" aria-hidden="true"/);
+  assert.equal((cta.match(/class="ring-card/g) || []).length, 12);
 });
 
 test("the mobile menu keeps its accessible associations", () => {
