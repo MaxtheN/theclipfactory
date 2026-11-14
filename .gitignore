@@ -14,5 +14,8 @@ dist/
 coverage/
 playwright-report/
 test-results/
+frontend/review-dist/
+frontend/.vercel/
+clip_factory/ui/
 scripts/experiments/.work/
 scripts/experiments/results/

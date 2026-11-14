@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFactory } from "./useFactory";
 import { descriptions, groups, icons, initialTab, rememberTab, type Tab } from "./navigation";
+import { Icon } from "./growth/Icon";
+import "./growth/operational-glass.css";
 import { Campaigns } from "./pages/Campaigns";
 import { Clips } from "./pages/Clips";
 import { Footage } from "./pages/Footage";
@@ -15,9 +17,28 @@ const labels: Record<string, string> = {
   factory: "factory status",
   videos: "footage",
 };
-export function App() {
+const groupIcons: Record<string, string> = { Make: "studio", Grow: "results", Setup: "settings" };
+/**
+ * The full set of local tools. Inside the Growth Factory shell this is the
+ * "Advanced tools" surface: the shell passes its sidebar toggle and collapse state.
+ */
+export function App({
+  sidebarToggle,
+  sidebarCollapsed = false,
+}: {
+  sidebarToggle?: ReactNode;
+  sidebarCollapsed?: boolean;
+}) {
   const state = useFactory();
   const [tab, setTab] = useState<Tab>(initialTab);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      groups.map((group) => [
+        group.label,
+        group.label !== "Setup" || (group.tabs as readonly Tab[]).includes(tab),
+      ]),
+    ),
+  );
   const [sourceId, setSourceId] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
   const previous = useRef(tab);
@@ -27,6 +48,8 @@ export function App() {
       previous.current = tab;
     }
     rememberTab(tab);
+    const group = groups.find((item) => (item.tabs as readonly Tab[]).includes(tab));
+    if (group) setExpandedGroups((current) => ({ ...current, [group.label]: true }));
   }, [tab]);
   const errorGroups = Object.entries(state.errors).reduce<
     Record<string, string[]>
@@ -47,50 +70,68 @@ export function App() {
         Skip to content
       </a>
       <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-symbol" aria-hidden="true">
-            c<span>f</span>
-          </span>
-          <div>
-            Clip Factory<small>RUNS ON THIS MAC</small>
-          </div>
-        </div>
-        <nav aria-label="Main navigation">
-          {groups.map((group) => (
-            <div
-              className="nav-group"
-              role="group"
-              aria-label={group.label}
-              key={group.label}
-            >
-              <span className="nav-group-label" aria-hidden="true">
-                {group.label}
-              </span>
-              {group.tabs.map((item) => (
-                <button
-                  key={item}
-                  aria-current={tab === item ? "page" : undefined}
-                  className={tab === item ? "nav-item active" : "nav-item"}
-                  onClick={() => setTab(item)}
-                >
-                  <span className="nav-icon" aria-hidden="true">
-                    {icons[item]}
-                  </span>
-                  {item}
-                  {!!counts[item] && (
-                    <span className="nav-count">
-                      {counts[item]}
-                      <span className="visually-hidden">
-                        {item === "Clips" ? " to review" : " running"}
-                      </span>
-                    </span>
-                  )}
-                </button>
-              ))}
+        <div className="tools-brand-row">
+          <div className="brand" hidden={sidebarCollapsed}>
+            <span className="brand-symbol" aria-hidden="true">
+              c<span>f</span>
+            </span>
+            <div>
+              Growth Factory<small>WORKSPACE TOOLS</small>
             </div>
+          </div>
+          {sidebarToggle}
+        </div>
+        <nav
+          className="tools-navigation"
+          aria-label="Main navigation"
+          hidden={sidebarCollapsed}
+        >
+          {groups.map((group) => (
+            <details
+              className="tools-nav-group"
+              key={group.label}
+              open={expandedGroups[group.label]}
+              onToggle={(event) => {
+                const open = event.currentTarget.open;
+                setExpandedGroups((current) =>
+                  current[group.label] === open
+                    ? current
+                    : { ...current, [group.label]: open },
+                );
+              }}
+            >
+              <summary>
+                <Icon name={groupIcons[group.label]} size={16} />
+                <span>{group.label}</span>
+                <Icon name="down" size={14} />
+              </summary>
+              <div className="tools-nav-items">
+                {group.tabs.map((item) => (
+                  <button
+                    key={item}
+                    aria-current={tab === item ? "page" : undefined}
+                    className={tab === item ? "nav-item active" : "nav-item"}
+                    onClick={() => setTab(item)}
+                  >
+                    <span className="nav-icon" aria-hidden="true">
+                      <Icon name={icons[item]} size={18} />
+                    </span>
+                    <span className="tools-nav-label">{item}</span>
+                    {!!counts[item] && (
+                      <span className="nav-count">
+                        {counts[item]}
+                        <span className="visually-hidden">
+                          {item === "Clips" ? " to review" : " running"}
+                        </span>
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </details>
           ))}
         </nav>
-        <div className="sidebar-footer">
+        <div className="sidebar-footer" hidden={sidebarCollapsed}>
           <span className="status-dot" />
           <strong>Private by default</strong>
           <p>

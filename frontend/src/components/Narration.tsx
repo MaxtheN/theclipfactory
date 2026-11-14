@@ -1,3 +1,4 @@
+import { AutoTextarea } from "./AutoTextarea";
 import { useState } from "react";
 import { post } from "../api";
 import type { FactoryState } from "../useFactory";
@@ -33,7 +34,7 @@ export function Narration({ state }: { state: FactoryState }) {
         }}
       >
         <Field label="Narration text">
-          <textarea
+          <AutoTextarea
             required
             rows={4}
             maxLength={5000}

@@ -64,7 +64,8 @@ function ClipDetails({
   const [rating, setRating] = useState("3");
   const [notes, setNotes] = useState("");
   const [coverError, setCoverError] = useState(false);
-  const technical = checks(clip.technical_checks);
+  // Typed in growth/productionContracts; read loosely here because this card accepts any clip.
+  const technical = checks((clip as { technical_checks?: unknown }).technical_checks);
   const source = state.data.videos.find((video) => video.id === clip.video_id);
   return (
     <details className="clip-more">

@@ -196,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
                 webview.settings["ALLOW_DOWNLOADS"] = True
                 startup_event(diagnostic_root, "native-window-starting")
                 window = webview.create_window(
-                    "Clip Factory", bootstrap, width=1440, height=960, min_size=(900, 640)
+                    "Growth Factory", bootstrap, width=1440, height=960, min_size=(900, 640)
                 )
                 closed = threading.Event()
 
@@ -228,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
                     try:
                         while time.monotonic() < deadline and not stop.is_set():
                             if window.run_js(
-                                "document.title === 'Clip Factory' && !!document.querySelector('#root') && document.querySelector('#root').textContent.includes('Clip Factory')"
+                                "document.title === 'Growth Factory' && !!document.querySelector('.gf-app') && document.querySelector('#root').textContent.includes('Factory')"
                             ):
                                 break
                             time.sleep(0.2)

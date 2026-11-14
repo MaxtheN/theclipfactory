@@ -5,16 +5,17 @@ export const groups = [
 ] as const;
 export type Tab = (typeof groups)[number]["tabs"][number];
 export const tabs: readonly Tab[] = groups.flatMap((group) => [...group.tabs]);
+/** Names in the Growth Factory icon set (growth/Icon.tsx). */
 export const icons: Record<Tab, string> = {
-  Factory: "◈",
-  Clips: "▣",
-  Footage: "▤",
-  Campaigns: "▦",
-  Results: "↗",
-  Instagram: "◎",
-  Studio: "✂",
-  Models: "⬡",
-  Settings: "⚙",
+  Factory: "studio",
+  Clips: "play",
+  Footage: "folder",
+  Campaigns: "setup",
+  Results: "results",
+  Instagram: "link",
+  Studio: "file",
+  Models: "spark",
+  Settings: "settings",
 };
 export const descriptions: Record<Tab, string> = {
   Factory: "Drop footage in. The factory finds the moments and makes the clips.",

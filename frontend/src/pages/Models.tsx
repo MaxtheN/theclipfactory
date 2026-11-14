@@ -1,3 +1,4 @@
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useState } from "react";
 import { endpoint, post, remove } from "../api";
 import type { FactoryState } from "../useFactory";
@@ -215,7 +216,7 @@ export function Models({ state }: { state: FactoryState }) {
               </select>
             </Field>
             <Field label="Prompt">
-              <textarea
+              <AutoTextarea
                 required
                 rows={5}
                 value={prompt}

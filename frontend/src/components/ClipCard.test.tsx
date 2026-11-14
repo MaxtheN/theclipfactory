@@ -173,7 +173,7 @@ describe("compact clip card", () => {
             ],
             captions: [{ id: "length", label: "Caption length", status: "warn", detail: "2 long cues" }],
           },
-        }}
+        } as Clip}
       />,
     );
     const more = screen.getByText("More").closest("details")!;

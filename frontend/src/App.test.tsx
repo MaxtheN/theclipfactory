@@ -68,13 +68,18 @@ describe("app shell", () => {
       expect(screen.getByRole("heading", { name: "Drop footage. Get clips." })).toBeInTheDocument(),
     );
     const nav = screen.getByRole("navigation", { name: "Main navigation" });
-    const groups = within(nav).getAllByRole("group");
-    expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["Make", "Grow", "Setup"]);
+    // Collapsible groups, in the Growth Factory shell's style.
+    const groups = Array.from(nav.querySelectorAll("details.tools-nav-group"));
+    expect(groups.map((group) => group.querySelector("summary")?.textContent)).toEqual([
+      "Make",
+      "Grow",
+      "Setup",
+    ]);
     expect(
       groups.map((group) =>
-        within(group)
-          .getAllByRole("button")
-          .map((button) => button.textContent?.replace(/[^A-Za-z]/g, "")),
+        Array.from(group.querySelectorAll("button")).map((button) =>
+          button.querySelector(".tools-nav-label")?.textContent,
+        ),
       ),
     ).toEqual([
       ["Factory", "Clips", "Footage"],

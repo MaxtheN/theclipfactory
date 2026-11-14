@@ -114,7 +114,6 @@ export interface Clip {
   hypothesis?: string | null;
   scene_refs?: string[];
   approval_override?: { at: string; review_status: string } | null;
-  technical_checks?: unknown;
   id: string;
   video_id: string;
   name: string;
