@@ -1,42 +1,38 @@
 .gf-brand-logo {
   display: block;
-  width: 72px;
-  height: 40px;
-  flex: 0 0 72px;
-  overflow: hidden;
-  filter: brightness(0) invert(1);
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 9px;
+  box-shadow: 0 6px 16px -8px rgba(255, 90, 31, 0.7);
 }
 .gf-app.gf-flow-app .gf-brand {
-  gap: 6px;
-  font-size: 20px;
-  letter-spacing: -0.65px;
+  gap: 10px;
+  font-size: 19px;
+  letter-spacing: -0.6px;
 }
 .gf-onboarding-brand .gf-brand-logo {
-  width: 78px;
-  height: 43px;
-  flex-basis: 78px;
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
+  border-radius: 11px;
 }
 .gf-operational .tools-brand-row .gf-brand-logo {
-  width: 54px;
+  width: 30px;
   height: 30px;
-  flex-basis: 54px;
+  flex-basis: 30px;
+  border-radius: 8px;
 }
 @media (max-width: 760px) {
   .gf-app.gf-flow-app .gf-brand .gf-brand-logo {
     width: 28px;
-    height: 20px;
+    height: 28px;
     flex-basis: 28px;
+    border-radius: 8px;
   }
   .gf-onboarding-brand .gf-brand-logo {
-    width: 65px;
-    height: 36px;
-    flex-basis: 65px;
-  }
-}
-@media (max-width: 520px) {
-  .gf-onboarding-brand .gf-brand-logo {
-    width: 61px;
-    height: 34px;
-    flex-basis: 61px;
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
   }
 }

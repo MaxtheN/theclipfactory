@@ -152,7 +152,7 @@
   cursor: not-allowed;
 }
 .gf-fmap .gf-fmap-tool:focus-visible {
-  outline: 2px solid var(--material-focus, #8B6946);
+  outline: 2px solid var(--material-focus, #C2410C);
   outline-offset: 1px;
 }
 
@@ -374,7 +374,7 @@
   background: var(--fmap-card-hover);
 }
 .gf-fmap .gf-fmap-station:focus-visible {
-  outline: 2px solid var(--material-focus, #8B6946);
+  outline: 2px solid var(--material-focus, #C2410C);
   outline-offset: 2px;
 }
 .gf-fmap .gf-fmap-station.is-selected {
@@ -817,7 +817,7 @@
   background: var(--fmap-hover, #EEE9E0);
 }
 .gf-fmap .gf-fmap-picker-button:focus-visible {
-  outline: 2px solid var(--material-focus, #8B6946);
+  outline: 2px solid var(--material-focus, #C2410C);
   outline-offset: 2px;
 }
 .gf-fmap-picker-k {
@@ -1012,7 +1012,7 @@
   background: transparent;
 }
 .gf-fmap-segment button:focus-visible {
-  outline: 2px solid var(--material-focus, #8B6946);
+  outline: 2px solid var(--material-focus, #C2410C);
   outline-offset: 2px;
 }
 .gf-fmap-view:not([hidden]) {

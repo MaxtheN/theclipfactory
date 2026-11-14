@@ -1,5 +1,8 @@
-# Logo asset
+# Logo
 
-`frontend/src/growth/assets/growth-factory-logo.png` is the exact transparent PNG supplied by the user: `f5de64d1-c9c6-4ca1-a7ce-9e7a10476982-removebg-preview.png`. The original remains unchanged in Downloads. macOS sips confirms alpha transparency. At the user’s latest request, BrandMark.tsx frames the visible artwork (source alpha bounds x142–475, y114–296) and brand-mark.css displays it in white. The PNG itself remains unchanged. Visible mark height follows the company wordmark: 43px in desktop onboarding, 40px in the main sidebar, and 30px beside the Tools title/subtitle. This supersedes the earlier black display preference.
+The Growth Factory mark is a play triangle cut into three clips: what the product does (long video in, short clips out), reading left to right like a fast-forward or rising bars. It sits white on a Signal orange (#FF5A1F) rounded tile.
 
-An earlier generated cutout was superseded by this user-supplied asset.
+- App: drawn inline as SVG in `frontend/src/growth/BrandMark.tsx` (no image file), sized in `brand-mark.css`.
+- Landing page: `landing-page/assets/icon.svg`, `mark.svg`, `mark-white.svg` and `favicon.svg`.
+
+This replaces the earlier user-supplied PNG (`growth-factory-logo.png`), which has been removed.

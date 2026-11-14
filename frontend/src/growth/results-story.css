@@ -3,7 +3,7 @@
   --rs-ink: var(--material-ink, #293237);
   --rs-muted: var(--material-secondary, #616A6E);
   --rs-line: var(--material-divider, #DAD6CE);
-  --rs-accent: var(--material-accent, #8B6946);
+  --rs-accent: var(--material-accent, #C2410C);
   display: grid;
   gap: 22px;
   min-width: 0;

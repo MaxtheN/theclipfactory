@@ -597,7 +597,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             headers={
                 "Content-Security-Policy": "default-src 'self'; script-src "
                 + " ".join(hashes)
-                + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+                + "; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
             },
         )
 
