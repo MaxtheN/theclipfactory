@@ -52,12 +52,6 @@
   letter-spacing: 0.8px;
   white-space: nowrap;
 }
-.gf-operational .tools-brand-row .brand-symbol {
-  width: 30px;
-  height: 32px;
-  flex-shrink: 0;
-  font-size: 20px;
-}
 .gf-operational .sidebar .gf-sidebar-toggle {
   display: inline-flex;
   align-items: center;
@@ -102,14 +96,7 @@
 .gf-operational .topbar,
 .gf-operational .gf-tools-return,
 .gf-operational .panel,
-.gf-operational .hero,
-.gf-operational .stat,
-.gf-operational .clip-card,
 .gf-operational .model-card,
-.gf-operational .analytics-card,
-.gf-operational .campaign-direction,
-.gf-operational .campaign-version,
-.gf-operational .campaign-observation,
 .gf-operational .ledger-task,
 .gf-operational .sticky-save {
   background: var(--panel);
@@ -164,25 +151,6 @@
   line-height: 1.16;
   letter-spacing: -1px;
 }
-.gf-operational .hero h2 {
-  font-size: clamp(24px, 2.2vw, 30px);
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.8px;
-}
-.gf-operational .brand-symbol {
-  border-color: var(--material-field-line);
-  background: rgba(255, 255, 255, 0.05);
-  color: #f1e7d8;
-}
-.gf-operational .sidebar .tools-nav-group > summary {
-  color: #d0ccc4;
-}
-.gf-operational .sidebar .tools-nav-group > summary:hover {
-  color: var(--material-ink);
-  background: rgba(255, 255, 255, 0.055);
-  border-radius: 7px;
-}
 .gf-operational .sidebar .nav-item {
   background: transparent;
   color: #e1ddd5;
@@ -199,30 +167,15 @@
   border-color: transparent;
   box-shadow: none;
 }
-.gf-operational .nav-count {
-  background: var(--material-selected);
-  color: #f1e3cf;
-}
 .gf-operational .sidebar-footer strong {
   color: #e5dfd4;
 }
 .gf-operational .sidebar-footer,
-.gf-operational .info-list > div,
-.gf-operational .workspace-footer {
+.gf-operational .info-list > div {
   border-color: var(--line);
 }
 .gf-operational .status-dot {
   background: #dca675;
-}
-.gf-operational .workspace-footer {
-  background: rgba(255, 255, 255, 0.025);
-  color: #c0bab0;
-}
-.gf-operational .slash {
-  color: #a9aaa6;
-}
-.gf-operational .eyebrow {
-  color: var(--material-secondary);
 }
 .gf-operational a {
   color: #ecd4b2;
@@ -345,7 +298,7 @@
 .gf-operational
   button:not(.secondary):not(.text-button):not(.danger-button):not(
     .nav-item
-  ):not(.source-item):not(.candidate):not(.gf-sidebar-toggle):focus-visible {
+  ):not(.gf-sidebar-toggle):focus-visible {
   box-shadow: inset 0 0 0 2px #5f4b3a;
 }
 .gf-operational .gf-tools-return button:focus-visible {
@@ -397,68 +350,33 @@
 .gf-operational .banner.error strong {
   color: #ffdfd1;
 }
-.gf-operational .gate-list,
 .gf-operational .render-warning {
   background: var(--material-warning-fill);
   color: var(--material-warning);
   border-color: transparent;
 }
-.gf-operational .requirements {
-  color: #d4cec4;
-}
-.gf-operational .hero {
-  background: var(--material-pane);
-}
-.gf-operational .hero p:not(.eyebrow),
-.gf-operational .stat > span,
-.gf-operational .pipeline small,
-.gf-operational .dropzone small,
-.gf-operational .candidate > span:last-child {
-  color: var(--material-secondary);
-}
-.gf-operational .pipeline > div,
-.gf-operational .empty,
-.gf-operational .source-item,
-.gf-operational .dropzone,
-.gf-operational .candidate {
+.gf-operational .empty {
   background: rgba(255, 255, 255, 0.055);
   border-color: var(--material-line);
   color: var(--ink);
 }
-.gf-operational .empty-mark,
-.gf-operational .upload-symbol,
-.gf-operational .source-thumbnail {
+.gf-operational .empty-mark {
   background: rgba(255, 255, 255, 0.07);
   border-color: rgba(255, 255, 255, 0.22);
   color: #ecd7b9;
 }
-.gf-operational .source-item:hover:not(:disabled),
-.gf-operational .candidate:hover:not(:disabled) {
-  background: var(--material-hover);
-  color: var(--ink);
-}
-.gf-operational .source-item.selected,
-.gf-operational .source-item.selected:hover:not(:disabled),
-.gf-operational .dropzone.dragging {
-  background: var(--material-selected);
-  border-color: transparent;
-  color: var(--material-ink);
-  box-shadow: inset 2px 0 0 var(--material-focus);
-}
 .gf-operational .read-only,
-.gf-operational .transcript,
 .gf-operational .artifact-data {
   background: rgba(17, 24, 29, 0.3);
   color: #e1ddd5;
   border-color: var(--material-line);
 }
-.gf-operational .source-player,
-.gf-operational .clip-player,
-.gf-operational .cover-preview {
-  background: rgba(16, 20, 23, 0.55);
-}
 .gf-operational .sticky-save > span {
   color: #e4d8c5;
+}
+/* The bar floats over the form while it scrolls: opaque, so text never shows through it. */
+.gf-operational .sticky-save {
+  background: var(--material-pane-solid);
 }
 .gf-operational .job progress {
   accent-color: #d6a26f;
@@ -471,41 +389,17 @@
   color: var(--material-button-ink);
 }
 
-.gf-operational .source-item.selected > span:last-child,
-.gf-operational .source-item.selected small,
-.gf-operational .source-item:hover:not(:disabled) small,
-.gf-operational .source-item:hover:not(:disabled) > span:last-child,
-.gf-operational .candidate.selected > span:last-child,
-.gf-operational .candidate:hover:not(:disabled) > span:last-child {
-  color: var(--material-ink);
-}
-
 /* Operational pages use the same flat content surfaces as campaign setup. */
 .gf-operational .panel {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
 }
-.gf-operational .panel :is(.stat, .clip-card, .model-card, .analytics-card, .campaign-direction, .campaign-version, .campaign-observation, .ledger-task),
-.gf-operational :is(.pipeline > div, .source-item, .candidate) {
+.gf-operational .panel :is(.model-card, .ledger-task) {
   background: var(--material-field);
   border-color: transparent;
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-}
-.gf-operational .source-item.selected,
-.gf-operational .source-item.selected:hover:not(:disabled) {
-  background: var(--material-selected);
-  box-shadow: inset 2px 0 0 var(--material-focus);
-}
-.gf-operational .dropzone {
-  background: var(--material-field);
-  border-color: var(--material-field-line);
-}
-.gf-operational .dropzone.dragging {
-  background: var(--material-selected);
-  border-color: var(--material-focus);
-  box-shadow: none;
 }
 .gf-operational .sidebar .gf-sidebar-toggle {
   background: transparent;
@@ -517,15 +411,11 @@
   background: var(--material-hover);
   border-color: transparent;
 }
-.gf-operational .sidebar :is(.tools-nav-group > summary, .nav-item),
+.gf-operational .sidebar .nav-item,
 .gf-operational .field > label,
 .gf-operational .check,
 .gf-operational .optin strong {
   color: var(--material-ink);
-}
-.gf-operational .workspace-footer,
-.gf-operational .slash {
-  color: var(--material-metadata);
 }
 
 @supports not (
@@ -535,14 +425,7 @@
   .gf-operational .topbar,
   .gf-operational .gf-tools-return,
   .gf-operational .panel,
-  .gf-operational .hero,
-  .gf-operational .stat,
-  .gf-operational .clip-card,
   .gf-operational .model-card,
-  .gf-operational .analytics-card,
-  .gf-operational .campaign-direction,
-  .gf-operational .campaign-version,
-  .gf-operational .campaign-observation,
   .gf-operational .ledger-task,
   .gf-operational .sticky-save {
     background: var(--material-pane-solid);
@@ -560,14 +443,7 @@
   .gf-operational .topbar,
   .gf-operational .gf-tools-return,
   .gf-operational .panel,
-  .gf-operational .hero,
-  .gf-operational .stat,
-  .gf-operational .clip-card,
   .gf-operational .model-card,
-  .gf-operational .analytics-card,
-  .gf-operational .campaign-direction,
-  .gf-operational .campaign-version,
-  .gf-operational .campaign-observation,
   .gf-operational .ledger-task,
   .gf-operational .sticky-save {
     background: var(--material-pane-solid);

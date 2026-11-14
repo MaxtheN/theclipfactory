@@ -5,7 +5,7 @@ import { ClipStyleSheet } from "./ClipStyle";
 import type { Clip, Job, TeamRun, Video } from "../types";
 import { ApiError, endpoint, post } from "../api";
 import { Storyboard } from "../components/Storyboard";
-import { Stages } from "./SourceStages";
+import { Stages } from "../components/Stages";
 import type { FactoryState } from "../useFactory";
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, reviewPreview } from "./workspaceApi";
@@ -102,7 +102,9 @@ export function FactoryHome({
       setSuccess((current) =>
         autoStarted.current.has(receipt.video.id) && current
           ? current
-          : "Source saved and added to this brand.",
+          : autopilot && !direction
+            ? "Source saved. The factory starts making clips from it as soon as you pick a clip style."
+            : "Source saved and added to this brand.",
       );
       w.clearNotice?.();
     } else {
@@ -329,7 +331,10 @@ export function FactoryHome({
     }
   }
   /** Autopilot: with a direction approved, confirmed new footage goes straight into production. */
-  async function autoProduce(video: Video) {
+  async function autoProduce(
+    video: Video,
+    started = `${video.name} added and queued for production. Its progress shows below.`,
+  ) {
     const strategyId = rulesId;
     if (
       !campaign ||
@@ -349,17 +354,37 @@ export function FactoryHome({
       );
       reloadRuns.current();
       void factory.refresh();
-      setSuccess(
-        `${video.name} added and queued for production. Its progress shows below.`,
-      );
+      setSuccess(started);
     } catch (e) {
       setSuccess(
-        `${video.name} added. Production did not start by itself: ${
+        `Production of ${video.name} did not start by itself: ${
           e instanceof Error ? e.message : "try Find clips."
         }`,
       );
     }
   }
+  // Footage is often added before a clip style is approved, and autopilot cannot run without one.
+  // The moment a style is approved, sources nothing has been made from start on their own.
+  const directed = useRef<boolean | null>(null); // null until the workspace has loaded once
+  useEffect(() => {
+    if (w.loading || !campaign) return;
+    const before = directed.current;
+    directed.current = !!direction;
+    if (before !== false || !direction) return;
+    for (const source of sources) {
+      const status = line?.sources.find((item) => item.video_id === source.id);
+      if (
+        status?.state === "idle" &&
+        status.can_produce &&
+        !status.run_id &&
+        !factory.data.clips.some((c) => c.video_id === source.id)
+      )
+        void autoProduce(
+          source,
+          `Style approved. ${source.name} is queued for production. Its progress shows below.`,
+        );
+    }
+  }, [w.loading, campaign?.id, !!direction]);
 
   async function attach(file?: File) {
     if (

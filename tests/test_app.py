@@ -300,6 +300,19 @@ def test_upload_mock_probe_public_redaction_and_media(client, monkeypatch):
     assert not (client.app.state.root / stored["path"]).exists()
 
 
+def test_deleting_a_source_takes_it_out_of_its_campaign_so_the_campaign_can_still_be_saved(client, monkeypatch):
+    kept, gone = upload_mock(client, monkeypatch), upload_mock(client, monkeypatch)
+    profile = client.post("/api/profiles", json={"name": "Brand"}).json()
+    body = {"name": "Main", "profile_ids": [profile["id"]], "video_ids": [kept["id"], gone["id"]]}
+    campaign = client.post("/api/campaigns", json=body).json()
+    assert client.delete(f"/api/videos/{gone['id']}").status_code == 200
+    saved = client.get("/api/campaigns").json()
+    assert [c["video_ids"] for c in saved if c["id"] == campaign["id"]] == [[kept["id"]]]
+    # A campaign that still listed the deleted source would be rejected here: every member must exist.
+    again = client.put(f"/api/campaigns/{campaign['id']}", json={**body, "video_ids": [kept["id"]]})
+    assert again.status_code == 200, again.text
+
+
 def test_invalid_upload_cleans_file_and_library(client, monkeypatch):
     def invalid(_):
         raise WorkError("This file is not a readable video.")

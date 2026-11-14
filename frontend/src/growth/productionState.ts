@@ -15,6 +15,9 @@ export function clipInScope(clip: Clip, scope: ProductionScope) {
 export function undirected(clip: Clip, sourceIds: readonly string[]) {
   return !clip.campaign_id && sourceIds.includes(clip.video_id);
 }
+export function newestFirst(clips: Clip[]) {
+  return [...clips].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+}
 export function jobInScope(job: Job, scope: ProductionScope, runs: TeamRun[] = []) {
   const context = object(job.context);
   if (!context || typeof context.video_id !== "string" || !scope.sourceIds.includes(context.video_id)) return false;

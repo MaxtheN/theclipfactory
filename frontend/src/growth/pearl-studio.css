@@ -81,6 +81,15 @@
 .gf-app .gf-reason-chain > i { background: var(--material-line); }
 .gf-app .gf-brief-summary, .gf-app .gf-brief-actions > span { color: var(--material-secondary); }
 .gf-app .gf-next-source > svg { color: var(--material-focus); }
+.gf-app .stage-track li { color: var(--material-secondary); }
+.gf-app .stage-track li:not(:last-child)::after { background: #A49B8D; }
+.gf-app .stage-track .stage-dot { border-color: var(--material-field-line); }
+.gf-app .stage-track li[data-status="done"] { color: var(--material-success); }
+.gf-app .stage-track li[data-status="done"] .stage-dot { color: var(--material-success); background: var(--material-success-fill); border-color: var(--material-success); }
+.gf-app .stage-track li[data-status="active"] { color: var(--material-ink); }
+.gf-app .stage-track li[data-status="active"] .stage-dot { border-color: var(--material-focus); box-shadow: 0 0 0 3px var(--material-focus-ring); }
+.gf-app .stage-track li[data-status="active"] .stage-dot::before { background: var(--material-focus); }
+.gf-app .stage-track li[data-status="failed"], .gf-app .stage-track li[data-status="failed"] .stage-dot { color: var(--material-danger); border-color: var(--material-danger); }
 .gf-app .gf-skeleton { background-image: linear-gradient(100deg,#E9E5DD 30%,#F7F5F0 50%,#E9E5DD 70%); }
 /* Native sheets and Command-K share the same paper material. */
 .gf-app .gf-panel-dialog, .gf-command-dialog { color-scheme: light; background: var(--material-command); color: var(--material-ink); border-color: #C7C1B6; box-shadow: 0 18px 64px rgba(48,42,33,.18),0 1px 0 rgba(255,255,255,.8) inset; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }

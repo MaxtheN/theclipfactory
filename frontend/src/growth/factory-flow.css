@@ -1666,7 +1666,7 @@ button.gf-library-edit-art > svg {
 }
 /* Quick look: the clip itself, playing over the page. */
 .gf-quicklook {
-  width: min(400px, 92vw, calc((100vh - 140px) * 0.5625));
+  width: min(400px, 92vw, calc((100vh - 176px) * 0.5625));
   padding: 0;
   border: 1px solid var(--material-line);
   border-radius: 14px;
@@ -1692,14 +1692,17 @@ button.gf-library-edit-art > svg {
 .gf-quicklook > .gf-inline-error {
   margin: 10px 14px 0;
 }
+/* The opening line gets the full width; up to three actions sit under it. */
 .gf-quicklook-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   padding: 12px 14px;
 }
 .gf-quicklook-bar > strong {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 0;
   font-size: 13px;
   font-weight: 550;
