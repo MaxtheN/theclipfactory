@@ -15,6 +15,7 @@ import { FactoryHome, type OpenProduction } from "./FactoryHome";
 import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
 import { AutomationPanel } from "./AutomationPanel";
+import { StrategistPanel } from "./StrategistPanel";
 import { QuickActions, type QuickAction } from "./QuickActions";
 import { BrandMark } from "./BrandMark";
 import "./growth.css";
@@ -678,8 +679,13 @@ export function GrowthApp() {
                   onReview={reviewClip}
                   onEditingRules={() => go("research")}
                 />
-                {/* Mount slot: the Strategist panels (StrategistPanel, BeliefLedger)
-                    render here, below the learning loop, inside Results. */}
+                {!onboarding && stage === "results" && w.profileId && (
+                  <StrategistPanel
+                    key={`strategist-${contextKey}`}
+                    profileId={w.profileId}
+                    onOpenStyleRules={() => go("research")}
+                  />
+                )}
               </div>
             </main>
           </div>
