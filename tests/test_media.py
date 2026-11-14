@@ -117,6 +117,11 @@ def test_real_render_preserves_audio_and_truthful_subtitles(tmp_path, sample):
         assert actual["has_audio"] is audio
         assert actual["duration"] == pytest.approx(0.4, abs=0.12)
         assert final["result"]["subtitles_burned"] is audio
+        checks = final["result"]["technical_checks"]
+        assert checks["playback_format_passed"], checks
+        statuses = {c["id"]: c["status"] for c in checks["playback_format"]}
+        assert statuses["audio_stream"] == ("pass" if audio else "not_applicable")
+        assert final["result"]["source_segments"] == [{"role": "main", "start": 0.1, "end": 0.5}]
         if audio:
             assert "Actual words" in output.with_suffix(".srt").read_text()
             assert final["result"]["warning"] is None

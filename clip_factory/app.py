@@ -662,10 +662,16 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         if not body.retry_of_job_id:
             return {"retry_of_job_id": None, "attempt": 1}
         failed = store.get("jobs", body.retry_of_job_id)
-        if not failed or failed["kind"] != "render" or failed["context"].get("video_id") != video["id"]:
+        if (
+            not failed
+            or failed["kind"] != "render"
+            or failed.get("context", {}).get("video_id") != video["id"]
+        ):
             raise HTTPException(422, "A retry must reference an earlier render of this source.")
         if failed["status"] not in {"failed", "cancelled"}:
             raise HTTPException(409, "Only a failed or cancelled render can be retried.")
+        if any(j.get("context", {}).get("retry_of_job_id") == failed["id"] for j in store.all("jobs")):
+            raise HTTPException(409, "This render was already retried. Retry its latest attempt instead.")
         attempt = int(failed["context"].get("attempt") or 1) + 1
         if attempt > MAX_RENDER_ATTEMPTS:
             raise HTTPException(
