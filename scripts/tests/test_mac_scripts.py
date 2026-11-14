@@ -2,6 +2,8 @@
 import os
 import shutil
 import subprocess
+import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -34,6 +36,10 @@ def test_setup_current_frontend_does_not_require_npm(tmp_path):
     root = tmp_path / "Checkout with spaces"
     (root / "scripts").mkdir(parents=True)
     shutil.copy(REPO / "scripts/setup-mac.sh", root / "scripts")
+    shutil.copy(REPO / "pyproject.toml", root)
+    (root / "clip_factory").mkdir()
+    for name in ("__init__.py", "inference_worker.py"):
+        shutil.copy(REPO / "clip_factory" / name, root / "clip_factory")
     (root / "frontend/src").mkdir(parents=True)
     (root / "frontend/dist").mkdir()
     for name in ("package.json", "package-lock.json", "index.html", "vite.config.ts", "tsconfig.json"):
@@ -57,6 +63,17 @@ def test_setup_current_frontend_does_not_require_npm(tmp_path):
     assert "unexpected-npm" not in result.stderr
     assert (root / "clip_factory/ui/index.html").read_text() == "built UI"
     assert f"{root}|-m pip install -e .[desktop]" in output.read_text()
+    # Build a real wheel from the setup fixture, without network or native deps.
+    # The frozen external Python needs a physical worker file, not only bytecode.
+    wheels = tmp_path / "wheels"
+    wheels.mkdir()
+    subprocess.run([sys.executable, "-c",
+                    ("from setuptools.build_meta import build_wheel; "
+                     f"build_wheel({str(wheels)!r})")], cwd=root, capture_output=True, check=True)
+    with zipfile.ZipFile(next(wheels.glob("*.whl"))) as wheel:
+        assert wheel.read("clip_factory/ui/index.html") == b"built UI"
+        assert wheel.read("clip_factory/inference_worker.py") == (
+            REPO / "clip_factory/inference_worker.py").read_bytes()
 
 
 @pytest.mark.parametrize("name", ["setup-mac.sh", "build-mac-app.sh"])

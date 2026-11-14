@@ -31,8 +31,8 @@ jobs:
           npm run build
       - name: Backend and launcher tests (no native GUI)
         run: |
-          python -m pip install '.[test]'
+          python -m pip install '.[test]' 'setuptools>=75' wheel
           python -m pytest tests scripts/tests -q
-          python -m ruff check clip_factory/main.py scripts
+          python -m ruff check clip_factory scripts
       - name: Headless bootstrap smoke (not a native desktop test)
         run: python scripts/smoke-headless.py

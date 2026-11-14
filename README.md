@@ -8,6 +8,21 @@ model fits or every pipeline has been hardware-validated**. See
 [API_CONTRACT.md](API_CONTRACT.md) for the current integration contract and
 [Mac testing](docs/mac-testing.md) for the release checklist.
 
+## Team mode
+
+Team production uses producer, footage analyst, creative strategist, editor,
+critic, and performance analyst roles as fresh-context calls to **one shared
+local model**. A durable local ledger records handoffs, evidence, validated
+outputs, findings, revisions, timings, and clip lineage. Heavy inference/rendering
+is serial—not a parallel swarm or six loaded models. Correction is bounded to
+**at most two revision cycles**, with repeated edits stopping as no progress.
+Baseline runs support comparison using observed results, not invented ROI.
+
+Outputs require human review; a critic pass is not approval. Team roles have no
+publish or ad-spend tools; existing external authorization gates remain separate.
+No autonomous ads capability is promised. See the [team-mode contract](docs/team-mode.md).
+Real MLX inference and native Mac behavior still require target-hardware testing.
+
 ## First run on macOS (Apple Silicon)
 
 1. Download/clone this repository into a writable directory. Spaces in its path
@@ -54,8 +69,8 @@ stdout; do not save stdout to persistent CI logs or files. The launcher disables
 HTTP access logs and does not persist its token. A restart creates a new token.
 
 For Linux development/CI, use Python supported by `pyproject.toml`,
-`python -m pip install -e '.[test]'`, and build the frontend with `npm ci && npm run
-build` in `frontend/`. Use `python -m clip_factory.main --headless` or `--browser`.
+`python -m pip install -e '.[test]' 'setuptools>=75' wheel`, and build the frontend
+with `npm ci && npm run build` in `frontend/`. Use `python -m clip_factory.main --headless` or `--browser`.
 This is **not** a supported Linux MLX/native desktop installation claim.
 
 ## Local storage, privacy, and model setup
@@ -117,11 +132,30 @@ Keychain storage, token expiry, API behavior, and actual integration limitations
 ## Packaged Mac `.app`
 
 The manual GitHub Actions workflow **Build Mac desktop artifact (not notarized)**
-uses an Apple Silicon runner, builds the frontend, copies it into
+uses `macos-15` (arm64 in the current [official runner table](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)),
+asserts native OS/Python architecture, builds the frontend, copies it into
 `clip_factory/ui`, runs backend/launcher tests, and uses PyInstaller to build a
-windowed `Clip Factory.app`. It uploads a ZIP **CI artifact**, not a published
-release. The installed UI package path is preferred by the parent server over
+windowed `Clip Factory.app`. `--add-data` includes the actual standalone
+`inference_worker.py` for the external runtime. Before archiving, the build checks
+that this file and **every built UI asset** match the bundle. It uploads a ZIP
+**CI artifact**, not a published release. The installed UI package path is preferred by the parent server over
 `frontend/dist`. No source-repository path should be required at runtime.
+
+Dispatch only after the final core/team verification commits are pushed. Select
+the intended branch explicitly; no automatic merge or release occurs. GitHub
+requires a dispatchable workflow on the default branch. If `mac-app.yml` exists
+only on the working branch, it may not yet appear or be dispatchable—registration
+is a parent/repository-owner task, not a reason to silently build `master`.
+
+Once registered, the current task's branch can be selected explicitly:
+
+```sh
+gh workflow run mac-app.yml --repo MaxtheN/theclipfactory \
+  --ref 8090/chat-instagram-local-mvp-8cfc3f
+```
+
+This is a **later manual action**, not part of Linux verification. Confirm the run's
+head SHA matches the reviewed final commit before trusting its artifact.
 
 Local build on an Apple Silicon Mac with Python 3.12, Node and dependencies:
 
@@ -150,9 +184,9 @@ works; perform the [manual Mac checklist](docs/mac-testing.md).
 ## Development and verification
 
 ```sh
-python -m pip install -e '.[test]'
+python -m pip install -e '.[test]' 'setuptools>=75' wheel
 python -m pytest tests scripts/tests -q
-python -m ruff check clip_factory/main.py scripts
+python -m ruff check clip_factory scripts
 (cd frontend && npm ci && npm test && npm run build)
 python scripts/smoke-headless.py
 ```

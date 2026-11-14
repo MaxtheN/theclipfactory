@@ -48,11 +48,20 @@ below are **manual acceptance work**, not claims of tests already passed.
 
 ## Packaged artifact
 
-- [ ] Dispatch `mac-app.yml`. Download the ZIP CI artifact; verify commit/build
-  provenance. This is ad-hoc/unsigned trust level, **not notarized or a release**.
+- [ ] After final team/core verification commits are pushed, dispatch `mac-app.yml`
+  with the explicit reviewed branch/ref (see README). If it is absent from the
+  default branch, first arrange workflow registration; do not substitute `master`.
+  Confirm runner OS and Python are native arm64. The current official public
+  runner table maps `macos-15` to arm64 and `macos-15-intel` to Intel; the workflow
+  checks architecture rather than assuming it. Download the ZIP CI artifact;
+  verify commit/build provenance. This is ad-hoc/unsigned trust level, **not notarized or a release**.
 - [ ] Extract and move `.app` to Applications on a machine without the source
   checkout. Trust only reviewed artifacts. Test per-app right-click → Open and
   relevant macOS Privacy & Security approval; never disable Gatekeeper globally.
+- [ ] The bundle asset verifier passed before archiving: the actual standalone
+  `inference_worker.py` and every built UI asset are present and byte-matched.
+  On the no-checkout Mac, run a real model task through external runtime Python
+  to confirm worker launch/imports, not just existence of files.
 - [ ] Cocoa window opens and packaged `clip_factory/ui/index.html` serves. Test
   shell/Finder with minimal PATH; installed `/opt/homebrew/bin/ffmpeg` is found.
 - [ ] Writable data is outside the app bundle; app replacement preserves data.
@@ -81,12 +90,30 @@ below are **manual acceptance work**, not claims of tests already passed.
 - [ ] Paid controls stay gated. No unattended campaign launch or spend exists.
   Manual events stay labeled manual; no causal/paid attribution is invented.
 
+## Team-mode acceptance
+
+- [ ] Review [team-mode contract](team-mode.md). Run the shared local model with
+  producer, footage analyst, creative strategist, editor, critic, and performance
+  analyst roles. Inspect ledger handoffs, evidence, findings, timings and lineage.
+- [ ] Confirm one heavy job at a time, not parallel model instances. Exercise
+  revision budgets 0, 1 and 2; no run exceeds two correction cycles. Repeated
+  edits stop as no progress. Invalid handoffs fail before rendering.
+- [ ] Missing evidence remains unknown; critic pass does not approve a clip.
+  Human review remains required. Team roles cannot publish or spend on ads.
+- [ ] Cancel/restart mid-run: inspect completed local outputs and interrupted
+  ledger state; no silent resumption or repeated external write occurs.
+- [ ] Compare team/baseline with matching source/config snapshots and observed
+  timings/feedback; do not convert these into unsupported ROI/causal claims.
+
 ## Automated checks and limits
 
 `ci.yml` runs frontend tests/build and backend/launcher tests on Linux/macOS;
 `scripts/smoke-headless.py` tests the actual parent's boot redirect, UI, cookie,
 and process termination using temporary data. `scripts/tests/test_launcher.py`
 uses a minimal FastAPI seam with real sockets to test launcher behavior without
-opening Cocoa. The Mac artifact workflow additionally freezes and smoke-tests
+opening Cocoa. Shell/packaging regression tests mock Mac tools on Linux and check
+failure paths;
+they are **not a native Mac build**. The Mac artifact workflow additionally
+verifies worker/UI data, freezes and smoke-tests
 the executable. A passing headless job is **not** native GUI, live Meta, real model,
 ffmpeg performance, M5 hardware, signing, or notarization acceptance.
