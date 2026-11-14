@@ -1,0 +1,29 @@
+name: Build Mac desktop artifact (not notarized)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build Apple Silicon desktop bundle and run backend tests
+        run: bash scripts/build-mac-app.sh
+      - name: Smoke packaged executable without GUI
+        run: python scripts/smoke-headless.py --executable 'dist/Clip Factory.app/Contents/MacOS/Clip Factory'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clip-factory-mac-arm64-not-notarized
+          path: dist/clip-factory-mac-arm64.zip
+          if-no-files-found: error
+          retention-days: 14

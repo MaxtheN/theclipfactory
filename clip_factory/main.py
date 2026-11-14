@@ -129,13 +129,20 @@ def main(argv: list[str] | None = None) -> int:
 
                 window = webview.create_window("Clip Factory", bootstrap, width=1440, height=960,
                                                min_size=(900, 640))
-                window.events.closed += stop.set
+                closed = threading.Event()
+
+                def on_closed():
+                    closed.set()
+                    stop.set()
+
+                window.events.closed += on_closed
                 # Signal callbacks only set an event; GUI destruction stays out of signal handlers.
                 def monitor_window():
                     while not stop.wait(0.2):
                         if not thread.is_alive():
                             break
-                    window.destroy()
+                    if not closed.is_set():
+                        window.destroy()
 
                 webview.start(monitor_window, private_mode=True)
             except Exception:  # noqa: BLE001 - native backends vary; never expose URL-bearing errors
