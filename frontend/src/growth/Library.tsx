@@ -1,3 +1,4 @@
+import { Clips } from "../pages/Clips";
 import { useState } from "react";
 import type { Clip } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -21,7 +22,7 @@ export function Library({
   onProduce: OpenProduction;
   onFactory: () => void;
 }) {
-  const [tab, setTab] = useState<"edits" | "footage">("edits");
+  const [tab, setTab] = useState<"edits" | "wall" | "footage">("edits");
   const [query, setQuery] = useState("");
   const ids = w.campaign?.video_ids || [];
   const sources = factory.data.videos.filter((v) => ids.includes(v.id));
@@ -55,6 +56,13 @@ export function Library({
           </button>
           <button
             type="button"
+            aria-pressed={tab === "wall"}
+            onClick={() => setTab("wall")}
+          >
+            Review wall<span>{clips.filter((c) => !c.approved).length}</span>
+          </button>
+          <button
+            type="button"
             aria-pressed={tab === "footage"}
             onClick={() => setTab("footage")}
           >
@@ -75,9 +83,23 @@ export function Library({
       <p className="gf-library-scope">
         {tab === "edits"
           ? "Edits for the selected workspace and profile. Every version keeps its own review state."
-          : "Original footage attached to this workspace. Source files stay on this Mac."}
+          : tab === "wall"
+            ? "Every edit side by side: play, filter by hypothesis, and approve or discard in place."
+            : "Original footage attached to this workspace. Source files stay on this Mac."}
       </p>
-      {tab === "edits" ? (
+      {tab === "wall" ? (
+        <div className="gf-review-wall">
+          <Clips
+            state={factory}
+            navigate={onFactory}
+            scope={(clip) =>
+              clip.campaign_id === w.campaign?.id &&
+              clip.profile_id === w.profileId &&
+              ids.includes(clip.video_id)
+            }
+          />
+        </div>
+      ) : tab === "edits" ? (
         <>
           {edits.length ? (
             <div className="gf-library-edits">

@@ -142,7 +142,8 @@ export function ClipReview({
             {teamReviewed && clip.team_review_status !== "pass" && (
               <p role="alert">
                 Unresolved critic warnings: failed or unknown review prevents
-                approval. Review the ledger’s checks, evidence and revisions.
+                approval here. Review the ledger’s checks, evidence and
+                revisions, or approve it anyway from the Clips page.
               </p>
             )}
             {teamReviewed && dirty && (
@@ -234,7 +235,7 @@ export function ClipReview({
             </details>
             <p className="muted">
               A critic pass is not human approval. Revision history is in the
-              Factory team ledger.
+              Studio team ledger.
             </p>
           </div>
         )}

@@ -1,68 +1,28 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFactory } from "./useFactory";
-import { Campaigns } from "./pages/Campaigns";
-import { Dashboard } from "./pages/Dashboard";
-import { Library } from "./pages/Library";
-import { Factory } from "./pages/Factory";
-import { Models } from "./pages/Models";
-import { Instagram } from "./pages/Instagram";
-import { Results } from "./pages/Results";
-import { SettingsPage } from "./pages/Settings";
+import { descriptions, groups, icons, initialTab, rememberTab, type Tab } from "./navigation";
 import { Icon } from "./growth/Icon";
 import { BrandMark } from "./growth/BrandMark";
 import "./growth/operational-glass.css";
-const tabs = [
-  "Campaigns",
-  "Dashboard",
-  "Library",
-  "Factory",
-  "Models",
-  "Instagram",
-  "Results",
-  "Settings",
-] as const;
-type Tab = (typeof tabs)[number];
-const navigationGroups: { label: string; icon: string; items: Tab[] }[] = [
-  {
-    label: "Create",
-    icon: "studio",
-    items: ["Campaigns", "Library", "Factory"],
-  },
-  { label: "Review", icon: "results", items: ["Dashboard", "Results"] },
-  {
-    label: "Workspace",
-    icon: "settings",
-    items: ["Models", "Instagram", "Settings"],
-  },
-];
-const navigationIcons: Record<Tab, string> = {
-  Campaigns: "setup",
-  Dashboard: "results",
-  Library: "folder",
-  Factory: "studio",
-  Models: "spark",
-  Instagram: "link",
-  Results: "results",
-  Settings: "settings",
+import { Campaigns } from "./pages/Campaigns";
+import { Clips } from "./pages/Clips";
+import { Footage } from "./pages/Footage";
+import { Home } from "./pages/Home";
+import { Instagram } from "./pages/Instagram";
+import { Models } from "./pages/Models";
+import { Results } from "./pages/Results";
+import { SettingsPage } from "./pages/Settings";
+import { Studio } from "./pages/Studio";
+const labels: Record<string, string> = {
+  system: "this Mac",
+  factory: "factory status",
+  videos: "footage",
 };
-const descriptions: Record<Tab, string> = {
-  Campaigns: "Saved profiles. Approved direction. Evidence-led revisions.",
-  Dashboard: "Your creative intent. A local production system.",
-  Library: "Source footage, ready for your next idea.",
-  Factory: "Find the moment. Shape the story. Keep control.",
-  Models: "Private intelligence, running on your machine.",
-  Instagram: "Connect deliberately. Publish with approval.",
-  Results: "Real observations. Clear provenance. No invented performance.",
-  Settings: "Define the brand, the objective, and the boundaries.",
-};
-function initialTab(): Tab {
-  try {
-    const saved = localStorage.getItem("clip-factory-tab");
-    return tabs.includes(saved as Tab) ? (saved as Tab) : "Campaigns";
-  } catch {
-    return "Campaigns";
-  }
-}
+const groupIcons: Record<string, string> = { Make: "studio", Grow: "results", Setup: "settings" };
+/**
+ * The full set of local tools. Inside the Growth Factory shell this is the
+ * "Advanced tools" surface: the shell passes its sidebar toggle and collapse state.
+ */
 export function App({
   sidebarToggle,
   sidebarCollapsed = false,
@@ -72,41 +32,39 @@ export function App({
 }) {
   const state = useFactory();
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
-    () => ({
-      Create: true,
-      Review: true,
-      Workspace: navigationGroups[2].items.includes(tab),
-    }),
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      groups.map((group) => [
+        group.label,
+        group.label !== "Setup" || (group.tabs as readonly Tab[]).includes(tab),
+      ]),
+    ),
   );
   const [sourceId, setSourceId] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
   const previous = useRef(tab);
   useEffect(() => {
-    const group = navigationGroups.find((item) => item.items.includes(tab));
-    if (group)
-      setExpandedGroups((current) => ({ ...current, [group.label]: true }));
-  }, [tab]);
-  useEffect(() => {
     if (previous.current !== tab) {
       heading.current?.focus();
       previous.current = tab;
     }
-    try {
-      localStorage.setItem("clip-factory-tab", tab);
-    } catch {
-      /* UI preferences are optional. */
-    }
+    rememberTab(tab);
+    const group = groups.find((item) => (item.tabs as readonly Tab[]).includes(tab));
+    if (group) setExpandedGroups((current) => ({ ...current, [group.label]: true }));
   }, [tab]);
   const errorGroups = Object.entries(state.errors).reduce<
     Record<string, string[]>
   >((groups, [key, error]) => {
-    if (error) (groups[error] ||= []).push(key);
+    if (error) (groups[error] ||= []).push(labels[key] ?? key);
     return groups;
   }, {});
   const active = state.data.jobs.filter((job) =>
     ["queued", "running"].includes(job.status),
   ).length;
+  const waiting = state.errors.clips
+    ? 0
+    : state.data.clips.filter((clip) => !clip.approved).length;
+  const counts: Partial<Record<Tab, number>> = { Factory: active, Clips: waiting };
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">
@@ -127,7 +85,7 @@ export function App({
           aria-label="Main navigation"
           hidden={sidebarCollapsed}
         >
-          {navigationGroups.map((group) => (
+          {groups.map((group) => (
             <details
               className="tools-nav-group"
               key={group.label}
@@ -142,12 +100,12 @@ export function App({
               }}
             >
               <summary>
-                <Icon name={group.icon} size={16} />
+                <Icon name={groupIcons[group.label]} size={16} />
                 <span>{group.label}</span>
                 <Icon name="down" size={14} />
               </summary>
               <div className="tools-nav-items">
-                {group.items.map((item) => (
+                {group.tabs.map((item) => (
                   <button
                     key={item}
                     aria-current={tab === item ? "page" : undefined}
@@ -155,11 +113,16 @@ export function App({
                     onClick={() => setTab(item)}
                   >
                     <span className="nav-icon" aria-hidden="true">
-                      <Icon name={navigationIcons[item]} size={18} />
+                      <Icon name={icons[item]} size={18} />
                     </span>
                     <span className="tools-nav-label">{item}</span>
-                    {item === "Factory" && active > 0 && (
-                      <span className="nav-count">{active}</span>
+                    {!!counts[item] && (
+                      <span className="nav-count">
+                        {counts[item]}
+                        <span className="visually-hidden">
+                          {item === "Clips" ? " to review" : " running"}
+                        </span>
+                      </span>
                     )}
                   </button>
                 ))}
@@ -169,28 +132,24 @@ export function App({
         </nav>
         <div className="sidebar-footer" hidden={sidebarCollapsed}>
           <span className="status-dot" />
-          <strong>Local-first workspace</strong>
+          <strong>Private by default</strong>
           <p>
-            Media stays on this machine.
+            Footage and models stay on this Mac.
             <br />
-            Meta actions require your opt-in.
+            Nothing is published without you.
           </p>
-          <small>GROWTH FACTORY / MVP</small>
         </div>
       </aside>
       <div className="workspace">
         <div className="topbar">
-          <span>
-            WORKSPACE <span className="slash">/</span>{" "}
-            {state.data.settings?.brand || "Your studio"}
-          </span>
+          <span>{state.data.settings?.brand || "Your studio"}</span>
           <div>
             <span className="badge">
               {state.loading || state.errors.jobs
-                ? "Queue unknown"
+                ? "Status unknown"
                 : active
-                  ? `${active} jobs active`
-                  : "Queue idle"}
+                  ? `${active} job${active === 1 ? "" : "s"} running`
+                  : "Idle"}
             </span>
             <button
               className="text-button"
@@ -205,14 +164,13 @@ export function App({
         <main id="main" tabIndex={-1}>
           <header className="page-heading">
             <div>
-              <p className="eyebrow">CREATE WITH INTENT</p>
               <h1 ref={heading} tabIndex={-1}>
                 {tab}
               </h1>
               <p>{descriptions[tab]}</p>
             </div>
-            {tab !== "Library" && (
-              <button className="secondary" onClick={() => setTab("Library")}>
+            {tab !== "Factory" && (
+              <button className="secondary" onClick={() => setTab("Factory")}>
                 ＋ Add footage
               </button>
             )}
@@ -224,7 +182,7 @@ export function App({
           )}
           {Object.keys(state.errors).length > 0 && (
             <div className="banner error" role="alert">
-              <strong>Some workspace data is unavailable</strong>
+              <strong>Some data could not be loaded</strong>
               <ul>
                 {Object.entries(errorGroups).map(([error, keys]) => (
                   <li key={error}>
@@ -232,9 +190,7 @@ export function App({
                   </li>
                 ))}
               </ul>
-              <small>
-                Last loaded data may be stale. Capabilities are not assumed.
-              </small>
+              <small>What you see may be out of date.</small>
               <button
                 className="secondary small"
                 onClick={() => void state.refresh()}
@@ -258,30 +214,30 @@ export function App({
               </button>
             </div>
           )}
-          {tab === "Campaigns" && (
-            <Campaigns state={state} openFactory={() => setTab("Factory")} />
-          )}
-          {tab === "Dashboard" && <Dashboard state={state} navigate={setTab} />}
-          {tab === "Library" && (
-            <Library
+          {tab === "Factory" && <Home state={state} navigate={setTab} />}
+          {tab === "Clips" && <Clips state={state} navigate={setTab} />}
+          {tab === "Footage" && (
+            <Footage
               state={state}
               onEdit={(id) => {
                 setSourceId(id);
-                setTab("Factory");
+                setTab("Studio");
               }}
             />
           )}
-          {tab === "Factory" && (
-            <Factory state={state} initialSource={sourceId} />
+          {tab === "Campaigns" && (
+            <Campaigns
+              state={state}
+              openFactory={() => setTab("Studio")}
+              openClips={() => setTab("Clips")}
+            />
           )}
-          {tab === "Models" && <Models state={state} />}
-          {tab === "Instagram" && <Instagram state={state} />}
           {tab === "Results" && <Results state={state} />}
+          {tab === "Instagram" && <Instagram state={state} />}
+          {tab === "Studio" && <Studio state={state} initialSource={sourceId} />}
+          {tab === "Models" && <Models state={state} />}
           {tab === "Settings" && <SettingsPage state={state} />}
         </main>
-        <footer className="workspace-footer">
-          LOCAL BY DEFAULT <span>Human review is part of the pipeline.</span>
-        </footer>
       </div>
     </div>
   );

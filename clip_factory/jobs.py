@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import queue
 import signal
@@ -35,6 +36,8 @@ class Jobs:
         self.stopping = threading.Event()
         self.lock = store.lock
         self.cancellations: dict[str, threading.Event] = {}
+        # Optional: called with the job id after every job, whatever its outcome.
+        self.cleanup: Callable[[str], None] | None = None
         for job in store.all("jobs"):
             if job["status"] in {"queued", "running"}:
                 store.patch(
@@ -153,6 +156,10 @@ class Jobs:
             finally:
                 with self.lock:
                     self.cancellations.pop(identifier, None)
+                if self.cleanup:
+                    # Housekeeping must never take the worker down.
+                    with contextlib.suppress(Exception):
+                        self.cleanup(identifier)
                 pending.task_done()
 
     def process(

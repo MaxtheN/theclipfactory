@@ -36,10 +36,17 @@ CAPTION_MIN_DISPLAY = 0.5
 CAPTION_SHORT_SECONDS = 0.3
 CAPTION_LONG_CHARS = 84
 COLD_OPEN_LIMITS = (0.5, 10.0)
+# HLG (iPhone, broadcast) and PQ sources look washed out unless mapped into SDR before H.264/JPEG output.
+HDR_TRANSFERS = {"arib-std-b67", "smpte2084"}
+TONEMAP = (
+    "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,"
+    "zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
+)
+FRAME_SIZE = 768
 
 
 def probe(path: Path) -> dict:
-    tool = shutil.which("ffprobe")
+    tool = find_tool("ffprobe")
     if not tool:
         raise WorkError("Install FFmpeg (including ffprobe) before importing videos.")
     try:
@@ -62,16 +69,54 @@ def probe(path: Path) -> dict:
         width, height = int(stream["width"]), int(stream["height"])
         if not math.isfinite(duration) or duration <= 0 or width <= 0 or height <= 0:
             raise ValueError()
+        if rotation(stream) % 180 == 90:
+            # Phones store portrait video as rotated landscape; report what players actually show.
+            width, height = height, width
         return {
             "duration": duration,
             "width": width,
             "height": height,
             "has_audio": any(s.get("codec_type") == "audio" for s in data["streams"]),
+            "hdr": stream.get("color_transfer") in HDR_TRANSFERS,
         }
     except (ValueError, KeyError, subprocess.SubprocessError):
         raise WorkError(
             "This file is not a readable video with a known duration. Try an MP4 or MOV export."
         ) from None
+
+
+def rotation(stream: dict) -> int:
+    """Display rotation in degrees (0/90/180/270) from stream side data or the legacy rotate tag."""
+    values = [side.get("rotation") for side in stream.get("side_data_list") or [] if isinstance(side, dict)]
+    values.append((stream.get("tags") or {}).get("rotate"))
+    for value in values:
+        try:
+            return round(float(value)) % 360
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
+def is_hdr(path: Path) -> bool:
+    """Best-effort check for sources imported before the HDR flag was recorded."""
+    try:
+        return bool(probe(path).get("hdr"))
+    except (WorkError, OSError, TypeError):
+        return False
+
+
+def filters() -> str:
+    try:
+        return subprocess.run(
+            [ffmpeg(), "-hide_banner", "-filters"], capture_output=True, text=True, timeout=10, check=False
+        ).stdout or ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def can_tonemap(listing: str | None = None) -> bool:
+    listing = filters() if listing is None else listing
+    return " zscale " in listing and " tonemap " in listing
 
 
 def number(value) -> float | None:
@@ -93,7 +138,7 @@ def rate(value) -> float | None:
 
 def inspect(path: Path) -> dict:
     """Stream facts used by technical checks; unlike probe(), audio-only or odd files are reported."""
-    tool = shutil.which("ffprobe")
+    tool = find_tool("ffprobe")
     if not tool:
         raise WorkError("Install FFmpeg (including ffprobe) before checking media.")
     try:
@@ -141,8 +186,20 @@ def inspect(path: Path) -> dict:
     }
 
 
+# Homebrew's default ffmpeg ships without libass/drawtext, so it cannot burn captions.
+# The keg-only ffmpeg-full formula can; prefer it (ffmpeg and ffprobe together) when installed.
+FULL_FFMPEG_DIRS = ("/opt/homebrew/opt/ffmpeg-full/bin", "/usr/local/opt/ffmpeg-full/bin")
+
+
+def find_tool(name: str) -> str | None:
+    for directory in FULL_FFMPEG_DIRS:
+        if found := shutil.which(f"{directory}/{name}"):
+            return found
+    return shutil.which(name)
+
+
 def ffmpeg() -> str:
-    tool = shutil.which("ffmpeg")
+    tool = find_tool("ffmpeg")
     if not tool:
         raise WorkError("Install FFmpeg before processing media.")
     return tool
@@ -255,7 +312,7 @@ def caption_entries(transcript: dict | None, segments: list[dict]) -> list[dict]
         start, end = float(segment["start"]), float(segment["end"])
         span_out = end - start
         local: list[dict] = []
-        for item in (transcript or {}).get("segments", []):
+        for item in foreground(transcript):
             words = usable_words(item.get("words"))
             if words:
                 inside = [w for w in words if start <= (w["start"] + w["end"]) / 2 < end]
@@ -263,7 +320,17 @@ def caption_entries(transcript: dict | None, segments: list[dict]) -> list[dict]
                     a, b = max(start, chunk[0]["start"]), min(end, chunk[-1]["end"])
                     text = clean_caption(" ".join(w["text"] for w in chunk))
                     if b > a and text:
-                        local.append({"start": a - start, "end": b - start, "text": text, "words": True})
+                        timed = [
+                            {
+                                "text": clean_caption(w["text"]),
+                                "start": max(a, w["start"]) - start,
+                                "end": min(b, w["end"]) - start,
+                            }
+                            for w in chunk
+                        ]
+                        local.append(
+                            {"start": a - start, "end": b - start, "text": text, "words": True, "timed": timed}
+                        )
             else:
                 a = max(start, number(item.get("start")) or 0.0)
                 b = min(end, number(item.get("end")) or 0.0)
@@ -277,9 +344,13 @@ def caption_entries(transcript: dict | None, segments: list[dict]) -> list[dict]
                 entry["end"] = max(
                     entry["end"], min(entry["start"] + CAPTION_MIN_DISPLAY, following, span_out)
                 )
-            entries.append(
-                {"start": entry["start"] + offset, "end": entry["end"] + offset, "text": entry["text"]}
-            )
+            placed = {"start": entry["start"] + offset, "end": entry["end"] + offset, "text": entry["text"]}
+            if entry.get("timed"):
+                placed["timed"] = [
+                    {"text": w["text"], "start": w["start"] + offset, "end": w["end"] + offset}
+                    for w in entry["timed"]
+                ]
+            entries.append(placed)
         offset += span_out
     return entries
 
@@ -289,6 +360,53 @@ def srt_text(entries: list[dict]) -> str:
         f"{index + 1}\n{stamp(entry['start'])} --> {stamp(entry['end'])}\n{entry['text']}\n"
         for index, entry in enumerate(entries)
     )
+
+
+def ass_stamp(seconds: float) -> str:
+    centiseconds = max(0, round(seconds * 100))
+    return f"{centiseconds // 360000}:{centiseconds // 6000 % 60:02}:{centiseconds // 100 % 60:02}.{centiseconds % 100:02}"
+
+
+def pop_captions(entries: list[dict]) -> str:
+    """Word-by-word captions: the cue stays on screen while the word being spoken lights up.
+
+    Same verbatim words and timings as the plain captions; only the presentation differs. Cues
+    without word timings are shown whole.
+    """
+    lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        "PlayResX: 1080",
+        "PlayResY: 1920",
+        "WrapStyle: 0",
+        "[V4+ Styles]",
+        (
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, "
+            "Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
+            "MarginL, MarginR, MarginV, Encoding"
+        ),
+        "Style: Pop,Arial,78,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,6,2,2,90,90,380,1",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    for entry in entries:
+        words = entry.get("timed") or []
+        if not words:
+            text = entry["text"].upper()
+            lines.append(f"Dialogue: 0,{ass_stamp(entry['start'])},{ass_stamp(entry['end'])},Pop,,0,0,0,,{text}")
+            continue
+        for index, word in enumerate(words):
+            begin = entry["start"] if index == 0 else word["start"]
+            finish = words[index + 1]["start"] if index + 1 < len(words) else entry["end"]
+            if finish <= begin:
+                continue
+            text = " ".join(
+                # The spoken word: warm yellow and slightly larger; the rest stay white.
+                f"{{\\c&H00E5FF&\\fscx112\\fscy112}}{w['text'].upper()}{{\\r}}" if n == index else w["text"].upper()
+                for n, w in enumerate(words)
+            )
+            lines.append(f"Dialogue: 0,{ass_stamp(begin)},{ass_stamp(finish)},Pop,,0,0,0,,{text}")
+    return "\n".join(lines) + "\n"
 
 
 def subtitles(transcript: dict | None, start: float, end: float) -> str:
@@ -357,6 +475,144 @@ def parse_transcript(kind: str, content: str, duration: float) -> dict:
         raise WorkError("The transcript has too many cues for one source video.")
     segments.sort(key=lambda s: s["start"])
     return {"language": language, "text": " ".join(s["text"] for s in segments), "segments": segments}
+
+
+# Phrases speech recognizers are known to produce over silence, music and noise.
+PHANTOM_PHRASES = {
+    "thank you",
+    "thanks",
+    "thank you very much",
+    "thank you for watching",
+    "thanks for watching",
+    "bye",
+    "bye bye",
+    "you",
+    "so",
+    "okay",
+    "please subscribe",
+    "subscribe",
+}
+
+
+def clean_transcript(result: dict) -> dict:
+    """Remove recognizer output that is almost certainly not speech.
+
+    Speech models invent phrases over music, crowd noise and ball sounds: the same line again and
+    again ("Thank you."), one word looping inside a segment ("no, no, no, ..."), or text with no
+    duration. Burning those in as captions misrepresents the source. A segment is dropped when the
+    recognizer's own confidence was low, when its timing is impossible for speech, when it repeats
+    itself, or when it is a stock phantom phrase standing alone. Nothing is rewritten; kept
+    segments are verbatim. Uncertain interjections are lost with the noise; that is the safer error.
+    """
+    segments = [s for s in result.get("segments", []) if isinstance(s, dict)]
+
+    def normal(segment) -> str:
+        return re.sub(r"[^\w]+", " ", str(segment.get("text", "")).lower()).strip()
+
+    texts = [normal(segment) for segment in segments]
+    counts: dict[str, int] = {}
+    for text in texts:
+        counts[text] = counts.get(text, 0) + 1
+    looped = {
+        text
+        for text, count in counts.items()
+        if text and count >= 4 and count >= 0.2 * len(segments) and len(text.split()) <= 6
+    }
+    # The same short line three or more times in a row is the recognizer stuck, not a speaker.
+    rejected: set[int] = set()
+    run_start = 0
+    for index in range(1, len(segments) + 1):
+        if index == len(segments) or texts[index] != texts[run_start]:
+            if index - run_start >= 3 and texts[run_start] and len(texts[run_start].split()) <= 6:
+                rejected.update(range(run_start, index))
+            run_start = index
+    spans = []
+    for position, (segment, text) in enumerate(zip(segments, texts)):
+        words = text.split()
+        timed = segment.get("words") if isinstance(segment.get("words"), list) else []
+        confidence = [
+            w["probability"] for w in timed if isinstance(w, dict) and isinstance(w.get("probability"), (int, float))
+        ]
+        certainty = sum(confidence) / len(confidence) if confidence else None
+        start, end = number(segment.get("start")), number(segment.get("end"))
+        span = (end - start) if start is not None and end is not None else None
+        spans.append((start, end))
+        logprob = number(segment.get("avg_logprob"))
+        if (
+            not text
+            or text in looped
+            or (certainty is not None and certainty < 0.5)
+            or (logprob is not None and logprob < -1.0)
+            or (span is not None and span >= 12 and len(words) <= 4)
+            # More than twelve words a second, or words with no duration, was never spoken.
+            or (span is not None and len(words) >= 2 and len(words) > 12 * max(span, 0.0))
+            or (len(words) >= 8 and len(set(words)) <= 0.35 * len(words))
+        ):
+            rejected.add(position)
+    for position, text in enumerate(texts):
+        if position in rejected or text not in PHANTOM_PHRASES:
+            continue
+        start, end = spans[position]
+        timed = segments[position].get("words") if isinstance(segments[position].get("words"), list) else []
+        confidence = [w.get("probability") for w in timed if isinstance(w, dict)]
+        confident = bool(confidence) and all(isinstance(p, (int, float)) and p >= 0.7 for p in confidence)
+        # In conversation these phrases are real; alone in a quiet stretch, or doubted by the
+        # recognizer itself, they are its favourite inventions.
+        accompanied = start is not None and any(
+            other not in rejected
+            and other != position
+            and spans[other][0] is not None
+            and abs(spans[other][0] - start) <= 8
+            for other in range(len(segments))
+        )
+        if not (accompanied and (confident or not confidence)):
+            rejected.add(position)
+    kept = [segment for position, segment in enumerate(segments) if position not in rejected]
+    cleaned = {**result, "segments": kept}
+    if rejected:
+        cleaned["text"] = " ".join(str(s.get("text", "")).strip() for s in kept)
+        cleaned["removed_segments"] = len(segments) - len(kept)
+    return cleaned
+
+
+SPARSE_WORDS_PER_MINUTE = 20.0
+DENSE_WORDS_PER_SECOND = 1.2
+
+
+def classify_speech(transcript: dict, duration: float) -> dict:
+    """Mark where speech carries the footage and where it is only background chatter.
+
+    Footage of a game, a workout or a street has stray exclamations but no speech worth captioning
+    or reasoning from. When a source has few words per minute overall, only stretches where someone
+    is clearly talking (dense words over about thirty seconds) stay in the foreground; everything
+    else is flagged `background` and ignored by captions, evidence and cut snapping. Sources with
+    real speech throughout are left untouched.
+    """
+    segments = [dict(s) for s in transcript.get("segments", []) if isinstance(s, dict)]
+    spoken = []
+    for segment in segments:
+        segment.pop("background", None)
+        start, end = number(segment.get("start")), number(segment.get("end"))
+        middle = (start + end) / 2 if start is not None and end is not None else None
+        spoken.append((middle, len(str(segment.get("text", "")).split())))
+    total = sum(count for _, count in spoken)
+    if total >= SPARSE_WORDS_PER_MINUTE * max(duration, 1.0) / 60:
+        return {**transcript, "segments": segments, "speech": "throughout"}
+    foreground = 0
+    for segment, (middle, _) in zip(segments, spoken):
+        nearby = sum(count for at, count in spoken if middle is not None and at is not None and abs(at - middle) <= 15)
+        if nearby >= DENSE_WORDS_PER_SECOND * 30:
+            foreground += 1
+        else:
+            segment["background"] = True
+    return {**transcript, "segments": segments, "speech": "in places" if foreground else "none"}
+
+
+def foreground(transcript: dict | None) -> list[dict]:
+    """Transcript segments that are speech to act on (not background chatter)."""
+    return [
+        s for s in (transcript or {}).get("segments", []) if isinstance(s, dict) and not s.get("background")
+    ]
 
 
 def peak_level(jobs: Jobs, job_id: str, path: Path) -> float | None:
@@ -607,13 +863,24 @@ def render(
     cold_open: tuple[float, float] | None = None,
     focus_x: float = 0.5,
     has_audio: bool | None = None,
+    hdr: bool | None = None,
+    crop_width: float | None = None,
+    report: bool = True,
+    motion: str = "static",
 ) -> dict:
+    """report=False: the caller owns the job's progress line (several clips rendering at once)."""
     output.parent.mkdir(parents=True, exist_ok=True)
-    # Preserve the complete source frame instead of silently cropping subjects/products.
-    if framing not in {"fit", "fill"} or caption_style not in {"standard", "high_contrast"}:
-        raise WorkError("Unsupported framing or caption style.")
+    # "fit" and "blur" keep the complete source frame instead of silently cropping subjects/products.
+    if (
+        framing not in {"fit", "fill", "blur"}
+        or caption_style not in {"standard", "high_contrast", "pop"}
+        or motion not in {"static", "push_in"}
+    ):
+        raise WorkError("Unsupported framing, caption style or motion.")
     if not 0 <= float(focus_x) <= 1:
         raise WorkError("Crop focus must be between 0 (left) and 1 (right).")
+    if crop_width is not None and not 0.2 <= float(crop_width) <= 1:
+        raise WorkError("The kept width must be between 0.2 and 1 of the source.")
     segments = []
     if cold_open:
         segments.append({"role": "cold_open", "start": float(cold_open[0]), "end": float(cold_open[1])})
@@ -627,28 +894,50 @@ def render(
     caption_text = srt_text(entries)
     if caption_text:
         srt.write_text(caption_text, encoding="utf-8")
-    if framing == "fit":
-        layout = (
-            "scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2,"
-            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
-        )
-    else:
+    available = filters()
+    # Map HLG/PQ sources into SDR after scaling (cheaper than tone mapping full-resolution frames).
+    tone_mapped = bool(is_hdr(source) if hdr is None else hdr) and can_tonemap(available)
+    tone = f"{TONEMAP}," if tone_mapped else ""
+    contain = "scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2"
+    cover = "scale=1080:1920:force_original_aspect_ratio=increase:force_divisible_by=2"
+
+    # Optional zoom for fit/blur: keep a full-height slice of the source around the action.
+    zoom = (
+        f"crop=iw*{float(crop_width):.4f}:ih:(iw-ow)*{float(focus_x):.4f}:0,"
+        if crop_width is not None and float(crop_width) < 0.999 and framing != "fill"
+        else ""
+    )
+
+    def layout_for(tag: str = "") -> str:
+        """Filter chain from one source input to a 1080x1920 frame; tag keeps graph labels unique."""
+        if framing == "fit":
+            return f"{zoom}{contain},{tone}pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+        if framing == "blur":
+            # The kept picture stays whole over a blurred, darkened copy of itself instead of black bars.
+            return (
+                f"{zoom}{contain},{tone}split[fg{tag}][bgsrc{tag}];"
+                f"[bgsrc{tag}]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,boxblur=8:2,"
+                f"scale=1080:1920,eq=brightness=-0.12:saturation=0.9[bg{tag}];"
+                f"[bg{tag}][fg{tag}]overlay=(W-w)/2:(H-h)/2,setsar=1"
+            )
         crop = (
             "crop=1080:1920" if focus_x == 0.5 else f"crop=1080:1920:(iw-ow)*{float(focus_x):.4f}:(ih-oh)/2"
         )
-        layout = f"scale=1080:1920:force_original_aspect_ratio=increase:force_divisible_by=2,{crop},setsar=1"
+        return f"{cover},{crop},{tone}setsar=1"
+
     overlays = ""
-    filters = subprocess.run(
-        [ffmpeg(), "-hide_banner", "-filters"], capture_output=True, text=True, timeout=10, check=False
-    )
     if caption_text or hook:
-        if " subtitles " not in filters.stdout:
+        if " subtitles " not in available:
             srt.unlink(missing_ok=True)
             raise WorkError(
-                "This FFmpeg build lacks libass subtitles. Install full Homebrew FFmpeg or render without captions."
+                "This FFmpeg build lacks libass, so captions cannot be burned in. Run `brew install ffmpeg-full` and restart Clip Factory, or render without captions."
             )
         # cwd is output directory; filename consists exclusively of generated hexadecimal IDs.
-        if caption_text:
+        if caption_text and caption_style == "pop":
+            pop_file = output.with_suffix(".pop.ass")
+            pop_file.write_text(pop_captions(entries), encoding="utf-8")
+            overlays += f",subtitles={pop_file.name}"
+        elif caption_text:
             # Use output-pixel coordinates instead of libass's small default script canvas.
             font_size = 52 if caption_style == "standard" else 60
             style = (
@@ -674,6 +963,13 @@ def render(
                 encoding="utf-8",
             )
             overlays += f",subtitles={hook_file.name}"
+    # A slow push toward the centre keeps a static shot alive. Applied under the text, which stays put.
+    push = (
+        f",scale=w='trunc(1080*(1+0.07*t/{total:.3f})/2)*2':h='trunc(1920*(1+0.07*t/{total:.3f})/2)*2':eval=frame,"
+        "crop=1080:1920"
+        if motion == "push_in" and len(segments) == 1
+        else ""
+    )
     temporary = output.with_name(output.stem + ".partial.mp4")
     encode = [
         "-r",
@@ -706,10 +1002,11 @@ def render(
             str(end - start),
             "-map",
             "0:v:0",
+            # First audio track only: phones add spatial-audio tracks FFmpeg cannot decode.
             "-map",
-            "0:a?",
+            "0:a:0?",
             "-vf",
-            layout + overlays,
+            layout_for() + push + overlays,
             *encode,
         ]
     else:
@@ -720,7 +1017,8 @@ def render(
             span = segment["end"] - segment["start"]
             inputs += ["-ss", str(segment["start"]), "-t", f"{span:.6f}", "-i", str(source)]
             graph.append(
-                f"[{index}:v:0]{layout},fps={OUTPUT_FPS},trim=duration={span:.6f},setpts=PTS-STARTPTS[v{index}]"
+                f"[{index}:v:0]{layout_for(str(index))},fps={OUTPUT_FPS},trim=duration={span:.6f},"
+                f"setpts=PTS-STARTPTS[v{index}]"
             )
             joins += f"[v{index}]"
             if has_audio:
@@ -745,7 +1043,8 @@ def render(
             *(["-map", "[aout]"] if has_audio else []),
             *encode,
         ]
-    jobs.update(job_id, progress=20, message="Rendering 1080 × 1920 H.264 clip")
+    if report:
+        jobs.update(job_id, progress=20, message="Rendering 1080 × 1920 H.264 clip")
     completed = False
     try:
         jobs.process(
@@ -755,7 +1054,8 @@ def render(
             failure="FFmpeg render failed. Check disk space and source compatibility.",
         )
         actual = probe(temporary)
-        jobs.update(job_id, progress=80, message="Checking playback, format and captions")
+        if report:
+            jobs.update(job_id, progress=80, message="Checking playback, format and captions")
         checks = verify(
             jobs,
             job_id,
@@ -782,6 +1082,9 @@ def render(
             "framing": framing,
             "caption_style": caption_style,
             "focus_x": float(focus_x),
+            "crop_width": float(crop_width) if zoom else None,
+            "motion": "push_in" if push else "static",
+            "tone_mapped": tone_mapped,
             "width": actual["width"],
             "height": actual["height"],
             "duration": actual["duration"],
@@ -791,7 +1094,7 @@ def render(
             "encoder": dict(ENCODER),
             "ffmpeg_version": ffmpeg_version(),
             "warning": None
-            if caption_text or not burn_subtitles
+            if caption_text or not burn_subtitles or transcript is not None
             else "No transcript: clip rendered without invented captions.",
         }
     finally:
@@ -799,6 +1102,7 @@ def render(
         if not completed:
             srt.unlink(missing_ok=True)
             hook_file.unlink(missing_ok=True)
+            output.with_suffix(".pop.ass").unlink(missing_ok=True)
 
 
 def extract_audio(jobs: Jobs, job_id: str, source: Path, output: Path):
@@ -812,6 +1116,8 @@ def extract_audio(jobs: Jobs, job_id: str, source: Path, output: Path):
             "-y",
             "-i",
             str(source),
+            "-map",
+            "0:a:0",
             "-vn",
             "-ac",
             "1",
@@ -858,3 +1164,182 @@ def sample_frames(
         if target.exists():
             frames.append({"time": round(at, 2), "path": str(target)})
     return frames
+
+
+def extract_frames(
+    jobs: Jobs,
+    job_id: str,
+    source: Path,
+    targets: list[tuple[float, Path]],
+    *,
+    hdr: bool = False,
+    size: int = FRAME_SIZE,
+) -> list[dict]:
+    """Grab several timestamped stills in one FFmpeg process (tone mapped when the source is HDR)."""
+    if not targets:
+        return []
+    chain = f"scale=w={size}:h={size}:force_original_aspect_ratio=decrease:force_divisible_by=2"
+    if hdr and can_tonemap():
+        chain += f",{TONEMAP}"
+    command = [ffmpeg(), "-nostdin", "-v", "error", "-y"]
+    for at, _ in targets:
+        command += ["-ss", f"{max(0.0, at):.3f}", "-i", str(source)]
+    for index, (_, target) in enumerate(targets):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        command += ["-map", f"{index}:v:0", "-frames:v", "1", "-vf", chain, "-q:v", "4", str(target)]
+    jobs.process(job_id, command, timeout=60 + 20 * len(targets), failure="Frame sampling failed.")
+    return [{"time": round(at, 2), "path": str(target)} for at, target in targets if target.exists()]
+
+
+METADATA_TIME = re.compile(r"pts_time:(-?[\d.]+)")
+
+
+def read_metadata(path: Path, key: str) -> list[tuple[float, float]]:
+    """Parse `metadata=print` output: one timestamp line followed by key=value lines."""
+    series: list[tuple[float, float]] = []
+    at = None
+    try:
+        with path.open(encoding="utf-8", errors="replace") as file:
+            for line in file:
+                match = METADATA_TIME.search(line)
+                if match:
+                    at = number(match[1])
+                    continue
+                if at is not None and line.startswith(key + "="):
+                    value = line.split("=", 1)[1].strip()
+                    parsed = -120.0 if value in {"-inf", "inf", "nan", "-nan"} else number(value)
+                    if parsed is not None:
+                        series.append((at, parsed))
+    except OSError:
+        return []
+    return series
+
+
+def signals(jobs: Jobs, job_id: str, source: Path, work: Path, *, duration: float, has_audio: bool) -> dict:
+    """Whole-source picture change and loudness over time; deterministic, no model.
+
+    Picture change is FFmpeg's scene score between consecutive decoded frames. Keyframes alone are
+    decoded first (seconds, even for long sources); sources with sparse keyframes fall back to one
+    full-decode frame per second.
+    """
+    work.mkdir(parents=True, exist_ok=True)
+    budget = max(180, int(duration))
+
+    def picture(dense: bool) -> list[tuple[float, float]]:
+        target = work / "motion.txt"
+        target.unlink(missing_ok=True)
+        chain = ("fps=1," if dense else "") + "scale=160:-2,select='gte(scene,0)',metadata=print:file=motion.txt"
+        command = [ffmpeg(), "-nostdin", "-hide_banner", "-v", "error"]
+        if not dense:
+            command += ["-skip_frame", "nokey"]
+        command += ["-i", str(source), "-an", "-sn", "-vf", chain, "-f", "null", "-"]
+        try:
+            jobs.process(job_id, command, cwd=work, timeout=budget, failure="Picture analysis failed.")
+            return read_metadata(target, "lavfi.scene_score")
+        except WorkError:
+            return []
+        finally:
+            target.unlink(missing_ok=True)
+
+    motion = picture(dense=False)
+    method = "keyframes"
+    if len(motion) < duration / 4:
+        dense = picture(dense=True)
+        if len(dense) > len(motion):
+            motion, method = dense, "one frame per second"
+    loudness: list[tuple[float, float]] = []
+    if has_audio:
+        target = work / "loudness.txt"
+        target.unlink(missing_ok=True)
+        try:
+            level = (
+                "aresample=8000,asetnsamples=n=4000:p=0,astats=metadata=1:reset=1,"
+                "ametadata=print:key=lavfi.astats.Overall.RMS_level:file=loudness.txt"
+            )
+            command = [ffmpeg(), "-nostdin", "-hide_banner", "-v", "error", "-i", str(source)]
+            command += ["-map", "0:a:0", "-vn", "-sn", "-af", level, "-f", "null", "-"]
+            jobs.process(
+                job_id,
+                command,
+                cwd=work,
+                timeout=budget,
+                failure="Loudness analysis failed.",
+            )
+            loudness = read_metadata(target, "lavfi.astats.Overall.RMS_level")
+        except WorkError:
+            loudness = []
+        finally:
+            target.unlink(missing_ok=True)
+    return {"motion": motion, "loudness": loudness, "method": method if motion else "unavailable"}
+
+
+# Crop shapes tried from tightest to widest, as width:height of the kept source region.
+ACTION_ASPECTS = (9 / 16, 3 / 4, 1.0, 4 / 3)
+
+
+def action_window(
+    jobs: Jobs, job_id: str, source: Path, work: Path, *, start: float, end: float, width: int, height: int
+) -> dict | None:
+    """The tightest full-height region of a landscape source that still holds the action.
+
+    A vertical clip of landscape footage either shows the whole frame small or crops into it. This
+    measures frame-to-frame change in a tiny grayscale copy of the range and returns the narrowest
+    crop (9:16, 3:4, 1:1 or 4:3 of the source height) containing at least 90% of the movement:
+    {"crop_width": fraction of source width kept, "focus_x": crop position 0..1, "share": movement
+    inside it}. None means keep the whole frame: portrait sources, footage without real movement,
+    or action spread edge to edge.
+    """
+    if width <= 0 or height <= 0 or end <= start or width <= height:
+        return None
+    columns, rows = 64, 36
+    work.mkdir(parents=True, exist_ok=True)
+    target = work / "movement.gray"
+    target.unlink(missing_ok=True)
+    try:
+        jobs.process(
+            job_id,
+            [
+                ffmpeg(), "-nostdin", "-v", "error", "-y",
+                "-ss", f"{max(0.0, start):.3f}", "-t", f"{min(end - start, 45.0):.3f}", "-i", str(source),
+                "-an", "-sn",
+                "-vf", f"fps=4,scale={columns}:{rows},format=gray,tblend=all_mode=difference",
+                "-f", "rawvideo", "-pix_fmt", "gray", str(target),
+            ],
+            timeout=120,
+            failure="Movement analysis failed.",
+        )
+        data = target.read_bytes()
+    except (WorkError, OSError):
+        return None
+    finally:
+        target.unlink(missing_ok=True)
+    size = columns * rows
+    frames = len(data) // size
+    if frames < 2:
+        return None
+    energy = [0] * columns
+    for offset in range(0, frames * size, columns):
+        for column, value in enumerate(data[offset : offset + columns]):
+            if value > 12:  # below this is sensor noise and compression shimmer
+                energy[column] += value
+    total = sum(energy)
+    if total < 40 * frames:
+        return None
+    for aspect in ACTION_ASPECTS:
+        kept = aspect / (width / height)
+        if kept >= 0.95:
+            break
+        window = max(1, round(kept * columns))
+        sums = [sum(energy[i : i + window]) for i in range(columns - window + 1)]
+        # Several positions can hold the action equally well: take the middle one, so the
+        # subject sits in the centre of the crop rather than against its edge.
+        peak = max(sums)
+        holding = [i for i, value in enumerate(sums) if value >= 0.999 * peak]
+        best = holding[len(holding) // 2]
+        share = sums[best] / total
+        # Conservative: cutting a subject out of frame is worse than showing the scene small.
+        if share >= 0.9:
+            centre = (best + window / 2) / columns
+            focus = min(1.0, max(0.0, (centre - kept / 2) / (1 - kept)))
+            return {"crop_width": round(kept, 4), "focus_x": round(focus, 3), "share": round(share, 3)}
+    return None

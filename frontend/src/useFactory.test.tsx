@@ -8,6 +8,8 @@ afterEach(() => {
 });
 function responses(path: string) {
   if (path === "/api/settings") return settings;
+  if (path === "/api/factory")
+    return { autopilot: false, model_id: null, ready: true, blockers: [], sources: [] };
   if (
     path === "/api/system" ||
     path === "/api/instagram/status" ||
@@ -56,6 +58,10 @@ describe("workspace state and polling", () => {
     expect(
       fetch.mock.calls.filter(([path]) => path === "/api/jobs"),
     ).toHaveLength(2);
+    expect(
+      fetch.mock.calls.filter(([path]) => path === "/api/factory"),
+    ).toHaveLength(2);
+    expect(result.current.data.factory?.ready).toBe(true);
     expect(
       fetch.mock.calls.filter(([path]) => path === "/api/settings"),
     ).toHaveLength(1);
@@ -106,5 +112,28 @@ describe("workspace state and polling", () => {
     expect(result.current.errors.models).toBe(
       "Invalid models response from local service.",
     );
+  });
+  it("keeps the last factory status and reports an unreadable one", async () => {
+    let broken = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (path: string) =>
+          new Response(
+            JSON.stringify(broken && path === "/api/factory" ? [] : responses(path)),
+          ),
+      ),
+    );
+    const { result } = renderHook(useFactory);
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data.factory?.sources).toEqual([]);
+    broken = true;
+    await act(async () => {
+      await result.current.refresh(["factory"]);
+    });
+    expect(result.current.errors.factory).toBe(
+      "Invalid factory response from local service.",
+    );
+    expect(result.current.data.factory?.ready).toBe(true);
   });
 });

@@ -10,7 +10,7 @@ Vercel project: `growth-factory-landing`, team `nurislombeks-projects`.
 
 From this folder, run `npm run dev`, then open `http://127.0.0.1:4174`.
 
-`npm run check` checks JavaScript syntax. Browser QA covers the responsive layout, keyboard-operated workflow tabs, walkthrough dialog, FAQ disclosures, and mobile navigation.
+`npm run check` checks JavaScript syntax. `npm test` runs dependency-free checks for asset paths, internal links, tab associations, demo links, and availability disclosures. Browser QA covers the responsive layout, keyboard-operated workflow tabs, walkthrough dialog, FAQ disclosures, and mobile navigation.
 
 The primary call to action opens the existing illustrative workspace at https://theclipfactory-frontend-two.vercel.app. The marketing page makes no public-release, measured-performance, pricing, or customer claims. The native Mac app is identified as in development.
 

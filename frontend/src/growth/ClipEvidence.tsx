@@ -244,7 +244,9 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
               ? "Fit · preserve full frame"
               : clip.framing === "fill"
                 ? "Fill · vertical crop"
-                : unknown}
+                : clip.framing === "blur"
+                  ? "Whole frame over a blurred backdrop"
+                  : unknown}
           </Fact>
           <Fact label="Horizontal crop focus">
             {clip.framing === "fit"

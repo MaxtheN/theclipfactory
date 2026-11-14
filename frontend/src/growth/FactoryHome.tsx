@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import type { Clip, Job, TeamRun, Video } from "../types";
-import { ApiError } from "../api";
+import { ApiError, endpoint, post } from "../api";
+import { Storyboard } from "../components/Storyboard";
+import { Stages } from "../pages/Home";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, reviewPreview } from "./workspaceApi";
+import { productionApi } from "./productionApi";
 import { jobInScope, object } from "./productionState";
 import { activeJob } from "../productionPreflight";
 import { Icon } from "./Icon";
+import { FactoryWorkflow } from "./FactoryWorkflow";
 import { Disclosure, Pill, formatTime } from "./parts";
 import { JourneyProgress } from "./JourneyProgress";
 import { sourceLabel, SourceDetails } from "./sourcePresentation";
@@ -89,7 +93,12 @@ export function FactoryHome({
       setPending(undefined);
       setLastAdded(receipt.video);
       setPhase("ready");
-      setSuccess("Source saved and attached to this workspace.");
+      // Keep the autopilot message if production already started for this source.
+      setSuccess((current) =>
+        autoStarted.current.has(receipt.video.id) && current
+          ? current
+          : "Source saved and attached to this workspace.",
+      );
       w.clearNotice?.();
     } else {
       setPhase(null);
@@ -212,6 +221,85 @@ export function FactoryHome({
     !!w.error ||
     !!factory.errors.videos ||
     !campaign;
+  // The production line as the local service reports it: one entry per source, with the stage
+  // it is at and the model production will use.
+  const line = factory.data.factory;
+  const modelId = line?.model_id ?? "";
+  const autopilot = factory.data.settings?.autonomy === "auto";
+  const [seen, setSeen] = useState<Record<string, boolean>>({});
+  const autoStarted = useRef(new Set<string>());
+  const swarmRequest = (videoId: string, strategyId: string) => ({
+    expected_strategy_version_id: strategyId,
+    video_id: videoId,
+    profile_id: w.profileId,
+    model_id: modelId,
+    strategy: "swarm" as const,
+  });
+  /** Many clips from one source, each on its own hypothesis, under the approved direction. */
+  async function makeClips(source: Video) {
+    const strategyId = campaign?.active_strategy_id;
+    if (!campaign || !direction || !strategyId || !modelId) return;
+    setError("");
+    setSuccess("");
+    await w.run(
+      async () => {
+        await productionApi.campaignProduce(
+          campaign.id,
+          swarmRequest(source.id, strategyId),
+        );
+        reloadRuns.current();
+        void factory.refresh();
+        setSuccess(
+          `Making clips from ${source.name}. They arrive below as they finish.`,
+        );
+      },
+      "Production started.",
+      campaign.id,
+    );
+  }
+  async function cancel(jobId: string) {
+    setError("");
+    try {
+      await post(endpoint("jobs", jobId, "cancel"));
+      void factory.refresh();
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "The job could not be cancelled.",
+      );
+    }
+  }
+  /** Autopilot: with a direction approved, confirmed new footage goes straight into production. */
+  async function autoProduce(video: Video) {
+    const strategyId = campaign?.active_strategy_id;
+    if (
+      !campaign ||
+      !autopilot ||
+      !direction ||
+      !strategyId ||
+      !modelId ||
+      reviewPreview
+    )
+      return;
+    if (autoStarted.current.has(video.id)) return;
+    autoStarted.current.add(video.id);
+    try {
+      await productionApi.campaignProduce(
+        campaign.id,
+        swarmRequest(video.id, strategyId),
+      );
+      reloadRuns.current();
+      void factory.refresh();
+      setSuccess(
+        `${video.name} added. The factory is making clips from it now.`,
+      );
+    } catch (e) {
+      setSuccess(
+        `${video.name} added. Production did not start by itself: ${
+          e instanceof Error ? e.message : "try Make clips."
+        }`,
+      );
+    }
+  }
 
   async function attach(file?: File) {
     if (
@@ -317,7 +405,9 @@ export function FactoryHome({
               if (pendingImports.get(campaign.id)?.attached) {
                 pendingImports.set(campaign.id, { video, attached: false });
                 setPending({ ...video });
-                throw new Error("This source is no longer attached to the workspace. Choose Attach imported footage to add it again deliberately.");
+                throw new Error(
+                  "This source is no longer attached to the workspace. Choose Attach imported footage to add it again deliberately.",
+                );
               }
               const saved = await workspaceApi.save(
                 {
@@ -357,11 +447,15 @@ export function FactoryHome({
       );
       if (ok && added) {
         setRefreshReturned(true);
+        void autoProduce(added);
       } else {
         setPhase(null);
-        setError(failure || (imported.current
-          ? "Your source is retained. Refresh the workspace to confirm its attachment."
-          : "No import was confirmed. Refresh the workspace before trying again."));
+        setError(
+          failure ||
+            (imported.current
+              ? "Your source is retained. Refresh the workspace to confirm its attachment."
+              : "No import was confirmed. Refresh the workspace before trying again."),
+        );
       }
     } finally {
       lock.current = false;
@@ -407,6 +501,7 @@ export function FactoryHome({
 
   return (
     <div className="gf-factory-home">
+      <FactoryWorkflow />
       <div
         className={`gf-upload-stage gf-card${dragging ? " is-dragging" : ""}`}
         hidden={importing || !!pending || !!unknown || phase === "ready"}
@@ -459,6 +554,11 @@ export function FactoryHome({
       {error && (
         <p className="gf-message error" role="alert">
           {error}
+        </p>
+      )}
+      {success && phase !== "ready" && (
+        <p className="gf-message success" role="status">
+          {success}
         </p>
       )}
       {importing && (
@@ -761,7 +861,16 @@ export function FactoryHome({
                 className="gf-cut-card"
                 onClick={() => onReview(clip)}
               >
-                <span className="gf-cut-art">
+                <span
+                  className="gf-cut-art"
+                  style={
+                    reviewPreview || clip.provenance_mode === "preview_fixture"
+                      ? undefined
+                      : {
+                          backgroundImage: `url(${endpoint("clips", clip.id, "cover")})`,
+                        }
+                  }
+                >
                   <Icon name="play" size={28} />
                   <span>
                     {reviewPreview || clip.provenance_mode === "preview_fixture"
@@ -816,38 +925,139 @@ export function FactoryHome({
           </div>
         ) : (
           <div className="gf-footage-list">
-            {sources.map((source) => (
-              <div className="gf-source-entry" key={source.id}>
-                <div className="gf-footage-row">
-                  <span className="gf-footage-icon">
-                    <Icon name="studio" size={22} />
-                  </span>
-                  <div className="gf-footage-copy">
-                    <strong>
-                      {sourceLabel(source.id, campaign?.video_ids || [])}
-                    </strong>
-                    <span>
-                      {reviewPreview
-                        ? "Illustrative source"
-                        : formatTime(source.duration)}
-                      {source.has_audio === true && source.transcript == null
-                        ? " · Transcript needed for captions"
-                        : ""}
+            {sources.map((source) => {
+              const status = line?.sources.find(
+                (item) => item.video_id === source.id,
+              );
+              const working =
+                status?.state === "queued" || status?.state === "working";
+              const ready =
+                !!direction &&
+                !!modelId &&
+                !!status?.can_produce &&
+                !w.busy &&
+                !w.loading;
+              // Counts are for this workspace: clips made elsewhere from the same file do not belong here.
+              const own = clips.filter((c) => c.video_id === source.id);
+              const waiting = own.filter((c) => !c.approved).length;
+              const headline =
+                !status ||
+                working ||
+                status.state === "failed" ||
+                status.state === "cancelled"
+                  ? status?.error || status?.headline
+                  : waiting
+                    ? `${waiting} clip${waiting === 1 ? "" : "s"} ready for review`
+                    : own.length
+                      ? `${own.length} clip${own.length === 1 ? "" : "s"} approved`
+                      : "Ready to make clips";
+              return (
+                <div
+                  className="gf-source-entry gf-footage-item"
+                  key={source.id}
+                >
+                  <div className="gf-footage-row">
+                    <span className="gf-footage-icon">
+                      <Icon name="studio" size={22} />
                     </span>
+                    <div className="gf-footage-copy">
+                      <strong>
+                        {sourceLabel(source.id, campaign?.video_ids || [])}
+                      </strong>
+                      <span>
+                        {reviewPreview
+                          ? "Illustrative source"
+                          : formatTime(source.duration)}
+                        {source.has_audio === true && source.transcript == null
+                          ? " · Transcript needed for captions"
+                          : ""}
+                      </span>
+                    </div>
+                    {status &&
+                      (working && status.job_id ? (
+                        <button
+                          type="button"
+                          className="gf-button secondary compact"
+                          onClick={() => void cancel(status.job_id!)}
+                        >
+                          Cancel
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="gf-button primary compact"
+                          disabled={!ready}
+                          title={
+                            !direction
+                              ? "Approve the creative direction first."
+                              : !modelId
+                                ? "Set up a local model in Advanced tools → Models."
+                                : status.blocked_reason || undefined
+                          }
+                          onClick={() => void makeClips(source)}
+                        >
+                          Make clips
+                        </button>
+                      ))}
+                    <button
+                      type="button"
+                      className="gf-button secondary compact"
+                      disabled={w.busy || w.loading}
+                      onClick={() => onProduce(source.id, "agent")}
+                    >
+                      Find clips
+                      <Icon name="arrow" size={15} />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="gf-button secondary compact"
-                    disabled={w.busy || w.loading}
-                    onClick={() => onProduce(source.id, "agent")}
-                  >
-                    Find clips
-                    <Icon name="arrow" size={15} />
-                  </button>
+                  <SourceDetails source={source} />
+                  {status && (
+                    <div className="gf-footage-line">
+                      <div className="source-card-body">
+                        <Stages source={status} />
+                        <p className="gf-footage-status" role="status">
+                          {headline}
+                        </p>
+                        {typeof status.progress === "number" && (
+                          <progress
+                            aria-label={`Progress for ${source.name}`}
+                            max={100}
+                            value={Math.min(100, Math.max(0, status.progress))}
+                          />
+                        )}
+                      </div>
+                      {status.storyboard && (
+                        <details
+                          className="gf-disclosure"
+                          onToggle={(event) => {
+                            const open = event.currentTarget.open;
+                            setSeen((current) =>
+                              current[source.id] === open
+                                ? current
+                                : { ...current, [source.id]: open },
+                            );
+                          }}
+                        >
+                          <summary>
+                            <Icon name="play" />
+                            What the factory saw · {
+                              status.storyboard.scenes
+                            }{" "}
+                            scenes
+                            <Icon name="down" size={15} />
+                          </summary>
+                          {seen[source.id] && (
+                            <Storyboard
+                              videoId={source.id}
+                              version={status.storyboard.updated_at}
+                            />
+                          )}
+                        </details>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <SourceDetails source={source} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

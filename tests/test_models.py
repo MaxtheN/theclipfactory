@@ -309,7 +309,7 @@ def test_run_sequential_tasks_never_reuse_response(models, monkeypatch):
 
 def test_run_bounds_before_starting_worker(models):
     with pytest.raises(WorkError, match="input"):
-        models.run("job", "qwen-small", "generate", prompt="x" * 64_001)
+        models.run("job", "qwen-small", "generate", prompt="x" * 96_001)
     with pytest.raises(WorkError, match="input"):
         models.run("job", "qwen-small", "generate", prompt="x", max_tokens=5000)
     models.jobs.process.assert_not_called()
@@ -568,3 +568,20 @@ def test_failed_ready_probe_is_briefly_cached_without_claiming_ready(models, mon
     assert probe.call_count == 1
     assert not models.ready(force=True)
     assert probe.call_count == 2
+
+
+def test_mlx_batch_goes_through_one_worker_process_and_is_checked(models, monkeypatch):
+    calls = []
+
+    def run(job, identifier, action, **payload):
+        calls.append((job, identifier, action, payload))
+        return {"outputs": [{"output": "a"}, "garbage"]}
+
+    monkeypatch.setattr(models, "run", run)
+    requests = [{"prompt": "one"}, {"prompt": "two"}]
+    assert models.run_batch("job", "qwen-small", requests) == [{"output": "a"}, {"error": "Invalid result"}]
+    assert calls == [("job", "qwen-small", "batch", {"requests": requests})]
+    monkeypatch.setattr(models, "run", lambda *a, **k: {"outputs": [{"output": "only one"}]})
+    with pytest.raises(WorkError, match="incomplete batch"):
+        models.run_batch("job", "qwen-small", requests)
+    assert models.run_batch("job", "qwen-small", []) == []

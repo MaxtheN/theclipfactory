@@ -17,8 +17,10 @@ import { changedEditFields, clipInScope, editErrors, jobInScope, object, readine
 
 type Mode = "manual" | "agent";
 const message = (e: unknown) => e instanceof Error ? e.message : "The operation was not confirmed. Refresh before retrying.";
-export function Studio({ w, factory, next, preferredSource, preferredMode, preferredClip }: {
+export function Studio({ w, factory, next, preferredSource, preferredMode, preferredClip, onDirection }: {
   w: Workspace; factory: FactoryState; next: () => void; preferredSource?: string; preferredMode?: Mode; preferredClip?: string;
+  /** Opens the direction screen when production is blocked on approval. */
+  onDirection?: () => void;
 }) {
   const sources = factory.data.videos.filter(v => w.campaign?.video_ids.includes(v.id));
   const scope = { campaignId: w.campaign?.id || "", profileId: w.profileId, sourceIds: sources.map(v => v.id) };
@@ -246,7 +248,9 @@ export function Studio({ w, factory, next, preferredSource, preferredMode, prefe
           const retryReason = savedRetryBlocker(job);
           return <div key={job.id} className="gf-form-fields"><div className="gf-spec-row"><strong>{job.kind} · {job.status}</strong><span>{job.id}</span></div><p>{job.error || job.message || "No worker message recorded."}</p>{activeJob(job) && <progress aria-label={`Production progress ${job.id}`} max={100} value={typeof job.progress === "number" ? job.progress : undefined} />}
             {activeJob(job) && (cancelId === job.id ? <div><p>Request cancellation? Active work can finish before cancellation is confirmed.</p><button className="gf-button secondary" disabled={busy} onClick={() => void perform(async () => { await productionApi.cancelJob(job.id); setCancelId(""); }, "Cancellation requested. The queue shows the final worker state.")}>Confirm cancellation</button><button className="gf-button ghost" onClick={() => setCancelId("")}>Keep running</button></div> : <button className="gf-button ghost" disabled={busy} onClick={() => setCancelId(job.id)}>Cancel job</button>)}
-            {["failed", "cancelled"].includes(job.status) && <><button className="gf-button secondary" disabled={busy || !!retryReason} onClick={() => void retry(job)}>Retry saved render</button>{retryReason && <p className="gf-help">{retryReason}</p>}</>}
+            {["failed", "cancelled"].includes(job.status) && (job.kind === "render"
+              ? <><button className="gf-button secondary" disabled={busy || !!retryReason} onClick={() => void retry(job)}>Retry saved render</button>{retryReason && <p className="gf-help">{retryReason}</p>}</>
+              : <p className="gf-approval-note">To try this agent run again, fix the issue above, then use Start agent production.</p>)}
             {run && <Disclosure title={`Agent tasks · ${run.status}`}><p>Model: {run.model_id} · Corrections: {run.revision_count}/{run.revision_budget}</p><p>{run.stop_reason || "No stop reason recorded."}</p>{run.tasks.map(task => <div key={task.id}><strong>{task.label} · {task.status}</strong><p>{task.role} · Iteration {task.iteration}</p><small>Inputs: {task.input_refs.join(", ") || "Not recorded"}</small><pre>{task.output ? JSON.stringify(task.output, null, 2) : task.error || "No output recorded"}</pre></div>)}</Disclosure>}
           </div>;
         })}
@@ -270,6 +274,7 @@ export function Studio({ w, factory, next, preferredSource, preferredMode, prefe
         </Disclosure>}
         {revisionParent && <Field label="What would make it better?">{id => <AutoTextarea id={id} value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Explain the edit settings you changed and why." rows={3} />}</Field>}
         {blockers.map(reason => <p className="gf-help" key={reason}>{reason}</p>)}
+        {!direction && onDirection && <button type="button" className="gf-button ghost full" onClick={onDirection}>Review and approve direction</button>}
         <PrimaryAction full label={busy ? "Queuing…" : mode === "agent" ? "Start agent production" : revisionParent ? "Render a new revision" : "Make the first cut"} intent="produce" disabled={busy || blockers.length > 0} onClick={() => void render()} />
         {revisionParent && <button className="gf-button ghost full" onClick={() => setRevisionParent(undefined)}>Back to review</button>}
       </div> : <>

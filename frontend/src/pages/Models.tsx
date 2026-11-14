@@ -13,6 +13,17 @@ import {
 import { Jobs } from "../components/Jobs";
 import { installedLlms, usableModel } from "../productionPreflight";
 import { Narration } from "../components/Narration";
+const readiness = [
+  ["platform", "Platform"],
+  ["apple_silicon", "Apple Silicon"],
+  ["memory_gb", "Memory"],
+  ["free_disk_gb", "Free disk"],
+  ["ffmpeg", "FFmpeg"],
+  ["ffprobe", "FFprobe"],
+  ["model_runtime", "Model runtime"],
+  ["whisper", "Speech-to-text"],
+  ["ollama", "Ollama"],
+] as const;
 export function Models({ state }: { state: FactoryState }) {
   const [consent, setConsent] = useState<Record<string, boolean>>({});
   const [prompt, setPrompt] = useState("");
@@ -55,6 +66,22 @@ export function Models({ state }: { state: FactoryState }) {
             Set up runtime
           </button>
         </div>
+      </Section>
+      <Section title="This Mac" detail="What the factory needs to run">
+        <dl className="info-list">
+          {readiness.map(([key, label]) => {
+            const value = state.errors.system ? null : state.data.system?.[key];
+            return (
+              <div key={key}>
+                <dt>{label}</dt>
+                <dd>
+                  <ReadOnlyValue value={value} />
+                  {typeof value === "number" ? " GB" : ""}
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
       </Section>
       <Section
         title="Model shelf"

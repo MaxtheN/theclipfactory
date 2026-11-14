@@ -10,10 +10,43 @@ import os
 import sys
 from pathlib import Path
 
-MAX_PROMPT = 64_000
+MAX_PROMPT = 96_000
 MAX_TEXT = 20_000
 MAX_TOKENS = 4096
+MAX_IMAGES = 24
+MAX_BATCH = 64
+MAX_SCHEMA = 64_000
 MAX_RESPONSE = 4 * 1024**2
+
+
+def validate_generation(request):
+    prompt = request["prompt"]
+    tokens = request.get("max_tokens", 1500)
+    images = request.get("images", [])
+    labels = request.get("image_labels")
+    schema = request.get("schema")
+    temperature = request.get("temperature", 0.3)
+    if not isinstance(prompt, str) or not 0 < len(prompt) <= MAX_PROMPT:
+        raise ValueError("Prompt limit exceeded")
+    if type(tokens) is not int or not 1 <= tokens <= MAX_TOKENS:
+        raise ValueError("Token limit exceeded")
+    if not isinstance(images, list) or len(images) > MAX_IMAGES:
+        raise ValueError("Image limit exceeded")
+    for image in images:
+        if not isinstance(image, str) or not Path(image).is_file():
+            raise ValueError("Images must be local files")
+    if labels is not None and (
+        not isinstance(labels, list)
+        or len(labels) != len(images)
+        or not all(isinstance(label, str) and 0 < len(label) <= 120 for label in labels)
+    ):
+        raise ValueError("Each image needs one short label")
+    if schema is not None and (
+        not isinstance(schema, dict) or len(json.dumps(schema, allow_nan=False)) > MAX_SCHEMA
+    ):
+        raise ValueError("Invalid output schema")
+    if isinstance(temperature, bool) or not isinstance(temperature, numbers.Real) or not 0 <= temperature <= 1.5:
+        raise ValueError("Invalid temperature")
 
 
 def validate_request(request):
@@ -21,18 +54,15 @@ def validate_request(request):
         raise TypeError("Invalid request")
     action = request.get("action")
     if action == "generate":
-        prompt = request["prompt"]
-        tokens = request.get("max_tokens", 1500)
-        images = request.get("images", [])
-        if not isinstance(prompt, str) or not 0 < len(prompt) <= MAX_PROMPT:
-            raise ValueError("Prompt limit exceeded")
-        if type(tokens) is not int or not 1 <= tokens <= MAX_TOKENS:
-            raise ValueError("Token limit exceeded")
-        if not isinstance(images, list) or len(images) > 16:
-            raise ValueError("Image limit exceeded")
-        for image in images:
-            if not isinstance(image, str) or not Path(image).is_file():
-                raise ValueError("Images must be local files")
+        validate_generation(request)
+    elif action == "batch":
+        requests = request["requests"]
+        if not isinstance(requests, list) or not 0 < len(requests) <= MAX_BATCH:
+            raise ValueError("Batch limit exceeded")
+        for item in requests:
+            if not isinstance(item, dict):
+                raise TypeError("Invalid batch request")
+            validate_generation(item)
     elif action == "narrate":
         text = request["text"]
         if not isinstance(text, str) or not 0 < len(text) <= MAX_TEXT:
@@ -72,6 +102,70 @@ def json_value(value):
     raise ValueError("Unsupported inference result type")
 
 
+def constraint(processor, schema):
+    """Grammar-constrained decoding: the model can only emit JSON matching the schema.
+
+    Unsupported schema features or a missing grammar engine fall back to free generation; the
+    caller validates every handoff either way.
+    """
+    try:
+        from mlx_vlm.structured import build_json_schema_logits_processor
+
+        tokenizer = processor.tokenizer if hasattr(processor, "tokenizer") else processor
+        return build_json_schema_logits_processor(tokenizer, schema)
+    except Exception:  # noqa: BLE001 - optional capability; never fail the request for it
+        return None
+
+
+def generate_text(model, processor, generate, model_path, request, config=None):
+    images = request.get("images", [])
+    labels = request.get("image_labels")
+    if labels:
+        # Interleave each frame with its label so the model can ground what it sees in time.
+        parts = []
+        for label in labels:
+            parts.append({"type": "text", "text": f"\n{label}:"})
+            parts.append({"type": "image"})
+        parts.append({"type": "text", "text": "\n" + request["prompt"]})
+        formatted = processor.apply_chat_template(
+            [{"role": "user", "content": parts}],
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+    else:
+        from mlx_vlm.prompt_utils import apply_chat_template
+        from mlx_vlm.utils import load_config
+
+        formatted = apply_chat_template(
+            processor,
+            load_config(model_path) if config is None else config,
+            request["prompt"],
+            num_images=len(images),
+            enable_thinking=False,
+        )
+    options = {}
+    if request.get("schema") is not None:
+        guide = constraint(processor, request["schema"])
+        if guide is not None:
+            options["logits_processors"] = [guide]
+    output = generate(
+        model,
+        processor,
+        formatted,
+        image=images or None,
+        max_tokens=request.get("max_tokens", 1500),
+        temperature=request.get("temperature", 0.3),
+        verbose=False,
+        **options,
+    )
+    # MLX-VLM 0.7.12 returns GenerationResult, not its repr/metrics.
+    text = output.text if hasattr(output, "text") else output
+    if not isinstance(text, str) or len(text) > 1_000_000:
+        raise ValueError("Invalid generated text")
+    return text
+
+
 def infer(request):
     validate_request(request)
     model_path = request["model"]
@@ -80,32 +174,23 @@ def infer(request):
     action = request["action"]
     if action == "generate":
         from mlx_vlm import generate, load
-        from mlx_vlm.prompt_utils import apply_chat_template
+
+        model, processor = load(model_path, trust_remote_code=False)
+        return {"output": generate_text(model, processor, generate, model_path, request)}
+    if action == "batch":
+        # One model load serves every request: watching a source is dozens of short calls.
+        from mlx_vlm import generate, load
         from mlx_vlm.utils import load_config
 
         model, processor = load(model_path, trust_remote_code=False)
-        images = request.get("images", [])
-        formatted = apply_chat_template(
-            processor,
-            load_config(model_path),
-            request["prompt"],
-            num_images=len(images),
-            enable_thinking=False,
-        )
-        output = generate(
-            model,
-            processor,
-            formatted,
-            image=images or None,
-            max_tokens=request.get("max_tokens", 1500),
-            temperature=0.3,
-            verbose=False,
-        )
-        # MLX-VLM 0.7.12 returns GenerationResult, not its repr/metrics.
-        text = output.text if hasattr(output, "text") else output
-        if not isinstance(text, str) or len(text) > 1_000_000:
-            raise ValueError("Invalid generated text")
-        return {"output": text}
+        config = load_config(model_path)
+        outputs = []
+        for item in request["requests"]:
+            try:
+                outputs.append({"output": generate_text(model, processor, generate, model_path, item, config)})
+            except Exception:  # noqa: BLE001 - one unreadable window must not discard the rest
+                outputs.append({"error": "Generation failed for this request."})
+        return {"outputs": outputs}
     if action == "transcribe":
         import mlx_whisper
 
@@ -115,20 +200,24 @@ def infer(request):
             word_timestamps=True,
             language=request.get("language") or None,
             verbose=False,
+            # Each window is decoded on its own and silent stretches are skipped: far fewer
+            # invented phrases ("Thank you.") on footage with little or no speech.
+            condition_on_previous_text=False,
+            hallucination_silence_threshold=2.0,
         )
-        return {
-            "text": output.get("text", ""),
-            "language": output.get("language"),
-            "segments": [
-                {
-                    "start": float(s["start"]),
-                    "end": float(s["end"]),
-                    "text": s["text"],
-                    "words": s.get("words", []),
-                }
-                for s in output.get("segments", [])
-            ],
-        }
+        segments = []
+        for s in output.get("segments", []):
+            segment = {
+                "start": float(s["start"]),
+                "end": float(s["end"]),
+                "text": s["text"],
+                "words": s.get("words", []),
+            }
+            for key in ("no_speech_prob", "avg_logprob"):
+                if s.get(key) is not None:
+                    segment[key] = float(s[key])
+            segments.append(segment)
+        return {"text": output.get("text", ""), "language": output.get("language"), "segments": segments}
 
     import importlib.util
 

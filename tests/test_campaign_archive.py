@@ -361,6 +361,17 @@ def test_archived_production_api_never_dispatches_callback(domain, api, action):
     assert len(calls) == 1
 
 
+def test_archived_campaign_refuses_swarm_production_until_restored(domain, api):
+    client, calls = api
+    domain.service.archive("campaign")
+    body = {"video_id": "source", "profile_id": "profile", "strategy": "swarm"}
+    assert client.post("/api/campaigns/campaign/produce", json=body).status_code == 409
+    assert not calls
+    client.post("/api/campaigns/campaign/restore")
+    assert client.post("/api/campaigns/campaign/produce", json=body).status_code == 202
+    assert calls == [("produce", "campaign")]
+
+
 def test_missing_campaign_archive_and_restore_are_not_creations(api):
     client, _ = api
     assert client.post("/api/campaigns/missing/archive").status_code == 404

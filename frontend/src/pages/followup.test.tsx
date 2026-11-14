@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clip, settings, testState } from "../test-state";
-import { Factory } from "./Factory";
+import { Studio } from "./Studio";
 import { Models } from "./Models";
 import { Instagram, publishingGate } from "./Instagram";
 import { Results } from "./Results";
@@ -82,7 +82,7 @@ describe("full local production", () => {
   it("produces variants for the selected source with exact model payload", async () => {
     const fetch = fetchMock();
     const user = userEvent.setup();
-    render(<Factory state={readyState()} />);
+    render(<Studio state={readyState()} />);
     await user.selectOptions(screen.getByLabelText("Source video"), "v2");
     await user.click(
       screen.getByRole("button", { name: "Produce variants (team)" }),
@@ -105,7 +105,7 @@ describe("full local production", () => {
     (runtime) => {
       const state = readyState();
       state.data.system = { model_runtime: runtime };
-      render(<Factory state={state} />);
+      render(<Studio state={state} />);
       expect(
         screen.getByRole("button", { name: "Produce variants (team)" }),
       ).toBeDisabled();
@@ -114,7 +114,7 @@ describe("full local production", () => {
   it("requires an installed model and fresh capability data", () => {
     const state = readyState();
     state.errors.models = "Unavailable";
-    render(<Factory state={state} />);
+    render(<Studio state={state} />);
     expect(
       screen.getByRole("button", { name: "Produce variants (team)" }),
     ).toBeDisabled();

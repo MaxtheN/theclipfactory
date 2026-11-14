@@ -172,6 +172,78 @@ def test_llm_id_rejects(value):
         TypeAdapter(LlmId).validate_python(value)
 
 
+def test_schema_becomes_the_format_and_frame_labels_reach_the_prompt(models, tmp_path):
+    seen = []
+    models.ollama = fake(seen=seen)
+    frames = [tmp_path / "a.jpg", tmp_path / "b.jpg"]
+    for frame in frames:
+        frame.write_bytes(b"\xff\xd8jpeg")
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
+    models.run(
+        "job", "ollama:qwen3.6:35b-a3b", "generate", prompt="Describe.", images=[str(f) for f in frames],
+        image_labels=["Frame at 1.0s", "Frame at 2.5s"], schema=schema, temperature=0.2,
+    )
+    body = seen[0]
+    assert body["format"] == schema and body["options"]["temperature"] == 0.2 and body["keep_alive"] == 0
+    assert body["messages"][0]["content"] == (
+        "The attached images are in order: image 1 is the Frame at 1.0s; image 2 is the Frame at 2.5s.\nDescribe."
+    )
+    assert len(body["messages"][0]["images"]) == 2
+
+
+def test_a_server_that_rejects_the_schema_is_retried_without_it():
+    bodies = []
+
+    def handler(request: httpx.Request):
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json=TAGS)
+        if request.url.path == "/api/show":
+            return httpx.Response(200, json={"capabilities": CAPS[json.loads(request.content)["model"]]})
+        body = json.loads(request.content)
+        bodies.append(body)
+        if "format" in body:
+            return httpx.Response(400, json={"error": "invalid format"})
+        return httpx.Response(200, content=json.dumps({"message": {"content": "{}"}, "done": True}).encode())
+
+    ollama = Ollama("http://ollama.test", transport=httpx.MockTransport(handler))
+    assert ollama.generate("llama3.2:3b", "p", schema={"type": "object"}) == "{}"
+    assert ["format" in body for body in bodies] == [True, False]
+    with pytest.raises(OllamaError, match="refused"):
+        fake_refusing().generate("llama3.2:3b", "p")
+
+
+def fake_refusing():
+    def handler(request: httpx.Request):
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json=TAGS)
+        if request.url.path == "/api/show":
+            return httpx.Response(200, json={"capabilities": CAPS[json.loads(request.content)["model"]]})
+        return httpx.Response(500)
+
+    return Ollama("http://ollama.test", transport=httpx.MockTransport(handler))
+
+
+def test_a_batch_keeps_the_model_loaded_until_its_last_request(models):
+    seen = []
+    models.ollama = fake(seen=seen)
+    results = models.run_batch("job", "ollama:llama3.2:3b", [{"prompt": "one"}, {"prompt": "two"}, {"prompt": "three"}])
+    assert results == [{"output": "hello"}] * 3
+    assert [body["keep_alive"] for body in seen] == ["5m", "5m", 0]
+    assert models.run_batch("job", "ollama:llama3.2:3b", []) == []
+    with pytest.raises(WorkError, match="invalid"):
+        models.run_batch("job", "ollama:llama3.2:3b", [{"prompt": ""}])
+    models.jobs.process.assert_not_called()
+
+
+def test_vision_is_known_per_model(models):
+    models.ollama = fake()
+    assert models.vision("ollama:qwen3.6:35b-a3b") is True
+    assert models.vision("ollama:llama3.2:3b") is False
+    assert models.vision("ollama:missing:1b") is False and models.vision("ollama:../evil") is False
+    assert models.vision("qwen-small") is True and models.vision("qwen-large") is True
+    assert models.vision("whisper-turbo") is False and models.vision("unknown") is False
+
+
 def test_raw_reply_is_kept_in_the_job_log(models):
     models.ollama = fake()
     models.run("job-1", "ollama:llama3.2:3b", "generate", prompt="p")
@@ -183,13 +255,14 @@ def test_raw_reply_is_kept_in_the_job_log(models):
     assert (models.logs / "job-1.log").stat().st_mode & 0o777 == 0o600
 
 
-def test_keep_warm_calls_keep_the_model_loaded_and_skip_generic_progress(models):
+def test_keep_warm_calls_keep_the_model_loaded_between_scout_prompts(models):
     seen = []
     models.ollama = fake(seen=seen)
     models.run("job", "ollama:llama3.2:3b", "generate", keep_warm=True, prompt="p")
     models.run("job", "ollama:llama3.2:3b", "generate", prompt="p")
     assert [body["keep_alive"] for body in seen] == ["10m", 0]
-    assert models.jobs.update.call_count == 1
+    # Progress wording belongs to the caller (a role, a scout, a scene), not to the model runner.
+    assert models.jobs.update.call_count == 0
 
 
 def test_unload_releases_weights_without_prompt_or_inference():

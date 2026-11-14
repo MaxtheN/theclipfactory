@@ -23,11 +23,16 @@ export const objectives = [
   "custom",
 ] as const;
 export interface Settings {
-  production_strategy?: "team" | "baseline";
+  production_strategy?: "swarm" | "team" | "baseline";
   brand: string;
   objective: string;
   language: string;
+  /** "auto": new footage starts production by itself. "review": you press Make clips. */
   autonomy: string;
+  /** "" lets the factory pick an installed model. */
+  default_model?: string;
+  /** How many clips to aim for per source (1–6). */
+  clip_count?: number;
   publishing_enabled: boolean;
   ads_enabled: boolean;
   daily_budget: number;
@@ -68,6 +73,12 @@ export interface Candidate {
   reason?: string;
   objective?: string;
 }
+export interface StoryboardSummary {
+  scenes: number;
+  vision: boolean;
+  model_id: string | null;
+  updated_at: string;
+}
 export interface Video {
   has_audio?: boolean | null;
   id: string;
@@ -77,7 +88,10 @@ export interface Video {
   height?: number | null;
   size?: number | null;
   created_at?: string;
+  /** List responses carry a slim {language, text, segment_count}; older services sent the full transcript. */
   transcript?: unknown;
+  has_transcript?: boolean;
+  storyboard?: StoryboardSummary | null;
   analysis?: unknown;
   status?: string;
 }
@@ -94,6 +108,13 @@ export interface Clip {
   team_run_id?: string | null;
   team_review_status?: "pass" | "fail" | "unknown" | "not_applicable" | null;
   team_findings?: unknown;
+  /** Why the factory picked this moment. */
+  reason?: string;
+  moment_summary?: string;
+  /** Swarm clips: the reason a viewer is expected to stop scrolling. */
+  hypothesis?: string | null;
+  scene_refs?: string[];
+  approval_override?: { at: string; review_status: string } | null;
   id: string;
   video_id: string;
   name: string;
@@ -136,6 +157,89 @@ export interface Analytics {
   notes?: unknown[];
   events?: unknown[];
 }
+export type StageStatus = "done" | "active" | "pending" | "skipped" | "failed";
+export interface FactoryStage {
+  key: string;
+  label: string;
+  status: StageStatus;
+  detail: string;
+}
+export type SourceState =
+  | "idle"
+  | "queued"
+  | "working"
+  | "needs_review"
+  | "done"
+  | "failed"
+  | "cancelled";
+export interface FactorySource {
+  video_id: string;
+  name: string;
+  duration: number;
+  created_at?: string;
+  state: SourceState;
+  headline: string;
+  progress: number | null;
+  stages: FactoryStage[];
+  job_id: string | null;
+  run_id: string | null;
+  clip_ids: string[];
+  unreviewed: number;
+  approved: number;
+  error: string | null;
+  can_produce: boolean;
+  blocked_reason: string | null;
+  storyboard: StoryboardSummary | null;
+  thumbnail: string | null;
+}
+export interface FactoryBlocker {
+  code: string;
+  message: string;
+  tab: string | null;
+}
+/** GET /api/factory: the production line, computed by the local service. */
+export interface FactoryLine {
+  autopilot: boolean;
+  model_id: string | null;
+  ready: boolean;
+  blockers: FactoryBlocker[];
+  sources: FactorySource[];
+}
+export interface StoryboardFrame {
+  time: number;
+  url: string;
+}
+export interface StoryboardScene {
+  index: number;
+  start: number;
+  end: number;
+  usable: boolean;
+  score: number;
+  motion: number;
+  loudness: number | null;
+  peak_time: number;
+  cuts: number;
+  speech: string;
+  visual: string | null;
+  action: "none" | "low" | "medium" | "high" | null;
+  on_screen_text: string[];
+  highlight: number | null;
+  highlight_reason: string;
+  frames: StoryboardFrame[];
+}
+/** GET /api/videos/{id}/storyboard: what the factory saw and heard in a source. */
+export interface Storyboard {
+  video_id: string;
+  version?: number;
+  model_id: string | null;
+  vision: boolean;
+  created_at?: string;
+  elapsed_seconds?: number;
+  duration: number;
+  signals: { interval: number; motion: number[]; loudness: (number | null)[] };
+  scenes: StoryboardScene[];
+  limitations: string;
+}
 export interface Data {
   system: SystemInfo | null;
   settings: Settings | null;
@@ -145,6 +249,7 @@ export interface Data {
   clips: Clip[];
   instagram: InstagramStatus | null;
   analytics: Analytics | null;
+  factory: FactoryLine | null;
 }
 export type Resource = keyof Data;
 
@@ -182,7 +287,7 @@ export interface TeamTask {
 export interface TeamRun {
   id: string;
   video_id: string;
-  mode: "team" | "baseline";
+  mode: "swarm" | "team" | "baseline";
   model_id: string;
   objective: string;
   status: string;

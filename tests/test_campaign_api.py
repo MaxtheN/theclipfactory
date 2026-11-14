@@ -379,7 +379,7 @@ def test_burned_hook_cannot_be_relabelled_or_approved_as_new_text(client):
     assert client.put("/api/clips/burned", json={"approved": True}).status_code == 200
 
 
-def test_unassigned_analysis_does_not_borrow_profiles_or_foreign_insights(client, monkeypatch):
+def test_unassigned_analysis_does_not_borrow_profiles_or_foreign_insights(client, monkeypatch, watched):
     video = upload_mock(client, monkeypatch)
     store = client.app.state.store
     store.put(
@@ -397,13 +397,13 @@ def test_unassigned_analysis_does_not_borrow_profiles_or_foreign_insights(client
         },
     )
     store.put("insights", {"id": "m", "account_id": "foreign", "metrics": {"views": 987654}})
-    monkeypatch.setattr("clip_factory.media.sample_frames", lambda *a: [])
+    watched(client)
     monkeypatch.setattr(client.app.state.models, "require", lambda *a: None)
     prompts = []
 
     def run(*args, **kwargs):
         prompts.append(kwargs["prompt"])
-        return {"output": '{"candidates":[{"start":0,"end":1,"hook":"Source-backed"}]}'}
+        return {"output": '{"candidates":[{"scene":"scene:0","start":0,"end":1,"hook":"Source-backed"}]}'}
 
     monkeypatch.setattr(client.app.state.models, "run", run)
     response = client.post(f"/api/videos/{video['id']}/analyze", json={})

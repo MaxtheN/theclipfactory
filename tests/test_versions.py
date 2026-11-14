@@ -643,6 +643,7 @@ def test_real_hook_variants_revision_and_verified_export(client, tmp_path):
         "width": 1080,
         "height": 1920,
         "has_audio": True,
+        "hdr": False,
     }
     manifest = json.loads((folder / "manifest.json").read_text())
     assert manifest["clip"]["parent_clip_id"] == text["id"]

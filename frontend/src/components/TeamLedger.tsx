@@ -14,7 +14,7 @@ export function validRuns(value: unknown): value is TeamRun[] {
         r &&
         typeof r.id === "string" &&
         typeof r.video_id === "string" &&
-        ["team", "baseline"].includes(r.mode) &&
+        ["team", "baseline", "swarm"].includes(r.mode) &&
         typeof r.status === "string" &&
         typeof r.model_id === "string" &&
         typeof r.objective === "string" &&

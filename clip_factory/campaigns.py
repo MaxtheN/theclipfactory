@@ -168,6 +168,9 @@ class AgentProduction(Body):
     profile_id: Identifier
     model_id: LlmId = "qwen-small"
     revision_budget: int = Field(default=2, ge=0, le=2, strict=True)
+    # team: a few clips with planning, self-check and revisions. swarm: many clips, one hypothesis
+    # each, under the same approved direction.
+    strategy: Literal["team", "swarm"] = "team"
 
 
 class Campaigns:

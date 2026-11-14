@@ -1,0 +1,152 @@
+/* Landing-only composition, using the workspace's existing material palette. */
+.gf-flow-app .gf-landing-heading {
+  padding: 18px 0 4px;
+  margin-bottom: 30px;
+}
+.gf-flow-app .gf-landing-heading h1 {
+  font-size: clamp(32px, 4vw, 54px);
+  font-weight: 550;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+  max-width: 850px;
+  text-wrap: balance;
+}
+.gf-flow-app .gf-landing-heading .gf-eyebrow {
+  color: var(--material-focus);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  margin-bottom: 18px;
+}
+.gf-flow-app .gf-landing-heading > div > p {
+  max-width: 620px;
+  font-size: 15px;
+  line-height: 1.8;
+  margin-top: 18px;
+  color: var(--material-secondary);
+  text-wrap: pretty;
+}
+.gf-factory-workflow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  padding: 0;
+  margin: 0 0 28px;
+  border: 1px solid var(--material-divider);
+  border-radius: 14px;
+  background: var(--material-shell);
+}
+.gf-factory-workflow li {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 22px;
+  min-width: 0;
+}
+.gf-factory-workflow li + li { border-left: 1px solid var(--material-divider); }
+.gf-workflow-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  color: var(--material-focus);
+  background: var(--material-field);
+  border: 1px solid var(--material-divider);
+}
+.gf-workflow-number {
+  color: var(--material-focus);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  margin-right: 9px;
+}
+.gf-factory-workflow strong { font-size: 13px; font-weight: 550; }
+.gf-factory-workflow p {
+  color: var(--material-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 6px;
+}
+.gf-flow-app .gf-upload-stage {
+  position: relative;
+  overflow: hidden;
+  min-height: 235px;
+  padding: 38px;
+  gap: 16px 24px;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  border: 1px dashed var(--material-focus);
+  border-radius: 18px;
+  background: linear-gradient(115deg, rgba(226,196,157,0.12), rgba(35,43,49,0.12));
+}
+.gf-flow-app .gf-upload-stage-icon {
+  width: 72px;
+  height: 86px;
+  border-radius: 16px;
+  border: 1px solid var(--material-line);
+  background: var(--material-shell);
+  box-shadow: 5px -5px 0 -1px var(--material-pane-solid), 5px -5px 0 0 var(--material-divider);
+}
+.gf-flow-app .gf-upload-stage .gf-eyebrow {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  margin-bottom: 12px;
+  color: var(--material-focus);
+}
+.gf-flow-app .gf-upload-stage h2 { font-size: clamp(23px, 2.4vw, 30px); margin-bottom: 12px; }
+.gf-flow-app .gf-upload-stage p { max-width: 470px; line-height: 1.8; }
+.gf-flow-app .gf-upload-stage > .gf-button { min-height: 48px; padding: 12px 22px; }
+.gf-flow-app .gf-upload-stage .gf-upload-stage-note {
+  grid-column: 2 / -1;
+  font-size: 11px;
+  margin-top: 0;
+}
+.gf-flow-app .gf-home-section > header { margin-top: 36px; }
+.gf-flow-app .gf-footage-list { border: 1px solid var(--material-divider); border-radius: 14px; overflow: hidden; }
+.gf-flow-app .gf-footage-row { padding: 20px; background: var(--material-shell); }
+.gf-flow-app .gf-footage-row:last-child { border-bottom: 0; }
+.gf-flow-app .gf-onboarding { max-width: 1080px; border-radius: 18px; overflow: hidden; }
+.gf-flow-app .gf-onboarding-intro {
+  padding: 38px;
+  background: linear-gradient(155deg, rgba(226,196,157,0.1), var(--material-shell));
+}
+.gf-flow-app .gf-onboarding-intro > .gf-eyebrow { color: var(--material-focus); font-size: 9px; letter-spacing: 0.12em; }
+.gf-flow-app .gf-onboarding-intro h2 { font-size: clamp(27px, 3vw, 36px); line-height: 1.2; max-width: none; margin: 24px 0 18px; }
+.gf-flow-app .gf-onboarding-intro > p { max-width: 360px; line-height: 1.9; }
+.gf-factory-workflow.is-compact { grid-template-columns: 1fr; border: 0; background: transparent; margin: 30px 0; gap: 22px; }
+.gf-factory-workflow.is-compact li { border: 0; padding: 0; }
+.gf-onboarding-trust { display: flex; gap: 10px; padding-top: 20px; border-top: 1px solid var(--material-divider); }
+.gf-onboarding-trust svg { flex-shrink: 0; color: var(--material-focus); margin-top: 3px; }
+.gf-onboarding-trust p { font-size: 11px; line-height: 1.8; color: var(--material-secondary); }
+.gf-flow-app .gf-onboarding-form { padding: 38px; background: var(--material-shell); }
+.gf-onboarding-form-heading { margin-bottom: 28px; }
+.gf-onboarding-form-heading .gf-eyebrow { font-size: 9px; letter-spacing: 0.12em; }
+.gf-flow-app .gf-onboarding-form-heading h2 { font-size: 22px; }
+.gf-onboarding-form-heading p { color: var(--material-secondary); font-size: 12px; margin-top: 8px; line-height: 1.7; }
+@media (max-width: 1100px) {
+  .gf-factory-workflow li { padding: 18px 14px; gap: 10px; }
+  .gf-workflow-icon { width: 34px; height: 38px; }
+  .gf-flow-app .gf-upload-stage { grid-template-columns: 72px minmax(0, 1fr); padding: 30px; }
+}
+@media (max-width: 760px) {
+  .gf-flow-app .gf-landing-heading { padding-top: 0; }
+  .gf-factory-workflow { grid-template-columns: 1fr; }
+  .gf-factory-workflow li { padding: 16px 20px; }
+  .gf-factory-workflow li + li { border-left: 0; border-top: 1px solid var(--material-divider); }
+  .gf-factory-workflow.is-compact li + li { border: 0; }
+  .gf-flow-app .gf-onboarding-intro, .gf-flow-app .gf-onboarding-form { padding: 26px; }
+  /* Keep the setup fields within reach on small screens; the intro still explains the loop. */
+  .gf-factory-workflow.is-compact { display: none; }
+  .gf-onboarding-trust { margin-top: 20px; }
+}
+@media (max-width: 520px) {
+  .gf-flow-app .gf-upload-stage { grid-template-columns: 1fr; padding: 28px 22px; }
+  .gf-flow-app .gf-upload-stage .gf-upload-stage-note { grid-column: 1; }
+  .gf-flow-app .gf-upload-stage > .gf-button { width: 100%; }
+  .gf-flow-app .gf-landing-heading h1 { font-size: 35px; }
+  .gf-flow-app .gf-landing-heading > div > p { font-size: 14px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .gf-flow-app .gf-upload-stage, .gf-factory-workflow,
+  .gf-flow-app .gf-onboarding-intro, .gf-flow-app .gf-onboarding-form,
+  .gf-flow-app .gf-footage-row { background: var(--material-pane-solid); }
+}

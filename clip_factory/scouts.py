@@ -40,7 +40,8 @@ not invent quotes or facts that are not in the transcript."""
 def _rows(video: dict) -> list[dict]:
     rows = []
     for s in (video.get("transcript") or {}).get("segments", []) or []:
-        if not isinstance(s, dict):
+        # Background chatter (see media.classify_speech) is not speech to build a clip on.
+        if not isinstance(s, dict) or s.get("background"):
             continue
         start, end = s.get("start"), s.get("end")
         if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in (start, end)) or end < start:

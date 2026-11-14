@@ -81,3 +81,29 @@ Linux CI verifies orchestration with scripted model doubles and real FFmpeg.
 Fresh MLX/Kokoro inference, native Cocoa/Keychain and throughput require target-Mac
 acceptance. Packaged app must contain standalone inference_worker.py. The Mac
 artifact is ad-hoc signed, not Developer-ID signed or notarized.
+
+## Storyboard-based evidence (current behaviour)
+
+Team runs no longer sample twelve stills and the opening minutes of transcript.
+Before any role runs, the source is watched once (see the README's *How the
+factory works*) and every role reasons over that storyboard:
+
+- The footage analyst cites scenes by ID; start and end are computed from the
+  cited scenes. Handoffs are grammar-constrained, with the run's valid evidence
+  IDs and list sizes filled into the schema.
+- A close look at dense frames around each selected moment's peak tells the
+  strategist and editor what happens there; the editor receives a suggested cut
+  around that peak and frames from inside its ranges; the critic receives frames
+  and verbatim speech from inside each candidate.
+- Output that is slightly off is repaired (ranges fitted and moved out of the
+  middle of sentences, labels renumbered, the user's objective restored). If
+  moment selection is unusable, the best scenes by measured signals are
+  shortlisted and the run continues.
+- Long, speech-led sources (over 20 minutes) use the scout swarm in `scouts.py`
+  to find moments; its ranges are tied to the storyboard scenes they overlap.
+- From the Factory screen the self-check runs once and its findings go to the
+  reviewer; automatic revision rounds (0-2) remain available from Studio and
+  campaigns.
+
+For volume, use the swarm strategy instead of team mode.
+
