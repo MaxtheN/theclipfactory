@@ -15,6 +15,7 @@ import { JourneyProgress } from "./JourneyProgress";
 import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
 import { PostToInstagram } from "./PostToInstagram";
+import { ReferenceResearchLauncher } from "./ReferenceResearch";
 import { briefSummary } from "./briefModel";
 import { rankOf, reviewOrder } from "./clipRanking";
 import "./campaign-brief.css";
@@ -292,6 +293,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
         <div className="gf-clip-strip"><button onClick={newCut}><Icon name="plus" size={14} /><strong>Find more</strong></button>{ordered.above.map((c, i) => clipButton(c, i))}</div>
         {ordered.below.length > 0 && <details className="gf-disclosure gf-below-bar"><summary>Below the bar ({ordered.below.length})<Icon name="down" size={15} /></summary><p className="gf-help">Kept, not deleted. Lower scores or similar to a better clip.</p><div className="gf-clip-strip">{ordered.below.map((c, i) => clipButton(c, ordered.above.length + i))}</div></details>}
       </>}
+      {clips.length > 0 && !reviewPreview && <ReferenceResearchLauncher campaignId={w.campaign.id} profileId={w.profileId} entry="studio" preferredClipId={selected?.id} />}
       {ledgerError && <p className="gf-inline-error" role="alert">Agent status: {ledgerError}</p>}
       {jobs.length > 0 && <Disclosure title="Production log" icon="clock">
         {jobs.map(job => {

@@ -4,6 +4,7 @@ import { workspaceApi, initialDirection } from "./workspaceApi";
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { Disclosure, Field, Pill, Empty, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
+import { ReferenceResearchLauncher } from "./ReferenceResearch";
 
 /** The selected workspace's ONE Style-rules set, inherited by every campaign in it. */
 export function Research({ w, next }: { w: Workspace; next: () => void }) {
@@ -226,6 +227,13 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
             onClick={() => void primary()}
           />
         </div>
+        {/* Reference reels -> one cited pattern -> an A/B test and a proposed rules note. */}
+        <ReferenceResearchLauncher
+          campaignId={w.campaign?.id}
+          profileId={w.profileId}
+          entry="rules"
+          onUsed={() => void w.load().catch(() => {})}
+        />
       </section>
     </div>
   );

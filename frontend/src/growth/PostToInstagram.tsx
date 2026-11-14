@@ -10,6 +10,7 @@ import {
   type PublishAttempt,
   type QualityReport,
 } from "./publishApi";
+import { postCopyApi, type PostCopy } from "./referencesApi";
 
 export interface PostableClip {
   id: string;
@@ -51,16 +52,26 @@ export function PostToInstagram({
   const [override, setOverride] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [copy, setCopy] = useState<PostCopy | null>();
+  const [writing, setWriting] = useState("");
+  // Generated copy prefills the caption until the person edits it themselves.
+  const edited = useRef(false), prefilled = useRef(false);
   const live = useRef(true);
 
   useEffect(() => {
     live.current = true;
     setTargets(undefined); setReport(undefined); setAttempts([]); setChosen([]); setError(""); setOverride("");
+    edited.current = false; prefilled.current = false; setCopy(undefined);
     publishApi.targets(clip.id).then(t => {
       if (!live.current) return;
       setTargets(t); setAttempts(t.attempts);
-      setCaption(t.default_caption || clip.caption || clip.hook || "");
+      if (!prefilled.current) setCaption(t.default_caption || clip.caption || clip.hook || "");
     }).catch(e => live.current && setError(message(e)));
+    postCopyApi.get(clip.id).then(v => {
+      if (!live.current || !v.post_copy) return;
+      setCopy(v.post_copy);
+      if (!edited.current) { prefilled.current = true; setCaption(v.post_copy.caption); }
+    }).catch(() => undefined);
     publishApi.quality(clip.id).then(r => live.current && setReport(r)).catch(e => live.current && setError(message(e)));
     return () => { live.current = false; };
   }, [clip.id, clip.sha256]);
@@ -114,6 +125,27 @@ export function PostToInstagram({
     }
   }
 
+  /** Ask the local model for fresh copy; the template fallback is labelled when the model cannot run. */
+  async function regenerate() {
+    setWriting("Writing…"); setError("");
+    try {
+      let view = await postCopyApi.regenerate(clip.id, "model");
+      for (let i = 0; view.job && ["queued", "running"].includes(view.job.status) && i < 600; i++) {
+        await new Promise(done => setTimeout(done, pollMs));
+        if (!live.current) return;
+        view = await postCopyApi.get(clip.id);
+        setWriting(view.job?.status === "queued" ? "Queued behind other local work…" : "Writing…");
+      }
+      if (!live.current) return;
+      if (view.job?.status === "failed") throw new Error(view.job.error || "Post copy could not be written.");
+      if (view.post_copy) { setCopy(view.post_copy); setCaption(view.post_copy.caption); edited.current = false; }
+    } catch (e) {
+      if (live.current) setError(message(e));
+    } finally {
+      if (live.current) setWriting("");
+    }
+  }
+
   async function act(attempt: PublishAttempt, kind: "reconcile" | "resume") {
     setBusy(true); setError("");
     try {
@@ -142,7 +174,8 @@ export function PostToInstagram({
           onChange={e => setChosen(old => e.target.checked ? [...old, account.id] : old.filter(id => id !== account.id))} />
         {" "}{account.display_name || account.id}{blocked.has(account.id) ? " · already has a post attempt" : ""}
       </label>)}</fieldset>)}
-    <Field label="Caption">{id => <AutoTextarea id={id} rows={3} maxLength={2200} value={caption} onChange={e => setCaption(e.target.value)} />}</Field>
+    <Field label="Caption" hint={copy ? `${copy.label}${copy.fallback_reason ? ` · ${copy.fallback_reason}` : ""}` : undefined}>{id => <AutoTextarea id={id} rows={3} maxLength={2200} value={caption} onChange={e => { edited.current = true; setCaption(e.target.value); }} />}</Field>
+    <button type="button" className="gf-button ghost" disabled={!!writing || busy} onClick={() => void regenerate()}>{writing || "Regenerate caption"}</button>
     <button className="gf-button full" disabled={!ready} onClick={() => void submit()}>
       {busy ? "Working…" : clip.approved ? "Post to Instagram" : "Approve & post"}
     </button>
