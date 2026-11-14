@@ -41,7 +41,7 @@ def installed(models, identifier):
     tiny_weights = struct.pack("<Q", len(header)) + header + struct.pack("<f", 0.0)
     files = {"config.json": b"{}", "model.safetensors": tiny_weights}
     if identifier == "whisper-turbo":
-        files = {"config.json": b"{}", "weights.npz": b"mock whisper weights"}
+        files = {"config.json": b"{}", "weights.safetensors": b"mock whisper weights"}
     if identifier == "kokoro":
         files = {"config.json": b"{}", "kokoro-v1_0.pth": b"weights", "voices/af_heart.pt": b"voice"}
     for name, data in files.items():
@@ -454,3 +454,55 @@ def test_parallel_download_disk_reservations_prevent_overcommit(models, monkeypa
     with pytest.raises(WorkError, match="transfer failed"), models._download_space("second", models.model_dir, 20 * mb):
         raise WorkError("transfer failed")
     assert models._download_reservations == {}
+
+
+@pytest.mark.parametrize("weight_name", ["weights.safetensors", "weights.npz"])
+def test_whisper_download_accepts_supported_publisher_formats(models, hub, weight_name):
+    api, transfer, info = hub
+    files = {"config.json": b'{"model_type":"whisper"}', weight_name: b"test model weights"}
+    info.siblings = [SimpleNamespace(rfilename=name, size=len(content)) for name, content in files.items()]
+
+    def download(repo, name, *, revision, local_dir, tqdm_class):
+        assert repo == "mlx-community/whisper-large-v3-turbo"
+        assert revision == SHA
+        (local_dir / name).write_bytes(files[name])
+
+    transfer.side_effect = download
+    assert models.download("job", "whisper-turbo") == {"model_id": "whisper-turbo", "installed": True}
+    assert models.item("whisper-turbo")["installed"]
+    assert transfer.call_count == 2
+    marker = json.loads((models.model_dir / "whisper-turbo" / ".complete").read_text())
+    assert {file["name"] for file in marker["files"]} == {"config.json", weight_name}
+    assert marker["revision"] == SHA
+
+
+def test_whisper_does_not_accept_arbitrary_safetensors_filename(models, hub):
+    _, transfer, _ = hub  # Qwen-style model.safetensors is not a Whisper loader filename.
+    with pytest.raises(WorkError, match="verification failed"):
+        models.download("job", "whisper-turbo")
+    transfer.assert_not_called()
+    assert not models.item("whisper-turbo")["installed"]
+
+
+def test_incomplete_whisper_safetensors_never_installs_and_retry_resumes(models, hub):
+    api, transfer, info = hub
+    weight_name = "weights.safetensors"
+    files = {"config.json": b"{}", weight_name: b"complete model weights"}
+    info.siblings = [SimpleNamespace(rfilename=name, size=len(content)) for name, content in files.items()]
+    truncated = True
+
+    def download(repo, name, *, revision, local_dir, tqdm_class):
+        content = files[name]
+        if truncated and name == weight_name:
+            content = content[:-1]
+        (local_dir / name).write_bytes(content)
+
+    transfer.side_effect = download
+    with pytest.raises(WorkError, match="verification failed"):
+        models.download("first", "whisper-turbo")
+    assert not models.item("whisper-turbo")["installed"]
+    assert not (models.model_dir / "whisper-turbo" / ".complete").exists()
+    truncated = False
+    assert models.download("retry", "whisper-turbo")["installed"]
+    assert api.model_info.call_args.kwargs["revision"] == SHA
+    assert models.item("whisper-turbo")["installed"]

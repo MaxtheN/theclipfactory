@@ -112,12 +112,12 @@ def validate_manifest(target: Path, manifest: dict, repo: str, identifier: str, 
     required = {"config.json"}
     if identifier == "kokoro":
         required |= {"kokoro-v1_0.pth", "voices/af_heart.pt"}
-    if identifier == "whisper-turbo":
-        required.add("weights.npz")
     has_weights = (
         any(n.endswith(".safetensors") for n in names)
         if identifier.startswith("qwen-")
-        else bool(names & {"weights.npz", "kokoro-v1_0.pth"})
+        else bool(names & {"weights.npz", "weights.safetensors"})
+        if identifier == "whisper-turbo"
+        else "kokoro-v1_0.pth" in names
     )
     if not required <= names or not has_weights:
         raise ValueError("Required config or weights missing")
