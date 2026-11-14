@@ -30,6 +30,7 @@ from .jobs import Jobs, WorkError
 from .meta import MetaClient, MetaError, MetaOAuth, SecureTokenStore, validate_public_video_url
 from .models import Models, apple_silicon
 from .store import Store, new_id, now
+from .team import TeamEngine
 
 Objective = Literal[
     "discovery", "awareness", "engagement", "followers", "traffic", "leads", "sales", "custom"
@@ -52,6 +53,7 @@ class Settings(Body):
     total_budget: float = Field(default=0, ge=0, le=10000000)
     graph_version: str = Field(default="v22.0", pattern=r"^v\d+\.\d+$")
     custom_event: str = Field(default="", max_length=200)
+    production_strategy: Literal["team", "baseline"] = "team"
 
 
 class Render(Body):
@@ -66,6 +68,10 @@ class Render(Body):
 
 class Analysis(Body):
     model_id: Literal["qwen-small", "qwen-large"] = "qwen-small"
+
+
+class TeamProduction(Analysis):
+    revision_budget: int = Field(default=2, ge=0, le=2, strict=True)
 
 
 class Inference(Analysis):
@@ -179,6 +185,21 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     async def lifespan(app):
         app.state.jobs = Jobs(store)
         app.state.models = Models(root, app.state.jobs)
+        app.state.team = TeamEngine(
+            store,
+            app.state.jobs,
+            app.state.models,
+            transcribe=transcribe_task,
+            render=render_team,
+            frames=lambda job, video: media.sample_frames(
+                app.state.jobs,
+                job,
+                source_path(video),
+                root / "work" / job / "team-frames",
+                video["duration"],
+            ),
+            baseline=pipeline_task,
+        )
         app.state.schedule_stop = threading.Event()
         app.state.scheduler = threading.Thread(
             target=run_schedules, daemon=True, name="factory-publish-scheduler"
@@ -390,7 +411,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         require("jobs", identifier)
         return jobs().cancel(identifier)
 
-    def transcribe_task(job_id: str, video: dict) -> dict:
+    def transcribe_task(job_id: str, video: dict, language: str | None = None) -> dict:
         if not video.get("has_audio"):
             raise WorkError("This video has no audio track. Analyze its sampled frames or edit it manually.")
         work = root / "work" / job_id
@@ -400,17 +421,21 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         try:
             media.extract_audio(jobs(), job_id, source_path(video), audio)
             result = models().run(
-                job_id, "whisper-turbo", "transcribe", audio=str(audio), language=settings()["language"]
+                job_id,
+                "whisper-turbo",
+                "transcribe",
+                audio=str(audio),
+                language=language or settings()["language"],
             )
             store.patch("videos", video["id"], transcript=result, status="transcribed")
             return {"video_id": video["id"], **result}
         finally:
             audio.unlink(missing_ok=True)
 
-    def analyze_task(job_id: str, video: dict, model_id: str) -> dict:
+    def analyze_task(job_id: str, video: dict, model_id: str, config: dict | None = None) -> dict:
         work = root / "work" / job_id
         frames = media.sample_frames(jobs(), job_id, source_path(video), work / "frames", video["duration"])
-        config = settings()
+        config = config or settings()
         evidence = [
             {
                 "hook": c["hook"],
@@ -454,7 +479,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         store.patch("videos", video["id"], analysis=result, status="analyzed")
         return result
 
-    def render_task(job_id: str, video: dict, body: Render) -> dict:
+    def render_task(job_id: str, video: dict, body: Render, team_metadata: dict | None = None) -> dict:
         identifier = new_id()
         target = root / "clips" / f"{identifier}.mp4"
         result = media.render(
@@ -510,6 +535,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "published_at": None,
             "path": str(target.relative_to(root)),
             **result,
+            **(team_metadata or {}),
         }
         try:
             store.put("clips", clip)
@@ -519,12 +545,19 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             raise
         return {"clip_id": identifier, **result}
 
-    def pipeline_task(job_id: str, video: dict, model_id="qwen-small") -> dict:
+    def render_team(job_id: str, video: dict, candidate: dict) -> dict:
+        body = Render.model_validate(
+            {k: candidate[k] for k in ["start", "end", "hook", "caption", "objective"]}
+        )
+        return render_task(job_id, video, body, team_metadata=candidate["_team"])
+
+    def pipeline_task(job_id: str, video: dict, model_id="qwen-small", config: dict | None = None) -> dict:
+        config = config or settings()
         models().require(model_id, "llm")
         if video.get("has_audio") and not video.get("transcript"):
-            transcribe_task(job_id, video)
+            transcribe_task(job_id, video, config["language"])
             video = require("videos", video["id"])
-        analysis = analyze_task(job_id, video, model_id)
+        analysis = analyze_task(job_id, video, model_id, config)
         output = []
         for candidate in analysis["candidates"][:3]:
             jobs().check(job_id)
@@ -564,12 +597,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             }
             store.put("videos", video)
             if settings()["autonomy"] == "auto":
-                jobs().submit(
-                    "pipeline",
-                    lambda job: pipeline_task(job, video),
-                    video_id=identifier,
-                    model_id="qwen-small",
-                )
+                submit_production(identifier, "qwen-small", settings()["production_strategy"])
             return public(video)
         except Exception:
             target.unlink(missing_ok=True)
@@ -619,15 +647,62 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             model_id=body.model_id,
         )
 
+    def submit_production(identifier: str, model_id: str, mode: str, revision_budget=2) -> dict:
+        with operations_lock:
+            video = require("videos", identifier)
+            if jobs().busy("video_id", identifier):
+                raise HTTPException(409, "This source already has a queued or running task.")
+            models().require(model_id, "llm")
+            if video.get("has_audio") and not video.get("transcript"):
+                models().require("whisper-turbo", "asr")
+            run = app.state.team.create(
+                video, settings(), model_id, mode=mode, revision_budget=revision_budget
+            )
+            job = jobs().submit(
+                "team" if mode == "team" else "pipeline",
+                lambda job: app.state.team.execute(run["id"], job),
+                video_id=identifier,
+                model_id=model_id,
+                team_run_id=run["id"],
+            )
+            app.state.team.bind_job(run["id"], job["id"])
+            return {"job": job, "run": app.state.team.get(run["id"])}
+
     @app.post("/api/videos/{identifier}/produce", status_code=202)
     def produce_video(identifier: str, body: Analysis):
-        models().require(body.model_id, "llm")
-        return submit_source(
-            identifier,
-            "pipeline",
-            lambda job, video: pipeline_task(job, video, body.model_id),
-            model_id=body.model_id,
-        )
+        return submit_production(identifier, body.model_id, settings()["production_strategy"])["job"]
+
+    @app.post("/api/videos/{identifier}/baseline", status_code=202)
+    def produce_baseline(identifier: str, body: Analysis):
+        return submit_production(identifier, body.model_id, "baseline")["job"]
+
+    @app.post("/api/videos/{identifier}/team", status_code=202)
+    def produce_team(identifier: str, body: TeamProduction):
+        return submit_production(identifier, body.model_id, "team", body.revision_budget)
+
+    @app.get("/api/team/runs")
+    def team_runs():
+        return app.state.team.all()
+
+    @app.get("/api/team/runs/{identifier}")
+    def team_run(identifier: str):
+        run = app.state.team.get(identifier)
+        if not run:
+            raise HTTPException(404, "Team run not found.")
+        return run
+
+    @app.post("/api/team/runs/{identifier}/cancel")
+    def cancel_team(identifier: str):
+        with operations_lock:
+            run = team_run(identifier)
+            if run.get("job_id"):
+                jobs().cancel(run["job_id"])
+            return app.state.team.get(identifier)
+
+    @app.get("/api/team/comparisons")
+    def team_comparisons(video_id: str):
+        require("videos", video_id)
+        return app.state.team.comparisons(video_id)
 
     @app.post("/api/videos/{identifier}/render", status_code=202)
     def render_video(identifier: str, body: Render):
@@ -645,7 +720,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
     @app.put("/api/clips/{identifier}")
     def edit_clip(identifier: str, body: ClipEdit):
-        require("clips", identifier)
+        clip = require("clips", identifier)
+        if body.approved and clip.get("team_review_status") in {"fail", "unknown"}:
+            raise HTTPException(
+                409, "Unresolved team checks block approval. Inspect findings and produce a corrected draft."
+            )
         if jobs().busy("clip_id", identifier):
             raise HTTPException(409, "Cannot edit while a clip task is running.")
         return public(store.patch("clips", identifier, **body.model_dump(exclude_none=True)))
@@ -828,7 +907,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         validate_public_video_url(body.public_video_url)
         with operations_lock:
             clip = require("clips", identifier)
-            if not clip["approved"] or not settings()["publishing_enabled"]:
+            if (
+                not clip["approved"]
+                or clip.get("team_review_status") in {"fail", "unknown"}
+                or not settings()["publishing_enabled"]
+            ):
                 raise HTTPException(409, "Approve the clip and explicitly enable publishing first.")
             account = connected_account()
             if not account:
@@ -844,6 +927,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 current = require("clips", identifier)
                 if (
                     not current["approved"]
+                    or current.get("team_review_status") in {"fail", "unknown"}
                     or not settings()["publishing_enabled"]
                     or connected_account() != account
                 ):
@@ -897,7 +981,12 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         with operations_lock:
             clip = require("clips", identifier)
             account = connected_account()
-            if not clip["approved"] or not settings()["publishing_enabled"] or not account:
+            if (
+                not clip["approved"]
+                or clip.get("team_review_status") in {"fail", "unknown"}
+                or not settings()["publishing_enabled"]
+                or not account
+            ):
                 raise HTTPException(409, "Approve the clip, enable publishing, and connect Instagram first.")
             if clip.get("publish_attempt") or any(
                 row["clip_id"] == identifier and row["status"] == "scheduled"
