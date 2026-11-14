@@ -13,6 +13,7 @@ import { postedRows, resultsStory, type PostedRow } from "./resultsModel";
 import { StrategistPanel } from "./StrategistPanel";
 import { GrowthLoopPanel } from "./GrowthLoopPanel";
 import { DemoLoopButton } from "./LearningLoopDemo";
+import type { DemoResult } from "./demoStore";
 import "./results-minimal.css";
 import { FactoryUpgrades } from "./FactoryUpgrades";
 import { PanelDialog } from "./PanelDialog";
@@ -1054,6 +1055,83 @@ function LearnedExtra({ memory }: { memory: LearningMemory | null }) {
 }
 
 /** Results: Post → Measure → Learn, then what is next and what needs you. */
+/** The demo's outcome on Results: simulated posts vs baseline, beliefs, and the real hook re-edit. */
+function DemoOutcome({ demo, onReset, simulatedOnly }: { demo: DemoResult; onReset?: () => void; simulatedOnly?: boolean }) {
+  const { plan, after } = demo;
+  const base = plan.baseline.metrics.hold_3s;
+  const parent = plan.clips.find((c) => c.clip_id === plan.recut.clip_id);
+  return (
+    <section className="gf-results-sim" aria-labelledby="gf-results-sim-title">
+      <header>
+        <h2 id="gf-results-sim-title">Learning loop</h2>
+        {simulatedOnly ? null : <span className="gf-results-sim-pill">Simulated</span>}
+        {onReset && (
+          <button type="button" className="gf-results-reset" onClick={onReset}>
+            Reset demo
+          </button>
+        )}
+      </header>
+      <div className="gf-results-sim-posts">
+        {plan.clips.map((clip) => {
+          const hold = clip.simulated.metrics.hold_3s;
+          const delta = Math.round((hold / base - 1) * 100);
+          return (
+            <article key={clip.clip_id} className={`gf-results-sim-post is-${clip.outcome}`}>
+              <img src={clip.cover_url} alt="" />
+              <div>
+                <strong>{clip.hook}</strong>
+                <small>Opens on {clip.opening}</small>
+                <span>
+                  <b>{Math.round(hold * 100)}%</b> at 3s · {delta >= 0 ? "+" : ""}
+                  {delta}% vs typical {Math.round(base * 100)}%
+                </span>
+                <small>{clip.simulated.metrics.views.toLocaleString()} views · {Math.round(clip.simulated.metrics.completion_rate * 100)}% to the end</small>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      <div className="gf-results-learned-grid">
+        {plan.beliefs.map((belief) => (
+          <article key={belief.id} className="gf-results-belief">
+            <strong>{belief.headline}</strong>
+            {belief.counts.matching > 0 ? (
+              <>
+                <span className="gf-results-belief-bar" aria-hidden="true">
+                  <i style={{ width: `${Math.round(belief.confidence * 100)}%` }} />
+                </span>
+                <small>{belief.detail} · {Math.round(belief.confidence * 100)}% sure</small>
+              </>
+            ) : (
+              <small>{belief.detail} · next test</small>
+            )}
+          </article>
+        ))}
+      </div>
+      <article className="gf-results-sim-recut">
+        <figure>
+          <figcaption>Before</figcaption>
+          {parent && <video src={parent.media_url} poster={parent.cover_url} controls playsInline preload="metadata" />}
+        </figure>
+        <div>
+          <span className="gf-results-sim-chip">Hook: {plan.recut.before_kind} → {plan.recut.after_kind}</span>
+          <p className="is-old">“{plan.recut.before_hook}”</p>
+          <p>“{plan.recut.after_hook}”</p>
+          <small>Draft · needs approval · next test: {plan.recut.next_test.toLowerCase()}</small>
+        </div>
+        <figure>
+          <figcaption>After · new render</figcaption>
+          {after ? (
+            <video src={after.media_url} controls playsInline preload="metadata" />
+          ) : (
+            <div className="gf-results-sim-wait">Re-edit not rendered yet</div>
+          )}
+        </figure>
+      </article>
+    </section>
+  );
+}
+
 export function Results({
   w,
   factory,
@@ -1062,6 +1140,8 @@ export function Results({
   onReview,
   onEditingRules,
   onRehearse,
+  demo = null,
+  onResetDemo,
 }: {
   w: Workspace;
   factory: FactoryState;
@@ -1070,6 +1150,9 @@ export function Results({
   onReview?: (clip: Clip) => void;
   onEditingRules?: () => void;
   onRehearse?: () => void;
+  /** The learning-loop demo's simulated outcome (its own store, never account history). */
+  demo?: DemoResult | null;
+  onResetDemo?: () => void;
 }) {
   const data = useResultsData(w, visible);
   const [view, setView] = useState<StrategistView | null>(null);
@@ -1161,19 +1244,25 @@ export function Results({
     <div className="gf-results-page is-minimal">
       <header className="gf-results-top">
         <dl className="gf-results-strip">
-          <div><dt>Posted</dt><dd>{posted}</dd></div>
+          <div><dt>Posted</dt><dd>{demo && !posted ? demo.plan.clips.length : posted}</dd></div>
           <div><dt>Measuring</dt><dd>{measuring}</dd></div>
-          <div><dt>Learned</dt><dd>{learned.length}</dd></div>
+          <div><dt>Learned</dt><dd>{demo && !learned.length ? demo.plan.beliefs.filter((b) => b.counts.matching > 0).length : learned.length}</dd></div>
+          {demo && !posted && <div className="gf-results-sim-pill">Simulated</div>}
         </dl>
         <div className="gf-results-top-actions">
           <button type="button" className={`gf-results-ig${connected ? " is-on" : ""}`} onClick={toAccounts}>
             <i aria-hidden="true" /> Instagram: {connected ? "connected" : "connect"}
           </button>
-          {onRehearse && <DemoLoopButton compact onClick={onRehearse} />}
         </div>
       </header>
+      {onRehearse && (
+        <div className="gf-results-run">
+          <DemoLoopButton onClick={onRehearse} />
+        </div>
+      )}
+      {demo && <DemoOutcome demo={demo} onReset={onResetDemo} simulatedOnly={!posted} />}
       <p id="gf-results-now" className="gf-results-now" role="status">{story.headline}</p>
-      <section className="gf-results-learned" aria-labelledby="gf-results-learned-title">
+      {(!demo || learned.length > 0) && <section className="gf-results-learned" aria-labelledby="gf-results-learned-title">
         <h2 id="gf-results-learned-title">What we learned</h2>
         {learned.length ? (
           <div className="gf-results-learned-grid">
@@ -1186,9 +1275,9 @@ export function Results({
             ))}
           </div>
         ) : (
-          <p className="gf-results-empty">No measured posts yet.{onRehearse && <> <button type="button" className="gf-strategist-link" onClick={onRehearse}>See the learning loop</button></>}</p>
+          <p className="gf-results-empty">No measured posts yet.</p>
         )}
-      </section>
+      </section>}
       {posted > 0 && <PostedClips rows={rows} untracked={untracked} error={data.error} onAccounts={toAccounts} />}
       <details className="gf-results-more" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
         <summary>Strategist and tools{pendingCount + drafts.length > 0 ? ` · ${pendingCount + drafts.length} to review` : ""}</summary>
@@ -1199,7 +1288,6 @@ export function Results({
           onOpenStyleRules={onEditingRules}
           onView={onView}
           learnedExtra={<LearnedExtra memory={data.memory} />}
-          onDemo={onRehearse}
           extraWaitingCount={memoryPending.length + drafts.length}
           extraWaiting={
             <>
@@ -1254,7 +1342,6 @@ export function Results({
         visible={visible && moreOpen}
         onReview={onReview}
         onEditingRules={onEditingRules}
-        onRehearse={onRehearse}
       />}
         <div className="gf-results-workspace-tools">
           <button type="button" onClick={() => setManualOpen(true)}><Icon name="upload" size={15} /> Add a result by hand</button>

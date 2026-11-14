@@ -541,9 +541,14 @@ class GrowthLoop:
             return self._request(profile_id, request_id, payload, slots, kind="rehearsal",
                                  rule_id=expected_strategy_version_id, evidence=evidence)
 
-    def demo_recut(self, profile_id, *, request_id, clip_id, target_seconds, rule):
-        """Learning-loop demo: one real, unapproved length re-cut backed by SIMULATED evidence only."""
-        payload = {"kind": "demo_loop", "clip_id": clip_id, "target": target_seconds}
+    def demo_recut(self, profile_id, *, request_id, clip_id, hook, payoff_start, payoff_end, rule):
+        """Learning-loop demo: one real, unapproved hook re-edit backed by SIMULATED evidence only.
+
+        The clip opens on a sentence it already contains (hook-first teaser of that span) under a
+        title card with that line; everything else keeps the parent's rendered treatment.
+        """
+        payload = {"kind": "demo_loop_hook", "clip_id": clip_id, "hook": hook,
+                   "payoff": [payoff_start, payoff_end]}
         with self.store.lock:
             existing = self._existing(profile_id, request_id, payload)
             if existing:
@@ -553,15 +558,21 @@ class GrowthLoop:
             if not version_id:
                 raise HTTPException(409, "Approve this brand's Style rules once before running the demo re-edit.")
             clip = self._parent(profile_id, clip_id)
+            plan = clip["edit_plan"]
+            if not plan["start"] + craft.SETUP_MIN <= payoff_start < payoff_end <= plan["end"]:
+                raise HTTPException(422, "The new opening line must be spoken inside this clip, after its setup.")
             snapshot = self.campaigns.snapshot(clip["campaign_id"], profile_id, clip["video_id"], version_id)
-            body = self._body(clip, snapshot, variable="duration_seconds", value=float(target_seconds),
+            body = self._body(clip, snapshot, variable="hooks", value=[hook],
                               reason=f"Learning-loop demo (simulated results): {rule}.")
+            body = Production.model_validate({
+                **body.model_dump(), "structure": "hook_first", "payoff_start": payoff_start,
+                "payoff_end": payoff_end, "hook_format": "title_card", "changed_variable": "hook"})
             evidence = {"simulated_evidence": True, "evidence_kind": "simulated_observation_rehearsal",
                         "source_clip_id": clip_id, "source_sha256": clip["sha256"],
-                        "comparison": {"status": "simulated", "decision": "test", "metric": "completion_rate"},
-                        "proposal": {"status": "learning_demo", "variable": "duration_seconds",
-                                     "before": clip["edit_plan"]["end"] - clip["edit_plan"]["start"],
-                                     "after": float(target_seconds), "reason": rule}}
+                        "comparison": {"status": "simulated", "decision": "test", "metric": "hold_3s"},
+                        "proposal": {"status": "learning_demo", "variable": "hook",
+                                     "before": plan.get("hook"), "after": hook, "reason": rule,
+                                     "next_test": "jump_cuts"}}
             return self._request(profile_id, request_id, payload, [(clip, body)], kind="demo_loop",
                                  rule_id=version_id, evidence=evidence)
 

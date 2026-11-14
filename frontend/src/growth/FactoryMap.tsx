@@ -42,7 +42,6 @@ import { factoryBuilderApi, type FactoryBuilderView } from "./factoryBuilderApi"
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { workspaceApi } from "./workspaceApi";
 import { Icon } from "./Icon";
-import { DemoLoopButton } from "./LearningLoopDemo";
 import { LoopRehearsalControls, LoopRehearsalInspector, rehearsalModel, useLoopRehearsal } from "./LoopRehearsal";
 import "./factory-map.css";
 
@@ -1019,13 +1018,11 @@ export function FactoryTabs({
   factory,
   active,
   children,
-  onDemo,
 }: {
   w: Workspace;
   factory: FactoryState;
   active: boolean;
   children: React.ReactNode;
-  onDemo?: () => void;
 }) {
   const [tab, setTab] = useState<"episodes" | "map">(() => {
     try {
@@ -1082,7 +1079,6 @@ export function FactoryTabs({
           </button>
         ))}
       </div>
-      {onDemo && <DemoLoopButton compact onClick={onDemo} />}
       </div>
       <div
         id="gf-factory-panel-episodes"

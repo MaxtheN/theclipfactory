@@ -23,8 +23,10 @@ class LearningRecutBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     request_id: str = Field(min_length=1, max_length=128)
     clip_id: str = Field(min_length=1, max_length=200)
-    target_seconds: float = Field(ge=8, le=90)
-    rule: str = Field(default="Shorter cuts hold viewers", max_length=120)
+    hook: str = Field(min_length=3, max_length=80)
+    payoff_start: float = Field(ge=0)
+    payoff_end: float = Field(gt=0)
+    rule: str = Field(default="Question hooks hold viewers", max_length=120)
 
 
 def install(app):

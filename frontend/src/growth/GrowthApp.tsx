@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PanelLeft, Settings } from "lucide-react";
 import { useFactory } from "../useFactory";
 import { useCampaignWorkspace } from "./useCampaignWorkspace";
@@ -17,6 +17,7 @@ import {
 } from "./FactoryHome";
 import { FactoryTabs } from "./FactoryMap";
 import { LearningLoopDemo } from "./LearningLoopDemo";
+import { clearDemoResult, loadDemoResult, saveDemoResult, type DemoResult } from "./demoStore";
 import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
 import { QuickActions, type QuickAction } from "./QuickActions";
@@ -146,9 +147,23 @@ export function GrowthApp() {
   }, [contextKey]);
   // Leaving Factory closes the demo; it only lives inside that pane.
   useEffect(() => {
-    if (stage !== "factory") setDemoOpen(false);
+    if (stage !== "results") setDemoOpen(false);
   }, [stage]);
-  const demoInPane = demoOpen && !onboarding && usable && stage === "factory";
+  const demoInPane = demoOpen && !onboarding && usable && stage === "results";
+  // The demo's simulated outcome lives in its own per-brand store, never in account history.
+  const [demoResult, setDemoResult] = useState<DemoResult | null>(() => loadDemoResult(w.profileId));
+  useEffect(() => setDemoResult(loadDemoResult(w.profileId)), [w.profileId]);
+  const keepDemoResult = useCallback(
+    (result: DemoResult) => {
+      saveDemoResult(w.profileId, result);
+      setDemoResult(result);
+    },
+    [w.profileId],
+  );
+  function resetDemo() {
+    clearDemoResult(w.profileId);
+    setDemoResult(null);
+  }
   const current = views[stage];
   // Sub-pages: a quiet "← Back" sits top-left above the title.
   const back: Stage | undefined =
@@ -245,7 +260,7 @@ export function GrowthApp() {
   }
   function openRehearsal() {
     if (blocked || onboarding || !usable || currentContext.current !== contextKey) return;
-    go("factory"); // the demo plays inside the Factory pane, never as a separate window
+    go("results"); // the demo plays inside the Results pane, never as a separate window
     setDemoOpen(true);
   }
   function reviewClip(clip: Clip) {
@@ -614,12 +629,8 @@ export function GrowthApp() {
                 className="gf-stage"
                 hidden={onboarding || !usable || stage !== "factory"}
               >
-                {demoInPane && (
-                  <LearningLoopDemo profileId={w.profileId} open onClose={() => setDemoOpen(false)} />
-                )}
-                <div hidden={demoInPane}>
+                <div>
                   <FactoryTabs
-                    onDemo={openRehearsal}
                     w={w}
                     factory={factory}
                     active={!onboarding && stage === "factory"}
@@ -748,6 +759,15 @@ export function GrowthApp() {
                 className="gf-stage"
                 hidden={onboarding || stage !== "results"}
               >
+                {demoInPane && (
+                  <LearningLoopDemo
+                    profileId={w.profileId}
+                    open
+                    onClose={() => setDemoOpen(false)}
+                    onResult={keepDemoResult}
+                  />
+                )}
+                <div hidden={demoInPane}>
                 <Results
                   key={contextKey}
                   w={w}
@@ -757,7 +777,10 @@ export function GrowthApp() {
                   onReview={reviewClip}
                   onEditingRules={() => go("research")}
                   onRehearse={openRehearsal}
+                  demo={demoResult}
+                  onResetDemo={resetDemo}
                 />
+                </div>
               </div>
             </main>
           </div>

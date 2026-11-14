@@ -24,24 +24,31 @@ The failed attempt exposed an existing destructive replacement policy: it delete
 
 The actual isolated Haiku check found the bad negation hook, scored source faithfulness2/5 and proposed preserving the negation. One call cost$0.000598. Its55/100 AI editorial score and the old72 production score use different rubrics; do not describe that difference as improvement.
 
-## Live walkthrough: one button, about 60 seconds
+## Live walkthrough: one button, about 25 seconds
 
-Factory (next to Episodes | Factory map) and Results both have **▶ Run the learning loop**
-("Simulated results · real agents · real re-edit"). It opens a full-screen Factory map and
-runs across all stations: Footage → Listen/Watch → Scouts → Brief/Editor → Critic (top 3 real
-clips, scores) → Approve/Post (simulated) → Measure (bar race vs your typical, SIMULATED,
-deterministic) → Strategist (beliefs from production `evaluate_belief` over those simulated
-observations, in memory) → Style rules (return arc lights) → Editor re-cut: a **real,
-unapproved** render of the underperformer changing one variable (length, e.g. 31s → 27s),
-before/after playable. Next / Pause / Skip to re-edit / Esc; reduced motion is static.
+Results has the one **▶ Run the learning loop** button (the Factory map shows live state only).
+The demo plays inside the Results pane (sidebar and top bar stay) across all stations:
+Footage → Listen/Watch → Scouts → Brief/Editor → Critic (top 3 real clips) → Approve/Post
+(simulated) → Measure (3-second-hold race vs your typical, SIMULATED, deterministic) →
+Strategist (production `evaluate_belief` over those simulated observations, in memory) →
+Style rules → Editor re-edit. Story: the winner's real opening is a question or punchline;
+the underperformer's opens on setup. Beliefs: "Question hooks hold viewers" (+N% 3-sec hold)
+and "Tighter pacing wins" (shown as the next test when these clips do not test it). The
+re-edit is a **real, unapproved** render of the underperformer changing the hook: it opens on
+a question (or negation punchline) sentence spoken in that clip (`structure=hook_first` with
+that payoff span) under a ≤8-word title card of the same source words. Jump cuts are not a
+supported single-variable experiment, so they are queued as "Next test: jump cuts".
+Next / Pause / Skip to re-edit / Close (Esc); reduced motion is static.
 
-Honesty: one persistent "Simulated" pill; nothing posts; no synthetic metric is stored;
-the draft is unapproved. Code: `clip_factory/learning_demo.py`,
-`POST /api/demo-loop/{profile}/learning-loop` (+ `/recut`, `GET /api/demo-loop/loops/{id}`),
-`GrowthLoop.demo_recut`, `frontend/src/growth/LearningLoopDemo.tsx`, `FactoryStage` in
-`FactoryMap.tsx`. The recut request id is stable per clip/length, so a replay reuses the
-existing draft instantly; the first render took ~28 s on the founder-data copy.
-The old Demo rehearsal mode, Demo replay button and Strategist simulation drawer are removed.
+After a run, Results shows the simulated outcome (3 posted clips vs baseline, beliefs, the
+"Hook: setup → question" before/after) from a per-brand browser demo store that never mixes
+with account history; "Reset demo" clears it.
+
+Honesty: one "Simulated" pill; nothing posts; no synthetic metric is stored; the draft is
+unapproved. Code: `clip_factory/learning_demo.py`, `POST /api/demo-loop/{profile}/learning-loop`
+(+ `/recut`, `GET /api/demo-loop/loops/{id}`), `GrowthLoop.demo_recut`,
+`frontend/src/growth/LearningLoopDemo.tsx`, `demoStore.ts`, `FactoryStage` in `FactoryMap.tsx`.
+The recut request id is stable per clip/payoff, so a replay reuses the existing draft.
 
 ## Real production controls
 

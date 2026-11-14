@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, post } from "../api";
 import { FactoryStage } from "./FactoryMap";
 import { STATIONS, type Station, type StationId } from "./flowEvents";
+import type { DemoResult } from "./demoStore";
 import "./learning-loop-demo.css";
 
 type DemoClip = {
@@ -12,24 +13,36 @@ type DemoClip = {
   media_url: string;
   cover_url: string;
   outcome: "win" | "steady" | "loss";
-  simulated: { metrics: { views: number; completion_rate: number } };
+  opening: "question" | "punchline" | "setup";
+  simulated: { metrics: { views: number; completion_rate: number; hold_3s: number } };
 };
 type Belief = {
   id: string;
   headline: string;
   confidence: number;
+  detail: string;
   status: string;
   counts: { matching: number; beats: number };
   evidence: { clip_id: string; value: number; baseline: number; outcome: string }[];
 };
 export type LearningDemoPlan = {
   profile_id: string;
-  baseline: { metrics: { views: number; completion_rate: number } };
+  baseline: { metrics: { views: number; completion_rate: number; hold_3s: number } };
   clips: DemoClip[];
   clip_count: number;
   source_minutes: number | null;
   beliefs: Belief[];
-  recut: { clip_id: string; target_main_seconds: number; before_seconds: number; rule: string };
+  recut: {
+    clip_id: string;
+    before_kind: string;
+    before_hook: string;
+    after_kind: string;
+    after_hook: string;
+    payoff_start: number;
+    payoff_end: number;
+    rule: string;
+    next_test: string;
+  };
   engine: string;
   honesty: string;
 };
@@ -40,21 +53,21 @@ type LoopStatus = {
   slot_status?: string;
   error?: string | null;
   progress?: number | null;
-  output: null | { clip_id: string; seconds: number; approved: boolean; media_url: string };
+  output: null | { clip_id: string; seconds: number; approved: boolean; media_url: string; hook?: string };
 };
 
 type Card = "picks" | "posted" | "race" | "beliefs" | "recut";
 type Beat = { caption: string; ms: number; active: StationId[]; flow: string[]; card?: Card };
 const BEATS: Beat[] = [
-  { caption: "Footage in", ms: 2500, active: ["footage"], flow: [] },
-  { caption: "Listening and watching", ms: 3500, active: ["listen", "watch"], flow: ["footage>listen", "listen>watch"] },
-  { caption: "Scout swarm finds moments", ms: 3500, active: ["scout"], flow: ["watch>scout"] },
-  { caption: "Editor cuts every clip", ms: 3500, active: ["brief", "editor"], flow: ["scout>brief", "brief>editor"] },
-  { caption: "Critic picks the best three", ms: 6000, active: ["critic"], flow: ["editor>critic"], card: "picks" },
-  { caption: "Posted to Instagram", ms: 5000, active: ["approve", "post"], flow: ["critic>approve", "approve>post"], card: "posted" },
-  { caption: "Three days later", ms: 8000, active: ["measure"], flow: ["post>measure"], card: "race" },
-  { caption: "The Strategist learns", ms: 8500, active: ["strategist"], flow: ["measure>strategist"], card: "beliefs" },
-  { caption: "New rule → next batch", ms: 4000, active: ["rules"], flow: ["strategist>rules", "return"] },
+  { caption: "Footage in", ms: 1200, active: ["footage"], flow: [] },
+  { caption: "Listening and watching", ms: 1700, active: ["listen", "watch"], flow: ["footage>listen", "listen>watch"] },
+  { caption: "Scout swarm finds moments", ms: 1700, active: ["scout"], flow: ["watch>scout"] },
+  { caption: "Editor cuts every clip", ms: 1700, active: ["brief", "editor"], flow: ["scout>brief", "brief>editor"] },
+  { caption: "Critic picks the best three", ms: 3600, active: ["critic"], flow: ["editor>critic"], card: "picks" },
+  { caption: "Posted to Instagram", ms: 2600, active: ["approve", "post"], flow: ["critic>approve", "approve>post"], card: "posted" },
+  { caption: "Three days later", ms: 4600, active: ["measure"], flow: ["post>measure"], card: "race" },
+  { caption: "The Strategist learns", ms: 4800, active: ["strategist"], flow: ["measure>strategist"], card: "beliefs" },
+  { caption: "New rule → next batch", ms: 2100, active: ["rules"], flow: ["strategist>rules", "return"] },
   { caption: "Editor re-cuts with it", ms: 0, active: ["editor"], flow: ["demo:strategist>editor", "return"], card: "recut" },
 ];
 const RULES_BEAT = 8;
@@ -64,7 +77,7 @@ function stageStations(plan: LearningDemoPlan | null, step: number, loop: LoopSt
   const touched = new Set(BEATS.slice(0, Math.max(0, step)).flatMap((b) => b.active));
   const now = new Set(step >= 0 ? BEATS[step].active : []);
   const win = plan?.clips.find((c) => c.outcome === "win");
-  const lift = plan && win ? Math.round((win.simulated.metrics.completion_rate / plan.baseline.metrics.completion_rate - 1) * 100) : 0;
+  const lift = plan && win ? Math.round((win.simulated.metrics.hold_3s / plan.baseline.metrics.hold_3s - 1) * 100) : 0;
   const count = plan?.clip_count ?? 0;
   const numbers: Partial<Record<StationId, [string, string]>> = {
     footage: [plan?.source_minutes ? `${plan.source_minutes} min` : "1", "episode"],
@@ -76,7 +89,7 @@ function stageStations(plan: LearningDemoPlan | null, step: number, loop: LoopSt
     critic: ["3", "top picks"],
     approve: ["3", "picked"],
     post: ["3", "posted"],
-    measure: [`+${lift}%`, "retention"],
+    measure: [`+${lift}%`, "3-sec hold"],
     strategist: [String(plan?.beliefs.length ?? 0), "learned"],
     rules: ["1", "proposal"],
   };
@@ -97,7 +110,6 @@ function stageStations(plan: LearningDemoPlan | null, step: number, loop: LoopSt
 }
 
 const pct = (value: number) => `${Math.round(value * 100)}%`;
-const secs = (value: number) => `${Math.round(value)}s`;
 const reducedMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -132,7 +144,18 @@ function Info({ text }: { text: string }) {
 }
 
 /** One entry point for the whole learning-loop story: real clips, simulated results, real learning, real re-edit. */
-export function LearningLoopDemo({ profileId, open, onClose }: { profileId: string; open: boolean; onClose: () => void }) {
+export function LearningLoopDemo({
+  profileId,
+  open,
+  onClose,
+  onResult,
+}: {
+  profileId: string;
+  open: boolean;
+  onClose: () => void;
+  /** Called once the re-edit beat is reached (and again when the real render lands). */
+  onResult?: (result: DemoResult) => void;
+}) {
   const [plan, setPlan] = useState<LearningDemoPlan | null>(null);
   const [error, setError] = useState("");
   const [step, setStep] = useState(0);
@@ -143,12 +166,14 @@ export function LearningLoopDemo({ profileId, open, onClose }: { profileId: stri
 
   const startRecut = useCallback(async (next: LearningDemoPlan, fresh = false) => {
     setLoopError("");
-    const id = `learning-demo:${next.recut.clip_id}:${next.recut.target_main_seconds}${fresh ? `:${Date.now()}` : ""}`;
+    const id = `learning-demo-hook:${next.recut.clip_id}:${next.recut.payoff_start}${fresh ? `:${Date.now()}` : ""}`;
     try {
       let status = await post<LoopStatus>(`/api/demo-loop/${encodeURIComponent(profileId)}/learning-loop/recut`, {
         request_id: id,
         clip_id: next.recut.clip_id,
-        target_seconds: next.recut.target_main_seconds,
+        hook: next.recut.after_hook,
+        payoff_start: next.recut.payoff_start,
+        payoff_end: next.recut.payoff_end,
         rule: next.recut.rule,
       });
       for (let i = 0; i < 120 && alive.current; i++) {
@@ -206,10 +231,22 @@ export function LearningLoopDemo({ profileId, open, onClose }: { profileId: stri
     return () => window.removeEventListener("keydown", key);
   }, [open, onClose]);
 
+  const reachedRecut = !!plan && step === BEATS.length - 1;
+  const after = loop?.output ?? null;
+  useEffect(() => {
+    if (!reachedRecut || !plan) return;
+    onResult?.({
+      plan,
+      after: after && { clip_id: after.clip_id, media_url: after.media_url, hook: after.hook },
+      ran_at: new Date().toISOString(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reachedRecut, plan, after?.clip_id]);
+
   if (!open) return null;
   const beat = BEATS[step];
   const parent = plan?.clips.find((c) => c.clip_id === plan.recut.clip_id);
-  const base = plan?.baseline.metrics.completion_rate ?? 0;
+  const base = plan?.baseline.metrics.hold_3s ?? 0;
   const stations = plan ? stageStations(plan, step, loop) : stageStations(null, -1, null);
   const total = BEATS.reduce((sum, b) => sum + b.ms, 0);
   const elapsed = BEATS.slice(0, step).reduce((sum, b) => sum + b.ms, 0);
@@ -260,13 +297,14 @@ export function LearningLoopDemo({ profileId, open, onClose }: { profileId: stri
               </div>
             )}
             {beat.card === "race" && (
-              <div className="gf-lld-race" aria-label="Viewers who watched to the end">
-                <span className="gf-lld-label">Watched to the end · 3 days</span>
+              <div className="gf-lld-race" aria-label="Viewers still watching at 3 seconds">
+                <span className="gf-lld-label">Still watching at 3s · 3 days</span>
                 {plan.clips.map((clip, i) => {
-                  const rate = clip.simulated.metrics.completion_rate;
+                  const rate = clip.simulated.metrics.hold_3s;
                   return (
                     <div key={clip.clip_id} className={`gf-lld-lane is-${clip.outcome}`}>
                       <img src={clip.cover_url} alt="" />
+                      <span className="gf-lld-open">Opens on {clip.opening}</span>
                       <div className="gf-lld-track">
                         <i className="gf-lld-bar" style={{ width: pct(rate / 0.75), animationDelay: `${i * 150}ms` }} />
                         <b className="gf-lld-base" style={{ left: pct(base / 0.75) }} />
@@ -289,12 +327,24 @@ export function LearningLoopDemo({ profileId, open, onClose }: { profileId: stri
                 {plan.beliefs.map((belief, i) => (
                   <article key={belief.id} style={{ animationDelay: `${i * 200}ms` }}>
                     <h3>{belief.headline}</h3>
-                    <div className="gf-lld-confidence">
-                      <i style={{ width: pct(belief.confidence), animationDelay: `${300 + i * 200}ms` }} />
-                    </div>
+                    {belief.counts.matching > 0 && (
+                      <div className="gf-lld-confidence">
+                        <i style={{ width: pct(belief.confidence), animationDelay: `${300 + i * 200}ms` }} />
+                      </div>
+                    )}
                     <span className="gf-lld-label">
-                      <CountUp to={belief.confidence * 100} format={(n) => `${Math.round(n)}% sure`} delay={300 + i * 200} />
-                      <Info text={`${belief.counts.beats} of ${belief.counts.matching} matching clips beat your typical. ${plan.engine}.`} />
+                      {belief.counts.matching ? (
+                        <>
+                          <b className="gf-lld-effect">{belief.detail}</b> ·{" "}
+                          <CountUp to={belief.confidence * 100} format={(n) => `${Math.round(n)}% sure`} delay={300 + i * 200} />
+                          <Info text={`${belief.counts.beats} of ${belief.counts.matching} matching clips beat your typical. ${plan.engine}.`} />
+                        </>
+                      ) : (
+                        <>
+                          {belief.detail} · <b className="gf-lld-effect">Next test</b>
+                          <Info text="None of these three clips tested it yet, so it is queued as its own one-variable test." />
+                        </>
+                      )}
                     </span>
                   </article>
                 ))}
@@ -308,16 +358,19 @@ export function LearningLoopDemo({ profileId, open, onClose }: { profileId: stri
                 </figure>
                 <div className="gf-lld-diff">
                   <span className="gf-lld-chip">
-                    {secs(plan.recut.before_seconds)} → {loop?.output ? secs(loop.output.seconds) : "…"}
+                    Hook: {plan.recut.before_kind} → {plan.recut.after_kind}
                   </span>
+                  <p className="gf-lld-hook is-old">“{plan.recut.before_hook}”</p>
+                  <p className="gf-lld-hook">“{plan.recut.after_hook}”</p>
                   <span className="gf-lld-label">{plan.recut.rule}</span>
                   {loop?.output && <span className="gf-lld-chip is-soft">Loop #2 ready</span>}
                   {loop?.output && (
                     <span className="gf-lld-label">
                       Draft · needs approval
-                      <Info text="A real, unapproved MP4 changing one variable (length). Nothing posts. The next batch adopts the rule only after you approve it in Style rules." />
+                      <Info text="A real, unapproved MP4 changing one variable: the hook. It now opens on a line spoken in the clip, with that line as the title. Nothing posts." />
                     </span>
                   )}
+                  <span className="gf-lld-label">Next test: {plan.recut.next_test.toLowerCase()}</span>
                 </div>
                 <figure>
                   <span className="gf-lld-label">After · new render</span>

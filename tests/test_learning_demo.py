@@ -20,29 +20,46 @@ class FakeStore:
         self.writes += 1
 
 
-def clip(identifier, hook, seconds, score):
-    return {"id": identifier, "profile_id": "p", "campaign_id": "c", "sha256": "x" * 64, "duration": seconds,
-            "rank": {"score": score}, "edit_plan": {"start": 10.0, "end": 10.0 + seconds - 2, "hook": hook}}
+def word(text, at):
+    return {"text": text, "start": at, "end": at + 0.3}
 
 
-def test_build_picks_real_clips_and_learns_with_production_math():
-    store = FakeStore({"profiles": [{"id": "p", "name": "Brand"}], "clips": [
-        clip("a", "Why now? Why at all?", 34.0, 80),
-        clip("b", "You can't reverse engineer chips", 28.5, 79),
-        clip("c", "Silicon Valley is open about plans", 29.0, 77),
-        clip("d", "Something else entirely here", 27.0, 60),
+def clip(identifier, hook, seconds, score, teaser=None, removed=0):
+    row = {"id": identifier, "profile_id": "p", "campaign_id": "c", "sha256": "x" * 64, "duration": seconds,
+           "video_id": "v", "rank": {"score": score},
+           "edit_plan": {"start": 10.0, "end": 10.0 + seconds - 2, "hook": hook},
+           "craft": {"jump_cuts": {"removed": [{}] * removed}}}
+    if teaser:
+        row["craft"]["structure"] = {"resolved": "hook_first", "teaser": {"text": teaser}}
+    return row
+
+
+SPOKEN = "So what was the reaction to that? It was loud."
+TRANSCRIPT = {"segments": [{"start": 0, "end": 60, "words": [
+    word(text, 20.0 + 0.35 * i) for i, text in enumerate(SPOKEN.split())]}]}
+
+
+def test_build_tells_the_hook_story_with_production_math():
+    store = FakeStore({"profiles": [{"id": "p", "name": "Brand"}], "videos": [{"id": "v", "transcript": TRANSCRIPT}],
+                       "clips": [
+        clip("a", "Why now? Why at all?", 31.0, 80, teaser="is why at all? And why now?", removed=2),
+        clip("b", "You can't reverse engineer chips", 28.5, 79, teaser="You cannot reverse engineer"),
+        clip("c", "NY Post covered it", 32.0, 75, teaser="with its cover called Fang"),
         {**clip("child", "Derived", 25.0, 99), "parent_clip_id": "b"},
     ]})
     plan = build(store, "p")
     ids = [c["clip_id"] for c in plan["clips"]]
-    assert ids == ["b", "c", "a"] and "child" not in ids
-    assert [c["outcome"] for c in plan["clips"]] == ["win", "steady", "loss"]
-    rates = [c["simulated"]["metrics"]["completion_rate"] for c in plan["clips"]]
-    assert rates[0] > plan["baseline"]["metrics"]["completion_rate"] > rates[2]
+    assert ids[0] == "a" and ids[2] == "c" and "child" not in ids
+    assert [c["opening"] for c in plan["clips"]] == ["question", "punchline", "setup"]
+    holds = [c["simulated"]["metrics"]["hold_3s"] for c in plan["clips"]]
+    assert holds[0] > plan["baseline"]["metrics"]["hold_3s"] > holds[2]
     assert all(c["simulated"]["simulated"] for c in plan["clips"])
-    assert plan["beliefs"] and all(0 < b["confidence"] < 1 for b in plan["beliefs"])
-    assert plan["recut"]["clip_id"] == "a" and plan["recut"]["target_main_seconds"] < plan["recut"]["main_seconds"]
-    assert plan["recut"]["rule"] == "Under 30 seconds holds viewers"
+    assert [b["headline"] for b in plan["beliefs"]] == ["Question hooks hold viewers", "Tighter pacing wins"]
+    assert plan["beliefs"][0]["detail"].endswith("3-sec hold") and 0 < plan["beliefs"][0]["confidence"] < 1
+    recut = plan["recut"]
+    assert recut["clip_id"] == "c" and recut["before_kind"] == "setup" and recut["after_kind"] == "question"
+    assert recut["after_hook"] == "What was the reaction to that?"  # source words, lead-in dropped
+    assert recut["payoff_start"] >= 10.0 + 4 and recut["next_test"] == "Jump cuts"
     assert build(store, "p")["clips"][0]["simulated"] == plan["clips"][0]["simulated"]  # deterministic
     assert store.writes == 0
 
