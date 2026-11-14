@@ -13,6 +13,7 @@ import {
 } from "./parts";
 import { Icon } from "./Icon";
 import { CloudAccountRow } from "./CloudSignIn";
+import { AiModelCard } from "./AiModelCard";
 import { objectives, type BrandKit, type Campaign, type Profile } from "../types";
 import { campaignGoalBody } from "./learningState";
 import { CampaignBriefEditor } from "./CampaignBrief";
@@ -940,6 +941,7 @@ export function Setup({
           <CloudAccountRow showLocal />
         </section>
       )}
+      {part === "brand" && <AiModelCard />}
       <section
         className="gf-card gf-brief"
         aria-label={part === "brand" ? "Brand profile form" : "Goals & brief form"}

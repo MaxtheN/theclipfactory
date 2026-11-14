@@ -21,6 +21,7 @@ import {
   type WebsiteBriefApi,
   type WebsiteBriefResult,
 } from "./websiteBriefApi";
+import { AiModelHint } from "./AiModelCard";
 import "./website-brief.css";
 
 type Phase = "input" | "reading" | "review" | "error";
@@ -342,6 +343,7 @@ export function WebsiteBrief({
       {phase === "error" && (
         <div className="gf-wb-error" role="alert">
           <p>{error}</p>
+          <AiModelHint kind={research?.error_kind} onRetry={restart} />
           <div className="gf-wb-actions">
             <button type="button" className="gf-button ghost" onClick={restart}>
               Try another address

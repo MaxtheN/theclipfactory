@@ -1,0 +1,102 @@
+/* Brand profile → AI model card, and the website step's cloud hint. */
+.gf-app .gf-ai-model {
+  display: grid;
+  gap: var(--gf-s3, 12px);
+  padding: var(--gf-s4, 16px) var(--gf-s5, 20px);
+}
+.gf-app .gf-ai-model > h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.gf-app .gf-ai-choices {
+  display: grid;
+  gap: var(--gf-s2, 8px);
+}
+.gf-app .gf-ai-choice,
+.gf-app .gf-ai-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+.gf-app .gf-ai-choice {
+  padding: 10px 12px;
+  border: 1px solid var(--material-choice-line);
+  border-radius: 10px;
+}
+.gf-app .gf-ai-choice.is-on {
+  border-color: var(--material-focus);
+}
+.gf-app .gf-ai-choice > span,
+.gf-app .gf-ai-toggle > span {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.gf-app .gf-ai-choice small,
+.gf-app .gf-ai-toggle small,
+.gf-app .gf-ai-key-form small,
+.gf-app .gf-ai-muted {
+  color: var(--material-secondary);
+  font-size: 12px;
+  margin: 0;
+}
+.gf-app .gf-ai-sub {
+  margin-left: 26px;
+}
+.gf-app .gf-ai-key {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gf-s2, 8px);
+  font-size: 13px;
+}
+.gf-app .gf-ai-ok {
+  color: var(--material-ink);
+  margin-right: auto;
+}
+.gf-app .gf-ai-key-form {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.gf-app .gf-ai-key-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gf-s2, 8px);
+}
+.gf-app .gf-ai-key-row > input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.gf-app .gf-ai-field {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.gf-app .gf-ai-error {
+  color: var(--material-danger);
+  font-size: 12px;
+  margin: 0;
+}
+.gf-app .gf-ai-hint {
+  display: grid;
+  gap: var(--gf-s2, 8px);
+  margin-top: var(--gf-s2, 8px);
+}
+.gf-app .gf-ai-hint-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gf-s2, 8px);
+}
+.gf-app .gf-ai-link {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--material-focus);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
