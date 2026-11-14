@@ -158,6 +158,38 @@ Enforced in code, not only by text:
 - **CTA**: `Brief.cta` turns on the CTA end card (`app.py:render_team`).
 
 
+### Reference research and post copy
+
+**Research what works** (`references.py`, `references_api.py`, UI `ReferenceResearch.tsx`, reached from
+Style rules → "Learn from examples" and Studio → "Test a pattern from examples"). Separate from the brief's
+display-only reference links:
+
+- Input: 1–3 references per campaign. An upload (≤3 min, ≤200 MB) is stored under
+  `<data>/references/<research id>/` with `media_kind: "reference"`; it is never a `videos` source, never
+  rendered or posted. A link is recorded as **not inspected** unless it is a direct public `.mp4` (no
+  platform pages, no login, no redirects, public addresses only); an unreachable link is **missing
+  material**, never analyzed footage.
+- Analysis (one `reference_research` job on the serial heavy worker): Whisper with word timestamps, frames at
+  0, 0.5, 1, 1.5, 2, 3 s then every 3 s described through the storyboard observation prompt, and FFmpeg
+  measurements: time to first word, words per second, cuts (scene score ≥0.3), integrated LUFS (ebur128),
+  caption presence (vision text matching speech; size is not measured), on-screen text in the first 2 s,
+  hook-first guess (opening words recur later). Each observation is a fact plus exact evidence
+  (time range, quote or frame) and is validated against the reference.
+- ONE pattern from qwen3-vl:4b (admission guard before every call, one repair, abstain): it must cite
+  existing observation IDs and pick one craft variable (`hook` only when a target clip's own transcript
+  grounds the B hook; `opening_treatment` text_overlay/none; `caption_style`; `hook_format`; `structure`).
+  `value_a` is the control from the approved Style rules / chosen clip; limits (n, other creator/audience,
+  no performance data) are added by code. Evidence and inference are stored and shown apart.
+- **Use this direction** queues `variants={variable, [value_a, value_b]}` on the chosen campaign clip's range
+  through `campaign_render` (each clip records `reference_research_id` and `reference_pattern`) and saves a
+  **proposed** Style-rules version (next experiment + limits, `reference_research_id`); nothing is approved.
+
+**Post copy** (`post_copy.py`, `GET/POST /api/clips/{id}/post-copy`): a caption ≤2,200 characters from the
+clip's hook, its transcript span and the brief (served key message, CTA with "link in bio" when a link
+exists), ≤5 relevant hashtags (blocklist, none when the brief says no hashtags), must-avoid and unspoken
+numbers refused. The local model writes it as a `post_copy` job; otherwise a labelled template is saved.
+Post to Instagram prefills the caption from it and offers "Regenerate caption".
+
 ## 7. Learning and strategist hooks
 
 Measured experiments feed `learning_memory` into the next run's prompts and propose
