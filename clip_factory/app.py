@@ -2715,4 +2715,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     )
     install_brand_research_api(app, app.state.brand_research)
 
+    from .factory_builder_api import create as create_factory_builder
+
+    # Factory builder: capability requests → work orders → reviewed extension branches (explicit clicks only).
+    create_factory_builder(app, store, root)
+
     return app

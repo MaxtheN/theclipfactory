@@ -11,7 +11,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import craft, reframe
+from . import craft, extensions, reframe
 from .jobs import Jobs, WorkError
 from .store import now
 
@@ -1363,10 +1363,11 @@ def render_crafted(
     srt = output.with_suffix(".srt")
     caption_file = output.with_suffix(".captions.ass")
     hook_file = output.with_suffix(".hook.ass")
+    ext_file = output.with_suffix(".ext.ass")
     fonts_dir = output.with_name(output.stem + ".fonts")
     logo_copy = output.with_name(output.stem + ".logo.png")
     temporary = output.with_name(output.stem + ".partial.mp4")
-    scratch = [caption_file, hook_file, logo_copy]
+    scratch = [caption_file, hook_file, ext_file, logo_copy]
     needs_ass = bool(entries) or bool(hook) or end_card is not None or (teaser and options["transition"] == "flash")
     if needs_ass and " subtitles " not in available:
         raise WorkError(
@@ -1422,6 +1423,23 @@ def render_crafted(
                 encoding="utf-8",
             )
             overlays.append(f"subtitles={hook_file.name}{fontsdir}")
+        # Merged renderer extensions the plan names (none by default), drawn on top of everything.
+        if options.get("extensions"):
+            elapsed = itertools.accumulate(s["end"] - s["start"] for s in segments)
+            try:
+                ext = extensions.apply(
+                    options["extensions"], duration=total, hook_seconds=hook_seconds if hook else 0.0,
+                    end_card_start=end_card[0] if end_card else None, cuts=tuple(list(elapsed)[:-1]),
+                )
+            except extensions.ExtensionError as exc:
+                raise WorkError(f"Renderer extension refused: {exc}"[:600]) from None
+            if ext["ass"]:
+                if " subtitles " not in available:
+                    raise WorkError("This FFmpeg build lacks libass, so the selected renderer extension cannot be drawn.")
+                ext_file.write_text(ext["ass"], encoding="utf-8")
+                overlays.append(f"subtitles={ext_file.name}")
+            overlays.extend(ext["filters"])
+            record["extensions"] = ext["applied"]
 
         # 5. Filter graph.
         inputs: list[str] = []

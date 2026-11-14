@@ -86,6 +86,7 @@ LEGACY_PLAN = {
     "payoff_end": None,
     "transition": "cut",
     "crop_focus": "fixed",
+    "extensions": {},
 }
 VARIABLES = ("hook", "opening_treatment", "caption_style", "hook_format", "structure")
 VARIANT_VALUES = {
@@ -176,6 +177,9 @@ class CraftOptions(BaseModel):
     # detector, or with too few faces, the render keeps focus_x and records why.
     crop_focus: Literal["fixed", "auto_face"] = "auto_face"
     variants: Variants | None = None
+    # Merged renderer extensions to apply: {capability: settings}. Empty (the default) means none;
+    # only extensions committed in this checkout are accepted (clip_factory/extensions).
+    extensions: dict[str, dict] = Field(default_factory=dict, max_length=8)
     # Set on each expanded variant copy (group id, variable, value); never part of the plan.
     _variant: dict = PrivateAttr(default_factory=dict)
 
@@ -189,6 +193,18 @@ class CraftOptions(BaseModel):
                 raise ValueError("Each emphasis word or phrase must be 1–40 plain characters.")
             cleaned.append(text)
         return cleaned
+
+    @field_validator("extensions")
+    @classmethod
+    def merged_extensions(cls, value: dict) -> dict:
+        if not value:
+            return {}
+        from .extensions import ExtensionError, validate_selection
+
+        try:
+            return validate_selection(value)
+        except ExtensionError as exc:
+            raise ValueError(str(exc)) from None
 
     @field_validator("cta_text")
     @classmethod
