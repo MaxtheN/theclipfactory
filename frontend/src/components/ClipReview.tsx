@@ -269,8 +269,19 @@ export function ClipReview({
             Download cover
           </a>
         </details>
-        <Field label="Clip hook">
-          <input value={hook} onChange={(e) => setHook(e.target.value)} />
+        <Field
+          label="Clip hook"
+          hint={
+            clip.hook_rendered
+              ? "Burned into this video. Render a new campaign output to change it; the original stays unchanged."
+              : undefined
+          }
+        >
+          <input
+            value={hook}
+            disabled={clip.hook_rendered === true}
+            onChange={(e) => setHook(e.target.value)}
+          />
         </Field>
         <Field label="Clip caption">
           <textarea

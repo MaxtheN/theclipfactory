@@ -398,3 +398,12 @@ describe("source-aware production preflight", () => {
     expect(hasTranscript({ segments: [] })).toBe(true);
   });
 });
+
+it("keeps a burned-in campaign hook read-only and explains how to revise it", () => {
+  render(
+    <ClipReview state={readyState()} clip={{ ...clip, hook_rendered: true }} />,
+  );
+  expect(screen.getByLabelText("Clip hook")).toBeDisabled();
+  expect(screen.getByText(/Burned into this video/)).toBeInTheDocument();
+  expect(screen.getByLabelText("Clip caption")).toBeEnabled();
+});
