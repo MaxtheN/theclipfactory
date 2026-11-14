@@ -319,6 +319,193 @@ def test_all_six_roles_observed_performance_keeps_actual_provenance(harness):
     assert all(task["status"] == "completed" for task in run["tasks"])
 
 
+def test_schema_correction_repairs_excess_evidence_refs_before_dependent_calls(harness):
+    outputs = script()
+    oversized = copy.deepcopy(outputs[1])
+    oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17
+    outputs.insert(1, oversized)
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    assert titles(harness.models) == ["Plan", "Footage", "Footage", "Strategy", "Edits", "Critique"]
+    correction = harness.models.calls[2]["data"]["format_correction"]
+    assert correction[0]["field"] == "moments.0.evidence_refs"
+    assert "at most 16" in correction[0]["problem"]
+    assert run["status"] == "needs_review"
+    assert len(harness.rendered) == 1
+    assert next(task for task in run["tasks"] if task["role"] == "footage_analyst")["output"] == footage()
+
+
+def test_schema_correction_stops_after_one_failed_retry(harness):
+    oversized = footage()
+    oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17
+    harness.models = ScriptedModels([plan(), oversized, oversized])
+    harness.engine.models = harness.models
+    run = harness.create()
+    with pytest.raises(WorkError, match="invalid structured handoff"):
+        harness.engine.execute(run["id"], "job")
+    assert titles(harness.models) == ["Plan", "Footage", "Footage"]
+    assert not harness.rendered
+    assert harness.engine.get(run["id"])["status"] == "failed"
+
+
+def test_footage_keeps_grounded_moments_when_other_citations_are_outside_the_range(harness):
+    outputs = script()
+    outputs[1]["moments"].append({
+        "start": 0, "end": 0.25, "summary": "Unsupported frame timing", "evidence_refs": ["frame:1"]
+    })
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    accepted = next(task for task in run["tasks"] if task["role"] == "footage_analyst")["output"]
+    assert accepted["moments"] == footage()["moments"]
+    assert "omitted" in accepted["limitations"]
+    assert harness.models.calls[2]["data"]["footage"] == accepted
+    assert run["status"] == "needs_review"
+    assert len(harness.rendered) == 1
+
+
+def test_footage_keeps_valid_moments_when_another_row_violates_the_schema(harness):
+    outputs = script()
+    rejected = copy.deepcopy(outputs[1]["moments"][0])
+    rejected["evidence_refs"] = ["frame:0"] * 17
+    outputs[1]["moments"].append(rejected)
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    accepted = next(t for t in run["tasks"] if t["role"] == "footage_analyst")["output"]
+    assert accepted["moments"] == footage()["moments"]
+    assert "structured fields were invalid" in accepted["limitations"]
+    assert titles(harness.models) == ["Plan", "Footage", "Strategy", "Edits", "Critique"]
+    assert len(harness.rendered) == 1
+
+
+@pytest.mark.parametrize("case", ["valid", "wrong_source", "out_of_bounds", "no_evidence"])
+def test_rejected_footage_can_only_reuse_same_source_time_grounded_analysis(harness, case):
+    analysis = {"video_id": "source", "candidates": [{
+        "start": 0, "end": 2,
+        "reason": "Previously analyzed source window"
+    }]}
+    if case == "wrong_source":
+        analysis["video_id"] = "another-source"
+    elif case == "out_of_bounds":
+        analysis["candidates"][0]["end"] = 3
+    elif case == "no_evidence":
+        analysis["candidates"][0]["end"] = 0.25
+    harness.store.patch("videos", "source", analysis=analysis)
+    rejected = footage("source:invented")
+    harness.models = ScriptedModels([plan(), rejected, rejected] + script()[2:])
+    harness.engine.models = harness.models
+    if case != "valid":
+        run = harness.create()
+        with pytest.raises(WorkError):
+            harness.engine.execute(run["id"], "job")
+        assert not harness.rendered
+        return
+    run, _ = harness.execute()
+    assert run["status"] == "needs_review"
+    assert "Reused revalidated saved source analysis" in run["stop_reason"]
+    assert next(t for t in run["tasks"] if t["role"] == "footage_analyst")["status"] == "failed"
+    reused = next(t for t in run["tasks"] if t["role"] == "reuse_footage")
+    assert reused["kind"] == "tool" and reused["status"] == "completed"
+    assert reused["output"]["moments"][0]["evidence_refs"] == ["frame:0", "frame:1"]
+    assert analysis["candidates"][0]["reason"] not in json.dumps(harness.models.calls[3]["data"])
+    assert len(harness.rendered) == 1
+    assert not harness.store.all("clips")[0]["approved"]
+
+
+def test_schema_correction_honors_cancellation_before_retry(harness):
+    oversized = footage()
+    oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17
+    harness.models = ScriptedModels([plan(), oversized])
+    harness.engine.models = harness.models
+    harness.models.after_call = lambda calls: setattr(harness.jobs, "cancelled", calls == 2)
+    run = harness.create()
+    with pytest.raises(JobCancelled):
+        harness.engine.execute(run["id"], "job")
+    assert titles(harness.models) == ["Plan", "Footage"]
+    assert not harness.rendered
+    assert harness.engine.get(run["id"])["status"] == "cancelled"
+
+
+@pytest.mark.parametrize("role_index", [1, 3])
+def test_grounding_correction_revalidates_footage_and_editor_before_dependents(harness, role_index):
+    outputs = script()
+    rejected = copy.deepcopy(outputs[role_index])
+    rows = rejected["moments" if role_index == 1 else "candidates"]
+    rows[0]["end"] = 3
+    outputs.insert(role_index, rejected)
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    correction = harness.models.calls[role_index + 1]["data"]
+    assert correction["previous_handoff"] == rejected
+    assert correction["format_correction"][0]["field"] == "source_grounding"
+    assert run["status"] == "needs_review"
+    assert len(harness.rendered) == 1
+    assert harness.rendered[0]["end"] == 1
+
+
+def test_grounding_correction_honors_cancellation(harness):
+    rejected = footage()
+    rejected["moments"][0]["end"] = 3
+    harness.models = ScriptedModels([plan(), rejected])
+    harness.engine.models = harness.models
+    harness.models.after_call = lambda calls: setattr(harness.jobs, "cancelled", calls == 2)
+    run = harness.create()
+    with pytest.raises(JobCancelled):
+        harness.engine.execute(run["id"], "job")
+    assert titles(harness.models) == ["Plan", "Footage"]
+    assert not harness.rendered
+
+
+@pytest.mark.parametrize("invalid_angle", [
+    {"id": "angle-2", "moment_index": 1},
+    {"id": "angle-1"},
+    {"id": "angle-2", "objective": "traffic"},
+])
+def test_strategy_keeps_valid_angles_when_another_cannot_be_used(harness, invalid_angle):
+    outputs = script()
+    rejected = {**outputs[2]["angles"][0], **invalid_angle}
+    outputs[2]["angles"].append(rejected)
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    assert harness.models.calls[3]["data"]["strategy"] == strategy()
+    assert run["status"] == "needs_review"
+    assert "Omitted 1 invalid creative angles" in run["stop_reason"]
+    assert len(harness.rendered) == 1
+
+
+def test_editor_receives_only_accepted_moment_evidence_and_explicit_angle_ranges(harness):
+    harness.store.patch("videos", "source", transcript={"segments": [
+        {"start": 0, "end": 1, "text": "Unselected speech"}
+    ]})
+    run, _ = harness.execute()
+    editor = harness.models.calls[3]["data"]
+    assert set(run["context"]["evidence"]) >= {"frame:0", "frame:1", "transcript:0", "source:source"}
+    assert editor["evidence"] == {"frame:0": {"time": 0.5, "type": "sampled_frame"}}
+    assert editor["allowed_source_ranges"] == {
+        "angle-1": {"start": 0, "end": 2, "objective": "sales", "evidence_refs": ["frame:0"]}
+    }
+
+
+@pytest.mark.parametrize("role_index", [1, 3])
+def test_grounding_correction_stops_after_one_rejected_retry(harness, role_index):
+    outputs = script()[:role_index + 1]
+    rejected = outputs[role_index]
+    rejected["moments" if role_index == 1 else "candidates"][0]["end"] = 3
+    outputs.append(copy.deepcopy(rejected))
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run = harness.create()
+    with pytest.raises(WorkError):
+        harness.engine.execute(run["id"], "job")
+    assert len(harness.models.calls) == role_index + 2
+    assert not harness.rendered
+    assert harness.engine.get(run["id"])["status"] == "failed"
+
+
 @pytest.mark.parametrize("metrics,account", [({"views": None}, "account"), ({"views": 10}, "other-account")])
 def test_unknown_or_wrong_account_metrics_do_not_invent_performance(harness, metrics, account):
     seed_observations(harness.store)
@@ -344,8 +531,6 @@ def test_unknown_or_wrong_account_metrics_do_not_invent_performance(harness, met
         "tools",
         "truncated",
         "duplicate_roles",
-        "critic_ref",
-        "critic_index",
     ],
 )
 def test_invalid_handoff_fails_before_any_render(harness, bad):
@@ -370,11 +555,6 @@ def test_invalid_handoff_fails_before_any_render(harness, bad):
         outputs[0] = '{"summary":"incomplete", "tasks":['
     elif bad == "duplicate_roles":
         outputs[0]["tasks"][0]["role"] = "editor"
-    else:
-        outputs[4] = critique("revise")
-        outputs[4]["findings"][0]["evidence_refs"] = ["fake"] if bad == "critic_ref" else ["source:source"]
-        if bad == "critic_index":
-            outputs[4]["findings"][0]["candidate_index"] = 1
     harness.models = ScriptedModels(outputs)
     harness.engine.models = harness.models
     run = harness.create()
@@ -458,6 +638,94 @@ def test_default_two_revisions_exhaust_budget_without_approval(harness):
     assert result["review_status"] == "fail"
     assert harness.store.get("clips", result["clip_ids"][0])["approved"] is False
     assert harness.rendered[0]["hook"] == "Third edit"
+
+
+def test_invalid_revision_retains_validated_draft_with_unresolved_review(harness):
+    invalid = edits(hook="Rejected revision")
+    invalid["candidates"][0]["evidence_refs"] = ["source:invented"]
+    harness.models = ScriptedModels(script(verdict="revise") + [revision(), invalid, invalid])
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review"
+    assert "Revision rejected" in run["stop_reason"]
+    assert result["review_status"] == "fail"
+    assert len(harness.rendered) == 1
+    assert harness.rendered[0]["hook"] == "See the source"
+    clip = harness.store.get("clips", result["clip_ids"][0])
+    assert clip["approved"] is False
+    assert clip["team_review_status"] == "fail"
+    assert any(t["role"] == "editor" and t["iteration"] == 1 and t["status"] == "failed" for t in run["tasks"])
+
+
+@pytest.mark.parametrize("case", ["reference", "index", "schema"])
+def test_rejected_first_critic_allows_only_validated_unapproved_previews(harness, case):
+    outputs = script(verdict="revise")
+    if case == "reference":
+        outputs[-1]["findings"][0]["evidence_refs"] = ["source:invented"]
+    elif case == "index":
+        outputs[-1]["findings"][0]["candidate_index"] = 1
+    else:
+        outputs[-1]["findings"][0]["evidence_refs"] *= 17
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review"
+    assert "Critic review unavailable" in run["stop_reason"]
+    assert result["review_status"] == "unknown"
+    assert len(harness.rendered) == 1
+    clip = harness.store.all("clips")[0]
+    assert not clip["approved"] and clip["team_review_status"] == "unknown"
+    assert set(clip["team_checks"].values()) == {"unknown"}
+    assert next(t for t in run["tasks"] if t["role"] == "critic")["status"] == "failed"
+    assert titles(harness.models).count("Critique") == 1
+    assert run["permissions"] == {"publish": False, "ads": False}
+
+
+def test_rejected_critic_recheck_retains_prior_edit_with_its_original_review(harness):
+    rejected = critique("revise", "source:invented")
+    harness.models = ScriptedModels(script(verdict="revise") + [
+        revision(), edits(hook="Unreviewed replacement"), rejected
+    ])
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review"
+    assert "Critic recheck rejected" in run["stop_reason"]
+    assert result["review_status"] == "fail"
+    assert len(harness.rendered) == 1
+    assert harness.rendered[0]["hook"] == "See the source"
+    assert harness.rendered[0]["_team"]["team_findings"] == critique("revise")["findings"]
+    assert not harness.store.all("clips")[0]["approved"]
+    assert next(t for t in run["tasks"] if t["role"] == "critic" and t["iteration"] == 1)["status"] == "failed"
+    assert titles(harness.models).count("Critique") == 2
+
+
+def test_cancellation_during_critic_recheck_does_not_render_retained_drafts(harness):
+    harness.models = ScriptedModels(script(verdict="revise") + [
+        revision(), edits(hook="Replacement"), critique("pass")
+    ])
+    harness.engine.models = harness.models
+    harness.models.after_call = lambda calls: setattr(harness.jobs, "cancelled", calls == 8)
+    run = harness.create()
+    with pytest.raises(JobCancelled):
+        harness.engine.execute(run["id"], "job")
+    assert not harness.rendered
+    assert harness.engine.get(run["id"])["status"] == "cancelled"
+
+
+def test_invalid_editor_candidate_does_not_discard_other_validated_drafts(harness):
+    outputs = script()
+    invalid = copy.deepcopy(outputs[3]["candidates"][0])
+    invalid.update(end=3, hook="Rejected out-of-range candidate")
+    outputs[3]["candidates"].insert(0, invalid)
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review"
+    assert "Omitted 1 invalid editor candidates" in run["stop_reason"]
+    assert result["review_status"] == "pass"
+    assert len(harness.rendered) == 1
+    assert harness.rendered[0]["hook"] == "See the source"
+    assert harness.store.get("clips", result["clip_ids"][0])["approved"] is False
 
 
 @pytest.mark.parametrize("stop", ["repeated_edit", "repeated_instruction", "producer_stop"])
@@ -713,6 +981,7 @@ def test_footage_requires_time_associated_source_evidence_before_dependents(harn
         moment["end"] = 0.5
     elif case in {"transcript_touching_boundary", "frame_out_of_time"}:
         moment["end"] = 1
+    outputs.insert(1, copy.deepcopy(outputs[1]))
     harness.models = ScriptedModels(outputs)
     harness.engine.models = harness.models
     run = harness.create()
@@ -720,7 +989,7 @@ def test_footage_requires_time_associated_source_evidence_before_dependents(harn
         harness.engine.execute(run["id"], "job")
     saved = harness.engine.get(run["id"])
     assert saved["status"] == "failed"
-    assert titles(harness.models) == ["Plan", "Footage"]
+    assert titles(harness.models) == ["Plan", "Footage", "Footage"]
     assert next(t for t in saved["tasks"] if t["role"] == "footage_analyst")["status"] == "failed"
     assert not harness.rendered
     assert [clip["id"] for clip in harness.store.all("clips")] == ["previous"]

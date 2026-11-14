@@ -89,12 +89,18 @@ def test_revision_budget_is_strict_and_at_most_two(client, monkeypatch, scripted
     assert not scripted.calls and not client.app.state.store.all("team_runs")
 
 
-@pytest.mark.parametrize("verdict,review", [("revise", "fail"), ("unknown", "unknown")])
+@pytest.mark.parametrize("verdict,review", [
+    ("revise", "fail"), ("unknown", "unknown"), ("malformed", "unknown"), ("bad_reference", "unknown")
+])
 def test_unresolved_critic_blocks_approval_publish_and_schedule(
     client, monkeypatch, scripted, graph, verdict, review
 ):
     video = upload_mock(client, monkeypatch)
-    scripted.outputs = script(f"source:{video['id']}", verdict=verdict)
+    scripted.outputs = script(f"source:{video['id']}", verdict="unknown" if verdict in {"malformed", "bad_reference"} else verdict)
+    if verdict == "malformed":
+        scripted.outputs[-1] = '{"verdict":'
+    elif verdict == "bad_reference":
+        scripted.outputs[-1]["findings"][0]["evidence_refs"] = ["source:invented"]
     renders = install_mock_render(client, monkeypatch)
     run = terminal_run(client, submit(client, video, revision_budget=0))
     clip_id = run["clip_ids"][0]

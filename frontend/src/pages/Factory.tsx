@@ -378,7 +378,7 @@ function Editor({
               {error}
             </p>
           )}
-          <button type="submit" disabled={state.busy}>
+          <button type="submit" disabled={state.busy || sourceBusy}>
             Queue subtitled render <span aria-hidden="true">→</span>
           </button>
         </form>

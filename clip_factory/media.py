@@ -649,11 +649,14 @@ def render(
             )
         # cwd is output directory; filename consists exclusively of generated hexadecimal IDs.
         if caption_text:
+            # Use output-pixel coordinates instead of libass's small default script canvas.
+            font_size = 52 if caption_style == "standard" else 60
             style = (
-                "FontName=Arial,FontSize=18,MarginV=60,Outline=2"
-                if caption_style == "standard"
-                else "FontName=Arial,FontSize=22,MarginV=60,Outline=2,BorderStyle=3,BackColour=&H80000000"
+                f"PlayResX=1080,PlayResY=1920,FontName=Arial,FontSize={font_size},"
+                "MarginL=72,MarginR=72,MarginV=144,Outline=3,Shadow=0,Alignment=2"
             )
+            if caption_style == "high_contrast":
+                style += ",BorderStyle=3,BackColour=&H80000000"
             overlays += f",subtitles={srt.name}:force_style='{style}'"
         if hook:
             # Hook is creator/strategy text, not a fabricated source transcript.

@@ -207,6 +207,14 @@ describe("local production controls", () => {
       true,
     );
   });
+  it.each(["queued", "running"])("blocks manual rendering while this source has a %s job", (status) => {
+    mockFetch();
+    const state = testState();
+    state.data.videos = [{ id: "v1", name: "Source", duration: 60 }];
+    state.data.jobs = [{ id: "active", kind: "team", status, context: { video_id: "v1" } }];
+    render(<Factory state={state} />);
+    expect(screen.getByRole("button", { name: /Queue subtitled render/ })).toBeDisabled();
+  });
   it("uploads multipart video files with the contract file field", async () => {
     const fetch = mockFetch();
     const user = userEvent.setup();
