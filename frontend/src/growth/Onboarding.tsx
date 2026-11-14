@@ -185,6 +185,14 @@ export function Onboarding({
   intro?: boolean;
 }) {
   const [showIntro, setShowIntro] = useState(() => intro && !introSeen());
+  // The brand list loads after mount, so `intro` can turn true later; show the welcome then,
+  // but only once and never after the creator has already moved past the first screen.
+  const introOffered = useRef(intro);
+  useEffect(() => {
+    if (!intro || introOffered.current) return;
+    introOffered.current = true;
+    if (!introSeen()) setShowIntro(true);
+  }, [intro]);
   // "Your clip style": approved only by the creator's explicit click; saved as Style rules at launch.
   const [clipStyle, setClipStyle] = useState<ClipStyle>(DEFAULT_CLIP_STYLE);
   const [styleApproved, setStyleApproved] = useState<ClipStyle | null>(null);
