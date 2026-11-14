@@ -71,8 +71,8 @@ export function WebsiteBrief({
   pollMs = 700,
   initialUrl = "",
   disabled = false,
-  stepNumber = 1,
-  stepCount = 5,
+  stepNumber,
+  stepCount,
 }: {
   /** Fill onboarding and the first campaign brief from the creator-edited draft. Nothing is saved here. */
   onApply: (result: WebsiteBriefResult) => void;
@@ -252,7 +252,7 @@ export function WebsiteBrief({
       aria-labelledby={`${id}-title`}
     >
       <p className="gf-wb-step">
-        Step {stepNumber} of {stepCount}
+        {stepNumber && stepCount ? `Step ${stepNumber} of ${stepCount}` : "Before we start"}
       </p>
       <h1 id={`${id}-title`} ref={heading} tabIndex={-1}>
         {titles[phase]}
