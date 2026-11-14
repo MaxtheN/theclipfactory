@@ -154,8 +154,11 @@ describe("team production contract", () => {
       model_id: "qwen-small",
     });
   });
-  it("defaults old typed settings to team and saves a deliberate baseline option", async () => {
-    expect(editableSettings(settings).production_strategy).toBe("team");
+  it("defaults untyped settings to the swarm and saves a deliberate baseline option", async () => {
+    expect(editableSettings(settings).production_strategy).toBe("swarm");
+    expect(
+      editableSettings({ ...settings, production_strategy: "team" }).production_strategy,
+    ).toBe("team");
     const fetch = vi.fn(async () => json({}));
     vi.stubGlobal("fetch", fetch);
     render(<SettingsPage state={testState()} />);

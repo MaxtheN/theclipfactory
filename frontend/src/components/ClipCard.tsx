@@ -217,6 +217,7 @@ export function ClipCard({ state, clip }: { state: FactoryState; clip: Clip }) {
               {review.label}
             </Badge>
           )}
+          {clip.hypothesis && <Badge>{clip.hypothesis.replace(/_/g, " ")}</Badge>}
           {length && <span className="muted">{length}</span>}
         </div>
         {burned ? (

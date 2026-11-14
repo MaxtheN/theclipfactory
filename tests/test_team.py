@@ -1278,6 +1278,9 @@ def test_cuts_snap_to_nearby_speech_boundaries_never_outside_the_moment():
     # Snapping never breaks the duration limit.
     assert snap_to_speech(10.8, 18.2, transcript, 5, 60, 8.0) == (10.8, 18.2)
     assert snap_to_speech(1.0, 2.0, None, 0, 5, 180) == (1.0, 2.0)
+    # A cut three seconds into or before the end of a sentence moves out to the sentence's edge.
+    assert snap_to_speech(17.0, 33.0, transcript, 5, 60, 180) == (14.38, 33.0)
+    assert snap_to_speech(22.0, 36.5, transcript, 5, 60, 180) == (22.0, 40.2)
 
 
 def test_close_look_follows_the_action_and_moves_the_clip_to_its_peak(harness):
@@ -1428,3 +1431,118 @@ def test_a_prompt_over_the_local_limit_is_refused_with_what_to_shorten(harness):
     with pytest.raises(WorkError, match="over the 96,000 local limit"):
         harness.engine.execute(run["id"], "job")
     assert not harness.models.calls and not harness.rendered
+
+
+class SwarmModels(ScriptedModels):
+    """One idea per requested slot, placed inside the stretch named in the prompt."""
+
+    def __init__(self, empty=()):
+        super().__init__([])
+        self.empty = set(empty)
+
+    def run_batch(self, job_id, model_id, requests):
+        self.batches.append(copy.deepcopy(requests))
+        replies = []
+        for request in requests:
+            start = float(request["prompt"].split("Your stretch is ", 1)[1].split("s", 1)[0])
+            wanted = request["schema"]["properties"]["ideas"]["maxItems"]
+            kinds = ["question", "spectacle", "story"]
+            ideas = [
+                {"hypothesis": kinds[n], "start": start + 20 * n, "end": start + 20 * n + 15,
+                 "hook": f"{kinds[n]} at {start:.0f}", "caption": "Caption. #tag"}
+                for n in range(wanted)
+            ]
+            replies.append({"output": json.dumps({"ideas": [] if start in self.empty else ideas})})
+        return replies
+
+
+def swarm_source(harness, minutes=6, scenes=6, **transcript):
+    harness.video = harness.store.put("videos", {**harness.video, "duration": minutes * 60, **transcript})
+    harness.board = board("source", minutes * 60.0, scenes=scenes)
+
+
+def test_swarm_quotas_cover_every_scene_before_any_gets_a_second_idea():
+    value = board("v", 600.0, scenes=5)
+    for index, score in enumerate([0.2, 0.9, 0.5, 0.0, 0.7]):
+        value["scenes"][index]["score"] = score
+    value["scenes"][3]["usable"] = False
+    assert TeamEngine.swarm_quotas(value, 3) == {1: 1, 4: 1, 2: 1}  # fewer clips than scenes: the strongest
+    assert TeamEngine.swarm_quotas(value, 6) == {0: 1, 1: 2, 2: 1, 4: 2}
+    assert TeamEngine.swarm_quotas(value, 100) == {0: 3, 1: 3, 2: 3, 4: 3}  # never more than three a scene
+
+
+def test_swarm_makes_about_a_clip_a_minute_each_on_its_own_hypothesis(harness):
+    swarm_source(harness)
+    harness.use([])
+    harness.models = harness.engine.models = SwarmModels()
+    run, result = harness.execute(mode="swarm")
+    assert run["status"] == "needs_review" and run["mode"] == "swarm"
+    # Six minutes of footage: seven clips wanted, nine ideas asked (a little spare), nine delivered.
+    assert (result["target"], result["ideas"], result["clips"], result["stretches"]) == (7, 9, 9, 6)
+    assert [r["schema"]["properties"]["ideas"]["maxItems"] for r in harness.models.batches[0]] == [2, 2, 2, 1, 1, 1]
+    assert len(harness.rendered) == 9 and len(run["clip_ids"]) == 9
+    assert result["hypotheses"] == ["question", "spectacle"]
+    first = harness.rendered[0]
+    assert (first["start"], first["end"], first["hook"]) == (0.0, 15.0, "question at 0")
+    assert first["_team"]["hypothesis"] == "question" and first["_team"]["team_review_status"] == "not_applicable"
+    assert first["_team"]["scene_refs"] == ["scene:0"] and first["_team"]["team_run_id"] == run["id"]
+    # No committee: the only model work is one short prompt per stretch.
+    assert not harness.models.calls and len(harness.models.batches) == 1
+    assert {t["role"]: t["status"] for t in run["tasks"]} == {"swarm": "completed", "watch": "completed"}
+    assert "9 clips from 6 stretches" in run["stop_reason"]
+    assert harness.watched == [("job", "source", "qwen-small")]  # footage without a transcript is watched
+
+
+def test_swarm_cuts_a_talk_from_its_words_without_first_watching_every_scene(harness):
+    lines = [{"start": 10.0 * i, "end": 10.0 * i + 8, "text": "Six words are spoken right here."} for i in range(36)]
+    swarm_source(harness, has_audio=True, transcript={"speech": "throughout", "segments": lines})
+    harness.models = harness.engine.models = SwarmModels()
+    run, _ = harness.execute(mode="swarm")
+    assert harness.watched == [("job", "source", None)]  # measured signals only: clips start sooner
+    prompt = harness.models.batches[0][0]["prompt"]
+    assert "[0.0-8.0] Six words are spoken right here." in prompt and "[60.0-" not in prompt
+    # Cuts land on sentence boundaries: 0-15s becomes 0-18.2s (the sentence ending at 18s, plus air).
+    assert (harness.rendered[0]["start"], harness.rendered[0]["end"]) == (0.0, 18.2)
+    assert run["status"] == "needs_review"
+
+
+def test_swarm_skips_empty_stretches_and_survives_failed_renders(harness):
+    swarm_source(harness)
+    harness.models = harness.engine.models = SwarmModels(empty={0.0, 60.0})
+    original = harness.engine.render
+    calls = []
+
+    def render(job, video, candidate):
+        calls.append(candidate["hook"])
+        if len(calls) == 2:
+            raise WorkError("FFmpeg render failed.")
+        return original(job, video, candidate)
+
+    harness.engine.render = render
+    run, result = harness.execute(mode="swarm")
+    assert (result["ideas"], result["clips"], result["failed_renders"]) == (5, 4, 1)
+    assert "1 renders failed" in run["stop_reason"] and run["status"] == "needs_review"
+
+
+def test_swarm_with_nothing_to_cut_fails_plainly_and_cancellation_keeps_finished_clips(harness):
+    swarm_source(harness)
+    harness.models = harness.engine.models = SwarmModels(empty={60.0 * i for i in range(6)})
+    run = harness.create(mode="swarm")
+    with pytest.raises(WorkError, match="no clip ideas"):
+        harness.engine.execute(run["id"], "job")
+    assert harness.engine.get(run["id"])["status"] == "failed" and not harness.rendered
+    harness.models = harness.engine.models = SwarmModels()
+    original = harness.engine.render
+
+    def render(job, video, candidate):
+        result = original(job, video, candidate)
+        harness.jobs.cancelled = True
+        return result
+
+    harness.engine.render = render
+    run = harness.create(mode="swarm")
+    with pytest.raises(JobCancelled):
+        harness.engine.execute(run["id"], "job")
+    saved = harness.engine.get(run["id"])
+    assert saved["status"] == "cancelled" and len(saved["clip_ids"]) >= 1
+    assert len(harness.store.all("clips")) == len(saved["clip_ids"])

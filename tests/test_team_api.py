@@ -25,8 +25,11 @@ graph = offline_graph_fixture
 
 @pytest.fixture
 def scripted(client, monkeypatch, watched):
-    # These tests start production explicitly; autopilot has its own test below.
-    assert client.patch("/api/settings", json={"autonomy": "review"}).status_code == 200
+    # These tests start team production explicitly; autopilot and the swarm have their own tests.
+    assert (
+        client.patch("/api/settings", json={"autonomy": "review", "production_strategy": "team"}).status_code
+        == 200
+    )
     watched(client)
     models = ScriptedModels([])
     monkeypatch.setattr(client.app.state.models, "require", models.require)
@@ -841,6 +844,7 @@ def test_autopilot_starts_production_on_import_and_the_line_reports_each_stage(
     client, monkeypatch, scripted, worker_block
 ):
     assert client.patch("/api/settings", json={"autonomy": "auto"}).status_code == 200
+    assert client.get("/api/settings").json()["production_strategy"] == "team"  # PATCH kept the fixture's choice
     scripted.outputs = script()
     renders = install_mock_render(client, monkeypatch)
     video = upload_mock(client, monkeypatch)
@@ -922,3 +926,46 @@ def test_reviewer_can_approve_over_an_unresolved_self_check_explicitly(
     edited = client.put(f"/api/clips/{clip_id}", json={"caption": "Different caption"}).json()
     assert edited["approved"] is False and edited["approval_override"] is None
     assert client.put(f"/api/clips/{clip_id}", json={"approved": False}).status_code == 200
+
+
+def test_swarm_is_the_default_and_turns_one_source_into_many_reviewable_clips(client, monkeypatch, scripted):
+    assert client.put("/api/settings", json={"autonomy": "review"}).status_code == 200
+    assert client.get("/api/settings").json()["production_strategy"] == "swarm"
+    video = upload_mock(client, monkeypatch, duration=600.0)
+    renders = install_mock_render(client, monkeypatch)
+    batches = []
+
+    def ideas(job, model, requests):
+        batches.append(requests)
+        replies = []
+        for request in requests:
+            start = float(request["prompt"].split("Your stretch is ", 1)[1].split("s", 1)[0])
+            replies.append({"output": json.dumps({"ideas": [
+                {"hypothesis": "question", "start": start + 5, "end": start + 35,
+                 "hook": f"What happens at {start:.0f}?", "caption": "A caption. #clip"},
+            ]})})
+        return replies
+
+    monkeypatch.setattr(client.app.state.models, "run_batch", ideas)
+    job = client.post(f"/api/videos/{video['id']}/produce", json={}).json()
+    assert job["kind"] == "swarm"
+    finished = wait_job(client, job["id"], timeout=30)
+    assert finished["status"] == "completed", finished
+    # Two 300-second scenes, ten minutes of footage: twelve clips wanted, three ideas asked per scene,
+    # one given each time.
+    assert finished["result"]["clips"] == 2 and finished["result"]["target"] == 12
+    assert not scripted.calls  # no committee: one short prompt per stretch
+    assert [r["schema"]["properties"]["ideas"]["maxItems"] for r in batches[0]] == [3, 3]
+    clips = client.get("/api/clips").json()
+    assert len(clips) == 2 and {c["hypothesis"] for c in clips} == {"question"}
+    assert all(c["team_review_status"] == "not_applicable" and c["approved"] is False for c in clips)
+    assert sorted((c["start"], c["end"]) for c in clips) == [(5.0, 35.0), (305.0, 335.0)]
+    assert all(c["reason"] == "Hypothesis: question." and c["scene_refs"] for c in clips)
+    assert all(isinstance(render["_team"]["burn_hook"], bool) for render in renders)  # the hook goes on screen
+    assert len(renders) == 2
+    source = client.get("/api/factory").json()["sources"][0]
+    assert source["state"] == "needs_review" and source["headline"] == "2 clips ready for review"
+    assert {s["key"]: s["status"] for s in source["stages"]}["render"] == "done"
+    assert next(s for s in source["stages"] if s["key"] == "render")["detail"] == "2 clips"
+    # Swarm clips have no self-check to wait for: plain approval works.
+    assert client.put(f"/api/clips/{clips[0]['id']}", json={"approved": True}).status_code == 200

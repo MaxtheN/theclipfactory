@@ -23,7 +23,7 @@ export const objectives = [
   "custom",
 ] as const;
 export interface Settings {
-  production_strategy?: "team" | "baseline";
+  production_strategy?: "swarm" | "team" | "baseline";
   brand: string;
   objective: string;
   language: string;
@@ -110,6 +110,8 @@ export interface Clip {
   /** Why the factory picked this moment. */
   reason?: string;
   moment_summary?: string;
+  /** Swarm clips: the reason a viewer is expected to stop scrolling. */
+  hypothesis?: string | null;
   scene_refs?: string[];
   approval_override?: { at: string; review_status: string } | null;
   technical_checks?: unknown;
@@ -285,7 +287,7 @@ export interface TeamTask {
 export interface TeamRun {
   id: string;
   video_id: string;
-  mode: "team" | "baseline";
+  mode: "swarm" | "team" | "baseline";
   model_id: string;
   objective: string;
   status: string;

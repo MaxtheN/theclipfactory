@@ -61,7 +61,9 @@ class Settings(Body):
     total_budget: float = Field(default=0, ge=0, le=10000000)
     graph_version: str = Field(default="v22.0", pattern=r"^v\d+\.\d+$")
     custom_event: str = Field(default="", max_length=200)
-    production_strategy: Literal["team", "baseline"] = "team"
+    # swarm: many clips fast, one hypothesis each. team: a few clips with planning, self-check and
+    # revisions. baseline: one analysis pass.
+    production_strategy: Literal["swarm", "team", "baseline"] = "swarm"
     # Empty means automatic: the best installed local model.
     default_model: str = Field(
         default="", pattern=r"^(|qwen-small|qwen-large|ollama:[A-Za-z0-9][A-Za-z0-9._:/-]{0,199})$"
@@ -82,7 +84,7 @@ class SettingsPatch(Body):
     total_budget: float | None = Field(default=None, ge=0, le=10000000)
     graph_version: str | None = Field(default=None, pattern=r"^v\d+\.\d+$")
     custom_event: str | None = Field(default=None, max_length=200)
-    production_strategy: Literal["team", "baseline"] | None = None
+    production_strategy: Literal["swarm", "team", "baseline"] | None = None
     default_model: str | None = Field(
         default=None, pattern=r"^(|qwen-small|qwen-large|ollama:[A-Za-z0-9][A-Za-z0-9._:/-]{0,199})$"
     )
@@ -314,6 +316,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             app.state.models,
             transcribe=transcribe_task,
             can_transcribe=whisper_ready,
+            render_workers=3,
             render=render_team,
             storyboard=lambda job, video, model, progress=(5, 95): app.state.storyboards.ensure(
                 job, video, model, progress=progress
@@ -1076,6 +1079,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             {k: candidate[k] for k in ["start", "end", "hook", "caption", "objective"]}
         )
         metadata = candidate["_team"]
+        # Swarm clips carry their hypothesis on screen for the first seconds.
+        if metadata.pop("burn_hook", False) and body.hook.strip():
+            body.hook_overlay = True
         if metadata.get("strategy_snapshot"):
             direction = metadata["strategy_snapshot"]
             body.framing = direction["framing"]
@@ -1374,7 +1380,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 )
             run = app.state.team.create(video, config, model_id, mode=mode, revision_budget=revision_budget)
             job = jobs().submit(
-                "team" if mode == "team" else "pipeline",
+                mode if mode in {"team", "swarm"} else "pipeline",
                 lambda job: app.state.team.execute(run["id"], job),
                 video_id=identifier,
                 model_id=model_id,
@@ -1411,7 +1417,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         "watch": ["watch"],
         "select": ["producer", "footage_analyst", "shortlist", "closeup"],
         "edit": ["performance_analyst", "creative_strategist", "editor", "critic"],
-        "render": ["render"],
+        "render": ["render", "swarm"],
     }
     JOB_STAGE = {"transcribe": "listen", "storyboard": "watch", "analyze": "select", "render": "render"}
 
@@ -1476,8 +1482,15 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             )
             for key in list(STAGE_ROLES)[list(STAGE_ROLES).index(failed_at) + 1 :]:
                 statuses.pop(key, None)
+        if run and run.get("mode") == "swarm" and of(["swarm"]) and of(["swarm"])[0]["status"] != "queued":
+            # A swarm writes ideas and renders them side by side: once it is running, picking and
+            # writing are simply part of the line.
+            for key in ("select", "edit"):
+                statuses.setdefault(key, "done")
         if tasks and run["status"] == "needs_review":
-            rendered = sum(1 for t in of(["render"]) if t["status"] == "completed")
+            rendered = sum(1 for t in of(["render"]) if t["status"] == "completed") or (
+                len(run.get("clip_ids", [])) if run.get("mode") == "swarm" else 0
+            )
             if rendered:
                 details["render"] = f"{rendered} clip{'s' if rendered != 1 else ''}"
             for key in ("select", "edit", "render"):

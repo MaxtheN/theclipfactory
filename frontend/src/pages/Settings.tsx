@@ -13,7 +13,9 @@ export function editableSettings(s: Settings): Settings {
     clip_count: CLIP_COUNTS.includes(count) ? count : 3,
     brand: s.brand ?? "",
     production_strategy:
-      s.production_strategy === "baseline" ? "baseline" : "team",
+      s.production_strategy === "baseline" || s.production_strategy === "team"
+        ? s.production_strategy
+        : "swarm",
     objective: s.objective ?? "discovery",
     language: s.language ?? "en",
     autonomy: s.autonomy ?? "auto",
@@ -166,17 +168,18 @@ export function SettingsPage({ state }: { state: FactoryState }) {
           </Field>
           <Field
             label="Production strategy"
-            hint="Team adds a self-check and revisions. Studio buttons can override this for one run."
+            hint="Swarm makes many clips fast, each on a different hypothesis. Team makes a few, with planning and a self-check."
           >
             <select
-              value={draft.production_strategy ?? "team"}
+              value={draft.production_strategy ?? "swarm"}
               onChange={(e) =>
                 update(
                   "production_strategy",
-                  e.target.value as "team" | "baseline",
+                  e.target.value as "swarm" | "team" | "baseline",
                 )
               }
             >
+              <option value="swarm">Swarm — many clips, about one per minute of footage</option>
               <option value="team">Team — bounded collaborative review</option>
               <option value="baseline">
                 Baseline — existing variant pipeline

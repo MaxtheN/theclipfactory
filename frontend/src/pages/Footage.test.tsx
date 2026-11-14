@@ -142,7 +142,7 @@ describe("factory settings", () => {
       autonomy: "auto",
       default_model: "qwen-small",
       clip_count: 5,
-      production_strategy: "team",
+      production_strategy: "swarm",
     });
   });
   it("keeps a saved default model visible when it is no longer installed", () => {

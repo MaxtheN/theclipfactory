@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { endpoint, put } from "../api";
 import { ClipCard } from "../components/ClipCard";
 import { Empty } from "../components/ui";
 import type { Tab } from "../navigation";
@@ -17,8 +18,13 @@ export function Clips({
 }) {
   const [filter, setFilter] = useState<Filter>("Needs review");
   const [source, setSource] = useState("");
+  const [hypothesis, setHypothesis] = useState("");
+  const hypotheses = [
+    ...new Set(state.data.clips.map((clip) => clip.hypothesis).filter((h): h is string => !!h)),
+  ].sort();
   const clips = newestFirst(state.data.clips).filter(
-    (clip) => !source || clip.video_id === source,
+    (clip) =>
+      (!source || clip.video_id === source) && (!hypothesis || clip.hypothesis === hypothesis),
   );
   const counts: Record<Filter, number> = {
     "Needs review": clips.filter((clip) => !clip.approved).length,
@@ -30,6 +36,15 @@ export function Clips({
   );
   const sources = state.data.videos.filter((video) =>
     state.data.clips.some((clip) => clip.video_id === video.id),
+  );
+  // One click for a wall of swarm clips. Clips whose self-check flagged something are left for
+  // an individual decision.
+  const approvable = shown.filter(
+    (clip) =>
+      !clip.approved &&
+      (!clip.team_run_id ||
+        clip.team_review_status === "not_applicable" ||
+        clip.team_review_status === "pass"),
   );
   if (!state.data.clips.length)
     return (
@@ -78,6 +93,34 @@ export function Clips({
               </option>
             ))}
           </select>
+        )}
+        {hypotheses.length > 1 && (
+          <select
+            aria-label="Filter by hypothesis"
+            value={hypothesis}
+            onChange={(event) => setHypothesis(event.target.value)}
+          >
+            <option value="">All hypotheses</option>
+            {hypotheses.map((name) => (
+              <option key={name} value={name}>
+                {name.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+        )}
+        {approvable.length > 1 && (
+          <button
+            className="secondary small"
+            disabled={state.busy}
+            onClick={() =>
+              void state.run(async () => {
+                for (const clip of approvable)
+                  await put(endpoint("clips", clip.id), { approved: true });
+              }, `${approvable.length} clips approved.`)
+            }
+          >
+            Approve all {approvable.length} shown
+          </button>
         )}
       </div>
       {!shown.length ? (
