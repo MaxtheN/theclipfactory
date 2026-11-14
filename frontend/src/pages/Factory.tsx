@@ -55,6 +55,11 @@ function Editor({ state, video }: { state: FactoryState; video: Video }) {
     (m) =>
       m.installed === true && (m.id.startsWith("qwen") || m.kind === "llm"),
   );
+  const productionReady =
+    !state.errors.models &&
+    !state.errors.system &&
+    state.data.system?.model_runtime === true &&
+    installed.some((m) => m.id === model);
   const analysisJob = state.data.jobs.find(
     (job) =>
       job.kind === "analyze" &&
@@ -157,11 +162,38 @@ function Editor({ state, video }: { state: FactoryState; video: Video }) {
           >
             Analyze video
           </button>
+          <button
+            disabled={state.busy || !productionReady}
+            onClick={() => {
+              if (!productionReady) return;
+              void state.run(
+                () =>
+                  post(endpoint("videos", video.id, "produce"), {
+                    model_id: model,
+                  }),
+                "Variant pipeline queued. It transcribes audio, analyzes moments, and renders up to 3 clips serially; review the job result and clips.",
+              );
+            }}
+          >
+            Produce variants
+          </button>
         </div>
         {!installed.length && (
           <p className="muted">
             No local analysis model installed. The manual range editor works
             without one.
+          </p>
+        )}
+        <p className="muted">
+          Produce variants runs the full local pipeline: transcribe when audio
+          is present, analyze, then render up to 3 variants. Requires an
+          installed analysis model and ready runtime; audio transcription also
+          requires Whisper. Clips still need your review.
+        </p>
+        {!productionReady && (
+          <p className="muted">
+            Set up the runtime and install the selected analysis model in Models
+            to enable variant production.
           </p>
         )}
         <h3>Suggested moments</h3>

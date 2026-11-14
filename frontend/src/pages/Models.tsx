@@ -10,6 +10,7 @@ import {
   ReadOnlyValue,
 } from "../components/ui";
 import { Jobs } from "../components/Jobs";
+import { Narration } from "../components/Narration";
 export function Models({ state }: { state: FactoryState }) {
   const [consent, setConsent] = useState<Record<string, boolean>>({});
   const [prompt, setPrompt] = useState("");
@@ -144,6 +145,7 @@ export function Models({ state }: { state: FactoryState }) {
           </div>
         )}
       </Section>
+      <Narration state={state} />
       <div className="two-col">
         <Section
           title="Inference playground"

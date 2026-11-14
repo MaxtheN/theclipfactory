@@ -3,6 +3,7 @@ import { endpoint, post, remove } from "../api";
 import type { Clip, InstagramStatus, Settings } from "../types";
 import type { FactoryState } from "../useFactory";
 import { Badge, Empty, Field, Section, ReadOnlyValue } from "../components/ui";
+import { PaidSetup } from "../components/PaidSetup";
 export function publishingGate(
   clip: Clip | undefined,
   settings: Settings | null,
@@ -15,6 +16,18 @@ export function publishingGate(
   if (!clip) reasons.push("Select a clip.");
   else if (clip.approved !== true)
     reasons.push("Approve this clip in Factory.");
+  if (
+    clip &&
+    (clip.publish_attempt ||
+      clip.instagram_media_id ||
+      clip.published_at ||
+      ["published", "publishing", "publish_needs_reconciliation"].includes(
+        clip.status || "",
+      ))
+  )
+    reasons.push(
+      "This clip has a publish attempt or published media. Reconcile with Meta before any retry; duplicate publishing is blocked.",
+    );
   if (settings?.publishing_enabled !== true)
     reasons.push("Enable publishing explicitly in Settings.");
   if (status?.connected !== true)
@@ -23,30 +36,8 @@ export function publishingGate(
     reasons.push("Publishing capability is unavailable or unknown.");
   return reasons;
 }
-export function isPublicHttps(value: string): boolean {
-  try {
-    const url = new URL(value);
-    const host = url.hostname.toLowerCase();
-    return (
-      url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      !!host &&
-      host.includes(".") &&
-      !host.endsWith(".local") &&
-      !host.endsWith(".localhost") &&
-      host !== "localhost" &&
-      host !== "0.0.0.0" &&
-      !/^127\./.test(host) &&
-      !/^10\./.test(host) &&
-      !/^192\.168\./.test(host) &&
-      !/^172\.(1[6-9]|2\d|3[01])\./.test(host) &&
-      !host.startsWith("[")
-    );
-  } catch {
-    return false;
-  }
-}
+export { isPublicHttps } from "../urlSafety";
+import { isPublicHttps } from "../urlSafety";
 export function Instagram({ state }: { state: FactoryState }) {
   const [token, setToken] = useState("");
   const [account, setAccount] = useState("");
@@ -313,6 +304,7 @@ export function Instagram({ state }: { state: FactoryState }) {
           events are separate observations, not attributed conversions.
         </p>
       </Section>
+      <PaidSetup state={state} />
     </>
   );
 }

@@ -89,8 +89,8 @@ export function Results({ state }: { state: FactoryState }) {
       <div className="banner">
         <strong>Unknown is not zero.</strong>
         <span>
-          Performance is shown only when observed. Organic, paid, and manual
-          sources remain distinct.
+          Performance is shown only when observed. Media insights may include
+          boosts; paid ad-account reads and manual observations remain separate.
         </span>
       </div>
       <Section
@@ -109,7 +109,7 @@ export function Results({ state }: { state: FactoryState }) {
                 <h3>{row.name || row.clip_id}</h3>
                 <p className="muted">Objective: {row.objective || "Unknown"}</p>
                 <div className="two-col">
-                  <MetricGroup title="Organic" metrics={row.organic} />
+                  <MetricGroup title="Media insights" metrics={row.organic} />
                   <MetricGroup title="Paid" metrics={row.paid} />
                 </div>
                 <dl className="info-list">

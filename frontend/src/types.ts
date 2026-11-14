@@ -88,6 +88,10 @@ export interface Clip {
   status?: string;
   instagram_media_id?: string | null;
   published_at?: string | null;
+  instagram_account_id?: string | null;
+  publish_attempt?: string | null;
+  warning?: string | null;
+  subtitles_burned?: boolean | null;
 }
 export interface InstagramStatus {
   connected?: boolean;
@@ -124,3 +128,21 @@ export interface Data {
   analytics: Analytics | null;
 }
 export type Resource = keyof Data;
+
+export interface AdAccount {
+  id: string;
+  name?: string;
+  currency?: string;
+  [key: string]: unknown;
+}
+export interface AdAccounts {
+  accounts: AdAccount[];
+  supported?: boolean;
+  note?: string;
+}
+export interface AdInsights {
+  rows: unknown[];
+  source?: unknown;
+  attribution?: unknown;
+  note?: string;
+}

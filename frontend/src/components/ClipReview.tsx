@@ -14,6 +14,7 @@ export function ClipReview({
   const [hook, setHook] = useState(clip.hook || "");
   const [rating, setRating] = useState("3");
   const [notes, setNotes] = useState("");
+  const [coverError, setCoverError] = useState(false);
   useEffect(() => {
     setCaption(clip.caption || "");
     setHook(clip.hook || "");
@@ -39,6 +40,51 @@ export function ClipReview({
           {clip.objective || "Unknown objective"} ·{" "}
           {clip.status || "Unknown status"}
         </p>
+        {clip.warning && (
+          <p className="render-warning" role="alert">
+            Render warning: {clip.warning}
+          </p>
+        )}
+        <p className="muted">
+          Subtitles burned in:{" "}
+          {clip.subtitles_burned === true
+            ? "Yes"
+            : clip.subtitles_burned === false
+              ? "No"
+              : "Unknown"}
+        </p>
+        {clip.publish_attempt && (
+          <p className="muted">
+            Publish attempt recorded: {clip.publish_attempt}. Reconcile with
+            Meta before retrying.
+          </p>
+        )}
+        <details>
+          <summary>Cover frame</summary>
+          <p className="muted">
+            A frame from the rendered clip. No invented text overlays.
+          </p>
+          {!coverError ? (
+            <img
+              className="cover-preview"
+              src={endpoint("clips", clip.id, "cover")}
+              alt={`Cover frame for ${clip.name}`}
+              loading="lazy"
+              onError={() => setCoverError(true)}
+            />
+          ) : (
+            <p role="alert" className="error-text">
+              Cover unavailable. The backend did not provide a cover image.
+            </p>
+          )}
+          <a
+            className="button secondary small"
+            href={endpoint("clips", clip.id, "cover/download")}
+            download
+          >
+            Download cover
+          </a>
+        </details>
         <Field label="Clip hook">
           <input value={hook} onChange={(e) => setHook(e.target.value)} />
         </Field>
