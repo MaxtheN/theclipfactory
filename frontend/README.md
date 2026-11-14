@@ -36,6 +36,17 @@ Vite binds to `127.0.0.1` and proxies `/api` to `http://127.0.0.1:8765` without 
 - Autonomy values are passed to the backend for validation. Review is the default; automatic local production never overrides clip approval or publishing gates. Ads settings do not create campaigns.
 - The only browser persistence is `clip-factory-tab`, a navigation preference. All product data lives in backend state.
 
+## Follow-up workflow integration
+
+- **Produce variants** submits `POST /api/videos/{id}/produce { model_id }` for the selected source. It is enabled only for a known ready runtime and installed selected model. Backend serially transcribes audio (Whisper required when needed), analyzes, and renders up to three variants; output still needs review.
+- **Kokoro narration** submits `POST /api/narrations { text }`. Completed `narration` jobs expose audio/download only when `result.download_url` matches a root-relative `/api/narrations/{id}/download` URL; external origins and path traversal are rejected. Audio is not automatically mixed into clips.
+- Clip review shows backend `warning` and `subtitles_burned` honestly (missing subtitle status is Unknown). Cover images and downloads use `/api/clips/{id}/cover` and `/api/clips/{id}/cover/download`, with no synthesized overlays.
+- Existing `publish_attempt`, `instagram_media_id`, `published_at`, publishing/published/reconciliation statuses block another publish action. The backend must reconcile uncertain external writes; the UI never retries them automatically.
+- Meta media metrics are labeled **Media insights**, not Organic: counts may include boosts. `paid` remains separate and unknown when not reported.
+- Paid setup requires actual **ads_read** permission and account access. `/api/ads/accounts` is fetched only on user request; `/api/ads/sync { ad_account_id }` queues a real read. Stored `/api/ads/insights` rows refresh only with an explicit button and retain returned source/attribution and raw account/ad identifiers. Stored rows may span accounts; the selected account controls sync only. Rows are never guessed to match clips. None of these endpoints are included in polling.
+- Validation-only `/api/ads/preflight` sends `{ clip_id, ad_account_id, destination_url, lifetime_budget_minor, duration_days, name }`. It requires an explicitly enabled ads opt-in, positive total settings budget, an accessible USD account, and a published Reel with `instagram_account_id` matching the connected account's `account.id`. Missing ownership is not assumed. Lifetime budget is whole **USD cents** (100 = $1.00), while settings budgets are **USD**, and preflight cannot exceed the configured total.
+- Preflight returns a job with a validation result (`can_create: false`). This UI has no ad creation or activation flow and performs no spend. Campaigns must be managed in Meta Ads Manager. Additional endpoints not yet present in a backend produce visible errors rather than simulated success.
+
 ## Test coverage
 
 Vitest / Testing Library cover API cookie behavior, multipart uploads, real error messages, invalid/HTML responses, resource retry and polling, nullable metrics, manual provenance, license consent, render ranges/payloads, approval/caption editing, publish gating, token clearing, read-only capabilities, and the rendering error boundary. Tests stub requests only inside test files; production has no mock API or fixtures.

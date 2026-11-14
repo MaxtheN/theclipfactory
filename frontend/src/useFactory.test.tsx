@@ -59,6 +59,9 @@ describe("workspace state and polling", () => {
     expect(
       fetch.mock.calls.filter(([path]) => path === "/api/settings"),
     ).toHaveLength(1);
+    expect(
+      fetch.mock.calls.some(([path]) => path.startsWith("/api/ads/")),
+    ).toBe(false);
     unmount();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(8000);

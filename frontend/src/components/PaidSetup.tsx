@@ -116,7 +116,8 @@ export function PaidInsights({ insights }: { insights: AdInsights }) {
       <p className="muted">
         Paid ad-account observations are shown separately. Ad IDs are never
         guessed to correspond to local clips; these rows are not merged into
-        media insights.
+        media insights. Stored rows may span accounts; the selected account
+        controls sync only, and account identifiers remain backend-reported.
       </p>
       {!insights.rows.length ? (
         <Empty title="No paid insight rows reported">

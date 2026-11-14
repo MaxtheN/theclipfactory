@@ -173,7 +173,7 @@ export function SettingsPage({ state }: { state: FactoryState }) {
           </span>
         </label>
         <div className="form-grid">
-          <Field label="Daily budget">
+          <Field label="Daily budget (USD)">
             <input
               required
               type="number"
@@ -190,7 +190,7 @@ export function SettingsPage({ state }: { state: FactoryState }) {
               }
             />
           </Field>
-          <Field label="Total budget">
+          <Field label="Total budget (USD)">
             <input
               required
               type="number"
