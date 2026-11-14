@@ -10,6 +10,7 @@ import {
 } from "./workspaceApi";
 import { Disclosure, Field, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
+import { FactoryWorkflow } from "./FactoryWorkflow";
 
 export function onboardingBodies(input: {
   name: string;
@@ -265,26 +266,18 @@ export function Onboarding({
       aria-label="Workspace onboarding"
     >
       <div className="gf-onboarding-intro">
-        <span className="gf-eyebrow">YOUR WORKSPACE</span>
-        <h2>Start with your audience.</h2>
+        <span className="gf-eyebrow">YOU DIRECT. AGENTS PRODUCE.</span>
+        <h2>A small brief.<br />A better first cut.</h2>
         <p>
-          Set this once for your podcast or brand. You can edit it later in
-          Workspace settings.
+          Tell us who you’re creating for and what you want to achieve.
+          Your agents use that context to find moments and shape clips,
+          while you keep the final say.
         </p>
-        <ol className="gf-onboarding-loop" aria-label="Factory workflow">
-          <li>
-            <Icon name="upload" />
-            Upload footage
-          </li>
-          <li>
-            <Icon name="studio" />
-            Review the cuts
-          </li>
-          <li>
-            <Icon name="results" />
-            Learn what to try next
-          </li>
-        </ol>
+        <FactoryWorkflow compact />
+        <div className="gf-onboarding-trust">
+          <Icon name="lock" size={16} />
+          <p>Local-first. No social sign-in needed. Nothing publishes without your approval.</p>
+        </div>
       </div>
       <form
         className="gf-onboarding-form"
@@ -293,6 +286,11 @@ export function Onboarding({
           void create();
         }}
       >
+        <div className="gf-onboarding-form-heading">
+          <span className="gf-eyebrow">YOUR CREATIVE CONTEXT</span>
+          <h2>Set up your workspace</h2>
+          <p>Start simple. You can change these details later.</p>
+        </div>
         <Field label="Podcast or workspace name">
           {(id) => (
             <AutoTextarea

@@ -6,6 +6,7 @@ import { workspaceApi, reviewPreview } from "./workspaceApi";
 import { jobInScope } from "./productionState";
 import { activeJob } from "../productionPreflight";
 import { Icon } from "./Icon";
+import { FactoryWorkflow } from "./FactoryWorkflow";
 import { Disclosure, Pill, formatTime } from "./parts";
 
 export type OpenProduction = (
@@ -223,6 +224,7 @@ export function FactoryHome({
 
   return (
     <div className="gf-factory-home">
+      <FactoryWorkflow />
       <div
         className={`gf-upload-stage gf-card${dragging ? " is-dragging" : ""}`}
         onDragOver={(e) => {
@@ -239,8 +241,9 @@ export function FactoryHome({
           <Icon name="upload" size={30} />
         </span>
         <div>
-          <h2>Drop your footage here</h2>
-          <p>A conversation, an interview, a story worth sharing.</p>
+          <span className="gf-eyebrow">START WITH THE SOURCE</span>
+          <h2>One video. More possibilities.</h2>
+          <p>Drop an interview, podcast, or conversation here. Then choose the moments and edits to produce.</p>
         </div>
         <button
           type="button"
@@ -248,7 +251,7 @@ export function FactoryHome({
           disabled={blocked || !!pending}
           onClick={() => picker.current?.click()}
         >
-          <Icon name="plus" size={16} />
+          <Icon name="upload" size={16} />
           Choose video
         </button>
         <input
@@ -268,7 +271,7 @@ export function FactoryHome({
         <p className="gf-upload-stage-note">
           {reviewPreview
             ? "Preview adds an illustrative placeholder; file contents stay unread."
-            : "Stored on this Mac. Importing does not start a render."}
+            : "MP4, MOV, WebM & more · Stored locally · Uploading does not start production."}
         </p>
       </div>
       {error && (

@@ -24,12 +24,13 @@ import "./writing-fields.css";
 import "./workspace-motion.css";
 import "./account-chrome.css";
 import "./factory-flow.css";
+import "./landing.css";
 
 const views = {
   factory: {
     label: "Factory",
-    title: "Factory",
-    sub: "Add footage. Review the cuts. Keep learning.",
+    title: "Good footage. Great stories.",
+    sub: "Turn long-form video into short-form clips. Set the direction, let agents shape the edit, and review every cut.",
     icon: "studio",
   },
   library: {
@@ -426,7 +427,7 @@ export function GrowthApp() {
               </div>
             </header>
             <main id="growth-main" className="gf-main">
-              <header className="gf-page-heading">
+              <header className={`gf-page-heading${onboarding || stage === "factory" ? " gf-landing-heading" : ""}`}>
                 <div>
                   <div className="gf-eyebrow">
                     {onboarding
@@ -435,14 +436,16 @@ export function GrowthApp() {
                         ? "WORKSPACE"
                         : stage === "research" || stage === "studio"
                           ? "FACTORY"
-                          : "YOUR WORKSPACE"}
+                          : stage === "factory"
+                            ? "YOUR VIDEO PRODUCTION WORKSPACE"
+                            : "YOUR WORKSPACE"}
                   </div>
                   <h1 tabIndex={-1} ref={heading}>
-                    {onboarding ? "Set up your workspace" : current.title}
+                    {onboarding ? "Your stories start here." : current.title}
                   </h1>
                   <p>
                     {onboarding
-                      ? "Add your audience and goal once. You can change them later."
+                      ? "From long-form footage to clips worth sharing. Give your agents a little context before the first edit."
                       : current.sub}
                   </p>
                 </div>
