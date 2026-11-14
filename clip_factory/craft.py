@@ -323,7 +323,15 @@ def plan_jump_cuts(words: list[dict], start: float, end: float, mode: str) -> di
     sparse speech are left alone. Returns {"keeps": [(a, b)], "removed": [...], ...}.
     """
     span = end - start
-    result = {"mode": mode, "keeps": [(start, end)], "removed": [], "fillers_removed": [], "reason": None}
+    result = {
+        "mode": mode,
+        "keeps": [(start, end)],
+        "removed": [],
+        "fillers_removed": [],
+        "removed_seconds": 0.0,
+        "removed_share": 0.0,
+        "reason": None,
+    }
     if mode == "off":
         result["reason"] = "Jump cuts are off."
         return result
@@ -363,14 +371,20 @@ def plan_jump_cuts(words: list[dict], start: float, end: float, mode: str) -> di
         if b - a >= 0.1 and not any(r[0] <= a and b <= r[1] for r in removals):
             removals.append((a, b, "filler"))
     removals = _merge(removals)
-    # Largest removals first until the cap; never more than MAX_PIECES pieces.
+    # Largest removals first until the cap; a pause bigger than what is left of the budget is
+    # shortened (still inside the pause), never more than MAX_PIECES pieces.
     budget = MAX_REMOVED_SHARE * span
     chosen: list[tuple[float, float, str]] = []
-    for removal in sorted(removals, key=lambda r: r[1] - r[0], reverse=True):
-        if len(chosen) + 1 >= MAX_PIECES:
+    for a, b, kind in sorted(removals, key=lambda r: r[1] - r[0], reverse=True):
+        left = budget - sum(r[1] - r[0] for r in chosen)
+        if len(chosen) + 1 >= MAX_PIECES or left < 0.2:
             break
-        if sum(r[1] - r[0] for r in chosen) + (removal[1] - removal[0]) <= budget:
-            chosen.append(removal)
+        if b - a > left:
+            if kind == "filler":
+                continue  # a filler is removed whole or not at all
+            middle = (a + b) / 2
+            a, b = middle - left / 2, middle + left / 2
+        chosen.append((a, b, kind))
     chosen.sort()
     # Restore removals that would leave a kept piece shorter than MIN_SEGMENT.
     while True:
