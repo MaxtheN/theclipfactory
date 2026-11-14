@@ -7,8 +7,8 @@ export const LAUNCH_FADE_MS = 280;
 export const LAUNCH_FALLBACK_PADDING_MS = 80;
 const messages: Record<LaunchPhase, string> = {
   profile: "Saving your audience and creative voice…",
-  workspace: "Your profile is saved. Creating your workspace…",
-  opening: "Your workspace is saved. Opening Factory…",
+  workspace: "Your brand is saved. Setting up your goals…",
+  opening: "All saved. Opening Factory…",
   ready: "Your choices are saved. Let’s make something worth watching.",
 };
 const progress: Record<LaunchPhase, string> = {
@@ -89,7 +89,7 @@ export function LaunchTransition({
     >
       <p className="gf-launch-name">{name}</p>
       <h1 id={title} className="gf-launch-title" ref={heading} tabIndex={-1}>
-        {ready ? "Your workspace is ready" : "Making it yours"}
+        {ready ? "Your brand is ready" : "Making it yours"}
       </h1>
       <div
         className="gf-launch-track"

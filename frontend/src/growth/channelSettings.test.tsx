@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  cleanup,
   waitFor,
   within,
 } from "@testing-library/react";
@@ -31,7 +32,10 @@ import { GrowthApp } from "./GrowthApp";
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 /** A small in-memory service: PUTs replace the exact record by ID. */
-function fixture({ latestVideos }: { latestVideos?: string[] } = {}) {
+function fixture({
+  latestVideos,
+  part = "brand",
+}: { latestVideos?: string[]; part?: "brand" | "campaign" } = {}) {
   const profiles: Profile[] = [
     {
       id: "profile-a",
@@ -150,7 +154,8 @@ function fixture({ latestVideos }: { latestVideos?: string[] } = {}) {
     },
   } as unknown as FactoryState;
   const next = vi.fn(),
-    onSaved = vi.fn();
+    onSaved = vi.fn(),
+    onAccounts = vi.fn();
   const view = render(
     <Setup
       w={w}
@@ -158,12 +163,14 @@ function fixture({ latestVideos }: { latestVideos?: string[] } = {}) {
       creating={false}
       next={next}
       onSaved={onSaved}
+      onAccounts={onAccounts}
+      part={part}
     />,
   );
-  return { w, factory, api, store, next, onSaved, view, profiles, campaign };
+  return { w, factory, api, store, next, onSaved, onAccounts, view, profiles, campaign };
 }
 const saveButton = () =>
-  screen.getByRole("button", { name: "Save settings" });
+  screen.getByRole("button", { name: /^Save (brand|goals)$/ });
 function noSideEffects(api: ReturnType<typeof fixture>["api"]) {
   expect(api.createProfile).not.toHaveBeenCalled();
   expect(api.propose).not.toHaveBeenCalled();
@@ -178,90 +185,50 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-describe("unified channel settings", () => {
-  it("shows one goal control, one save action and no duplicate upload box", () => {
-    const { view } = fixture();
-    expect(screen.getAllByRole("combobox")).toHaveLength(1);
-    expect(
-      screen.getByRole("combobox", { name: "What are we working toward?" }),
-    ).toHaveValue("discovery");
-    expect(screen.getByRole("option", { name: /^Drive visits/ })).toBeTruthy();
-    expect(screen.queryByLabelText("Campaign brief intent")).toBeNull();
-    expect(screen.queryByLabelText("Production objective")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Save profile goal/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Save & find direction/ })).toBeNull();
-    // Settings save plus the campaign brief's own save (nothing to save until it changes).
+describe("brand profile", () => {
+  it("shows only brand fields, the links and one save action", () => {
+    const { view, next, onAccounts } = fixture();
+    expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo");
+    expect(screen.getByLabelText("Who it's for")).toHaveValue("Builders");
+    expect(screen.getByLabelText("Voice & boundaries")).toHaveValue("Keep meaning");
+    // Campaign fields live in the Campaign brief, not here.
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByLabelText("Campaign name")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save brief" })).toBeNull();
     expect(
       screen.getAllByRole("button", { name: /^Save/ }).map((b) => b.textContent),
-    ).toEqual(["Save brief", "Save settings"]);
-    expect(screen.getByRole("button", { name: "Save brief" })).toBeDisabled();
+    ).toEqual(["Save brand"]);
     expect(view.container.querySelector('input[type="file"]')).toBeNull();
-    expect(screen.queryByText("Add an episode")).toBeNull();
-    // Discovery needs no metric.
-    expect(screen.getByLabelText("Primary metric")).toBeDisabled();
-    expect(saveButton()).toBeEnabled();
-    // Advanced: existing footage attachment and linked profiles stay available.
-    expect(screen.getByLabelText("Attach Source A")).toBeDisabled();
-    expect(screen.getByLabelText("Attach Source B")).toBeEnabled();
-    expect(screen.getByLabelText("Link Separate profile")).toBeChecked();
-    expect(screen.getByRole("button", { name: "Create workspace" })).toBeTruthy();
+    // Advanced is closed and holds the rarely used notes.
+    const advanced = screen.getByLabelText("Advanced controls").closest("details")!;
+    expect(advanced.open).toBe(false);
+    expect(advanced).toContainElement(screen.getByLabelText("Extra creative notes"));
+    fireEvent.click(screen.getByRole("button", { name: "Style rules" }));
+    expect(next).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Connected accounts" }));
+    expect(onAccounts).toHaveBeenCalledTimes(1);
+    // No user-facing jargon on this screen.
+    expect(view.container.textContent).not.toMatch(/workspace|snapshot|provenance|strategy version/i);
   });
 
-  it("requires a metric only for goal-directed work", () => {
-    fixture();
-    fireEvent.change(screen.getByLabelText("What are we working toward?"), {
-      target: { value: "traffic" },
-    });
-    expect(saveButton()).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Primary metric"), {
-      target: { value: "full_episode_visits" },
-    });
-    expect(saveButton()).toBeEnabled();
-  });
-
-  it("writes the exact selected profile, leaves the other unchanged and preserves latest footage", async () => {
+  it("writes only the exact selected brand and leaves the campaign and the other brand unchanged", async () => {
     const { api, store, next, onSaved } = fixture({
       latestVideos: ["source-a", "source-new"],
     });
-    fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
+    fireEvent.change(screen.getByLabelText("Who it's for"), {
       target: { value: "Founders shipping AI products" },
     });
-    fireEvent.change(screen.getByLabelText("What are we working toward?"), {
-      target: { value: "traffic" },
-    });
-    fireEvent.change(screen.getByLabelText("Primary metric"), {
-      target: { value: " full_episode_visits " },
-    });
-    fireEvent.click(screen.getByLabelText("Attach Source B"));
     fireEvent.click(saveButton());
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(api.updateProfile).toHaveBeenCalledTimes(1);
+    // No brand kit was edited, so none is sent (the saved one is kept by the service).
     expect(api.updateProfile).toHaveBeenCalledWith("profile-a", {
       name: "All-In demo",
       audience: "Founders shipping AI products",
       brand_context: "Keep meaning",
       creative_preferences: "Meaning first",
     });
-    expect(api.save).toHaveBeenCalledTimes(1);
-    expect(api.save).toHaveBeenCalledWith(
-      {
-        name: "Campaign A",
-        // The brief is saved by Save brief; this save keeps the latest saved brief exactly.
-        brief: {
-          audience: "Builders",
-          constraints: ["Keep meaning"],
-          requested_outputs: ["Vertical clips"],
-          measurement_intent: "Discovery",
-        },
-        profile_ids: ["profile-a", "profile-b"],
-        video_ids: ["source-a", "source-new", "source-b"],
-        // The goal belongs to this campaign, not the shared workspace.
-        objective: "traffic",
-        primary_metric: "full_episode_visits",
-        notes: "",
-      },
-      "campaign-a",
-    );
+    expect(api.save).not.toHaveBeenCalled();
     expect(store.profiles[1]).toEqual({
       id: "profile-b",
       name: "Separate profile",
@@ -277,13 +244,39 @@ describe("unified channel settings", () => {
     noSideEffects(api);
   });
 
-  it("never falls back to another profile when the selected one is no longer linked", async () => {
+  it("saves the brand kit only when it is edited, and checks it first", async () => {
+    const { api, store, onSaved } = fixture();
+    fireEvent.change(screen.getByLabelText("Logo (PNG file on this Mac)"), {
+      target: { value: "logo.jpg" },
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("full path to a .png file");
+    expect(saveButton()).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Logo (PNG file on this Mac)"), {
+      target: { value: "/Users/me/logo.png" },
+    });
+    fireEvent.change(screen.getByLabelText("Main colour"), {
+      target: { value: "#123456" },
+    });
+    fireEvent.change(screen.getByLabelText("Font"), { target: { value: "Inter" } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(api.updateProfile.mock.calls[0][1].brand_kit).toEqual({
+      font_family: "Inter",
+      primary_color: "#123456",
+      accent_color: "#FFD400",
+      logo_file: "/Users/me/logo.png",
+    });
+    expect(store.profiles[0].brand_kit?.primary_color).toBe("#123456");
+    expect(api.save).not.toHaveBeenCalled();
+  });
+
+  it("never falls back to another brand when the selected one is no longer linked", async () => {
     const { api, store, onSaved } = fixture();
     store.campaigns[0].profile_ids = ["profile-b"];
     fireEvent.click(saveButton());
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "no longer linked to this campaign",
+        "no longer linked",
       ),
     );
     expect(api.updateProfile).not.toHaveBeenCalled();
@@ -297,54 +290,21 @@ describe("unified channel settings", () => {
     api.updateProfile.mockRejectedValueOnce(
       new ApiError("Profile name must not be blank.", 422),
     );
-    fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
+    fireEvent.change(screen.getByLabelText("Who it's for"), {
       target: { value: "Retained audience" },
     });
     fireEvent.click(saveButton());
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "The workspace was not saved, so nothing changed",
+        "Nothing was saved. Your edits are still here.",
       ),
     );
     expect(api.save).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
-      "Retained audience",
-    );
+    expect(screen.getByLabelText("Who it's for")).toHaveValue("Retained audience");
     expect(onSaved).not.toHaveBeenCalled();
     expect(saveButton()).toBeEnabled();
     fireEvent.click(saveButton());
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
-  });
-
-  it("reports a partial save and requires readback before saving again", async () => {
-    const { api, onSaved, store } = fixture();
-    api.save.mockRejectedValueOnce(new ApiError("Conflict", 409));
-    fireEvent.change(screen.getByLabelText("Campaign name"), {
-      target: { value: "Renamed channel" },
-    });
-    fireEvent.change(screen.getByLabelText("Creative preferences"), {
-      target: { value: "Claim first" },
-    });
-    fireEvent.click(saveButton());
-    await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent("Partially saved"),
-    );
-    expect(store.profiles[0].creative_preferences).toBe("Claim first");
-    expect(store.campaigns[0].name).toBe("Campaign A");
-    expect(onSaved).not.toHaveBeenCalled();
-    expect(saveButton()).toBeDisabled();
-    expect(screen.getByLabelText("Campaign name")).toHaveValue("Renamed channel");
-    fireEvent.click(screen.getByRole("button", { name: "Check saved state" }));
-    await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        "workspace saved; campaign not saved",
-      ),
-    );
-    expect(saveButton()).toBeEnabled();
-    expect(screen.getByLabelText("Campaign name")).toHaveValue("Renamed channel");
-    fireEvent.click(saveButton());
-    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
-    expect(store.campaigns[0].name).toBe("Renamed channel");
   });
 
   it("treats a lost response as unknown and blocks a repeat until readback", async () => {
@@ -354,8 +314,8 @@ describe("unified channel settings", () => {
       Object.assign(store.profiles.find((p) => p.id === id)!, body);
       throw new ApiError("Cannot reach the local service.", 0);
     });
-    fireEvent.change(screen.getByLabelText("Campaign name"), {
-      target: { value: "Renamed channel" },
+    fireEvent.change(screen.getByLabelText("Brand name"), {
+      target: { value: "Renamed brand" },
     });
     fireEvent.click(saveButton());
     await waitFor(() =>
@@ -365,29 +325,159 @@ describe("unified channel settings", () => {
     );
     expect(api.save).not.toHaveBeenCalled();
     expect(saveButton()).toBeDisabled();
+    expect(onSaved).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Check saved state" }));
     await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        "workspace saved; campaign not saved",
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Readback confirms every change is saved.",
       ),
     );
-    expect(onSaved).not.toHaveBeenCalled();
-    expect(saveButton()).toBeEnabled();
+    expect(onSaved).toHaveBeenCalledTimes(1);
     expect(api.updateProfile).toHaveBeenCalledTimes(1);
+    expect(store.profiles[0].name).toBe("Renamed brand");
+    noSideEffects(api);
+  });
+});
+
+describe("goals & brief (the default campaign)", () => {
+  it("shows one goal control, the brief's own save and the goals save, without the word campaign", () => {
+    const { view } = fixture({ part: "campaign" });
+    // One automatic campaign per brand: no name field and no campaign wording.
+    expect(screen.queryByLabelText("Campaign name")).toBeNull();
+    expect(view.container.textContent).not.toMatch(/campaign|workspace|snapshot|provenance/i);
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
+    expect(
+      screen.getByRole("combobox", { name: "What are we working toward?" }),
+    ).toHaveValue("discovery");
+    expect(screen.getByRole("option", { name: /^Drive visits/ })).toBeTruthy();
+    expect(screen.queryByLabelText("Brand name")).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: /^Save/ }).map((b) => b.textContent),
+    ).toEqual(["Save brief", "Save goals"]);
+    expect(screen.getByRole("button", { name: "Save brief" })).toBeDisabled();
+    expect(view.container.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.getByLabelText("Primary metric")).toBeDisabled();
+    expect(saveButton()).toBeEnabled();
+    // Advanced: footage attachment and shared brands stay available.
+    expect(screen.getByLabelText("Attach Source A")).toBeDisabled();
+    expect(screen.getByLabelText("Attach Source B")).toBeEnabled();
+    expect(screen.getByLabelText("Link Separate profile")).toBeChecked();
+    expect(screen.getByRole("button", { name: "Create brand" })).toBeTruthy();
+  });
+
+  it("requires a metric only for goal-directed work", () => {
+    fixture({ part: "campaign" });
+    fireEvent.change(screen.getByLabelText("What are we working toward?"), {
+      target: { value: "traffic" },
+    });
+    expect(saveButton()).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Primary metric"), {
+      target: { value: "full_episode_visits" },
+    });
+    expect(saveButton()).toBeEnabled();
+  });
+
+  it("writes only the campaign, keeps the latest brief and footage, and never touches a brand", async () => {
+    const { api, onSaved } = fixture({
+      part: "campaign",
+      latestVideos: ["source-a", "source-new"],
+    });
+    fireEvent.change(screen.getByLabelText("What are we working toward?"), {
+      target: { value: "traffic" },
+    });
+    fireEvent.change(screen.getByLabelText("Primary metric"), {
+      target: { value: " full_episode_visits " },
+    });
+    fireEvent.click(screen.getByLabelText("Attach Source B"));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(api.updateProfile).not.toHaveBeenCalled();
+    expect(api.save).toHaveBeenCalledTimes(1);
+    expect(api.save).toHaveBeenCalledWith(
+      {
+        name: "Campaign A",
+        // The brief is saved by Save brief; this save keeps the latest saved brief exactly.
+        brief: {
+          audience: "Builders",
+          constraints: ["Keep meaning"],
+          requested_outputs: ["Vertical clips"],
+          measurement_intent: "Discovery",
+        },
+        profile_ids: ["profile-a", "profile-b"],
+        video_ids: ["source-a", "source-new", "source-b"],
+        // The goal belongs to this campaign, not the shared brand.
+        objective: "traffic",
+        primary_metric: "full_episode_visits",
+        notes: "",
+      },
+      "campaign-a",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Saved and confirmed.");
     noSideEffects(api);
   });
 
-  it("opens style rules only through the explicit action", async () => {
-    const { next, onSaved } = fixture();
+  it("keeps the draft after a rejected save and needs no readback for a definite refusal", async () => {
+    const { api, onSaved, store } = fixture({ part: "campaign" });
+    api.save.mockRejectedValueOnce(new ApiError("Conflict", 409));
+    fireEvent.change(screen.getByLabelText("Notes for the agents"), {
+      target: { value: "Favour founders" },
+    });
     fireEvent.click(saveButton());
-    await waitFor(() => expect(onSaved).toHaveBeenCalled());
-    expect(next).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Style rules" }));
-    expect(next).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("Nothing was saved"),
+    );
+    expect(store.campaigns[0].notes).toBe("");
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Notes for the agents")).toHaveValue("Favour founders");
+    expect(saveButton()).toBeEnabled();
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(store.campaigns[0].notes).toBe("Favour founders");
+    expect(api.updateProfile).not.toHaveBeenCalled();
   });
 
-  it("creates a profile only by explicit action and links it on save", async () => {
-    const { api } = fixture();
+  it("treats a lost campaign response as unknown and reads back before another save", async () => {
+    const { api, onSaved, store } = fixture({ part: "campaign" });
+    api.save.mockImplementationOnce(async () => {
+      throw new ApiError("Cannot reach the local service.", 0);
+    });
+    fireEvent.change(screen.getByLabelText("Notes for the agents"), {
+      target: { value: "Favour founders" },
+    });
+    fireEvent.click(saveButton());
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "may or may not have been written",
+      ),
+    );
+    expect(saveButton()).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Check saved state" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Readback: not saved. Your edits are still here; saving again is now safe.",
+      ),
+    );
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(store.campaigns[0].notes).toBe("");
+    expect(saveButton()).toBeEnabled();
+    noSideEffects(api);
+  });
+
+  it("shows the campaign name only once a brand has a second campaign", () => {
+    const { w, factory } = fixture({ part: "campaign" });
+    cleanup();
+    (w as { campaigns: Campaign[] }).campaigns = [
+      w.campaign!,
+      { ...w.campaign!, id: "campaign-b", name: "Launch week" },
+    ];
+    render(
+      <Setup w={w} factory={factory} creating={false} next={vi.fn()} onSaved={vi.fn()} part="campaign" />,
+    );
+    expect(screen.getByLabelText("Campaign name")).toHaveValue("Campaign A");
+  });
+
+  it("creates a brand only by explicit action and links it on save", async () => {
+    const { api } = fixture({ part: "campaign" });
     api.createProfile.mockResolvedValueOnce({
       id: "profile-c",
       name: "New clips",
@@ -400,10 +490,10 @@ describe("unified channel settings", () => {
     fireEvent.click(saveButton());
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
     expect(api.createProfile).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("New workspace name"), {
+    fireEvent.change(screen.getByLabelText("New brand name"), {
       target: { value: "New clips" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create brand" }));
     await waitFor(() => expect(api.createProfile).toHaveBeenCalledTimes(1));
   });
 });
@@ -422,19 +512,19 @@ describe("app routing", () => {
       await within(main).findByRole("heading", { name: "Results & next test" }),
     ).toBeTruthy();
     expect(
-      within(main).queryByRole("heading", { name: "Workspace settings" }),
+      within(main).queryByRole("heading", { name: "Brand profile" }),
     ).toBeNull();
   });
 });
 
-describe("campaign brief in workspace settings", () => {
+describe("campaign brief in the Campaign brief screen", () => {
   const addChip = (label: string, value: string) => {
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
     fireEvent.click(screen.getByRole("button", { name: `Add to ${label}` }));
   };
 
   it("saves only the brief with an exact campaign PUT, keeps membership and reads it back", async () => {
-    const { api, store } = fixture({ latestVideos: ["source-a", "source-new"] });
+    const { api, store } = fixture({ part: "campaign", latestVideos: ["source-a", "source-new"] });
     addChip("Key messages", "Agents need human review");
     addChip("Must avoid", "market predictions");
     fireEvent.change(screen.getByLabelText("Call to action"), {
@@ -473,7 +563,7 @@ describe("campaign brief in workspace settings", () => {
   });
 
   it("blocks an invalid brief and reports an unconfirmed save", async () => {
-    const { api } = fixture();
+    const { api } = fixture({ part: "campaign" });
     addChip("Must include", "crypto");
     addChip("Must avoid", "Crypto");
     expect(screen.getByRole("alert")).toHaveTextContent(

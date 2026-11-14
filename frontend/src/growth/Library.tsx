@@ -44,7 +44,7 @@ export function Library({
       .includes(normalized),
   );
   return (
-    <section className="gf-library" aria-label="Workspace library">
+    <section className="gf-library" aria-label="Library">
       <div className="gf-library-toolbar">
         <div className="gf-library-tabs" role="group" aria-label="Library view">
           <button

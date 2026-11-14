@@ -33,7 +33,7 @@ export const LANES: { layer: StrategistLayer; title: string; note: string }[] =
     },
     {
       layer: "campaign",
-      title: "Campaign",
+      title: "Posting plan",
       note: "Monthly: posting time and channel plan",
     },
   ];
@@ -56,7 +56,7 @@ export function EvidenceChip({ item }: { item: BeliefEvidence }) {
   return (
     <li
       className={`gf-strategist-chip is-${item.outcome}`}
-      title={`Snapshot ${item.snapshot_id}: ${item.metric} ${item.value} vs account median ${item.baseline}${item.trigger === "demo_override" ? " (measured early by request)" : ""}`}
+      title={`Measured ${item.metric} ${item.value} vs account median ${item.baseline}${item.trigger === "demo_override" ? " (measured early by request)" : ""}`}
     >
       <span>post {shortId(item.publication_id)}</span>
       <span>

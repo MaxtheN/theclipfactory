@@ -273,7 +273,7 @@ function propose(
   for (const ref of d.evidence_refs) {
     const observation = requireRecord(s.observations, ref, "Evidence");
     if (observation.profile_id !== profile.id)
-      fail("Evidence belongs to another workspace.");
+      fail("Evidence belongs to another brand.");
   }
   const versions = s.strategies.filter((v) => v.profile_id === profile.id);
   const version: StrategyVersion = {
@@ -363,7 +363,7 @@ function route(
       (method === "POST" && !identifier) ||
       (method === "PUT" && identifier && parts.length === 3)
     ) {
-      if (!text(body.name).trim()) fail("Name the profile.");
+      if (!text(body.name).trim()) fail("Name the brand.");
       const old = identifier
         ? requireRecord(s.profiles, identifier, "Profile")
         : null;
@@ -375,6 +375,11 @@ function route(
         brand_context: text(body.brand_context),
         creative_preferences: text(body.creative_preferences),
         active_strategy_id: old?.active_strategy_id ?? null,
+        // Omitted keeps the saved brand kit, as the local service does.
+        brand_kit:
+          "brand_kit" in body
+            ? ((body.brand_kit as Profile["brand_kit"]) ?? null)
+            : (old?.brand_kit ?? null),
       };
       if (old) Object.assign(old, profile);
       else s.profiles.push(profile);
@@ -394,7 +399,7 @@ function route(
       ) {
         const version = requireRecord(s.strategies, subId, "Strategy");
         if (version.profile_id !== profile.id || version.status !== "proposed")
-          fail("Only this workspace's proposed style rules can be reviewed.");
+          fail("Only this brand's proposed style rules can be reviewed.");
         if (decision === "approve") {
           if (version.base_version_id !== (profile.active_strategy_id ?? null))
             fail("Style rules changed. Reload and review the conflict.");
@@ -487,7 +492,7 @@ function route(
       if (!text(body.name).trim()) fail("Name the campaign.");
       const profile_ids = strings(body.profile_ids),
         video_ids = strings(body.video_ids);
-      if (!profile_ids.length) fail("Select a profile.");
+      if (!profile_ids.length) fail("Select a brand.");
       profile_ids.forEach((p) => requireRecord(s.profiles, p, "Profile"));
       video_ids.forEach((v) => requireRecord(s.videos, v, "Source"));
       const old = identifier
@@ -538,7 +543,7 @@ function route(
     if (method === "GET" && !action) return campaign;
     if (action === "strategies") {
       if (method === "GET" && !subId) return [];
-      fail("Style rules belong to the workspace now.");
+      fail("Style rules belong to the brand now.");
     }
     if (action === "observations" && method === "GET")
       return s.observations.filter((o) => o.campaign_id === campaign.id);
@@ -598,7 +603,7 @@ function route(
           o.profile_id !== profileId ||
           o.value === null
         )
-          fail("Evidence must have a known value for this profile.");
+          fail("Evidence must have a known value for this brand.");
       });
       const d = validateDirection(body.proposed_direction);
       d.evidence_refs = [...new Set([...d.evidence_refs, ...refs])];
@@ -620,11 +625,11 @@ function route(
         !campaign.video_ids.includes(videoId) ||
         !campaign.profile_ids.includes(profileId)
       )
-        fail("Select this campaign's source and profile.");
+        fail("Select this campaign's source and brand.");
       const rules = requireRecord(s.profiles, profileId, "Profile")
         .active_strategy_id;
       if (!rules || body.expected_strategy_version_id !== rules)
-        fail("The approved workspace style rules changed or are missing. Reload before rendering.");
+        fail("The approved style rules changed or are missing. Reload before rendering.");
       const strategy = requireRecord(s.strategies, rules, "Strategy");
       const d = strategy.directions[profileId];
       const source = requireRecord(s.videos, videoId, "Source");

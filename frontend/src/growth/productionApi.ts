@@ -140,7 +140,7 @@ function validateRenderRequest(
   if (body.opening_treatment === "text_overlay" && body.hook != null)
     requireInput(
       !!body.hook.trim(),
-      "A text-overlay opening needs text or an approved strategy hook.",
+      "A text-overlay opening needs text or an approved style-rules hook.",
     );
   if (body.opening_treatment === "cold_open") {
     requireInput(

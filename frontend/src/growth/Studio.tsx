@@ -113,7 +113,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     message: "Pick a clip below to review it.",
   } : {
     state: "uncertain" as const, step: 1 as const, title: "Production finished; the output is not available yet",
-    message: "The worker reported completion, but its exact output is not in this workspace. Check the production log; no other clip was picked in its place.",
+    message: "The worker reported completion, but its exact output is not here. Check the production log; no other clip was picked in its place.",
   } : journeyJob ? {
     state: "uncertain" as const, step: 1 as const, title: "Check the latest production status",
     message: journeyJob.error || journeyJob.message || `The worker reported ${journeyJob.status}. Check the production log before starting another run.`,
@@ -239,10 +239,10 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
       setUncertainExports(old => new Set(old).add(clip.id));
       const record = await productionApi.createVerifiedExport(clip);
       setExportsState(old => ({ clipId: clip.id, rows: [record, ...(old.clipId === clip.id ? old.rows.filter(r => r.id !== record.id) : [])], error: "" }));
-    }, "Verified export created: MP4 and provenance manifest are ready.");
+    }, "Export ready: the MP4 and its record file.");
     await reconcile(clip);
   }
-  if (!w.campaign) return <Empty title="No campaign yet" icon="studio">Create a campaign to start.</Empty>;
+  if (!w.campaign) return <Empty title="Nothing set up yet" icon="studio">Set up your brand to start.</Empty>;
   const blockers = mode === "agent" ? [...ready.agent, ...(reviewPreview ? ["Agents run in the Mac app, not in this preview."] : []), ...(ledgerError ? ["Agent status is unavailable. Refresh before starting."] : [])] : [...ready.manual, ...edits, ...(revisionError ? [revisionError] : [])];
   const exportRows = exportsState.clipId === selected?.id ? exportsState.rows : [];
   const making = !selected || !!revisionParent;
@@ -310,7 +310,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     <aside className="gf-card gf-review-inspector">
       <div className="gf-card-header"><div><h2>{!making ? "Review this clip" : revisionParent ? "Request a change" : "Find clips"}</h2></div></div>
       {making ? <div className="gf-form-fields">
-        {!revisionParent && (() => { const summary = briefSummary(w.campaign!.brief, w.campaign!.objective, w.campaign!.primary_metric); return <p className="gf-brief-summary" aria-label="Campaign brief summary"><span title={summary}>{summary}</span>{onEditBrief && <button type="button" className="gf-button ghost compact" onClick={onEditBrief}>Edit brief</button>}</p>; })()}
+        {!revisionParent && (() => { const summary = briefSummary(w.campaign!.brief, w.campaign!.objective, w.campaign!.primary_metric); return <p className="gf-brief-summary" aria-label="Goals and brief summary"><span title={summary}>{summary}</span>{onEditBrief && <button type="button" className="gf-button ghost compact" onClick={onEditBrief}>Edit brief</button>}</p>; })()}
         {sources.length > 1 && <Field label="Episode">{id => <select id={id} value={sourceId} disabled={!!revisionParent || busy} onChange={e => { setSourceId(e.target.value); setStart("0"); const s = sources.find(v => v.id === e.target.value); setEnd(String(Math.min(direction?.duration_seconds || 30, s?.duration || 30))); }}><option value="" disabled>Choose an episode</option>{sources.map(s => <option value={s.id} key={s.id}>{sourceLabel(s.id, w.campaign!.video_ids)}</option>)}</select>}</Field>}
         {revisionParent && <Field label="What would make it better?">{id => <AutoTextarea id={id} value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="What should change, and why?" rows={3} />}</Field>}
         {/* One reason at a time: the first thing to fix. */}

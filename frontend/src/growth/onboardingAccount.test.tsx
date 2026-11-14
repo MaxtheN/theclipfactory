@@ -48,7 +48,7 @@ function next() {
 }
 function toAccount() {
   fireEvent.change(
-    screen.getByRole("textbox", { name: "Podcast or workspace name" }),
+    screen.getByRole("textbox", { name: "Name your brand / podcast" }),
     { target: { value: "Founder stories" } },
   );
   fireEvent.change(
@@ -60,7 +60,7 @@ function toAccount() {
   next();
   next();
   expect(
-    screen.getByRole("heading", { name: "Review your workspace" }),
+    screen.getByRole("heading", { name: "Review your brand" }),
   ).toBeInTheDocument();
   next();
 }
@@ -100,7 +100,7 @@ describe("account as the last onboarding step", () => {
     toAccount();
     expect(
       screen.getByRole("heading", {
-        name: "Save your workspace to your account",
+        name: "Save your brand to your account",
       }),
     ).toBeInTheDocument();
     expect(progress).toHaveAttribute(

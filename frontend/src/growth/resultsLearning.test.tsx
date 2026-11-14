@@ -148,15 +148,15 @@ function fixture() {
 }
 beforeEach(() => vi.restoreAllMocks());
 
-describe("selected profile goal control", () => {
-  it("writes only selected-profile writable fields and keeps a failed draft", async () => {
+describe("selected campaign goal control", () => {
+  it("writes the goal only to the campaign, never the brand, and keeps a failed draft", async () => {
     const { w, factory, profiles } = fixture();
     vi.spyOn(workspaceApi, "campaigns").mockResolvedValue([w.campaign!]);
     vi.spyOn(workspaceApi, "profiles").mockResolvedValue(profiles);
-    const save = vi.spyOn(workspaceApi, "save");
-    const update = vi
-      .spyOn(workspaceApi, "updateProfile")
-      .mockRejectedValue(new Error("Profile save failed"));
+    const update = vi.spyOn(workspaceApi, "updateProfile");
+    const save = vi
+      .spyOn(workspaceApi, "save")
+      .mockRejectedValue(new Error("Campaign save failed"));
     render(
       <Setup
         w={w}
@@ -164,6 +164,7 @@ describe("selected profile goal control", () => {
         creating={false}
         next={vi.fn()}
         onSaved={vi.fn()}
+        part="campaign"
       />,
     );
     expect(screen.queryByLabelText("Campaign brief intent")).toBeNull();
@@ -171,24 +172,22 @@ describe("selected profile goal control", () => {
       target: { value: "traffic" },
     });
     expect(
-      screen.getByRole("button", { name: "Save settings" }),
+      screen.getByRole("button", { name: "Save goals" }),
     ).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Primary metric"), {
       target: { value: "full_episode_visits" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Save settings" }),
+      screen.getByRole("button", { name: "Save goals" }),
     );
     await waitFor(() =>
-      // Workspace fields only: the goal is saved on the campaign afterwards.
-      expect(update).toHaveBeenCalledWith("profile-a", {
-        name: profiles[0].name,
-        audience: profiles[0].audience,
-        brand_context: profiles[0].brand_context,
-        creative_preferences: profiles[0].creative_preferences,
-      }),
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({ objective: "traffic", primary_metric: "full_episode_visits" }),
+        w.campaign!.id,
+      ),
     );
-    expect(save).not.toHaveBeenCalled();
+    // The brand (backend profile) is never written by a goal change.
+    expect(update).not.toHaveBeenCalled();
     expect(screen.getByLabelText("What are we working toward?")).toHaveValue(
       "traffic",
     );

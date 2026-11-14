@@ -241,7 +241,7 @@ export function TeamLedger({
             <StructuredData value={run.plan} />
           </details>
           <details>
-            <summary>Source/config context snapshot</summary>
+            <summary>What the agents were given</summary>
             <StructuredData value={run.context} />
           </details>
           <details>

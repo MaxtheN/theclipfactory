@@ -342,6 +342,14 @@ export interface TeamComparison {
 }
 
 /** A workspace: one person, channel or brand. It owns ONE approved Style-rules set. */
+/** A brand's look for title cards, captions and the end card (backend craft.BrandKit). */
+export interface BrandKit {
+  font_family?: string;
+  font_file?: string | null;
+  primary_color?: string;
+  accent_color?: string;
+  logo_file?: string | null;
+}
 export interface Profile {
   id: string;
   name: string;
@@ -351,6 +359,7 @@ export interface Profile {
   objective?: string;
   primary_metric?: string | null;
   creative_preferences: string;
+  brand_kit?: BrandKit | null;
   /** The workspace's approved Style-rules version, inherited by every campaign in it. */
   active_strategy_id?: string | null;
   /** Set when rules approved on a campaign before workspace rules were adopted. */

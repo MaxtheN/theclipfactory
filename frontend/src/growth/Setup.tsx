@@ -13,7 +13,7 @@ import {
 } from "./parts";
 import { Icon } from "./Icon";
 import { CloudAccountRow } from "./CloudSignIn";
-import { objectives, type Campaign, type Profile } from "../types";
+import { objectives, type BrandKit, type Campaign, type Profile } from "../types";
 import { campaignGoalBody } from "./learningState";
 import { CampaignBriefEditor } from "./CampaignBrief";
 import { sameBrief } from "./briefModel";
@@ -30,23 +30,24 @@ export const objectiveLabels: Record<(typeof objectives)[number], string> = {
   custom: "Something else (custom)",
 };
 
-/** Workspace fields only: goals belong to campaigns and are never sent here. */
+/** Brand fields only (a backend profile): goals belong to campaigns and are never sent here. */
 type ProfileBody = Pick<
   Profile,
   "name" | "audience" | "brand_context" | "creative_preferences"
->;
-type Attempt = {
-  profileId: string;
-  profile: ProfileBody;
-  campaign: CampaignInput;
-};
+> & { brand_kit?: BrandKit | null };
+type Part = "brand" | "campaign";
+type Attempt =
+  | { part: "brand"; profileId: string; profile: ProfileBody }
+  | { part: "campaign"; campaign: CampaignInput };
 type SaveState =
   | { kind: "idle" }
   | { kind: "saved"; message: string }
   | { kind: "failed"; message: string }
   // Something may have been written. Saving again is blocked until a readback.
-  | { kind: "partial" | "unknown"; message: string };
+  | { kind: "unknown"; message: string };
 
+const DEFAULT_KIT = { primary_color: "#111111", accent_color: "#FFD400" };
+const HEX = /^#[0-9A-Fa-f]{6}$/;
 const union = (a: string[], b: string[]) => [...new Set([...a, ...b])];
 const lines = (text: string) =>
   text
@@ -62,13 +63,25 @@ const uncertain = (error: unknown) =>
   error.status < 400;
 const message = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
+function sameKit(saved: BrandKit | null | undefined, sent: BrandKit | null) {
+  const a = saved || null;
+  if (!a || !sent) return a === sent;
+  return (
+    (a.font_family || "") === (sent.font_family || "") &&
+    (a.primary_color || "").toUpperCase() === (sent.primary_color || "").toUpperCase() &&
+    (a.accent_color || "").toUpperCase() === (sent.accent_color || "").toUpperCase() &&
+    (a.logo_file || null) === (sent.logo_file || null) &&
+    (a.font_file || null) === (sent.font_file || null)
+  );
+}
 function profileMatches(saved: Profile | undefined, body: ProfileBody) {
   return (
     !!saved &&
     saved.name === body.name &&
     saved.audience === body.audience &&
     saved.brand_context === body.brand_context &&
-    saved.creative_preferences === body.creative_preferences
+    saved.creative_preferences === body.creative_preferences &&
+    (body.brand_kit === undefined || sameKit(saved.brand_kit, body.brand_kit))
   );
 }
 function campaignMatches(saved: Campaign | undefined, body: CampaignInput) {
@@ -84,6 +97,13 @@ function campaignMatches(saved: Campaign | undefined, body: CampaignInput) {
   );
 }
 
+/**
+ * Brand profile (part "brand"): the brand's name, audience, voice and look.
+ * Goals & brief (part "campaign"): the selected campaign's goal, notes and brief. Every brand
+ * has one automatic campaign, so the word "campaign" (and its name) only shows once a brand
+ * has a second one.
+ * Each part saves only its own record, then confirms it by reading it back.
+ */
 export function Setup({
   w,
   factory,
@@ -92,28 +112,37 @@ export function Setup({
   onSaved,
   advanced,
   onNewCampaign,
+  onAccounts,
+  goals,
+  part = "brand",
 }: {
   w: Workspace;
   factory: FactoryState;
+  /** Opens Style rules. */
   next: () => void;
   creating: boolean;
   onSaved: () => void;
-  /** Rarely used workspace actions, shown inside the single Advanced section. */
+  /** Rarely used actions, shown inside the single Advanced section. */
   advanced?: ReactNode;
-  /** Opens the New campaign form for this workspace. */
+  /** Opens the New campaign form for this brand (Advanced: a separate push). */
   onNewCampaign?: () => void;
+  /** The Goals & brief section shown below the brand (part "campaign"). */
+  goals?: ReactNode;
+  /** Opens connected accounts (Results). */
+  onAccounts?: () => void;
+  part?: Part;
 }) {
   const campaign = creating ? undefined : w.campaign;
-  // The profile being edited is fixed for this mount (GrowthApp keys Setup by
-  // campaign and profile). It is never silently replaced by another profile.
+  // The brand being edited is fixed for this mount (GrowthApp keys Setup by
+  // campaign and profile). It is never silently replaced by another one.
   const profile =
     campaign && campaign.profile_ids.includes(w.profileId)
       ? w.profiles.find((p) => p.id === w.profileId)
       : undefined;
   const [name, setName] = useState(campaign?.name || "");
-  const [workspaceName, setWorkspaceName] = useState(profile?.name || "");
+  const [brandName, setBrandName] = useState(profile?.name || "");
   const [audience, setAudience] = useState(profile?.audience || "");
-  // The goal belongs to this campaign; each campaign in the workspace has its own.
+  // The goal belongs to this campaign; each campaign has its own.
   const [objective, setObjective] = useState(
     campaign?.objective || "discovery",
   );
@@ -125,30 +154,51 @@ export function Setup({
       "Preserve the speaker's meaning. Keep captions readable.",
   );
   const [creative, setCreative] = useState(profile?.creative_preferences || "");
+  // Brand kit: sent only when it already exists or is edited here.
+  const savedKit = profile?.brand_kit || null;
+  const [kitEdited, setKitEdited] = useState(false);
+  const [fontFamily, setFontFamily] = useState(savedKit?.font_family || "");
+  const [primary, setPrimary] = useState(savedKit?.primary_color || DEFAULT_KIT.primary_color);
+  const [accent, setAccent] = useState(savedKit?.accent_color || DEFAULT_KIT.accent_color);
+  const [logo, setLogo] = useState(savedKit?.logo_file || "");
   const [linkProfiles, setLinkProfiles] = useState<string[]>([]);
   const [attachSources, setAttachSources] = useState<string[]>([]);
   const [profileName, setProfileName] = useState("");
   const [state, setState] = useState<SaveState>({ kind: "idle" });
   const [checking, setChecking] = useState(false);
   const attempt = useRef<Attempt | null>(null);
+  // Campaigns are invisible until a brand has more than one.
+  const severalCampaigns =
+    w.campaigns.filter((c) => c.profile_ids.includes(w.profileId)).length > 1;
   const linked = new Set(campaign?.profile_ids || []);
   const attached = new Set(campaign?.video_ids || []);
-  const needsReadback = state.kind === "partial" || state.kind === "unknown";
+  const needsReadback = state.kind === "unknown";
   const blocked =
     w.busy || w.loading || checking || factory.loading || !campaign || !profile;
   const metricNeeded = objective !== "discovery";
+  const kitError =
+    !HEX.test(primary) || !HEX.test(accent)
+      ? "Use colours like #112233."
+      : logo.trim() && !/^\/.+\.png$/i.test(logo.trim())
+        ? "The logo must be a full path to a .png file."
+        : fontFamily && !/^[A-Za-z0-9 _.-]*$/.test(fontFamily)
+          ? "Use letters, numbers and spaces in the font name."
+          : "";
   const valid =
-    !!name.trim() &&
-    !!workspaceName.trim() &&
-    (!metricNeeded || !!metric.trim());
+    part === "brand"
+      ? !!brandName.trim() && !(kitEdited && kitError)
+      : !!name.trim() && (!metricNeeded || !!metric.trim());
 
   function edited() {
     if (state.kind === "saved" || state.kind === "failed")
       setState({ kind: "idle" });
   }
+  function editKit() {
+    setKitEdited(true);
+    edited();
+  }
 
-  function bodies(latestCampaign: Campaign) {
-    const goal = campaignGoalBody(objective, metric);
+  function profileBody(): ProfileBody {
     const constraints = lines(voice);
     if (constraints.length > 30)
       throw new Error("Use up to 30 voice and boundary lines.");
@@ -157,24 +207,34 @@ export function Setup({
         "Keep each voice or boundary line within 1,200 characters.",
       );
     // Only writable fields; read-only production_history is never sent.
-    const profileBody: ProfileBody = {
-      name: workspaceName.trim(),
+    const body: ProfileBody = {
+      name: brandName.trim(),
       audience: audience.trim(),
       brand_context: voice.trim(),
       creative_preferences: creative.trim(),
     };
-    const campaignBody: CampaignInput = {
+    if (kitEdited)
+      body.brand_kit = {
+        ...(savedKit || {}),
+        font_family: fontFamily.trim(),
+        primary_color: primary,
+        accent_color: accent,
+        logo_file: logo.trim() || null,
+      };
+    return body;
+  }
+  function campaignBody(latestCampaign: Campaign): CampaignInput {
+    return {
       name: name.trim(),
       // The brief has its own Save brief; this save keeps the latest saved one exactly.
       brief: latestCampaign.brief,
-      ...goal,
+      ...campaignGoalBody(objective, metric),
       notes: notes.trim(),
       // Membership is a union with the latest saved record, so footage or
-      // profiles attached elsewhere since this screen loaded are retained.
+      // brands attached elsewhere since this screen loaded are retained.
       profile_ids: union(latestCampaign.profile_ids, linkProfiles),
       video_ids: union(latestCampaign.video_ids, attachSources),
     };
-    return { profileBody, campaignBody };
   }
 
   async function save() {
@@ -182,109 +242,86 @@ export function Setup({
     const campaignId = campaign.id,
       profileId = profile.id;
     // Assigned inside the task; casts stop TypeScript narrowing them here.
-    let stage = "read" as "read" | "profile" | "campaign" | "readback";
+    let stage = "read" as "read" | "write" | "readback";
     let started = false as boolean,
       unknownOutcome = false as boolean,
       failure = "" as string;
-    const ok = await w.run(async () => {
-      started = true;
-      try {
-        // 1. Latest saved state, never the possibly stale screen copy.
-        const [campaigns, profiles] = await Promise.all([
-          workspaceApi.campaigns(),
-          workspaceApi.profiles(),
-        ]);
-        const latestCampaign = campaigns.find((c) => c.id === campaignId);
-        if (!latestCampaign)
-          throw new Error("This campaign is no longer available.");
-        // 2. The selected profile must still belong to this channel. There is
-        // no fallback to another profile.
-        const latestProfile = profiles.find((p) => p.id === profileId);
-        if (!latestProfile || !latestCampaign.profile_ids.includes(profileId))
-          throw new Error(
-            "This workspace is no longer linked to this campaign. Refresh and choose again.",
-          );
-        // 3. Strict writable bodies.
-        const { profileBody, campaignBody } = bodies(latestCampaign);
-        attempt.current = {
-          profileId,
-          profile: profileBody,
-          campaign: campaignBody,
-        };
-        // 4. Exact selected profile by ID.
-        stage = "profile";
-        await workspaceApi.updateProfile(profileId, profileBody);
-        // 5. Channel metadata with preserved membership.
-        stage = "campaign";
-        await workspaceApi.save(campaignBody, campaignId);
-        // 6. Confirm by reading back.
-        stage = "readback";
-        const [savedCampaigns, savedProfiles] = await Promise.all([
-          workspaceApi.campaigns(),
-          workspaceApi.profiles(),
-        ]);
-        if (
-          !profileMatches(
-            savedProfiles.find((p) => p.id === profileId),
-            profileBody,
-          ) ||
-          !campaignMatches(
-            savedCampaigns.find((c) => c.id === campaignId),
-            campaignBody,
-          )
-        )
-          throw new Error("Saved state did not match your edits.");
-      } catch (error) {
-        unknownOutcome = stage === "readback" || uncertain(error);
-        failure = message(error, "The save failed.");
-        throw error;
-      }
-    }, "Settings saved. Style rules and earlier clips are unchanged.");
+    const ok = await w.run(
+      async () => {
+        started = true;
+        try {
+          // 1. Latest saved state, never the possibly stale screen copy.
+          const [campaigns, profiles] = await Promise.all([
+            workspaceApi.campaigns(),
+            workspaceApi.profiles(),
+          ]);
+          const latestCampaign = campaigns.find((c) => c.id === campaignId);
+          if (!latestCampaign)
+            throw new Error("These goals are no longer available. Refresh and try again.");
+          // 2. The selected brand must still belong to this campaign. There is
+          // no fallback to another one.
+          const latestProfile = profiles.find((p) => p.id === profileId);
+          if (!latestProfile || !latestCampaign.profile_ids.includes(profileId))
+            throw new Error(
+              "This brand is no longer linked to these goals. Refresh and choose again.",
+            );
+          // 3. One strict writable body for this part only, by exact ID.
+          if (part === "brand") {
+            const body = profileBody();
+            attempt.current = { part, profileId, profile: body };
+            stage = "write";
+            await workspaceApi.updateProfile(profileId, body);
+          } else {
+            const body = campaignBody(latestCampaign);
+            attempt.current = { part, campaign: body };
+            stage = "write";
+            await workspaceApi.save(body, campaignId);
+          }
+          // 4. Confirm by reading back.
+          stage = "readback";
+          if (!(await confirmed())) throw new Error("Saved state did not match your edits.");
+        } catch (error) {
+          unknownOutcome = stage === "readback" || uncertain(error);
+          failure = message(error, "The save failed.");
+          throw error;
+        }
+      },
+      part === "brand"
+        ? "Brand profile saved. Style rules and earlier clips are unchanged."
+        : "Goals saved. Style rules and earlier clips are unchanged.",
+    );
     if (!started) return;
     if (ok) {
       setLinkProfiles([]);
       setAttachSources([]);
+      setKitEdited(false);
       setState({ kind: "saved", message: "Saved and confirmed." });
       onSaved();
       return;
     }
-    // 7. Keep every draft and say exactly what may have been written.
-    if (!failure) {
-      // Writes were confirmed by readback, but the workspace refresh failed.
+    // 5. Keep every draft and say exactly what may have been written.
+    if (!failure)
+      // Writes were confirmed by readback, but the refresh failed.
       setState({
         kind: "unknown",
         message:
-          "Your changes were confirmed, but the workspace could not refresh. Check saved state before saving again.",
+          "Your changes were confirmed, but the screen could not refresh. Check saved state before saving again.",
       });
-      return;
-    }
-    if (stage === "read")
+    else if (stage === "read")
       setState({
         kind: "failed",
         message: `${failure} Nothing was saved; your edits are still here.`,
       });
-    else if (stage === "profile")
+    else if (stage === "write")
       setState(
         unknownOutcome
           ? {
               kind: "unknown",
-              message: `${failure} The workspace save was not confirmed and may or may not have been written. Check saved state before saving again.`,
+              message: `${failure} The save was not confirmed and may or may not have been written. Check saved state before saving again.`,
             }
           : {
               kind: "failed",
-              message: `${failure} The workspace was not saved, so nothing changed. Your edits are still here.`,
-            },
-      );
-    else if (stage === "campaign")
-      setState(
-        unknownOutcome
-          ? {
-              kind: "unknown",
-              message: `${failure} Workspace saved; the campaign save was not confirmed. Check saved state before saving again.`,
-            }
-          : {
-              kind: "partial",
-              message: `${failure} Partially saved: workspace saved, campaign was not. Check saved state before saving again.`,
+              message: `${failure} Nothing was saved. Your edits are still here.`,
             },
       );
     else
@@ -294,45 +331,50 @@ export function Setup({
       });
   }
 
-  async function checkSaved() {
+  /** True when the saved record matches the last attempt exactly. */
+  async function confirmed() {
     const last = attempt.current;
-    if (!last || !campaign || checking) return;
-    setChecking(true);
-    try {
-      const [campaigns, profiles] = await Promise.all([
-        workspaceApi.campaigns(),
-        workspaceApi.profiles(),
-      ]);
-      const profileOk = profileMatches(
-        profiles.find((p) => p.id === last.profileId),
+    if (!last || !campaign) return false;
+    if (last.part === "brand")
+      return profileMatches(
+        (await workspaceApi.profiles()).find((p) => p.id === last.profileId),
         last.profile,
       );
-      const campaignOk = campaignMatches(
-        campaigns.find((c) => c.id === campaign.id),
-        last.campaign,
-      );
+    return campaignMatches(
+      (await workspaceApi.campaigns()).find((c) => c.id === campaign.id),
+      last.campaign,
+    );
+  }
+
+  async function checkSaved() {
+    if (!attempt.current || !campaign || checking) return;
+    setChecking(true);
+    try {
+      const ok = await confirmed();
       setState(
-        profileOk && campaignOk
+        ok
           ? {
               kind: "saved",
               message: "Readback confirms every change is saved.",
             }
           : {
               kind: "failed",
-              message: `Readback: workspace ${profileOk ? "saved" : "not saved"}; campaign ${campaignOk ? "saved" : "not saved"}. Your edits are still here; saving again is now safe.`,
+              message:
+                "Readback: not saved. Your edits are still here; saving again is now safe.",
             },
       );
-      if (profileOk && campaignOk) {
+      if (ok) {
         setLinkProfiles([]);
         setAttachSources([]);
+        setKitEdited(false);
         onSaved();
       }
       await w.load().catch(() => {});
     } catch (error) {
-      setState((old) => ({
-        kind: old.kind === "partial" ? "partial" : "unknown",
+      setState({
+        kind: "unknown",
         message: `Could not read saved state: ${message(error, "the service is unavailable")}. Try again before saving.`,
-      }));
+      });
     } finally {
       setChecking(false);
     }
@@ -341,8 +383,8 @@ export function Setup({
   async function createProfile() {
     const title = profileName.trim();
     if (!title || blocked) return;
-    // Explicit, separate action. It creates one new local profile and only
-    // queues it for linking; the channel changes when settings are saved.
+    // Explicit, separate action. It creates one new local brand and only
+    // queues it for linking; the campaign changes when it is saved.
     await w.run(async () => {
       const created = await workspaceApi.profile({
         name: title,
@@ -352,286 +394,386 @@ export function Setup({
       });
       setLinkProfiles((old) => union(old, [created.id]));
       setProfileName("");
-    }, "Workspace created. Save settings to share this campaign with it. No social account was connected.");
+    }, "Brand created. Save goals to share them with it. No social account was connected.");
   }
 
   if (!campaign)
     return (
-      <Empty title="No campaign selected" icon="settings">
-        {w.loading
-          ? "Opening your workspace…"
-          : "Choose a workspace from the top bar."}
+      <Empty title="Nothing open yet" icon="settings">
+        {w.loading ? "Opening…" : "Choose a brand from the top bar."}
       </Empty>
     );
   if (!profile)
     return (
-      <Empty title="Choose a workspace" icon="settings">
-        This workspace isn't linked to the campaign. Refresh and pick another;
-        nothing changes automatically.
+      <Empty title="Choose a brand" icon="settings">
+        This brand isn't linked here. Refresh and pick another; nothing
+        changes automatically.
       </Empty>
     );
-  return (
-    <div className="gf-setup-grid gf-channel-settings-grid">
-      <section className="gf-card gf-brief" aria-label="Workspace settings form">
-        <div className="gf-form-fields">
-          <FieldGroup title="Workspace">
-            <Field label="Workspace name">
-              {(id) => (
-                <AutoTextarea
-                  rows={1}
-                  id={id}
-                  maxLength={200}
-                  placeholder="e.g. All-In Podcast"
-                  value={workspaceName}
-                  onChange={(e) => {
-                    setWorkspaceName(e.target.value);
-                    edited();
-                  }}
-                />
-              )}
-            </Field>
-            <Field label="Who are we speaking to?">
-              {(id) => (
-                <AutoTextarea
-                  rows={1}
-                  id={id}
-                  maxLength={3000}
-                  placeholder="Builders, founders and curious minds"
-                  value={audience}
-                  onChange={(e) => {
-                    setAudience(e.target.value);
-                    edited();
-                  }}
-                />
-              )}
-            </Field>
-            <Field
-              label="Voice and boundaries"
-              hint="One rule per line."
-            >
-              {(id) => (
-                <AutoTextarea
-                  id={id}
-                  rows={3}
-                  maxLength={4000}
-                  value={voice}
-                  onChange={(e) => {
-                    setVoice(e.target.value);
-                    edited();
-                  }}
-                />
-              )}
-            </Field>
-            <Field label="Creative preferences">
-              {(id) => (
-                <AutoTextarea
-                  id={id}
-                  rows={2}
-                  maxLength={4000}
-                  placeholder="e.g. Lead with a clear claim; keep the context intact."
-                  value={creative}
-                  onChange={(e) => {
-                    setCreative(e.target.value);
-                    edited();
-                  }}
-                />
-              )}
-            </Field>
-            <CloudAccountRow />
-          </FieldGroup>
-          <FieldGroup title="Campaign">
-            <Field label="Campaign name">
-              {(id) => (
-                <AutoTextarea
-                  rows={1}
-                  id={id}
-                  maxLength={200}
-                  placeholder="e.g. Founder stories"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    edited();
-                  }}
-                />
-              )}
-            </Field>
-            <Field
-              label="What are we working toward?"
-              hint="This campaign's goal. Other campaigns keep their own."
-            >
-              {(id) => (
-                <select
-                  id={id}
-                  value={objective}
-                  onChange={(e) => {
-                    setObjective(e.target.value);
-                    edited();
-                  }}
-                >
-                  {objectives.map((value) => (
-                    <option key={value} value={value}>
-                      {objectiveLabels[value]}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Field>
-            <Field
-              label="Primary metric"
-              hint={
-                metricNeeded
-                  ? "Required for this goal."
-                  : "Not needed while exploring."
-              }
-            >
-              {(id) => (
-                <AutoTextarea
-                  id={id}
-                  rows={1}
-                  maxLength={200}
-                  value={metricNeeded ? metric : ""}
-                  disabled={!metricNeeded}
-                  placeholder={
-                    metricNeeded
-                      ? "e.g. full_episode_visits"
-                      : "Not needed for discovery"
-                  }
-                  onChange={(e) => {
-                    setMetric(e.target.value);
-                    edited();
-                  }}
-                />
-              )}
-            </Field>
-            <Field
-              label="Campaign notes"
-              hint="Optional. Added to the agents' instructions for this campaign only, within the workspace style rules."
-            >
-              {(id) => (
-                <AutoTextarea
-                  id={id}
-                  rows={2}
-                  maxLength={2000}
-                  placeholder="e.g. Favour the guest's founding story"
-                  value={notes}
-                  onChange={(e) => {
-                    setNotes(e.target.value);
-                    edited();
-                  }}
-                />
-              )}
-            </Field>
-            <CampaignBriefEditor
-              w={w}
-              campaign={campaign}
-              workspaceAudience={profile.audience}
+
+  const brandForm = (
+    <>
+      <FieldGroup title="Brand">
+        <Field label="Brand name">
+          {(id) => (
+            <AutoTextarea
+              rows={1}
+              id={id}
+              maxLength={200}
+              placeholder="e.g. All-In Podcast"
+              value={brandName}
+              onChange={(e) => {
+                setBrandName(e.target.value);
+                edited();
+              }}
             />
-            {onNewCampaign && (
-              <button
-                type="button"
-                className="gf-button ghost compact"
-                disabled={w.busy || checking}
-                onClick={onNewCampaign}
-              >
-                <Icon name="plus" size={14} />
-                New campaign
-              </button>
+          )}
+        </Field>
+        <Field label="Who it's for">
+          {(id) => (
+            <AutoTextarea
+              rows={1}
+              id={id}
+              maxLength={3000}
+              placeholder="Builders, founders and curious minds"
+              value={audience}
+              onChange={(e) => {
+                setAudience(e.target.value);
+                edited();
+              }}
+            />
+          )}
+        </Field>
+        <Field label="Voice & boundaries" hint="One rule per line.">
+          {(id) => (
+            <AutoTextarea
+              id={id}
+              rows={3}
+              maxLength={4000}
+              value={voice}
+              onChange={(e) => {
+                setVoice(e.target.value);
+                edited();
+              }}
+            />
+          )}
+        </Field>
+        <div className="gf-link-rows">
+          <button
+            type="button"
+            className="gf-link-row"
+            disabled={w.busy || checking}
+            onClick={next}
+          >
+            <Icon name="research" size={16} />
+            <span>Style rules</span>
+            <Icon name="arrow" size={14} />
+          </button>
+          {onAccounts && (
+            <button
+              type="button"
+              className="gf-link-row"
+              disabled={w.busy || checking}
+              onClick={onAccounts}
+            >
+              <Icon name="results" size={16} />
+              <span>Connected accounts</span>
+              <Icon name="arrow" size={14} />
+            </button>
+          )}
+        </div>
+        <CloudAccountRow />
+      </FieldGroup>
+      <FieldGroup title="Brand kit">
+        <div className="gf-form-pair">
+          <Field label="Main colour">
+            {(id) => (
+              <input
+                id={id}
+                type="color"
+                value={HEX.test(primary) ? primary : DEFAULT_KIT.primary_color}
+                onChange={(e) => {
+                  setPrimary(e.target.value.toUpperCase());
+                  editKit();
+                }}
+              />
             )}
-          </FieldGroup>
-          <details className="gf-disclosure gf-advanced-settings">
-            <summary aria-label="Advanced controls">
-              <Icon name="settings" />
-              Advanced
-              <Icon name="down" size={15} />
-            </summary>
-            <div className="gf-disclosure-body">
-              <h3>Episodes in this campaign</h3>
-              {factory.data.videos.length === 0 && (
-                <p className="gf-help">No imported footage yet.</p>
-              )}
-              <div className="gf-profile-options">
-                {factory.data.videos.map((v) => {
-                  const on = attached.has(v.id) || attachSources.includes(v.id);
-                  return (
-                    <label key={v.id} className={on ? "selected" : ""}>
-                      <input
-                        type="checkbox"
-                        aria-label={`Attach ${v.name}`}
-                        checked={on}
-                        disabled={blocked || attached.has(v.id)}
-                        onChange={(e) => {
-                          setAttachSources((old) =>
-                            e.target.checked
-                              ? union(old, [v.id])
-                              : old.filter((id) => id !== v.id),
-                          );
-                          edited();
-                        }}
-                      />
-                      <Icon name="studio" size={14} />
-                      {v.name}
-                      {typeof v.duration === "number" && (
-                        <small> · {formatTime(v.duration)}</small>
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-              <h3>Shared with workspaces</h3>
-              <div className="gf-profile-options">
-                {w.profiles.map((p) => {
-                  const on = linked.has(p.id) || linkProfiles.includes(p.id);
-                  return (
-                    <label key={p.id} className={on ? "selected" : ""}>
-                      <input
-                        type="checkbox"
-                        aria-label={`Link ${p.name}`}
-                        checked={on}
-                        disabled={blocked || linked.has(p.id)}
-                        onChange={(e) => {
-                          setLinkProfiles((old) =>
-                            e.target.checked
-                              ? union(old, [p.id])
-                              : old.filter((id) => id !== p.id),
-                          );
-                          edited();
-                        }}
-                      />
-                      <Icon name="headphones" size={14} />
-                      {p.name}
-                    </label>
-                  );
-                })}
-              </div>
-              <Field label="New workspace name">
-                {(id) => (
-                  <AutoTextarea
-                    rows={1}
-                    id={id}
-                    maxLength={200}
-                    placeholder="e.g. Founder stories · clips"
-                    value={profileName}
-                    onChange={(e) => setProfileName(e.target.value)}
+          </Field>
+          <Field label="Accent colour">
+            {(id) => (
+              <input
+                id={id}
+                type="color"
+                value={HEX.test(accent) ? accent : DEFAULT_KIT.accent_color}
+                onChange={(e) => {
+                  setAccent(e.target.value.toUpperCase());
+                  editKit();
+                }}
+              />
+            )}
+          </Field>
+        </div>
+        <Field label="Font" hint="An installed font's name. Blank uses the default.">
+          {(id) => (
+            <input
+              id={id}
+              maxLength={80}
+              placeholder="e.g. Inter"
+              value={fontFamily}
+              onChange={(e) => {
+                setFontFamily(e.target.value);
+                editKit();
+              }}
+            />
+          )}
+        </Field>
+        <Field label="Logo (PNG file on this Mac)">
+          {(id) => (
+            <input
+              id={id}
+              maxLength={1024}
+              placeholder="/Users/you/Pictures/logo.png"
+              value={logo}
+              onChange={(e) => {
+                setLogo(e.target.value);
+                editKit();
+              }}
+            />
+          )}
+        </Field>
+        {kitEdited && kitError && (
+          <p className="gf-help" role="alert">
+            {kitError}
+          </p>
+        )}
+      </FieldGroup>
+      <details className="gf-disclosure gf-advanced-settings">
+        <summary aria-label="Advanced controls">
+          <Icon name="settings" />
+          Advanced
+          <Icon name="down" size={15} />
+        </summary>
+        <div className="gf-disclosure-body">
+          <Field label="Extra creative notes">
+            {(id) => (
+              <AutoTextarea
+                id={id}
+                rows={2}
+                maxLength={4000}
+                placeholder="e.g. Lead with a clear claim; keep the context intact."
+                value={creative}
+                onChange={(e) => {
+                  setCreative(e.target.value);
+                  edited();
+                }}
+              />
+            )}
+          </Field>
+          {onNewCampaign && (
+            <button
+              type="button"
+              className="gf-button secondary compact"
+              disabled={w.busy || checking}
+              onClick={onNewCampaign}
+            >
+              <Icon name="plus" size={14} />
+              Run a separate push (campaign)
+            </button>
+          )}
+          {advanced}
+        </div>
+      </details>
+    </>
+  );
+
+  const campaignForm = (
+    <>
+      <FieldGroup title="Goals & brief">
+        {severalCampaigns && <Field label="Campaign name">
+          {(id) => (
+            <AutoTextarea
+              rows={1}
+              id={id}
+              maxLength={200}
+              placeholder="e.g. Founder stories"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                edited();
+              }}
+            />
+          )}
+        </Field>}
+        <Field label="What are we working toward?">
+          {(id) => (
+            <select
+              id={id}
+              value={objective}
+              onChange={(e) => {
+                setObjective(e.target.value);
+                edited();
+              }}
+            >
+              {objectives.map((value) => (
+                <option key={value} value={value}>
+                  {objectiveLabels[value]}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+        <Field
+          label="Primary metric"
+          hint={
+            metricNeeded
+              ? "Required for this goal."
+              : "Not needed while exploring."
+          }
+        >
+          {(id) => (
+            <AutoTextarea
+              id={id}
+              rows={1}
+              maxLength={200}
+              value={metricNeeded ? metric : ""}
+              disabled={!metricNeeded}
+              placeholder={
+                metricNeeded
+                  ? "e.g. full_episode_visits"
+                  : "Not needed for discovery"
+              }
+              onChange={(e) => {
+                setMetric(e.target.value);
+                edited();
+              }}
+            />
+          )}
+        </Field>
+        <Field label="Notes for the agents" hint="Optional.">
+          {(id) => (
+            <AutoTextarea
+              id={id}
+              rows={2}
+              maxLength={2000}
+              placeholder="e.g. Favour the guest's founding story"
+              value={notes}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                edited();
+              }}
+            />
+          )}
+        </Field>
+        <CampaignBriefEditor
+          w={w}
+          campaign={campaign}
+          workspaceAudience={profile.audience}
+        />
+      </FieldGroup>
+      <details className="gf-disclosure gf-advanced-settings">
+        <summary aria-label="Episodes and sharing">
+          <Icon name="settings" />
+          Episodes & sharing
+          <Icon name="down" size={15} />
+        </summary>
+        <div className="gf-disclosure-body">
+          <h3>Episodes</h3>
+          {factory.data.videos.length === 0 && (
+            <p className="gf-help">No imported footage yet.</p>
+          )}
+          <div className="gf-profile-options">
+            {factory.data.videos.map((v) => {
+              const on = attached.has(v.id) || attachSources.includes(v.id);
+              return (
+                <label key={v.id} className={on ? "selected" : ""}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Attach ${v.name}`}
+                    checked={on}
+                    disabled={blocked || attached.has(v.id)}
+                    onChange={(e) => {
+                      setAttachSources((old) =>
+                        e.target.checked
+                          ? union(old, [v.id])
+                          : old.filter((id) => id !== v.id),
+                      );
+                      edited();
+                    }}
                   />
-                )}
-              </Field>
-              <button
-                type="button"
-                className="gf-button secondary compact"
-                disabled={!profileName.trim() || blocked}
-                onClick={() => void createProfile()}
-              >
-                Create workspace
-                <Icon name="plus" size={14} />
-              </button>
-              {advanced && (
-                <>
-                  <h3>Workspace</h3>
-                  {advanced}
-                </>
-              )}
-            </div>
-          </details>
+                  <Icon name="studio" size={14} />
+                  {v.name}
+                  {typeof v.duration === "number" && (
+                    <small> · {formatTime(v.duration)}</small>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+          <h3>Shared with brands</h3>
+          <div className="gf-profile-options">
+            {w.profiles.map((p) => {
+              const on = linked.has(p.id) || linkProfiles.includes(p.id);
+              return (
+                <label key={p.id} className={on ? "selected" : ""}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Link ${p.name}`}
+                    checked={on}
+                    disabled={blocked || linked.has(p.id)}
+                    onChange={(e) => {
+                      setLinkProfiles((old) =>
+                        e.target.checked
+                          ? union(old, [p.id])
+                          : old.filter((id) => id !== p.id),
+                      );
+                      edited();
+                    }}
+                  />
+                  <Icon name="headphones" size={14} />
+                  {p.name}
+                </label>
+              );
+            })}
+          </div>
+          <Field label="New brand name">
+            {(id) => (
+              <AutoTextarea
+                rows={1}
+                id={id}
+                maxLength={200}
+                placeholder="e.g. Founder stories · clips"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+              />
+            )}
+          </Field>
+          <button
+            type="button"
+            className="gf-button secondary compact"
+            disabled={!profileName.trim() || blocked}
+            onClick={() => void createProfile()}
+          >
+            Create brand
+            <Icon name="plus" size={14} />
+          </button>
+          {advanced}
+        </div>
+      </details>
+    </>
+  );
+
+  return (
+    <>
+    <div
+      className="gf-setup-grid gf-channel-settings-grid"
+      id={part === "campaign" ? "gf-goals" : undefined}
+    >
+      <section
+        className="gf-card gf-brief"
+        aria-label={part === "brand" ? "Brand profile form" : "Goals & brief form"}
+      >
+        <div className="gf-form-fields">
+          {part === "brand" ? brandForm : campaignForm}
         </div>
       </section>
       <div className="gf-stage-action">
@@ -645,7 +787,9 @@ export function Setup({
           }
         >
           {state.kind === "idle"
-            ? "Saves this workspace and campaign. Nothing is published."
+            ? part === "brand"
+              ? "Saves your brand. Nothing is published."
+              : "Saves your goals. Nothing is published."
             : state.message}
         </span>
         <div className="gf-channel-actions">
@@ -660,17 +804,8 @@ export function Setup({
               <Icon name="refresh" size={14} />
             </button>
           )}
-          <button
-            type="button"
-            className="gf-button secondary compact"
-            disabled={w.busy || checking}
-            onClick={next}
-          >
-            Style rules
-            <Icon name="research" size={14} />
-          </button>
           <PrimaryAction
-            label={w.busy ? "Saving…" : "Save settings"}
+            label={w.busy ? "Saving…" : part === "brand" ? "Save brand" : "Save goals"}
             intent="approve"
             disabled={blocked || needsReadback || !valid}
             onClick={() => void save()}
@@ -678,5 +813,7 @@ export function Setup({
         </div>
       </div>
     </div>
+    {goals}
+    </>
   );
 }

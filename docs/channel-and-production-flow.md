@@ -2,7 +2,7 @@
 
 ## Daily flow
 
-1. Set up the workspace once: name, audience, voice and boundaries. Each campaign then sets its own outcome.
+1. Set up the brand once: name, audience, voice and boundaries, and its goals & brief.
 2. Add footage in Factory. The import surface confirms storage and attachment separately; no guessed upload percentage.
 3. Start agent production, or choose a moment manually. By default the swarm covers the whole episode (about a clip a minute), then ranks the clips best first with a quality floor; similar clips are merged and weaker ones wait under "Below the bar" (kept, not deleted). Studio → Fine-tune → "Deep edit" runs the slower team engine for a few self-checked clips.
 4. Review the exact generated clip. Technical checks and version history are available in the inspector. Approve and export that exact revision.
@@ -20,11 +20,13 @@ A **campaign** is a goal-scoped push inside a workspace: its own `objective` + `
 
 Every agent prompt (producer, footage analyst, scouts and selector, swarm, performance analyst, creative strategist, editor, critic, baseline, learning analyst) carries one bounded CAMPAIGN BRIEF block with a fixed precedence: workspace boundaries and must-avoid items (hard) > approved Style rules > campaign brief > the run's "what to look for" note and reference links (untrusted data). Moments and cuts that touch a must-avoid item are rejected in code and listed on the run; the critic reports must-avoid hits as findings; selection roles say which key message or topic each moment serves. Each production snapshot stores the normalized brief, so earlier clips keep the brief they were made with.
 
-Edit the brief in **New campaign** or **Workspace settings → Campaign** ("Save brief": reads the latest campaign, sends that exact record with only the brief changed, membership preserved, then confirms by readback). "Save settings" keeps the latest saved brief. Find clips shows a one-line summary ("Goal · CTA · Avoid") with **Edit brief**. Briefs saved before these fields existed read complete with empty new fields; nothing is rewritten until the next save.
+Edit the brief in **New campaign** or **Brand profile → Goals & brief** ("Save brief": reads the latest campaign, sends that exact record with only the brief changed, membership preserved, then confirms by readback). "Save goals" keeps the latest saved brief. Find clips shows a one-line summary ("Goal · CTA · Avoid") with **Edit brief**. Briefs saved before these fields existed read complete with empty new fields; nothing is rewritten until the next save.
 
 ## One place for context
 
-Workspace settings edits the workspace's audience, voice and preferences and the selected campaign's name, goal, metric and notes. It does not require onboarding again or start an agent. Workspace style rules are a contextual advanced control: save a proposed version, then explicitly approve it. A metadata save never silently replaces approved strategy. Model/tool setup remains in Advanced tools.
+**Brand profile** (the UI word for a workspace/profile) edits the brand's name, audience, voice & boundaries and brand kit (colours, font, PNG logo; sent only when edited, and a save that omits the kit keeps the saved one), with links to Style rules and Connected accounts and the account sign-in row; "Save brand" writes only the profile. Below it, **Goals & brief** edits the selected campaign's goal, metric, notes and brief; "Save goals" writes only the campaign. Each save reads back its own record. It does not require onboarding again or start an agent.
+
+**Campaigns are hidden by default.** Every brand gets one automatic campaign named "<Brand> — main" at onboarding, and the word "campaign" does not appear in the default UI. A second one is created only through Brand profile → Advanced → "Run a separate push (campaign)"; after that the top bar shows "Campaign: <name>" (with "Goals & brief…" and "New campaign…") and Goals & brief shows the campaign name. Backend semantics are unchanged. Workspace style rules are a contextual advanced control: save a proposed version, then explicitly approve it. A metadata save never silently replaces approved strategy. Model/tool setup remains in Advanced tools.
 
 ## Required controls retained
 

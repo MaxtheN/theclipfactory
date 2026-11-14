@@ -104,7 +104,7 @@ export function onboardingBodies(input: {
     .map((line) => line.trim())
     .filter(Boolean);
   if (!name || name.length > 200)
-    throw new Error("Use a workspace name between 1 and 200 characters.");
+    throw new Error("Use a brand name between 1 and 200 characters.");
   if (!audience || audience.length > 3000)
     throw new Error("Describe your audience in 1–3,000 characters.");
   if (!(objectives as readonly string[]).includes(input.objective))
@@ -257,7 +257,7 @@ export function Onboarding({
   function problem(index: number) {
     if (index === 0) {
       if (!name.trim() || name.trim().length > 200)
-        return "Use a workspace name between 1 and 200 characters.";
+        return "Use a brand name between 1 and 200 characters.";
       if (!audience.trim() || audience.trim().length > 3000)
         return "Describe your audience in 1–3,000 characters.";
     }
@@ -406,7 +406,7 @@ export function Onboarding({
       });
     } catch (e) {
       setStepError(
-        e instanceof Error ? e.message : "Check your workspace details.",
+        e instanceof Error ? e.message : "Check your brand details.",
       );
       return;
     }
@@ -426,7 +426,7 @@ export function Onboarding({
         attemptedProfile.current = body;
         savedProfile = await workspaceApi.profile(body);
         if (!savedProfile?.id || savedProfile.id.length > 128)
-          throw new Error("The saved profile could not be confirmed.");
+          throw new Error("The saved brand could not be confirmed.");
         profileReceipt.current = savedProfile;
         setProfile(savedProfile);
       } else if (
@@ -442,7 +442,7 @@ export function Onboarding({
           bodies.profile,
         );
         if (!savedProfile?.id || savedProfile.id !== profileReceipt.current?.id)
-          throw new Error("The updated profile could not be confirmed.");
+          throw new Error("The updated brand could not be confirmed.");
         profileReceipt.current = savedProfile;
         setProfile(savedProfile);
       }
@@ -451,7 +451,8 @@ export function Onboarding({
       let savedCampaign = campaignReceipt.current;
       if (!savedCampaign) {
         const body: CampaignInput = {
-          name: name.trim(),
+          // The first campaign is simply "<Brand> — main"; more can be added later.
+          name: `${name.trim().slice(0, 190)} — main`,
           profile_ids: [savedProfile.id],
           video_ids: [],
           brief: bodies.brief,
@@ -460,7 +461,7 @@ export function Onboarding({
         attemptedCampaign.current = body;
         savedCampaign = await workspaceApi.save(body);
         if (!savedCampaign?.id)
-          throw new Error("The saved workspace could not be confirmed.");
+          throw new Error("Your saved goals could not be confirmed.");
         campaignReceipt.current = savedCampaign;
         setCampaign(savedCampaign);
       }
@@ -472,15 +473,15 @@ export function Onboarding({
       setLaunchPhase("ready");
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "The workspace could not be saved.";
+        e instanceof Error ? e.message : "Your brand could not be saved.";
       const rejected =
         e instanceof ApiError && (e.status === 400 || e.status === 422);
       if (phase !== "refresh" && !rejected) setUncertain(phase);
       setError(
         phase === "refresh"
-          ? `Your workspace was saved. Refresh to open it. ${message}`
+          ? `Your brand was saved. Refresh to open it. ${message}`
           : rejected
-            ? `${message} Correct your details and try again.${profileReceipt.current ? " Your saved profile will be reused." : " Your inputs are still editable."}`
+            ? `${message} Correct your details and try again.${profileReceipt.current ? " Your saved brand will be reused." : " Your inputs are still editable."}`
             : `${message} Check saved records before resubmitting; your details stay here.`,
       );
     } finally {
@@ -497,8 +498,8 @@ export function Onboarding({
     "Who are we making this for?",
     "What are we working toward?",
     "How should your edits feel?",
-    "Review your workspace",
-    "Save your workspace to your account",
+    "Review your brand",
+    "Save your brand to your account",
   ];
   const descriptions = [
     "Tell us who you make this for. We’ll use it to guide your edits.",
@@ -507,7 +508,7 @@ export function Onboarding({
     askAccount
       ? "Check your choices. Next, save them to your account."
       : "Check your choices, then save them and open Factory.",
-    "Your footage stays on this Mac. An account keeps this workspace yours.",
+    "Your footage stays on this Mac. An account keeps this brand yours.",
   ];
   function goToProgress(index: number) {
     if (locked || index > furthest) return;
@@ -549,7 +550,7 @@ export function Onboarding({
   return (
     <section
       className={`gf-onboarding gf-onboarding-wizard${launchPhase ? " is-launching" : ""}`}
-      aria-label="Workspace onboarding"
+      aria-label="Brand onboarding"
     >
       <header className="gf-onboarding-header">
         <div className="gf-onboarding-brand">
@@ -563,7 +564,7 @@ export function Onboarding({
       </header>
       <nav
         className="gf-onboarding-progress-wrap"
-        aria-label="Workspace setup"
+        aria-label="Brand setup"
         hidden={!!launchPhase}
         style={{ "--onboarding-steps": steps.length } as CSSProperties}
       >
@@ -662,7 +663,7 @@ export function Onboarding({
 
             {step === 0 && (
               <>
-                <Field label="Podcast or workspace name">
+                <Field label="Name your brand / podcast">
                   {(id) => (
                     <AutoTextarea
                       id={id}
@@ -878,7 +879,7 @@ export function Onboarding({
                 <dl className="gf-onboarding-summary">
                   <div className="gf-onboarding-summary-row">
                     <div className="gf-onboarding-summary-copy">
-                      <dt>Workspace & audience</dt>
+                      <dt>Brand & audience</dt>
                       <dd>
                         <strong>{name.trim()}</strong>
                         <p>{audience.trim()}</p>
@@ -944,7 +945,7 @@ export function Onboarding({
                 </Disclosure>
                 <p className="gf-onboarding-review-note">
                   {askAccount
-                    ? "Next, save this workspace to your account, or keep it on this Mac only."
+                    ? "Next, save this brand to your account, or keep it on this Mac only."
                     : "Launch saves your choices and opens Factory. You choose when to add footage and start production."}
                 </p>
               </>
@@ -992,7 +993,7 @@ export function Onboarding({
                   onClick={() => void reconcile()}
                 >
                   Check saved{" "}
-                  {uncertain === "profile" ? "profiles" : "workspaces"}
+                  {uncertain === "profile" ? "brands" : "goals"}
                 </button>
               )}
               {!!matches.length && (
@@ -1021,8 +1022,8 @@ export function Onboarding({
             <p className="gf-flow-note">
               <Icon name="check" size={14} />
               {campaign
-                ? "Workspace saved. Ready to open."
-                : "Profile saved. Your next attempt will reuse it."}
+                ? "All saved. Ready to open."
+                : "Brand saved. Your next attempt will reuse it."}
             </p>
           )}
         </div>
@@ -1069,19 +1070,19 @@ export function Onboarding({
           >
             <span className="gf-onboarding-cta-label">
               {busy
-                ? "Saving workspace…"
+                ? "Saving…"
                 : account.submitting
                   ? account.mode === "sign-up"
                     ? "Creating account…"
                     : "Signing in…"
                   : step === last
                     ? campaign
-                      ? "Open workspace"
+                      ? "Open Factory"
                       : askAccount && !signedIn
                         ? account.mode === "sign-up"
                           ? "Create account & launch"
                           : "Sign in & launch"
-                        : "Launch workspace"
+                        : "Launch"
                     : editingReview
                       ? "Review changes"
                       : "Continue"}

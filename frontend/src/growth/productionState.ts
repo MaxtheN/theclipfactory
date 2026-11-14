@@ -27,7 +27,7 @@ export function readiness(input: {
   const shared: string[] = [];
   if (input.stale) shared.push("Refresh unavailable or stale workspace data first.");
   if (!input.approved) shared.push("Approve direction for this account profile first.");
-  if (!source || !input.sourceAttached) shared.push("Attach and select footage from this campaign.");
+  if (!source || !input.sourceAttached) shared.push("Add and select an episode first.");
   else if (source.duration == null || !Number.isFinite(source.duration) || source.duration <= 0) shared.push("This source has no usable duration. Check the imported file.");
   if (source && sourceHasActiveJob(jobs, source.id)) shared.push("This source already has queued or running work.");
   if (system?.ffmpeg !== true || system.ffprobe !== true) shared.push("Local FFmpeg and ffprobe are required for production.");
@@ -71,7 +71,7 @@ export function editErrors(draft: EditDraft, duration: number | null | undefined
 
 export function retryBlocker(job: Job, jobs: Job[], scope: ProductionScope, direction?: { framing: string; caption_style: string }): string | null {
   const context = object(job.context), plan = object(context?.plan);
-  if (!jobInScope(job, scope) || job.kind !== "render") return "This render belongs to another source, campaign or profile.";
+  if (!jobInScope(job, scope) || job.kind !== "render") return "This render belongs to another episode or brand.";
   if (!["failed", "cancelled"].includes(job.status)) return "Only a failed or cancelled render can be retried.";
   if (!plan || typeof plan.start !== "number" || typeof plan.end !== "number") return "The saved render plan is unavailable. Choose a new edit.";
   const attempt = context?.attempt ?? 1;

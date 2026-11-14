@@ -232,6 +232,21 @@ def test_campaign_goal_and_notes_are_campaign_scoped_and_kept_when_omitted(domai
     assert d.store.get("campaigns", other["id"])["objective"] == "discovery"
 
 
+def test_profile_saves_that_omit_the_brand_kit_keep_the_saved_one(domain):
+    d = domain
+    kit = {"font_family": "Inter", "primary_color": "#123456", "accent_color": "#ABCDEF"}
+    d.service.save_profile(Profile(name="Profile A", brand_kit=kit), d.a["id"])
+    # The Brand profile screen saves name, audience and voice without the kit: it is kept.
+    d.service.save_profile(Profile(name="Renamed brand", audience="Founders"), d.a["id"])
+    saved = d.store.get("profiles", d.a["id"])
+    assert saved["name"] == "Renamed brand" and saved["brand_kit"]["primary_color"] == "#123456"
+    # An explicit kit replaces it; an explicit null clears it.
+    d.service.save_profile(Profile(name="Renamed brand", brand_kit={**kit, "accent_color": "#000000"}), d.a["id"])
+    assert d.store.get("profiles", d.a["id"])["brand_kit"]["accent_color"] == "#000000"
+    d.service.save_profile(Profile(name="Renamed brand", brand_kit=None), d.a["id"])
+    assert d.store.get("profiles", d.a["id"])["brand_kit"] is None
+
+
 def test_profile_context_and_profile_scoped_production_history_persist(domain):
     d = domain
     approve_initial(d)

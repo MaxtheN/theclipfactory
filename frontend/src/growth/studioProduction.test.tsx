@@ -143,7 +143,7 @@ describe("Studio production integration", () => {
     w.campaign!.brief = { ...w.campaign!.brief, cta: "Listen to the full episode", must_avoid: ["market predictions"] };
     const onEditBrief = vi.fn();
     render(<Studio w={w} factory={factory()} next={() => {}} preferredMode="agent" onEditBrief={onEditBrief} />);
-    expect(screen.getByLabelText("Campaign brief summary")).toHaveTextContent(
+    expect(screen.getByLabelText("Goals and brief summary")).toHaveTextContent(
       "Goal: drive full-episode visits · CTA: Listen to the full episode · Avoid: market predictions",
     );
     fireEvent.click(screen.getByRole("button", { name: "Edit brief" }));

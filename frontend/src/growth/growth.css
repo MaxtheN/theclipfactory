@@ -2733,3 +2733,33 @@
   font-size: 12px;
   opacity: 0.75;
 }
+.gf-link-rows {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+.gf-link-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.gf-link-row span {
+  flex: 1;
+  font-weight: 500;
+}
+.gf-link-row:hover:not(:disabled) {
+  border-color: currentColor;
+}
+.gf-link-row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

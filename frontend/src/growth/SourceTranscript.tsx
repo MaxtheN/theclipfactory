@@ -330,7 +330,7 @@ export function SourceTranscript({
             </Field>
             <Field
               label="Transcript language"
-              hint="Optional language code for imported text, such as en or fr. Local transcription uses the workspace language."
+              hint="Optional language code for imported text, such as en or fr. Local transcription uses your default language."
             >
               {(id) => (
                 <input
@@ -338,7 +338,7 @@ export function SourceTranscript({
                   value={draft.language}
                   disabled={blocked}
                   maxLength={12}
-                  placeholder="Use workspace language"
+                  placeholder="Use default language"
                   onChange={(event) =>
                     update({ language: event.target.value, error: "" })
                   }

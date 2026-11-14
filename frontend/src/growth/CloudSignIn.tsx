@@ -259,7 +259,7 @@ export function CloudSignIn({
               ? "Sign in to Growth Factory"
               : "Create your Growth Factory account"}
           </h2>
-          <p>Your footage stays on this Mac. An account keeps this workspace linked to you.</p>
+          <p>Your footage stays on this Mac. An account keeps this brand linked to you.</p>
           <CloudAccountFields account={account} />
           <footer className="gf-cloud-actions">
             <button

@@ -68,7 +68,7 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
     } catch (e) {
       if (mounted.current && request === generation.current)
         setError(
-          e instanceof Error ? e.message : "Unable to load this workspace.",
+          e instanceof Error ? e.message : "Unable to load this brand.",
         );
       throw e;
     } finally {

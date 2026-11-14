@@ -5,7 +5,7 @@ export type QuickAction = {
   id: string;
   label: string;
   icon: string;
-  group: "Campaign" | "Workspace";
+  group: "Clips" | "Brand";
   keywords?: string;
   disabled?: boolean;
   hint?: string;
@@ -174,7 +174,7 @@ export function QuickActions({
           aria-label="Quick actions"
           className="gf-command-list"
         >
-          {(["Campaign", "Workspace"] as const).map((group) => {
+          {(["Clips", "Brand"] as const).map((group) => {
             const grouped = filtered.filter((action) => action.group === group);
             if (!grouped.length) return null;
             return (

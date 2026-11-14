@@ -131,7 +131,7 @@ function AnalystRecommendations({
   return (
     <Disclosure title="Performance analyst recommendations" icon="results">
       <p>
-        Read completed recommendations from this campaign and profile. This does
+        Read completed recommendations for this brand. This does
         not run an agent or establish audience lift.
       </p>
       <button
@@ -158,7 +158,7 @@ function AnalystRecommendations({
           <p>{row.recommendation}</p>
           <small>{row.limitation}</small>
           <p>
-            Known campaign observations:{" "}
+            Known observations:{" "}
             {row.observationIds.join(", ") || "None cited"}
           </p>
           {row.otherEvidenceRefs.length > 0 && (
@@ -376,7 +376,7 @@ export function Results({
   if (!w.campaign)
     return (
       <Empty title="Every next edit needs a reason" icon="results">
-        Start a campaign to build a traceable production and learning loop.
+        Set up your brand to build a traceable production and learning loop.
       </Empty>
     );
   const validDates =
@@ -586,7 +586,7 @@ export function Results({
               <strong>Observe</strong>
               <p>
                 {known.length
-                  ? `${selectedKnown.length} selected known-value observation${selectedKnown.length === 1 ? "" : "s"}, scoped to this profile.`
+                  ? `${selectedKnown.length} selected known-value observation${selectedKnown.length === 1 ? "" : "s"}, for this brand.`
                   : "Import real evidence before proposing an evidence-led change."}
               </p>
             </div>
@@ -806,7 +806,7 @@ export function Results({
         <Disclosure title="Production impact & receipts" icon="clock">
           <p>
             {clips.length} human-approved {reviewPreview ? "sample " : ""}
-            outputs for this profile.
+            outputs for this brand.
           </p>
           <p>
             Elapsed time, human minutes and cost per accepted asset need a

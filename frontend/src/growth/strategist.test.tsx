@@ -173,7 +173,7 @@ describe("StrategistPanel", () => {
     const open = vi.fn();
     render(<StrategistPanel profileId="p" onOpenStyleRules={open} />);
     expect(await screen.findByText(/question hooks tend to beat/)).toBeTruthy();
-    for (const lane of ["Craft", "Selection", "Campaign"])
+    for (const lane of ["Craft", "Selection", "Posting plan"])
       expect(screen.getByRole("region", { name: `${lane} beliefs` })).toBeTruthy();
     const craft = screen.getByRole("region", { name: "Craft beliefs" });
     expect(within(craft).getByText("Supported")).toBeTruthy();

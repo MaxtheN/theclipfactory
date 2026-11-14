@@ -45,7 +45,7 @@ function start() {
 }
 function fillAudience() {
   fireEvent.change(
-    screen.getByRole("textbox", { name: "Podcast or workspace name" }),
+    screen.getByRole("textbox", { name: "Name your brand / podcast" }),
     { target: { value: "Founder stories" } },
   );
   fireEvent.change(
@@ -69,7 +69,7 @@ function toReview(goal = /^Reach new people/) {
   next();
 }
 function launch() {
-  fireEvent.click(screen.getByRole("button", { name: "Launch workspace" }));
+  fireEvent.click(screen.getByRole("button", { name: "Launch" }));
 }
 function boundaries() {
   screen
@@ -201,7 +201,7 @@ describe("guided workspace onboarding", () => {
       screen.getByRole("heading", { name: "What are we working toward?" }),
     ).toHaveFocus();
     expect(
-      screen.queryByRole("textbox", { name: "Podcast or workspace name" }),
+      screen.queryByRole("textbox", { name: "Name your brand / podcast" }),
     ).not.toBeInTheDocument();
     noWrites();
     fireEvent.click(screen.getByRole("radio", { name: /^Reach new people/ }));
@@ -218,7 +218,7 @@ describe("guided workspace onboarding", () => {
     ).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(
-      screen.getByRole("textbox", { name: "Podcast or workspace name" }),
+      screen.getByRole("textbox", { name: "Name your brand / podcast" }),
     ).toHaveValue("Founder stories");
     expect(
       screen.getByRole("textbox", { name: "Who are we speaking to?" }),
@@ -230,7 +230,7 @@ describe("guided workspace onboarding", () => {
     ).toBeChecked();
     next();
     expect(
-      screen.getByRole("heading", { name: "Review your workspace" }),
+      screen.getByRole("heading", { name: "Review your brand" }),
     ).toHaveFocus();
     noWrites();
     launch();
@@ -246,7 +246,8 @@ describe("guided workspace onboarding", () => {
     expect(vi.mocked(workspaceApi.profile).mock.calls[0][0]).not.toHaveProperty("objective");
     expect(workspaceApi.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        name: "Founder stories",
+        // The first (automatic) campaign is "<Brand> — main".
+        name: "Founder stories — main",
         profile_ids: ["new-profile"],
         video_ids: [],
         objective: "awareness",
@@ -351,7 +352,7 @@ describe("guided workspace onboarding", () => {
     });
     next();
     expect(
-      screen.getByRole("heading", { name: "Review your workspace" }),
+      screen.getByRole("heading", { name: "Review your brand" }),
     ).toHaveFocus();
     expect(screen.getByText("Early-stage founders")).toBeInTheDocument();
     noWrites();
@@ -364,7 +365,7 @@ describe("guided workspace onboarding", () => {
     );
     next();
     expect(
-      screen.getByRole("heading", { name: "Review your workspace" }),
+      screen.getByRole("heading", { name: "Review your brand" }),
     ).toHaveFocus();
     noWrites();
   });
@@ -382,7 +383,7 @@ describe("guided workspace onboarding", () => {
     );
     expect(screen.getByRole("alert")).toHaveTextContent("1–3,000 characters");
     expect(
-      screen.queryByRole("button", { name: "Launch workspace" }),
+      screen.queryByRole("button", { name: "Launch" }),
     ).not.toBeInTheDocument();
     noWrites();
     fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
@@ -394,7 +395,7 @@ describe("guided workspace onboarding", () => {
       }),
     );
     expect(
-      screen.getByRole("heading", { name: "Review your workspace" }),
+      screen.getByRole("heading", { name: "Review your brand" }),
     ).toHaveFocus();
     noWrites();
   });
@@ -416,7 +417,7 @@ describe("guided workspace onboarding", () => {
     screen.getByRole("button", { name: "Continue" }).focus();
     await user.keyboard("{Enter}");
     noWrites();
-    screen.getByRole("button", { name: "Launch workspace" }).focus();
+    screen.getByRole("button", { name: "Launch" }).focus();
     await user.keyboard("{Enter}");
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());
   });
@@ -451,19 +452,19 @@ describe("guided workspace onboarding", () => {
       next();
       next();
       const launchButton = screen.getByRole("button", {
-        name: "Launch workspace",
+        name: "Launch",
       });
       expect(launchButton).toBeEnabled();
       launchButton.focus();
       await user.keyboard("{Enter}");
       expect(
         screen.getByRole("status", { name: "Making it yours" }),
-      ).toHaveTextContent("Your workspace is saved. Opening Factory…");
+      ).toHaveTextContent("All saved. Opening Factory…");
       expect(complete).not.toHaveBeenCalled();
       await act(async () => reload.resolve());
       expect(complete).toHaveBeenCalledOnce();
       expect(
-        screen.getByRole("button", { name: "Open workspace" }),
+        screen.getByRole("button", { name: "Open Factory" }),
       ).toBeEnabled();
       expect(workspaceApi.profile).toHaveBeenCalledTimes(1);
       expect(workspaceApi.save).toHaveBeenCalledTimes(1);
@@ -483,7 +484,7 @@ describe("guided workspace onboarding", () => {
     const { complete } = start();
     toReview();
     const form = screen
-      .getByRole("button", { name: "Launch workspace" })
+      .getByRole("button", { name: "Launch" })
       .closest("form")!;
     fireEvent.submit(form);
     fireEvent.submit(form);
@@ -519,7 +520,7 @@ describe("guided workspace onboarding", () => {
       render(<Onboarding w={w} onComplete={complete} onBusyChange={busy} />);
       toReview();
       const form = screen
-        .getByRole("button", { name: "Launch workspace" })
+        .getByRole("button", { name: "Launch" })
         .closest("form")!;
       fireEvent.submit(form);
       expect(workspaceApi.profile).toHaveBeenCalledOnce();
@@ -530,10 +531,10 @@ describe("guided workspace onboarding", () => {
         screen.getByRole("status", { name: "Making it yours" }),
       ).toHaveTextContent("Saving your audience and creative voice…");
       expect(
-        screen.queryByRole("navigation", { name: "Workspace setup" }),
+        screen.queryByRole("navigation", { name: "Brand setup" }),
       ).not.toBeInTheDocument();
       expect(
-        screen.queryByRole("button", { name: "Launch workspace" }),
+        screen.queryByRole("button", { name: "Launch" }),
       ).not.toBeInTheDocument();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2000);
@@ -549,7 +550,7 @@ describe("guided workspace onboarding", () => {
       );
       expect(
         screen.getByRole("status", { name: "Making it yours" }),
-      ).toHaveTextContent("Your profile is saved. Creating your workspace…");
+      ).toHaveTextContent("Your brand is saved. Setting up your goals…");
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2000);
       });
@@ -564,18 +565,18 @@ describe("guided workspace onboarding", () => {
       );
       expect(
         screen.getByRole("status", { name: "Making it yours" }),
-      ).toHaveTextContent("Your workspace is saved. Opening Factory…");
+      ).toHaveTextContent("All saved. Opening Factory…");
       expect(w.load).toHaveBeenCalledWith("confirmed-campaign");
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2000);
       });
       expect(complete).not.toHaveBeenCalled();
       expect(
-        screen.queryByRole("heading", { name: "Your workspace is ready" }),
+        screen.queryByRole("heading", { name: "Your brand is ready" }),
       ).not.toBeInTheDocument();
       await act(async () => reload.resolve());
       expect(
-        screen.getByRole("status", { name: "Your workspace is ready" }),
+        screen.getByRole("status", { name: "Your brand is ready" }),
       ).toHaveTextContent("Your choices are saved.");
       expect(w.setProfileId).toHaveBeenCalledWith("confirmed-profile");
       expect(busy).toHaveBeenLastCalledWith(true);
@@ -636,7 +637,7 @@ describe("guided workspace onboarding", () => {
         toReview();
         await act(async () => launch());
         expect(
-          screen.getByRole("status", { name: "Your workspace is ready" }),
+          screen.getByRole("status", { name: "Your brand is ready" }),
         ).toBeVisible();
         await act(async () => {
           await vi.advanceTimersByTimeAsync(elapsed);
@@ -669,14 +670,14 @@ describe("onboarding validation and write recovery", () => {
         screen.queryByRole("status", { name: "Making it yours" }),
       ).not.toBeInTheDocument();
       expect(
-        screen.getByRole("heading", { name: "Review your workspace" }),
+        screen.getByRole("heading", { name: "Review your brand" }),
       ).toBeVisible();
       expect(screen.getByRole("alert")).toHaveFocus();
       expect(screen.getByRole("alert")).toHaveTextContent(
         "Audience needs clarification",
       );
       expect(
-        screen.getByRole("button", { name: "Launch workspace" }),
+        screen.getByRole("button", { name: "Launch" }),
       ).toBeEnabled();
       fireEvent.click(screen.getByRole("button", { name: "Edit audience" }));
       expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
@@ -786,15 +787,15 @@ describe("onboarding validation and write recovery", () => {
     toReview();
     launch();
     const check = await screen.findByRole("button", {
-      name: "Check saved workspaces",
+      name: "Check saved goals",
     });
     expect(
-      screen.getByRole("button", { name: "Launch workspace" }),
+      screen.getByRole("button", { name: "Launch" }),
     ).toBeDisabled();
     fireEvent.click(check);
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Launch workspace" }),
+        screen.getByRole("button", { name: "Launch" }),
       ).toBeEnabled(),
     );
     launch();
@@ -813,11 +814,11 @@ describe("onboarding validation and write recovery", () => {
     toReview();
     launch();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Check saved profiles" }),
+      await screen.findByRole("button", { name: "Check saved brands" }),
     );
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Launch workspace" }),
+        screen.getByRole("button", { name: "Launch" }),
       ).toBeEnabled(),
     );
     launch();
@@ -842,9 +843,9 @@ describe("onboarding validation and write recovery", () => {
     toReview();
     launch();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Check saved workspaces" }),
+      await screen.findByRole("button", { name: "Check saved goals" }),
     );
-    const open = await screen.findByRole("button", { name: "Open workspace" });
+    const open = await screen.findByRole("button", { name: "Open Factory" });
     await waitFor(() => expect(open).toBeEnabled());
     fireEvent.click(open);
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());
@@ -859,7 +860,7 @@ describe("onboarding validation and write recovery", () => {
       .mockResolvedValue(undefined);
     toReview();
     launch();
-    const open = await screen.findByRole("button", { name: "Open workspace" });
+    const open = await screen.findByRole("button", { name: "Open Factory" });
     await waitFor(() => expect(open).toBeEnabled());
     fireEvent.click(open);
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());

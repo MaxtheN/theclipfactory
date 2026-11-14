@@ -155,7 +155,7 @@ export function App({
               className="text-button"
               disabled={state.loading}
               onClick={() => void state.refresh()}
-              aria-label="Refresh workspace"
+              aria-label="Refresh"
             >
               ↻ Refresh
             </button>

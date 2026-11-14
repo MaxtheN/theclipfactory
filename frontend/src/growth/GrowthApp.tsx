@@ -42,7 +42,7 @@ const views = {
   library: {
     label: "Library",
     title: "Library",
-    sub: "Every episode and clip in this campaign.",
+    sub: "Every episode and clip for this brand.",
     icon: "folder",
   },
   results: {
@@ -52,21 +52,21 @@ const views = {
     icon: "results",
   },
   setup: {
-    label: "Workspace settings",
-    title: "Workspace settings",
-    sub: "Who it's for, the voice to keep, and this campaign's goal.",
+    label: "Brand profile",
+    title: "Brand profile",
+    sub: "Your brand, its voice and look, and what the clips should achieve.",
     icon: "settings",
   },
   research: {
     label: "Style rules",
-    title: "Workspace style rules",
-    sub: "How agents pick and open clips in every campaign in this workspace. Save, then approve.",
+    title: "Style rules",
+    sub: "How agents pick and open clips for this brand. Save, then approve.",
     icon: "research",
   },
   campaign: {
     label: "New campaign",
     title: "New campaign",
-    sub: "A focused push inside this workspace, with its own goal and episodes. It uses the workspace style rules.",
+    sub: "A new push for this brand, with its own goal and episodes.",
     icon: "plus",
   },
   studio: {
@@ -112,7 +112,7 @@ export function GrowthApp() {
     !!w.campaign &&
     w.campaign.profile_ids.includes(w.profileId) &&
     w.profiles.some((p) => p.id === w.profileId);
-  // Workspace = one person/brand (a backend profile). Campaigns are the
+  // Brand = one person, show or company (a backend profile). Campaigns are the
   // goal-scoped pushes linked to it.
   const workspaces = w.profiles.filter((p) =>
     w.campaigns.some((c) => c.profile_ids.includes(p.id)),
@@ -199,6 +199,14 @@ export function GrowthApp() {
     setPreferredClip(clip);
     go("studio");
   };
+  /** Brand profile, scrolled to Goals & brief (the default campaign's brief). */
+  function openGoals() {
+    go("setup");
+    window.setTimeout(
+      () => document.getElementById("gf-goals")?.scrollIntoView?.({ block: "start" }),
+      0,
+    );
+  }
   function reviewClip(clip: Clip) {
     openProduction(clip.video_id, undefined, clip.id);
   }
@@ -211,7 +219,7 @@ export function GrowthApp() {
       id,
       label: `Go to ${views[id].label}`,
       icon: views[id].icon,
-      group: "Workspace" as const,
+      group: id === "setup" ? ("Brand" as const) : ("Clips" as const),
       keywords: `${id} ${views[id].sub}`,
       disabled: blocked || onboarding || !usable,
       hint: id === "factory" ? "Add episodes and review clips" : undefined,
@@ -221,38 +229,51 @@ export function GrowthApp() {
       id: "research",
       label: "Style rules",
       icon: "research",
-      group: "Workspace",
+      group: "Brand",
       disabled: blocked || onboarding || !usable,
       keywords:
-        "style rules editing rules creative direction approval workspace settings",
-      hint: "Workspace settings",
+        "style rules editing rules creative direction approval brand profile settings",
+      hint: "Brand profile",
       run: () => go("research"),
     },
     {
-      id: "campaign",
-      label: "New campaign",
-      icon: "plus",
-      group: "Workspace",
+      id: "brief",
+      label: "Goals & brief",
+      icon: "research",
+      group: "Brand",
       disabled: blocked || onboarding || !usable,
-      keywords: "campaign goal push episode launch series",
-      hint: "Inside this workspace",
-      run: () => go("campaign"),
+      keywords: "brief goal key messages call to action avoid",
+      hint: "Brand profile",
+      run: openGoals,
     },
+    // Separate pushes (campaigns) are an advanced idea: offered here only once one exists.
+    ...(workspaceCampaigns.length > 1
+      ? [
+          {
+            id: "campaign",
+            label: "New campaign",
+            icon: "plus",
+            group: "Brand" as const,
+            disabled: blocked || onboarding || !usable,
+            keywords: "campaign goal push episode launch series",
+            run: () => go("campaign"),
+          },
+        ]
+      : []),
     {
       id: "new",
-      label: "New workspace",
+      label: "New brand",
       icon: "plus",
-      group: "Workspace",
+      group: "Brand",
       disabled: blocked,
-      keywords: "podcast profile onboarding",
-      hint: "Workspace settings · Advanced",
+      keywords: "podcast brand workspace onboarding",
       run: newWorkspace,
     },
     {
       id: "tools",
-      label: "Advanced workspace tools",
+      label: "Advanced tools",
       icon: "settings",
-      group: "Workspace",
+      group: "Brand",
       disabled: blocked,
       keywords: "models runtime integrations settings",
       hint: "Models and local tools",
@@ -260,9 +281,9 @@ export function GrowthApp() {
     },
     {
       id: "refresh",
-      label: "Refresh workspace",
+      label: "Refresh",
       icon: "refresh",
-      group: "Workspace",
+      group: "Brand",
       disabled: blocked || w.loading,
       keywords: "reload reconnect",
       run: refreshWorkspace,
@@ -374,14 +395,14 @@ export function GrowthApp() {
               <button
                 type="button"
                 className="gf-channel-settings"
-                aria-label="Workspace settings"
+                aria-label="Brand profile"
                 aria-current={primaryStage === "setup" ? "page" : undefined}
-                title="Workspace settings"
+                title="Brand profile"
                 disabled={blocked || !usable || onboarding}
                 onClick={() => go("setup")}
               >
                 <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
-                <span>Workspace settings</span>
+                <span>Brand profile</span>
               </button>
             </div>
           </aside>
@@ -389,16 +410,16 @@ export function GrowthApp() {
             <header className="gf-topbar" hidden={onboarding}>
               <div className="gf-context-switcher">
                 <label className="gf-workspace-switcher">
-                  <span>Workspace</span>
+                  <span>Brand</span>
                   <select
-                    aria-label="Current workspace"
+                    aria-label="Current brand"
                     value={onboarding ? "__new__" : w.profileId}
                     disabled={blocked || w.loading}
                     onChange={(e) => {
                       const next = e.target.value;
                       if (next === "__new__") return newWorkspace();
                       // Stay on the current campaign if it belongs to this
-                      // workspace; otherwise open the workspace's first one.
+                      // brand; otherwise open the brand's first one.
                       const target = w.campaign?.profile_ids.includes(next)
                         ? w.campaign.id
                         : w.campaigns.find((c) => c.profile_ids.includes(next))
@@ -416,22 +437,22 @@ export function GrowthApp() {
                     }}
                   >
                     {onboarding && (
-                      <option value="__new__">Set up your workspace</option>
+                      <option value="__new__">Set up your brand</option>
                     )}
                     {!onboarding && !workspaces.some((p) => p.id === w.profileId) && (
-                      <option value="">Choose a workspace</option>
+                      <option value="">Choose a brand</option>
                     )}
                     {workspaces.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
                       </option>
                     ))}
-                    {!onboarding && <option value="__new__">New workspace…</option>}
+                    {!onboarding && <option value="__new__">New brand…</option>}
                   </select>
                 </label>
                 {!onboarding && workspaceCampaigns.length > 1 && (
                   <label className="gf-campaign-switcher">
-                    <span aria-hidden="true">▸</span>
+                    <span>Campaign:</span>
                     <select
                       aria-label="Current campaign"
                       value={w.selected}
@@ -439,6 +460,7 @@ export function GrowthApp() {
                       onChange={(e) => {
                         if (e.target.value === "__new_campaign__")
                           return go("campaign");
+                        if (e.target.value === "__brief__") return openGoals();
                         setPreferredClip(undefined);
                         setPreferredSource(undefined);
                         setPreferredMode(undefined);
@@ -451,12 +473,10 @@ export function GrowthApp() {
                           {c.name}
                         </option>
                       ))}
+                      <option value="__brief__">Goals & brief…</option>
                       <option value="__new_campaign__">New campaign…</option>
                     </select>
                   </label>
-                )}
-                {!onboarding && usable && workspaceCampaigns.length === 1 && (
-                  <span className="gf-campaign-name">▸ {w.campaign?.name}</span>
                 )}
               </div>
               <div className="gf-top-right">{commandTrigger}</div>
@@ -484,14 +504,14 @@ export function GrowthApp() {
                     onClick={() => go("setup")}
                   >
                     <Icon name="back" size={15} />
-                    Back to Workspace settings
+                    Back to Brand profile
                   </button>
                 )}
               </header>
               {!onboarding && w.loading && (
                 <div className="gf-loading" role="status">
                   <span className="gf-spinner" />
-                  Opening your workspace…
+                  Loading your brand…
                 </div>
               )}
               {!onboarding &&
@@ -592,6 +612,18 @@ export function GrowthApp() {
                   factory={factory}
                   next={() => go("research")}
                   onNewCampaign={() => go("campaign")}
+                  onAccounts={() => go("results")}
+                  goals={
+                    <Setup
+                      key={`goals-${contextKey}`}
+                      part="campaign"
+                      creating={false}
+                      onSaved={() => {}}
+                      w={w}
+                      factory={factory}
+                      next={() => go("research")}
+                    />
+                  }
                   advanced={
                     <nav
                       className="gf-advanced-actions"
@@ -604,7 +636,7 @@ export function GrowthApp() {
                         onClick={newWorkspace}
                       >
                         <Icon name="plus" size={15} />
-                        New workspace
+                        New brand
                       </button>
                       <button
                         type="button"
@@ -656,7 +688,7 @@ export function GrowthApp() {
                   preferredClip={preferredClip}
                   next={() => go("results")}
                   onDirection={() => go("research")}
-                  onEditBrief={() => go("setup")}
+                  onEditBrief={openGoals}
                 />
               </div>
               <div

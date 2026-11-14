@@ -269,10 +269,10 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
           <Fact label="Caption cues">
             {number(clip.caption_cues) ? clip.caption_cues : unknown}
           </Fact>
-          <Fact label="Campaign / profile">
+          <Fact label="Goals / brand IDs">
             {clip.campaign_id || unknown} / {clip.profile_id || unknown}
           </Fact>
-          <Fact label="Strategy snapshot identity">
+          <Fact label="Style rules used">
             {clip.strategy_version_id || unknown}
           </Fact>
           <Fact label="Output SHA-256">{clip.sha256 || unknown}</Fact>

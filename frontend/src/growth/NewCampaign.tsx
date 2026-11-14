@@ -72,8 +72,8 @@ export function NewCampaign({
         createdId = saved.id;
       },
       rulesApproved
-        ? "Campaign created. It uses this workspace's approved style rules."
-        : "Campaign created. Approve the workspace style rules before finding clips.",
+        ? "Campaign created. It uses this brand's approved style rules."
+        : "Campaign created. Approve the style rules before finding clips.",
     );
     if (!ok || !createdId) return;
     // Open the new campaign; this workspace stays selected because it is linked.
@@ -180,10 +180,10 @@ export function NewCampaign({
       <div className="gf-stage-action">
         <span>
           {problem ? `${problem} ` : ""}
-          For {workspace?.name || "this workspace"}.{" "}
+          For {workspace?.name || "this brand"}.{" "}
           {rulesApproved
-            ? "Uses the workspace style rules."
-            : "The workspace style rules still need approval."}{" "}
+            ? "Uses the brand's style rules."
+            : "The style rules still need approval."}{" "}
           Nothing is published.
         </span>
         <div className="gf-channel-actions">

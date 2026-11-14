@@ -285,7 +285,7 @@ describe("Factory imports and scoped Library", () => {
       const view = home(w);
       upload();
       expect(await screen.findByRole("alert")).toHaveTextContent(
-        "attachment was not confirmed",
+        "Adding it to your brand was not confirmed",
       );
       const retry = screen.getByRole("button", {
         name: "Attach imported footage",

@@ -67,7 +67,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
       if (
         await w.run(
           () => workspaceApi.approve(workspace.id, pending!.id),
-          "Workspace style rules approved. New clips in every campaign will follow them.",
+          "Style rules approved. New clips will follow them.",
         )
       )
         next();
@@ -80,7 +80,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
   }
   if (!workspace)
     return (
-      <Empty title="No workspace yet" icon="research">
+      <Empty title="No brand yet" icon="research">
         Create a workspace first.
       </Empty>
     );
@@ -89,9 +89,9 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
       <section className="gf-card gf-hypothesis">
         <div className="gf-card-header">
           <div>
-            <h2>Rules for every campaign</h2>
+            <h2>Rules for every clip</h2>
             <p className="gf-help">
-              Every campaign in {workspace.name} uses these rules.
+              Every clip for {workspace.name} uses these rules.
             </p>
           </div>
           <Pill tone={pending ? "sand" : active ? "mint" : "quiet"}>
@@ -203,7 +203,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
         </div>
         <div className="gf-card-action">
           <span>
-            <Icon name="lock" size={13} /> For every campaign in{" "}
+            <Icon name="lock" size={13} /> For every clip for{" "}
             {workspace.name}
           </span>
           <PrimaryAction

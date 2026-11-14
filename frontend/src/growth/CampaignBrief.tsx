@@ -158,7 +158,7 @@ export function BriefFields({
       <FieldGroup title="Audience and tone">
         <Field
           label="Target audience"
-          hint={workspaceAudience ? `Blank uses the workspace audience: ${workspaceAudience.slice(0, 80)}` : "Blank uses the workspace audience."}
+          hint={workspaceAudience ? `Blank uses the brand's audience: ${workspaceAudience.slice(0, 80)}` : "Blank uses the brand's audience."}
         >
           {(id) => (
             <AutoTextarea
@@ -363,7 +363,7 @@ export function CampaignBriefEditor({
     const ok = await w.run(async () => {
       try {
         const latest = (await workspaceApi.campaigns()).find((c) => c.id === campaign.id);
-        if (!latest) throw new Error("This campaign is no longer available.");
+        if (!latest) throw new Error("These goals are no longer available. Refresh and try again.");
         const body = briefSaveBody(latest, draft);
         stage = "write";
         await workspaceApi.save(body, campaign.id);
@@ -382,7 +382,7 @@ export function CampaignBriefEditor({
       }
     }, "Brief saved. The next production uses it; earlier clips keep theirs.");
     if (ok) setState({ kind: "saved", message: "Brief saved and confirmed." });
-    else if (!failure) setState({ kind: "unknown", message: "Saved, but the workspace could not refresh. Reload before editing again." });
+    else if (!failure) setState({ kind: "unknown", message: "Saved, but the screen could not refresh. Reload before editing again." });
     else if (stage === "read") setState({ kind: "failed", message: `${failure} Nothing was saved.` });
     else
       setState({
@@ -395,7 +395,7 @@ export function CampaignBriefEditor({
   }
 
   return (
-    <section className="gf-brief-editor" aria-label="Campaign brief">
+    <section className="gf-brief-editor" aria-label="Brief">
       <BriefFields
         value={draft}
         disabled={w.busy}

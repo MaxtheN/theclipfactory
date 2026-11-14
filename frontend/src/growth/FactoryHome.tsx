@@ -97,7 +97,7 @@ export function FactoryHome({
       setSuccess((current) =>
         autoStarted.current.has(receipt.video.id) && current
           ? current
-          : "Source saved and attached to this workspace.",
+          : "Source saved and added to this brand.",
       );
       w.clearNotice?.();
     } else {
@@ -317,7 +317,7 @@ export function FactoryHome({
     }
     if (file && campaign.video_ids.length >= 100) {
       setError(
-        "This workspace already has 100 sources. Choose another workspace before importing more footage.",
+        "This brand already has 100 sources. Remove or archive some before importing more footage.",
       );
       return;
     }
@@ -396,19 +396,19 @@ export function FactoryHome({
               !Array.isArray(latest.video_ids)
             )
               throw new Error(
-                "The workspace changed. Refresh before attaching this footage.",
+                "Your brand changed. Refresh before adding this footage.",
               );
             const sourceIds = [...new Set([...latest.video_ids, video.id])];
             if (sourceIds.length > 100)
               throw new Error(
-                "This workspace reached its 100-source limit. Your saved source is retained; review workspace settings before attaching it.",
+                "This brand reached its 100-source limit. Your saved source is kept; free a slot before adding it.",
               );
             if (!latest.video_ids.includes(video.id)) {
               if (pendingImports.get(campaign.id)?.attached) {
                 pendingImports.set(campaign.id, { video, attached: false });
                 setPending({ ...video });
                 throw new Error(
-                  "This source is no longer attached to the workspace. Choose Attach imported footage to add it again deliberately.",
+                  "This source is no longer in this brand. Choose Attach imported footage to add it again deliberately.",
                 );
               }
               const saved = await workspaceApi.save(
@@ -429,7 +429,7 @@ export function FactoryHome({
                 !saved.profile_ids.includes(w.profileId)
               )
                 throw new Error(
-                  "Campaign attachment was not confirmed. Your saved source is retained; check the workspace before retrying.",
+                  "Adding it to your brand was not confirmed. Your saved source is kept; refresh before retrying.",
                 );
             }
             pendingImports.set(campaign.id, { video, attached: true });
@@ -444,7 +444,7 @@ export function FactoryHome({
             throw e;
           }
         },
-        "Footage added to this workspace.",
+        "Footage added.",
         campaign.id,
       );
       if (ok && added) {
@@ -455,8 +455,8 @@ export function FactoryHome({
         setError(
           failure ||
             (imported.current
-              ? "Your source is retained. Refresh the workspace to confirm its attachment."
-              : "No import was confirmed. Refresh the workspace before trying again."),
+              ? "Your source is kept. Refresh to confirm it was added."
+              : "No import was confirmed. Refresh before trying again."),
         );
       }
     } finally {
@@ -573,18 +573,18 @@ export function FactoryHome({
               ? "Saving your footage"
               : phase === "attaching"
                 ? "Attaching saved footage"
-                : "Confirming your workspace"
+                : "Adding it to your brand"
           }
           message={
             phase === "uploading"
               ? "Saving the file on this Mac."
               : phase === "attaching"
-                ? "Saved. Adding it to this workspace."
+                ? "Saved. Adding it to your brand."
                 : "Confirming the episode is attached."
           }
           receipts={
             phase === "refreshing"
-              ? ["Source saved", "Campaign attachment confirmed"]
+              ? ["Source saved", "Added to your brand"]
               : pending
                 ? ["Source saved"]
                 : []
@@ -603,7 +603,7 @@ export function FactoryHome({
               ? sourceLabel(lastAdded.id, campaign.video_ids)
               : "New source"
           }
-          receipts={["Source saved", "Campaign attachment confirmed"]}
+          receipts={["Source saved", "Added to your brand"]}
           actions={
             <>
               <button
@@ -631,7 +631,7 @@ export function FactoryHome({
           message={
             pendingImports.get(campaign?.id || "")?.attached
               ? "Attachment was confirmed. Refresh to reopen the saved source; the file will not be uploaded again."
-              : "Campaign attachment still needs confirmation. Your next attempt reuses the saved source."
+              : "Adding it to your brand still needs confirmation. Your next attempt reuses the saved source."
           }
           receipts={["Source saved"]}
           actions={
@@ -795,7 +795,7 @@ export function FactoryHome({
           state="refreshing"
           step={1}
           title="Waiting for the saved edits"
-          message="The worker reported completion, but no matching clip records are available in this workspace yet."
+          message="The worker reported completion, but no matching clips are here yet."
           actions={
             <button
               className="gf-button secondary"

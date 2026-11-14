@@ -55,7 +55,7 @@ describe("Quick actions", () => {
         label: "Research unavailable",
         keywords: "edit",
         icon: "research",
-        group: "Campaign",
+        group: "Clips",
         disabled: true,
         run: blocked,
       },
@@ -64,7 +64,7 @@ describe("Quick actions", () => {
         label: "Research",
         keywords: "edit",
         icon: "research",
-        group: "Campaign",
+        group: "Clips",
         run: research,
       },
       {
@@ -72,14 +72,14 @@ describe("Quick actions", () => {
         label: "Studio",
         keywords: "edit",
         icon: "studio",
-        group: "Campaign",
+        group: "Clips",
         run: studio,
       },
       {
         id: "refresh",
         label: "Refresh workspace",
         icon: "refresh",
-        group: "Workspace",
+        group: "Brand",
         run: vi.fn(),
       },
     ]);
@@ -111,7 +111,7 @@ describe("Quick actions", () => {
         id: "blocked",
         label: "Studio",
         icon: "studio",
-        group: "Campaign",
+        group: "Clips",
         disabled: true,
         run,
       },
@@ -145,13 +145,13 @@ describe("Quick actions", () => {
     openPalette([
       {
         id: "tools",
-        label: "Workspace tools",
+        label: "Advanced tools",
         icon: "settings",
-        group: "Workspace",
+        group: "Brand",
         run,
       },
     ]);
-    fireEvent.click(screen.getByRole("option", { name: "Workspace tools" }));
+    fireEvent.click(screen.getByRole("option", { name: "Advanced tools" }));
     expect(run).toHaveBeenCalledOnce();
     expect(destination).toHaveFocus();
     destination.remove();

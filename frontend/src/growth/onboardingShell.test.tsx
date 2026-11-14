@@ -76,7 +76,7 @@ afterEach(() => {
 
 async function enterOnboarding(viaQuickActions = false) {
   const workspace = await screen.findByRole("combobox", {
-    name: "Current workspace",
+    name: "Current brand",
   });
   await waitFor(() => expect(workspace).toHaveValue("preview-profile-allin"));
   if (viaQuickActions) {
@@ -84,16 +84,16 @@ async function enterOnboarding(viaQuickActions = false) {
     const search = screen.getByRole("combobox", {
       name: "Search quick actions",
     });
-    fireEvent.change(search, { target: { value: "new workspace" } });
+    fireEvent.change(search, { target: { value: "new brand" } });
     fireEvent.keyDown(search, { key: "Enter" });
   } else {
     // New workspace lives in Workspace settings → Advanced, not the sidebar.
-    fireEvent.click(screen.getByRole("button", { name: "Workspace settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Brand profile" }));
     screen
       .getByLabelText("Advanced controls")
       .closest("details")
       ?.setAttribute("open", "");
-    fireEvent.click(screen.getByRole("button", { name: "New workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "New brand" }));
   }
   return screen.findByRole("heading", { name: "Who are we making this for?" });
 }
@@ -152,7 +152,7 @@ describe("standalone onboarding shell", () => {
         screen.queryByRole("button", { name: "Back to Factory" }),
       ).not.toBeInTheDocument();
       fireEvent.change(
-        screen.getByRole("textbox", { name: "Podcast or workspace name" }),
+        screen.getByRole("textbox", { name: "Name your brand / podcast" }),
         {
           target: { value: "First-run workspace" },
         },
@@ -169,11 +169,11 @@ describe("standalone onboarding shell", () => {
       vi.useFakeTimers();
       await act(async () => {
         fireEvent.click(
-          screen.getByRole("button", { name: "Launch workspace" }),
+          screen.getByRole("button", { name: "Launch" }),
         );
       });
       const ready = screen.getByRole("status", {
-        name: "Your workspace is ready",
+        name: "Your brand is ready",
       });
       expect(ready).toBeVisible();
       expect(campaigns).toHaveBeenCalledTimes(2);
@@ -188,7 +188,8 @@ describe("standalone onboarding shell", () => {
       expect(savedProfiles).toHaveLength(before[0].length + 1);
       expect(savedCampaigns).toHaveLength(before[1].length + 1);
       const saved = savedCampaigns.find(
-        (campaign) => campaign.name === "First-run workspace",
+        // The first campaign is named after the brand automatically.
+        (campaign) => campaign.name === "First-run workspace — main",
       )!;
       await act(async () => {
         await vi.advanceTimersByTimeAsync(LAUNCH_SWEEP_MS);
@@ -228,7 +229,7 @@ describe("standalone onboarding shell", () => {
       ).toBeVisible();
       expect(localStorage.getItem("growth-campaign")).toBe(saved.id);
       expect(
-        screen.queryByRole("region", { name: "Workspace onboarding" }),
+        screen.queryByRole("region", { name: "Brand onboarding" }),
       ).not.toBeInTheDocument();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2000);
@@ -261,7 +262,7 @@ describe("standalone onboarding shell", () => {
       name: "Who are we making this for?",
     });
     expect(question).toHaveFocus();
-    expect(screen.getByLabelText("Podcast or workspace name")).toHaveValue("");
+    expect(screen.getByLabelText("Name your brand / podcast")).toHaveValue("");
     expect(
       screen.getByRole("textbox", { name: "Who are we speaking to?" }),
     ).toHaveValue("");
@@ -289,18 +290,18 @@ describe("standalone onboarding shell", () => {
     await waitFor(() =>
       expect(
         screen.getByRole("textbox", {
-          name: "Who are we speaking to?",
+          name: "Who it's for",
         }),
       ).toHaveValue("Builders and founders"),
     );
     expect(
-      screen.getByRole("combobox", { name: "Current workspace" }),
+      screen.getByRole("combobox", { name: "Current brand" }),
     ).toHaveValue("preview-profile-allin");
     expect(
       screen.getByRole("navigation", { name: "Main navigation" }),
     ).toBeVisible();
     expect(
-      screen.queryByRole("region", { name: "Workspace onboarding" }),
+      screen.queryByRole("region", { name: "Brand onboarding" }),
     ).not.toBeInTheDocument();
     expect(window.location.hash).toBe("#onboarding");
     expect(await previewRequest<Profile[]>("/api/profiles")).toEqual(before[0]);
@@ -320,7 +321,7 @@ describe("standalone onboarding shell", () => {
     ]);
     render(<GrowthApp />);
     await screen.findByRole("button", { name: "Back to Factory" });
-    fireEvent.change(screen.getByLabelText("Podcast or workspace name"), {
+    fireEvent.change(screen.getByLabelText("Name your brand / podcast"), {
       target: { value: "Direct preview workspace" },
     });
     fireEvent.change(
@@ -333,20 +334,20 @@ describe("standalone onboarding shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Explore first" }));
     next();
     expect(
-      screen.getByRole("heading", { name: "Review your workspace" }),
+      screen.getByRole("heading", { name: "Review your brand" }),
     ).toHaveFocus();
     expect(await previewRequest<Profile[]>("/api/profiles")).toEqual(before[0]);
     expect(await previewRequest<Campaign[]>("/api/campaigns")).toEqual(
       before[1],
     );
-    fireEvent.click(screen.getByRole("button", { name: "Launch workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
     await screen.findByRole("heading", { name: "Factory" });
     const profiles = await previewRequest<Profile[]>("/api/profiles");
     const campaigns = await previewRequest<Campaign[]>("/api/campaigns");
     expect(profiles).toHaveLength(before[0].length + 1);
     expect(campaigns).toHaveLength(before[1].length + 1);
     const saved = campaigns.find(
-      (campaign) => campaign.name === "Direct preview workspace",
+      (campaign) => campaign.name === "Direct preview workspace — main",
     )!;
     expect(
       profiles.find((profile) => profile.id === saved.profile_ids[0]),
@@ -358,7 +359,7 @@ describe("standalone onboarding shell", () => {
       screen.getByRole("navigation", { name: "Main navigation" }),
     ).toBeVisible();
     expect(
-      screen.queryByRole("region", { name: "Workspace onboarding" }),
+      screen.queryByRole("region", { name: "Brand onboarding" }),
     ).not.toBeInTheDocument();
     expect(window.location.hash).toBe("#onboarding");
     fireEvent.keyDown(window, { key: "k", metaKey: true });
@@ -373,11 +374,11 @@ describe("standalone onboarding shell", () => {
     render(<GrowthApp />);
     await waitFor(() =>
       expect(
-        screen.getByRole("textbox", { name: "Who are we speaking to?" }),
+        screen.getByRole("textbox", { name: "Who it's for" }),
       ).toHaveValue("Builders and founders"),
     );
     const audience = screen.getByRole("textbox", {
-      name: "Who are we speaking to?",
+      name: "Who it's for",
     });
     fireEvent.change(audience, {
       target: { value: "An unsaved workspace audience" },
@@ -391,10 +392,10 @@ describe("standalone onboarding shell", () => {
       screen.queryByRole("button", { name: "Open quick actions" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("combobox", { name: "Current workspace" }),
+      screen.queryByRole("combobox", { name: "Current brand" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("heading", { name: "Set up your workspace" }),
+      screen.queryByRole("heading", { name: "Set up your brand" }),
     ).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     expect(
@@ -409,10 +410,10 @@ describe("standalone onboarding shell", () => {
     const search = screen.getByRole("combobox", {
       name: "Search quick actions",
     });
-    fireEvent.change(search, { target: { value: "workspace settings" } });
+    fireEvent.change(search, { target: { value: "brand profile" } });
     fireEvent.keyDown(search, { key: "Enter" });
     expect(
-      screen.getByRole("textbox", { name: "Who are we speaking to?" }),
+      screen.getByRole("textbox", { name: "Who it's for" }),
     ).toHaveValue("An unsaved workspace audience");
   });
   it("saves only on explicit final launch and restores Factory with the created workspace/profile scope", async () => {
@@ -425,7 +426,7 @@ describe("standalone onboarding shell", () => {
     render(<GrowthApp />);
     await enterOnboarding(true);
     fireEvent.change(
-      screen.getByRole("textbox", { name: "Podcast or workspace name" }),
+      screen.getByRole("textbox", { name: "Name your brand / podcast" }),
       { target: { value: "Producer launch test" } },
     );
     fireEvent.change(
@@ -440,7 +441,7 @@ describe("standalone onboarding shell", () => {
     );
     next();
     expect(
-      screen.getByRole("heading", { name: "Review your workspace" }),
+      screen.getByRole("heading", { name: "Review your brand" }),
     ).toHaveFocus();
     expect(await previewRequest<Profile[]>("/api/profiles")).toHaveLength(
       before[0].length,
@@ -448,7 +449,7 @@ describe("standalone onboarding shell", () => {
     expect(await previewRequest<Campaign[]>("/api/campaigns")).toHaveLength(
       before[1].length,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Launch workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
     await screen.findByRole("heading", { name: "Factory" });
     expect(
       screen.queryByRole("dialog", { name: "Quick actions" }),
@@ -461,13 +462,13 @@ describe("standalone onboarding shell", () => {
       screen.getByRole("button", { name: "Open quick actions" }),
     ).toBeVisible();
     expect(
-      screen.queryByRole("region", { name: "Workspace onboarding" }),
+      screen.queryByRole("region", { name: "Brand onboarding" }),
     ).not.toBeInTheDocument();
     const profiles = await previewRequest<Profile[]>("/api/profiles");
     const campaigns = await previewRequest<Campaign[]>("/api/campaigns");
     expect(profiles).toHaveLength(before[0].length + 1);
     expect(campaigns).toHaveLength(before[1].length + 1);
-    const saved = campaigns.find((c) => c.name === "Producer launch test")!;
+    const saved = campaigns.find((c) => c.name === "Producer launch test — main")!;
     const profile = profiles.find((p) => p.id === saved.profile_ids[0])!;
     expect(profile).toMatchObject({
       audience: "Podcast producers and company marketers",

@@ -319,7 +319,7 @@ export function StrategistPanel({
           ))}
           {pending?.campaign.map((proposal) => (
             <details key={proposal.id} className="gf-strategist-proposal">
-              <summary>Review campaign proposal</summary>
+              <summary>Review posting-plan proposal</summary>
               <p>{proposal.summary}</p>
               <small>{proposal.caveat}</small>
               <div className="gf-strategist-actions">

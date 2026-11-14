@@ -526,7 +526,8 @@ class Campaigns:
             return self.store.put(
                 "profiles",
                 {
-                    **self._merge(existing, body, LEGACY_GOAL_KEYS),
+                    # A save that omits the brand kit (e.g. from an older screen) keeps the saved one.
+                    **self._merge(existing, body, (*LEGACY_GOAL_KEYS, "brand_kit")),
                     "id": identifier or new_id(),
                     "created_at": existing.get("created_at", now()),
                     "updated_at": now(),

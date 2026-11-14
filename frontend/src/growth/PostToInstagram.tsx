@@ -136,7 +136,7 @@ export function PostToInstagram({
     </div> : !error && <p className="gf-help">Checking quality…</p>}
     {held && <Field label="Override reason (required to post a held clip)">{id => <AutoTextarea id={id} rows={2} value={override} onChange={e => setOverride(e.target.value)} placeholder="Why is it fine to post anyway?" />}</Field>}
     {targets && (targets.accounts.length === 0
-      ? <p className="gf-help">Connect an Instagram account for this workspace first.</p>
+      ? <p className="gf-help">Connect an Instagram account for this brand first.</p>
       : <fieldset><legend>Accounts</legend>{targets.accounts.map(account => <label key={account.id}>
         <input type="checkbox" checked={chosen.includes(account.id)} disabled={blocked.has(account.id) || busy}
           onChange={e => setChosen(old => e.target.checked ? [...old, account.id] : old.filter(id => id !== account.id))} />
