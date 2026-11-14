@@ -127,7 +127,13 @@ def test_tags_are_deterministic_and_unknown_stays_null():
     assert first == tag_clip(json.loads(json.dumps(clip)), dict(publication))
     assert first == {"hook_style": "number", "duration_bucket": "long", "opening_type": "text_overlay",
                      "caption_style": "pop", "framing": "blur", "moment_type": "humor", "speaker_role": None,
-                     "posting_window": "evening", "day_type": "weekend"}
+                     "posting_window": "evening", "day_type": "weekend",
+                     # Saved before craft options existed: rendered linear, overlay hook, no cuts.
+                     "structure": "linear", "hook_format": "overlay", "jump_cuts": "off"}
+    crafted = tag_clip({**clip, "structure": "hook_first",
+                        "edit_plan": {**clip["edit_plan"], "structure": "auto", "hook_format": "title_card",
+                                      "jump_cuts": "silences"}})
+    assert (crafted["structure"], crafted["hook_format"], crafted["jump_cuts"]) == ("hook_first", "title_card", "silences")
     bare = tag_clip({"id": "legacy"})
     assert all(value is None for value in bare.values())
     assert tag_clip({"hook": "Why rates matter?", "hypothesis": "invented"})["moment_type"] is None

@@ -30,6 +30,7 @@ from typing import Any, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .craft import with_legacy
 from .jobs import WorkError
 from .learning import bound_digest, identity, memory_digest, utc
 
@@ -43,6 +44,10 @@ VOCAB: dict[str, dict[str, tuple[str, ...]]] = {
         "opening_type": ("text_overlay", "cold_open", "none"),
         "caption_style": ("standard", "high_contrast", "pop"),
         "framing": ("fit", "fill", "blur"),
+        # Editing craft (craft.py), as rendered: each is one testable variable.
+        "structure": ("linear", "hook_first"),
+        "hook_format": ("overlay", "title_card"),
+        "jump_cuts": ("off", "silences", "silences_and_fillers"),
     },
     "selection": {
         "moment_type": ("bold_claim", "question", "story", "lesson", "contrast", "emotion", "humor", "spectacle"),
@@ -56,7 +61,8 @@ VOCAB: dict[str, dict[str, tuple[str, ...]]] = {
 VARIABLE_LAYER = {variable: layer for layer, variables in VOCAB.items() for variable in variables}
 # Fixed, documented prior weights for "how much would knowing this change the next batch".
 IMPORTANCE = {"hook_style": 1.0, "moment_type": 1.0, "duration_bucket": 0.8, "opening_type": 0.8,
-              "posting_window": 0.7, "caption_style": 0.6, "framing": 0.5, "speaker_role": 0.6, "day_type": 0.4}
+              "posting_window": 0.7, "caption_style": 0.6, "framing": 0.5, "speaker_role": 0.6, "day_type": 0.4,
+              "structure": 0.8, "hook_format": 0.6, "jump_cuts": 0.5}
 TAG_VERSION = "strategist-tags-v1"
 DEFAULT_METRICS = ("views", "plays", "reach", "impressions", "likes")
 MIN_EVIDENCE = 3            # matching measured posts before a belief can leave "testing"
@@ -141,12 +147,19 @@ def tag_clip(clip: dict, publication: dict | None = None) -> dict:
         seconds += plan["cold_open_end"] - plan["cold_open_start"]
     window, day = _posting((publication or {}).get("published_at")) if publication else (None, None)
     pick = (lambda layer, variable, value: value if value in VOCAB[layer][variable] else None)
+    legacy = with_legacy(plan) if plan else {}
+    opening = _opening(clip, plan)
     return {
         "hook_style": _hook_style(plan.get("hook", clip.get("hook"))),
         "duration_bucket": _duration_bucket(seconds),
-        "opening_type": _opening(clip, plan),
+        "opening_type": opening,
         "caption_style": pick("craft", "caption_style", plan.get("caption_style")),
         "framing": pick("craft", "framing", plan.get("framing")),
+        # Resolved structure (auto becomes linear or hook_first at render); plans saved before
+        # these options existed were rendered linear, with overlay hooks and no cuts.
+        "structure": pick("craft", "structure", clip.get("structure") or legacy.get("structure")),
+        "hook_format": pick("craft", "hook_format", legacy.get("hook_format")) if opening == "text_overlay" else None,
+        "jump_cuts": pick("craft", "jump_cuts", legacy.get("jump_cuts")),
         "moment_type": pick("selection", "moment_type", clip.get("hypothesis")),
         "speaker_role": pick("selection", "speaker_role", clip.get("speaker_role")),
         "posting_window": window,
