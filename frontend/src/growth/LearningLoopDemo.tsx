@@ -418,12 +418,11 @@ export function LearningLoopDemo({
   );
 }
 
-/** The single demo entry point used on Factory and Results. */
-export function DemoLoopButton({ onClick, compact = false }: { onClick: () => void; compact?: boolean }) {
+/** The single demo entry point: expands the demo inline on Results. */
+export function DemoLoopButton({ onClick, expanded = false }: { onClick: () => void; expanded?: boolean }) {
   return (
-    <button type="button" className={`gf-lld-launch${compact ? " is-compact" : ""}`} onClick={onClick}>
-      <span aria-hidden="true">▶</span> Run the learning loop
-      <small>Simulated results · real agents · real re-edit</small>
+    <button type="button" className="gf-lld-launch" onClick={onClick} aria-expanded={expanded}>
+      <span aria-hidden="true">{expanded ? "▾" : "▶"}</span> {expanded ? "Hide the learning loop" : "Run the learning loop"}
     </button>
   );
 }

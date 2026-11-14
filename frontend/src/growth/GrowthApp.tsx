@@ -16,7 +16,6 @@ import {
   type OpenProduction,
 } from "./FactoryHome";
 import { FactoryTabs } from "./FactoryMap";
-import { LearningLoopDemo } from "./LearningLoopDemo";
 import { clearDemoResult, loadDemoResult, saveDemoResult, type DemoResult } from "./demoStore";
 import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
@@ -149,7 +148,6 @@ export function GrowthApp() {
   useEffect(() => {
     if (stage !== "results") setDemoOpen(false);
   }, [stage]);
-  const demoInPane = demoOpen && !onboarding && usable && stage === "results";
   // The demo's simulated outcome lives in its own per-brand store, never in account history.
   const [demoResult, setDemoResult] = useState<DemoResult | null>(() => loadDemoResult(w.profileId));
   useEffect(() => setDemoResult(loadDemoResult(w.profileId)), [w.profileId]);
@@ -260,7 +258,7 @@ export function GrowthApp() {
   }
   function openRehearsal() {
     if (blocked || onboarding || !usable || currentContext.current !== contextKey) return;
-    go("results"); // the demo plays inside the Results pane, never as a separate window
+    go("results"); // the demo expands inline on Results, below the strip
     setDemoOpen(true);
   }
   function reviewClip(clip: Clip) {
@@ -527,10 +525,10 @@ export function GrowthApp() {
               </div>
               <div className="gf-top-right">{commandTrigger}</div>
             </header>
-            <main id="growth-main" className={`gf-main${demoInPane ? " is-demo" : ""}`} tabIndex={-1}>
+            <main id="growth-main" className="gf-main" tabIndex={-1}>
               <header
                 className={`gf-page-heading${stage === "factory" ? " gf-landing-heading" : ""}${narrowStage ? " is-narrow" : ""}`}
-                hidden={onboarding || demoInPane}
+                hidden={onboarding}
               >
                 {back && !onboarding && (
                   <button
@@ -759,15 +757,6 @@ export function GrowthApp() {
                 className="gf-stage"
                 hidden={onboarding || stage !== "results"}
               >
-                {demoInPane && (
-                  <LearningLoopDemo
-                    profileId={w.profileId}
-                    open
-                    onClose={() => setDemoOpen(false)}
-                    onResult={keepDemoResult}
-                  />
-                )}
-                <div hidden={demoInPane}>
                 <Results
                   key={contextKey}
                   w={w}
@@ -779,8 +768,10 @@ export function GrowthApp() {
                   onRehearse={openRehearsal}
                   demo={demoResult}
                   onResetDemo={resetDemo}
+                  demoOpen={demoOpen && !onboarding && usable && stage === "results"}
+                  onCloseDemo={() => setDemoOpen(false)}
+                  onDemoResult={keepDemoResult}
                 />
-                </div>
               </div>
             </main>
           </div>

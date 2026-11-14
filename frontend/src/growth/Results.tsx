@@ -1,5 +1,5 @@
 import { AutoTextarea } from "../components/AutoTextarea";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import type { Clip, Direction } from "../types";
 import {
@@ -12,7 +12,8 @@ import { pendingRules, scopeAutomation, type Row } from "./flowEvents";
 import { postedRows, resultsStory, type PostedRow } from "./resultsModel";
 import { StrategistPanel } from "./StrategistPanel";
 import { GrowthLoopPanel } from "./GrowthLoopPanel";
-import { DemoLoopButton } from "./LearningLoopDemo";
+import { DemoLoopButton, LearningLoopDemo } from "./LearningLoopDemo";
+import { brandClips, simulateResults, type SimResults } from "./demoResults";
 import type { DemoResult } from "./demoStore";
 import "./results-minimal.css";
 import { FactoryUpgrades } from "./FactoryUpgrades";
@@ -1055,56 +1056,46 @@ function LearnedExtra({ memory }: { memory: LearningMemory | null }) {
 }
 
 /** Results: Post → Measure → Learn, then what is next and what needs you. */
-/** The demo's outcome on Results: simulated posts vs baseline, beliefs, and the real hook re-edit. */
-function DemoOutcome({ demo, onReset, simulatedOnly }: { demo: DemoResult; onReset?: () => void; simulatedOnly?: boolean }) {
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const compact = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(n));
+
+/** The demo's outcome on Results: a simulated, deterministic history built from the brand's real clips. */
+function DemoOutcome({ demo, sim, onReset }: { demo: DemoResult; sim: SimResults; onReset?: () => void }) {
   const { plan, after } = demo;
-  const base = plan.baseline.metrics.hold_3s;
   const parent = plan.clips.find((c) => c.clip_id === plan.recut.clip_id);
+  const byClip = new Map(sim.posts.map((p) => [p.clip_id, p]));
+  const t = sim.typical;
+  const chip = (label: string, value: number, typical: number, text = compact(value)) => (
+    <span className={`gf-sim-chip${value > typical * 1.05 ? " is-up" : value < typical * 0.95 ? " is-down" : ""}`}>
+      {label} <b>{text}</b>
+    </span>
+  );
   return (
     <section className="gf-results-sim" aria-labelledby="gf-results-sim-title">
       <header>
         <h2 id="gf-results-sim-title">Learning loop</h2>
-        {simulatedOnly ? null : <span className="gf-results-sim-pill">Simulated</span>}
+        <span className="gf-results-sim-pill">Simulated</span>
         {onReset && (
           <button type="button" className="gf-results-reset" onClick={onReset}>
             Reset demo
           </button>
         )}
       </header>
-      <div className="gf-results-sim-posts">
-        {plan.clips.map((clip) => {
-          const hold = clip.simulated.metrics.hold_3s;
-          const delta = Math.round((hold / base - 1) * 100);
-          return (
-            <article key={clip.clip_id} className={`gf-results-sim-post is-${clip.outcome}`}>
-              <img src={clip.cover_url} alt="" />
-              <div>
-                <strong>{clip.hook}</strong>
-                <small>Opens on {clip.opening}</small>
-                <span>
-                  <b>{Math.round(hold * 100)}%</b> at 3s · {delta >= 0 ? "+" : ""}
-                  {delta}% vs typical {Math.round(base * 100)}%
-                </span>
-                <small>{clip.simulated.metrics.views.toLocaleString()} views · {Math.round(clip.simulated.metrics.completion_rate * 100)}% to the end</small>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      <h3 className="gf-sim-h">What we learned</h3>
       <div className="gf-results-learned-grid">
-        {plan.beliefs.map((belief) => (
+        {sim.beliefs.map((belief) => (
           <article key={belief.id} className="gf-results-belief">
             <strong>{belief.headline}</strong>
-            {belief.counts.matching > 0 ? (
-              <>
-                <span className="gf-results-belief-bar" aria-hidden="true">
-                  <i style={{ width: `${Math.round(belief.confidence * 100)}%` }} />
-                </span>
-                <small>{belief.detail} · {Math.round(belief.confidence * 100)}% sure</small>
-              </>
-            ) : (
-              <small>{belief.detail} · next test</small>
-            )}
+            <span className="gf-results-belief-bar" aria-hidden="true">
+              <i style={{ width: `${Math.round(belief.confidence * 100)}%` }} />
+            </span>
+            <small>{belief.detail} · {Math.round(belief.confidence * 100)}% sure</small>
+            <span className="gf-sim-cite" aria-label={`Supported by ${belief.support.length} clips`}>
+              {belief.support.map((id) => {
+                const post = byClip.get(id);
+                return post ? <img key={id} src={post.cover_url} alt="" title={post.hook} /> : null;
+              })}
+            </span>
           </article>
         ))}
       </div>
@@ -1128,6 +1119,31 @@ function DemoOutcome({ demo, onReset, simulatedOnly }: { demo: DemoResult; onRes
           )}
         </figure>
       </article>
+      <h3 className="gf-sim-h">Posted clips <small>· typical {Math.round(t.hold_3s * 100)}% 3-sec hold</small></h3>
+      <ul className="gf-sim-posts">
+        {sim.posts.map((post) => {
+          const m = post.metrics;
+          return (
+            <li key={post.clip_id} className={`gf-sim-post${post.role ? ` is-${post.role}` : ""}`}>
+              <img src={post.cover_url} alt="" loading="lazy" />
+              <div>
+                <strong>{post.hook}</strong>
+                <small>
+                  {shortDate(post.posted_at)}
+                  {post.role === "win" ? " · demo winner" : post.role === "loss" ? " · re-edited" : post.role ? " · in the demo" : ""}
+                </small>
+                <span className="gf-sim-chips">
+                  {chip("Views", m.views, t.views)}
+                  {chip("3s hold", m.hold_3s, t.hold_3s, `${Math.round(m.hold_3s * 100)}%`)}
+                  {chip("Watch", m.avg_watch, t.avg_watch, `${Math.round(m.avg_watch * 100)}%`)}
+                  {chip("Saves", m.saves, t.saves)}
+                  {chip("Shares", m.shares, t.shares)}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
@@ -1142,6 +1158,9 @@ export function Results({
   onRehearse,
   demo = null,
   onResetDemo,
+  demoOpen = false,
+  onCloseDemo,
+  onDemoResult,
 }: {
   w: Workspace;
   factory: FactoryState;
@@ -1153,6 +1172,10 @@ export function Results({
   /** The learning-loop demo's simulated outcome (its own store, never account history). */
   demo?: DemoResult | null;
   onResetDemo?: () => void;
+  /** The demo panel expands inline below the strip. */
+  demoOpen?: boolean;
+  onCloseDemo?: () => void;
+  onDemoResult?: (result: DemoResult) => void;
 }) {
   const data = useResultsData(w, visible);
   const [view, setView] = useState<StrategistView | null>(null);
@@ -1216,9 +1239,24 @@ export function Results({
     now,
   });
   const [moreOpen, setMoreOpen] = useState(false);
+  const [demoShown, setDemoShown] = useState(demoOpen);
+  useEffect(() => {
+    if (demoOpen) return setDemoShown(true);
+    // Keep the demo mounted while the panel collapses, then unmount it.
+    const timer = window.setTimeout(() => setDemoShown(false), 380);
+    return () => window.clearTimeout(timer);
+  }, [demoOpen]);
+  const brandPool = brandClips(factory.data.clips, w.profileId);
+  const brandKey = brandPool.map((c) => c.id).join();
   const posted = rows.length + untracked.length;
   const measuring = rows.filter((r) => r.window < 1).length;
   const learned = (view?.beliefs ?? []).filter((b) => b.status !== "retired" && b.counts.matching > 0);
+  // Simulated history only while no real post exists; display only, never written to real tables.
+  const sim = useMemo(
+    () => (demo && !posted ? simulateResults(demo, brandPool) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [demo, posted, brandKey],
+  );
   const connected = (data.scoped?.accounts ?? []).length > 0;
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -1244,10 +1282,9 @@ export function Results({
     <div className="gf-results-page is-minimal">
       <header className="gf-results-top">
         <dl className="gf-results-strip">
-          <div><dt>Posted</dt><dd>{demo && !posted ? demo.plan.clips.length : posted}</dd></div>
-          <div><dt>Measuring</dt><dd>{measuring}</dd></div>
-          <div><dt>Learned</dt><dd>{demo && !learned.length ? demo.plan.beliefs.filter((b) => b.counts.matching > 0).length : learned.length}</dd></div>
-          {demo && !posted && <div className="gf-results-sim-pill">Simulated</div>}
+          <div><dt>Posted</dt><dd>{sim ? sim.posts.length : posted}</dd></div>
+          <div><dt>Measuring</dt><dd>{sim ? sim.posts.length : measuring}</dd></div>
+          <div><dt>Learned</dt><dd>{sim ? sim.beliefs.length : learned.length}</dd></div>
         </dl>
         <div className="gf-results-top-actions">
           <button type="button" className={`gf-results-ig${connected ? " is-on" : ""}`} onClick={toAccounts}>
@@ -1257,10 +1294,22 @@ export function Results({
       </header>
       {onRehearse && (
         <div className="gf-results-run">
-          <DemoLoopButton onClick={onRehearse} />
+          <DemoLoopButton onClick={demoOpen ? () => onCloseDemo?.() : onRehearse} expanded={demoOpen} />
         </div>
       )}
-      {demo && <DemoOutcome demo={demo} onReset={onResetDemo} simulatedOnly={!posted} />}
+      <div className={`gf-results-demo-panel${demoOpen ? " is-open" : ""}`}>
+        <div>
+          {w.profileId && (demoOpen || demoShown) && (
+            <LearningLoopDemo
+              profileId={w.profileId}
+              open
+              onClose={() => onCloseDemo?.()}
+              onResult={onDemoResult}
+            />
+          )}
+        </div>
+      </div>
+      {demo && sim && <DemoOutcome demo={demo} sim={sim} onReset={onResetDemo} />}
       <p id="gf-results-now" className="gf-results-now" role="status">{story.headline}</p>
       {(!demo || learned.length > 0) && <section className="gf-results-learned" aria-labelledby="gf-results-learned-title">
         <h2 id="gf-results-learned-title">What we learned</h2>
