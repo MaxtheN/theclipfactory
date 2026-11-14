@@ -732,11 +732,11 @@ function useReplay(events: ReplayEvent[], reduced: boolean) {
 }
 
 const OVERVIEW_STAGES: { label: string; ids: StationId[]; detail: string }[] = [
-  { label: "Content", ids: ["footage", "listen", "watch", "scout", "brief", "editor", "critic"], detail: "Source, agents and clip quality" },
-  { label: "Instagram", ids: ["post"], detail: "The exact content and destination" },
-  { label: "Measure", ids: ["measure"], detail: "Account observations and their window" },
-  { label: "Strategy", ids: ["strategist", "rules"], detail: "Evidence → one creative change" },
-  { label: "Next draft / Upgrade", ids: ["builder", "editor"], detail: "Re-cut, or build a missing capability" },
+  { label: "Understand", ids: ["footage", "listen", "watch"], detail: "Footage, transcript, scenes" },
+  { label: "Create", ids: ["scout", "brief", "editor"], detail: "Scouts, brief check, editor" },
+  { label: "Judge", ids: ["critic", "approve"], detail: "Critic, quality gate, you" },
+  { label: "Ship", ids: ["post", "measure"], detail: "Instagram and measurement" },
+  { label: "Learn", ids: ["strategist", "rules", "builder"], detail: "Strategist and style rules" },
 ];
 function FactoryOverview({ model, rehearsal, selected, onSelect, onPreview }: { model: FactoryMapModel; rehearsal?: ReturnType<typeof useLoopRehearsal>; selected: number; onSelect: (index: number) => void; onPreview: (index: number | null) => void }) {
   const activeStage = rehearsal ? [0, 1, 2, 3, 4, 4][rehearsal.phase] : OVERVIEW_STAGES.findIndex(group => model.stations.some(s => group.ids.includes(s.id) && s.state === "active"));
@@ -827,10 +827,7 @@ export function FactoryMap({
       <header className="gf-fmap-head">
         <div>
           <h2 id="gf-fmap-title">Factory map</h2>
-          <p>
-            Content → Instagram → measurement → strategy → the next iteration.
-            Open Engine details when you want to see how the work happens.
-          </p>
+
         </div>
         <div className="gf-fmap-actions" aria-label="Factory map status">
           <span
@@ -843,9 +840,8 @@ export function FactoryMap({
         </div>
       </header>
       <FactoryOverview model={model} rehearsal={mode === "demo" ? rehearsal : undefined} selected={overview} onSelect={setOverview} onPreview={setPreviewStage} />
-      <StagePreview index={previewStage ?? overview} model={model} rehearsal={mode === "demo" ? rehearsal : undefined} />
       {mode === "demo" && <><LoopRehearsalControls state={rehearsal} /><LoopRehearsalInspector state={rehearsal} /></>}
-      <details className="gf-fmap-engine-details"><summary>Engine details <span>Transcript, scouts, rubric, strategy and factory builder</span></summary>
+      <details className="gf-fmap-engine-details"><summary>Open full map</summary>
       {mode === "real" && replay.on && replayRun && (
         <div className="gf-fmap-replay" role="status">
           <strong>Demo replay · recorded run, {REPLAY_SPEED}× speed</strong>

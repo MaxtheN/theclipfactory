@@ -106,30 +106,21 @@ afterEach(() => {
 });
 
 describe("FactoryMap", () => {
-  it("previews stages on hover and keyboard focus, and restores the clicked selection", () => {
+  it("shows one compact five-phase strip with a single status each", () => {
     motion(false);
     vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([]);
     render(<FactoryMap w={w} factory={factory(false)} />);
     const stages = screen.getByRole("list", { name: "Factory growth loop" });
-    const buttons = stages.querySelectorAll("button");
-    fireEvent.click(buttons[2]);
-    expect(screen.getByRole("heading", { name: "Measure", level: 3 })).toBeTruthy();
-    fireEvent.mouseEnter(buttons[1]);
-    expect(screen.getByRole("heading", { name: "Instagram", level: 3 })).toBeTruthy();
-    expect(screen.getByText("Output evidence")).toBeTruthy();
-    fireEvent.mouseLeave(stages);
-    expect(screen.getByRole("heading", { name: "Measure", level: 3 })).toBeTruthy();
-    fireEvent.focus(buttons[3]);
-    expect(screen.getByRole("heading", { name: "Strategy", level: 3 })).toBeTruthy();
-    fireEvent.blur(stages, { relatedTarget: document.body });
-    expect(screen.getByRole("heading", { name: "Measure", level: 3 })).toBeTruthy();
+    expect([...stages.querySelectorAll("strong")].map((n) => n.textContent)).toEqual(["Understand", "Create", "Judge", "Ship", "Learn"]);
+    expect(screen.queryByText("Output evidence")).toBeNull();
+    expect(screen.getByText("Open full map")).toBeTruthy();
   });
 
   it("summarises the chosen run compactly and lists full detail in the menu", async () => {
     motion(false);
     vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([finishedRun]);
     render(<FactoryMap w={w} factory={factory(false)} />);
-    fireEvent.click(screen.getByText(/^Engine details/));
+    fireEvent.click(screen.getByText("Open full map"));
     const picker = await screen.findByRole("button", { name: /Choose a run/ });
     expect(picker.textContent).toMatch(/^Run.*Needs review$/);
     fireEvent.click(picker);
