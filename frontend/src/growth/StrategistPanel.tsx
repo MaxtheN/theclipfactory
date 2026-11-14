@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { BeliefLedger, type LedgerBelief } from "./BeliefLedger";
 import {
   strategistApi,
@@ -7,6 +14,7 @@ import {
   type StrategistRun,
   type StrategistView,
 } from "./strategistApi";
+import { experimentLines } from "./resultsModel";
 import "./strategist.css";
 
 const STEP_MS = 1100;
@@ -23,28 +31,35 @@ export function prefersReducedMotion(): boolean {
   }
 }
 
-function PortfolioStrip({ portfolio }: { portfolio: Portfolio | null }) {
+function PortfolioStrip({
+  portfolio,
+  metric,
+}: {
+  portfolio: Portfolio | null;
+  metric: string | null;
+}) {
   if (!portfolio?.slots.length)
     return (
       <p className="gf-strategist-empty">
-        No experiment queue yet: beliefs need measured posts first.
+        Nothing queued yet. The first experiments appear once posts are
+        measured.
       </p>
     );
+  const lines = experimentLines(portfolio.slots, metric);
+  const modes = [
+    ...new Map(
+      portfolio.slots.map((s) => [
+        `${s.mode}|${s.variable}|${s.value}|${s.direction}`,
+        s.mode,
+      ]),
+    ).values(),
+  ];
   return (
     <ol className="gf-strategist-queue" aria-label="Next experiment batch">
-      {portfolio.slots.map((slot) => (
-        <li
-          key={slot.slot}
-          className={`is-${slot.mode}`}
-          title={slot.rationale}
-        >
-          <strong>{slot.mode === "exploit" ? "Apply" : "Explore"}</strong>
-          <span>
-            {slot.direction === "decrease" && slot.mode === "exploit"
-              ? "avoid "
-              : ""}
-            {slot.variable.replace(/_/g, " ")}: {slot.value.replace(/_/g, " ")}
-          </span>
+      {lines.map((line, i) => (
+        <li key={i} className={`is-${modes[i]}`}>
+          <strong>{modes[i] === "exploit" ? "Keep" : "Test"}</strong>
+          <span>{line.replace(/^Test: (.)/, (_, c: string) => c.toUpperCase())}</span>
         </li>
       ))}
     </ol>
@@ -76,9 +91,20 @@ function modelNote(run: StrategistRun | undefined): string | null {
 export function StrategistPanel({
   profileId,
   onOpenStyleRules,
+  onView,
+  extraWaiting,
+  extraWaitingCount = 0,
+  learnedExtra,
 }: {
   profileId: string;
   onOpenStyleRules?: () => void;
+  /** Reports each fresh real view (never the simulation) to the Results header. */
+  onView?: (view: StrategistView) => void;
+  /** More items for "Waiting for you" (drafts, rules from measured tests). */
+  extraWaiting?: ReactNode;
+  extraWaitingCount?: number;
+  /** Shown under the lanes, e.g. measured tests and the account's typical numbers. */
+  learnedExtra?: ReactNode;
 }) {
   const [view, setView] = useState<StrategistView | null>(null);
   const [error, setError] = useState("");
@@ -88,6 +114,9 @@ export function StrategistPanel({
   const [playing, setPlaying] = useState(false);
   const reduced = useMemo(prefersReducedMotion, []);
   const alive = useRef(true);
+  const panel = useRef<HTMLElement>(null);
+  const onViewRef = useRef(onView);
+  onViewRef.current = onView;
 
   const load = useCallback(async () => {
     try {
@@ -95,6 +124,7 @@ export function StrategistPanel({
       if (alive.current) {
         setView(next);
         setError("");
+        onViewRef.current?.(next);
       }
       return next;
     } catch (caught) {
@@ -171,6 +201,10 @@ export function StrategistPanel({
     try {
       const result = await strategistApi.simulate(profileId);
       setSimulation(result);
+      panel.current?.scrollIntoView?.({
+        behavior: reduced ? "auto" : "smooth",
+        block: "start",
+      });
       setStep(reduced ? result.steps.length - 1 : 0);
       setPlaying(!reduced);
     } catch (caught) {
@@ -192,8 +226,18 @@ export function StrategistPanel({
   const note = simulation ? null : modelNote(latest);
   const pending = view?.pending_proposals;
 
+  const waitingCount =
+    (pending?.style_rules.length ?? 0) +
+    (pending?.campaign.length ?? 0) +
+    extraWaitingCount;
+  const baselineValue =
+    view?.baseline.metrics && view.target_metric
+      ? view.baseline.metrics[view.target_metric]
+      : null;
+
   return (
     <section
+      ref={panel}
       className={`gf-strategist${simulation ? " is-simulated" : ""}${reduced ? " is-reduced" : ""}`}
       aria-labelledby="gf-strategist-title"
     >
@@ -204,14 +248,15 @@ export function StrategistPanel({
       )}
       <header className="gf-strategist-head">
         <div>
-          <h2 id="gf-strategist-title">Strategist</h2>
+          <span className="gf-results-step">02</span>
+          <h2 id="gf-strategist-title">What we've learned</h2>
           <p>
-            Learns from this account's own measured posts, compared with its
-            median {view?.target_metric ?? "metric"}
-            {view?.baseline.metrics && view.target_metric
-              ? ` (${view.baseline.metrics[view.target_metric] ?? "unknown"} over ${view.baseline.posts} posts)`
+            The Strategist compares each measured post with your typical{" "}
+            {(view?.target_metric ?? "result").replace(/_/g, " ")}
+            {baselineValue != null && view
+              ? ` (${baselineValue.toLocaleString()} across ${view.baseline.posts} posts)`
               : ""}
-            . Every change is a proposal you approve.
+            . Every change it suggests waits for you.
           </p>
         </div>
         <div className="gf-strategist-actions">
@@ -221,14 +266,6 @@ export function StrategistPanel({
             disabled={busy || active || !!simulation}
           >
             {active ? "Strategist running…" : "Run strategist"}
-          </button>
-          <button
-            type="button"
-            aria-pressed={!!simulation}
-            onClick={() => void toggleSimulation()}
-            disabled={busy && !simulation}
-          >
-            {simulation ? "Back to real data" : "Play simulation"}
           </button>
         </div>
       </header>
@@ -253,11 +290,11 @@ export function StrategistPanel({
       {simulation && current && (
         <div className="gf-strategist-sim-controls">
           <span>
-            Synthetic post {current.step} of {simulation.steps.length}:{" "}
-            {current.post.views.toLocaleString()} views vs median{" "}
+            Simulated post {current.step} of {simulation.steps.length}:{" "}
+            {current.post.views.toLocaleString()} views vs typical{" "}
             {current.baseline_views?.toLocaleString() ?? "unknown"}
             {current.layers_run.length
-              ? ` · reviewed ${current.layers_run.join(", ")}`
+              ? ` · reviewed ${current.layers_run.join(", ").replace("campaign", "posting plan")}`
               : ""}
           </span>
           <button
@@ -287,25 +324,40 @@ export function StrategistPanel({
         beliefs={beliefs}
         onRetire={simulation ? undefined : (id) => void retire(id)}
       />
-      <section className="gf-strategist-section">
-        <h3>Next batch</h3>
+      {!simulation && learnedExtra}
+      <p className="gf-strategist-footnote">
+        Observational, not proof: these patterns come from your own posts and
+        guide the next test. They don't show why a post did well.
+      </p>
+      <section className="gf-strategist-section" aria-labelledby="gf-next-experiment">
+        <span className="gf-results-step">03</span>
+        <h3 id="gf-next-experiment">Next experiment</h3>
         <p className="gf-strategist-note">
-          About three in four slots apply supported beliefs; one tests the most
-          uncertain, most important one.
+          Most clips keep what has worked; about one in four tests something
+          still uncertain.
         </p>
-        <PortfolioStrip portfolio={portfolio} />
+        <PortfolioStrip
+          portfolio={portfolio}
+          metric={view?.target_metric ?? null}
+        />
       </section>
       {!simulation && (
-        <section className="gf-strategist-section">
-          <h3>Waiting for your review</h3>
-          {!pending?.style_rules.length && !pending?.campaign.length && (
-            <p className="gf-strategist-empty">No pending proposals.</p>
+        <section className="gf-strategist-section" aria-labelledby="gf-waiting-for-you">
+          <span className="gf-results-step">04</span>
+          <h3 id="gf-waiting-for-you">
+            Waiting for you{waitingCount ? ` (${waitingCount})` : ""}
+          </h3>
+          {!waitingCount && (
+            <p className="gf-strategist-empty">
+              Nothing needs you right now. Nothing changes without your
+              approval.
+            </p>
           )}
           {pending?.style_rules.map((rule) => (
             <article key={rule.id} className="gf-strategist-proposal">
               <span>
-                {rule.layer === "selection" ? "Selection" : "Craft"} change ·
-                Style rules version {rule.version}
+                New {rule.layer === "selection" ? "clip-picking" : "editing"}{" "}
+                rule · Style rules version {rule.version}
               </span>
               <button
                 type="button"
@@ -319,7 +371,7 @@ export function StrategistPanel({
           ))}
           {pending?.campaign.map((proposal) => (
             <details key={proposal.id} className="gf-strategist-proposal">
-              <summary>Review posting-plan proposal</summary>
+              <summary>Review a posting-time suggestion</summary>
               <p>{proposal.summary}</p>
               <small>{proposal.caveat}</small>
               <div className="gf-strategist-actions">
@@ -327,7 +379,7 @@ export function StrategistPanel({
                   type="button"
                   onClick={() => void decide(proposal.id, true)}
                 >
-                  Approve plan
+                  Approve
                 </button>
                 <button
                   type="button"
@@ -338,8 +390,25 @@ export function StrategistPanel({
               </div>
             </details>
           ))}
+          {extraWaiting}
         </section>
       )}
+      <section className="gf-strategist-section gf-strategist-sim" aria-labelledby="gf-simulation">
+        <span className="gf-results-step">05</span>
+        <h3 id="gf-simulation">See how it learns</h3>
+        <p className="gf-strategist-note">
+          A replay on made-up posts, so you can watch beliefs form. It is
+          clearly labelled and never mixed with your real results.
+        </p>
+        <button
+          type="button"
+          aria-pressed={!!simulation}
+          onClick={() => void toggleSimulation()}
+          disabled={busy && !simulation}
+        >
+          {simulation ? "Back to real data" : "See how it learns (simulated data)"}
+        </button>
+      </section>
       <p className="gf-strategist-caveat">
         {simulation?.caveat ?? view?.caveat}
       </p>

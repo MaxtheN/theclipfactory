@@ -181,8 +181,13 @@ describe("StrategistPanel", () => {
     expect(within(craft).getByRole("meter").getAttribute("aria-valuenow")).toBe("94");
     expect(screen.getByText(/Model held: insufficient memory/)).toBeTruthy();
     const queue = screen.getByRole("list", { name: "Next experiment batch" });
-    expect(within(queue).getAllByText("Apply")).toHaveLength(3);
-    expect(within(queue).getAllByText("Explore")).toHaveLength(1);
+    // Identical slots read as one sentence: "… on the next 3 clips".
+    expect(within(queue).getAllByText("Keep")).toHaveLength(1);
+    expect(within(queue).getAllByText("Test")).toHaveLength(1);
+    expect(
+      within(queue).getByText(/Keep using question hooks on the next 3 clips/),
+    ).toBeTruthy();
+    expect(within(queue).getByText(/Try story moments on the next clip/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Review in Style rules" }));
     expect(open).toHaveBeenCalled();
     expect(screen.queryByText(/Simulation — synthetic/)).toBeNull();
@@ -211,7 +216,7 @@ describe("StrategistPanel", () => {
     vi.spyOn(strategistApi, "view").mockResolvedValue(view());
     vi.spyOn(strategistApi, "simulate").mockResolvedValue(simulation());
     render(<StrategistPanel profileId="p" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Play simulation" }));
+    fireEvent.click(await screen.findByRole("button", { name: "See how it learns (simulated data)" }));
     expect(await screen.findByText(/Simulation — synthetic data/)).toBeTruthy();
     expect(screen.getByText("Synthetic belief at step 1.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Run strategist" })).toHaveProperty("disabled", true);
@@ -228,7 +233,7 @@ describe("StrategistPanel", () => {
     vi.spyOn(strategistApi, "view").mockResolvedValue(view());
     vi.spyOn(strategistApi, "simulate").mockResolvedValue(simulation());
     const { container } = render(<StrategistPanel profileId="p" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Play simulation" }));
+    fireEvent.click(await screen.findByRole("button", { name: "See how it learns (simulated data)" }));
     expect(await screen.findByText("Synthetic belief at step 3.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
@@ -240,7 +245,7 @@ describe("StrategistPanel", () => {
     vi.spyOn(strategistApi, "view").mockResolvedValue(view());
     vi.spyOn(strategistApi, "simulate").mockResolvedValue(simulation());
     render(<StrategistPanel profileId="p" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Play simulation" }));
+    fireEvent.click(await screen.findByRole("button", { name: "See how it learns (simulated data)" }));
     await screen.findByText("Synthetic belief at step 1.");
     expect(
       await screen.findByText("Synthetic belief at step 2.", {}, { timeout: 2500 }),

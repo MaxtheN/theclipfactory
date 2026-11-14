@@ -1,6 +1,18 @@
 import { AutoTextarea } from "../components/AutoTextarea";
-import { useEffect, useRef, useState } from "react";
-import type { Direction } from "../types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api } from "../api";
+import type { Clip, Direction } from "../types";
+import {
+  AutomationPanel,
+  parseAutomationState,
+  parseLearningMemory,
+  type LearningMemory,
+} from "./AutomationPanel";
+import { pendingRules, scopeAutomation, type Row } from "./flowEvents";
+import { postedRows, resultsStory, type PostedRow } from "./resultsModel";
+import { StrategistPanel } from "./StrategistPanel";
+import type { StrategistView } from "./strategistApi";
+import "./results-story.css";
 import {
   applyLearningEdit,
   nextProductionMode,
@@ -182,7 +194,8 @@ function AnalystRecommendations({
   );
 }
 
-export function Results({
+/** Hand-entered results and a creator-proposed test. Kept under "Add a result by hand". */
+export function HandEnteredResults({
   w,
   factory,
   next,
@@ -386,20 +399,6 @@ export function Results({
     Date.parse(to) <= Date.now();
   return (
     <>
-      {!observations.length && (
-        <div className="gf-first-step" role="note">
-          <Icon name="results" size={18} />
-          <strong>Post a clip to start learning.</strong>
-          <button
-            type="button"
-            className="gf-button secondary compact"
-            onClick={() => next(undefined, "agent")}
-          >
-            Open Studio
-            <Icon name="arrow" size={15} />
-          </button>
-        </div>
-      )}
       <div className="gf-results-grid">
         <section className="gf-card gf-evidence">
         <div className="gf-card-header">
@@ -416,7 +415,7 @@ export function Results({
         </Pill>
         <div className="gf-evidence-status">
           <span className="gf-overline">AUDIENCE OUTCOME</span>
-          <h3>No winner. Yet.</h3>
+          <h3>Nothing proven yet.</h3>
           <p>
             {observations.length
               ? "Observations can inform a new test. They don't establish why an edit performed."
@@ -563,14 +562,14 @@ export function Results({
           <p>
             Manual publication references are retained with each observation.
             Unknown values remain unknown. This interface has no statistical
-            evaluation service and cannot name a causal winner.
+            evaluation service and cannot say which edit caused a result.
           </p>
         </Disclosure>
       </section>
       <section className="gf-card gf-next-test">
         <div className="gf-card-header">
           <div>
-            <span className="gf-overline">02 / PLAN THE NEXT TEST</span>
+            <span className="gf-overline">02 / SET UP A TEST</span>
             <h2>Next test</h2>
           </div>
           <Pill tone="quiet">
@@ -817,5 +816,418 @@ export function Results({
       </section>
       </div>
     </>
+  );
+}
+
+type ResultsData = {
+  scoped: ReturnType<typeof scopeAutomation>;
+  experiments: Row[];
+  memory: LearningMemory | null;
+  error: string;
+};
+const textOf = (v: unknown) => (typeof v === "string" ? v : "");
+
+function useResultsData(w: Workspace, visible: boolean): ResultsData {
+  const [data, setData] = useState<ResultsData>({
+    scoped: null,
+    experiments: [],
+    memory: null,
+    error: "",
+  });
+  const campaignId = w.campaign?.id,
+    profileId = w.profileId;
+  useEffect(() => {
+    if (!visible || !profileId) return;
+    let live = true;
+    const load = async () => {
+      const query = new URLSearchParams({ profile_id: profileId });
+      if (campaignId) query.set("campaign_id", campaignId);
+      const [state, accounts, digest] = await Promise.all([
+        api<unknown>("/api/automation/state").catch(() => null),
+        api<unknown>("/api/automation/accounts").catch(() => null),
+        api<unknown>(`/api/automation/memory?${query}`).catch(() => null),
+      ]);
+      if (!live) return;
+      try {
+        const parsed = state ? parseAutomationState(state) : null;
+        const rows = Array.isArray(accounts)
+          ? (accounts.filter(
+              (a) => a && typeof a === "object" && typeof a.id === "string",
+            ) as Row[])
+          : [];
+        setData({
+          scoped: scopeAutomation(
+            parsed ? { ...parsed, accounts: rows } : null,
+            campaignId,
+            profileId,
+          ),
+          experiments: (parsed?.experiments ?? []).filter(
+            (e) => e.campaign_id === campaignId && e.profile_id === profileId,
+          ),
+          memory: parseLearningMemory(digest),
+          error: parsed ? "" : "Tracking data is unavailable right now.",
+        });
+      } catch (e) {
+        setData((old) => ({
+          ...old,
+          error: e instanceof Error ? e.message : "Tracking data is unavailable.",
+        }));
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void load();
+    }, 15000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [visible, campaignId, profileId]);
+  return data;
+}
+
+function StoryHeader({ story }: { story: ReturnType<typeof resultsStory> }) {
+  return (
+    <section className="gf-results-story" aria-labelledby="gf-results-now">
+      <ol aria-label="Post, measure, learn">
+        {story.steps.map((step, n) => (
+          <li
+            key={step.key}
+            className={`is-${step.state}`}
+            aria-current={step.state === "current" ? "step" : undefined}
+          >
+            <span className="gf-results-story-num">
+              {step.state === "done" ? <Icon name="check" size={13} /> : n + 1}
+            </span>
+            <span>
+              <strong>{step.label}</strong>
+              <small>{step.note}</small>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p id="gf-results-now" className="gf-results-now" role="status">
+        <span>Right now</span>
+        {story.headline}
+      </p>
+    </section>
+  );
+}
+
+function PostedClips({
+  rows,
+  untracked,
+  error,
+  onAccounts,
+}: {
+  rows: PostedRow[];
+  untracked: Clip[];
+  error: string;
+  onAccounts: () => void;
+}) {
+  return (
+    <section className="gf-results-card" aria-labelledby="gf-posted-title">
+      <span className="gf-results-step">01</span>
+      <h2 id="gf-posted-title">Posted clips</h2>
+      {error && (
+        <p className="gf-help" role="alert">
+          {error}
+        </p>
+      )}
+      {!rows.length && !untracked.length && (
+        <div className="gf-results-empty">
+          <p>
+            Nothing posted yet. Approve a clip in Studio, post it, then track
+            it here so it can be measured.
+          </p>
+          <button
+            type="button"
+            className="gf-button secondary compact"
+            onClick={onAccounts}
+          >
+            Instagram accounts
+            <Icon name="arrow" size={14} />
+          </button>
+        </div>
+      )}
+      <ul className="gf-posted-list">
+        {rows.map((row) => (
+          <li key={row.id} className="gf-posted">
+            <div className="gf-posted-head">
+              <strong>{row.title}</strong>
+              <span>
+                {row.account}
+                {row.postedAt
+                  ? ` · posted ${new Date(row.postedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                  : ""}
+              </span>
+            </div>
+            {row.demo && (
+              <span className="gf-automation-badge">
+                Demo override · measured{" "}
+                {row.demoHours === null ? "early" : `${row.demoHours} h after posting`}, before its window
+              </span>
+            )}
+            {row.chips.length ? (
+              <ul className="gf-ratio-chips" aria-label="Latest numbers vs your typical post">
+                {row.chips.map((chip) => (
+                  <li key={chip.metric} className={`is-${chip.tone}`}>
+                    {chip.label}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="gf-posted-wait">No numbers yet — the first reading comes at the end of the window.</p>
+            )}
+            <div className="gf-posted-window">
+              <span
+                className="gf-posted-window-bar"
+                role="progressbar"
+                aria-label="Measurement window"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(row.window * 100)}
+              >
+                <i style={{ width: `${Math.round(row.window * 100)}%` }} />
+              </span>
+              <small>{row.windowLabel}</small>
+            </div>
+          </li>
+        ))}
+        {untracked.map((clip) => (
+          <li key={clip.id} className="gf-posted is-untracked">
+            <div className="gf-posted-head">
+              <strong>{clip.hook || clip.name}</strong>
+              <span>
+                Posted
+                {clip.published_at
+                  ? ` ${new Date(clip.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                  : ""}{" "}
+                · not tracked yet
+              </span>
+            </div>
+            <button
+              type="button"
+              className="gf-strategist-link"
+              onClick={onAccounts}
+            >
+              Track it to measure
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function LearnedExtra({ memory }: { memory: LearningMemory | null }) {
+  if (!memory || (!memory.posts && !memory.comparisons.length)) return null;
+  const known = memory.baseline.filter((m) => m.median !== null).slice(0, 4);
+  return (
+    <div className="gf-results-typical">
+      {known.length > 0 && (
+        <p>
+          <strong>Your typical post</strong> (middle of {memory.posts} tracked):{" "}
+          {known
+            .map((m) => `${m.median!.toLocaleString()} ${m.name.replace(/_/g, " ")}`)
+            .join(" · ")}
+        </p>
+      )}
+      {memory.comparisons.map((c) => (
+        <p key={c.experimentId}>
+          <strong>Measured test · {c.variable.replace(/_/g, " ")}:</strong>{" "}
+          {c.metrics
+            .map(
+              (m) =>
+                `${m.name.replace(/_/g, " ")} ${m.parent?.toLocaleString() ?? "unknown"} → ${m.variant?.toLocaleString() ?? "unknown"}`,
+            )
+            .join(" · ")}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/** Results: Post → Measure → Learn, then what is next and what needs you. */
+export function Results({
+  w,
+  factory,
+  next,
+  visible = true,
+  onReview,
+  onEditingRules,
+}: {
+  w: Workspace;
+  factory: FactoryState;
+  next: (id?: string, mode?: "manual" | "agent") => void;
+  visible?: boolean;
+  onReview?: (clip: Clip) => void;
+  onEditingRules?: () => void;
+}) {
+  const data = useResultsData(w, visible);
+  const [view, setView] = useState<StrategistView | null>(null);
+  const onView = useCallback((v: StrategistView) => setView(v), []);
+  const clips = factory.data.clips.filter(
+    (c) => c.campaign_id === w.campaign?.id && c.profile_id === w.profileId,
+  );
+  const approved = clips.filter((c) => c.approved);
+  const publications = data.scoped?.publications ?? [];
+  const tracked = new Set(publications.map((p) => textOf(p.clip_id)));
+  const untracked = clips.filter(
+    (c) => (c.instagram_media_id || c.published_at) && !tracked.has(c.id),
+  );
+  const now = Date.now();
+  const rows = postedRows({
+    publications,
+    snapshots: data.scoped?.snapshots ?? [],
+    policies: data.scoped?.policies ?? [],
+    accounts: data.scoped?.accounts ?? [],
+    clips,
+    baseline: data.memory?.baseline ?? [],
+    now,
+  });
+  const strategistPending = pendingRules([], view);
+  // Proposed brand Style rules (from any source) that the Strategist did not list itself.
+  const versionPending = pendingRules(
+    w.versions.filter(
+      (v) =>
+        v.profile_id === w.profileId ||
+        v.changed_profile_ids.includes(w.profileId),
+    ),
+    null,
+  ).filter((p) => !strategistPending.some((s) => s.id === p.id));
+  const memoryPending = [
+    ...versionPending,
+    ...(data.memory?.pending ?? []).filter(
+      (p) =>
+        !strategistPending.some((s) => s.id === p.id) &&
+        !versionPending.some((v) => v.id === p.id),
+    ),
+  ];
+  const drafts = data.experiments
+    .map((e) => ({
+      experiment: e,
+      clip: clips.find((c) => c.id === e.clip_id && !c.approved),
+    }))
+    .filter((d): d is { experiment: Row; clip: Clip } => !!d.clip);
+  const pendingCount =
+    strategistPending.length +
+    memoryPending.length +
+    (view?.pending_proposals.campaign.length ?? 0);
+  const story = resultsStory({
+    approvedClips: approved.length,
+    posted: rows.length + untracked.length,
+    publications,
+    snapshots: data.scoped?.snapshots ?? [],
+    learned: (view?.beliefs ?? []).filter(
+      (b) => b.status !== "retired" && b.counts.matching > 0,
+    ).length,
+    pendingRules: pendingCount,
+    now,
+  });
+  const accounts = useRef<HTMLDivElement>(null);
+  const toAccounts = useCallback(() => {
+    const el = accounts.current;
+    if (!el) return;
+    const details = el.querySelector("details");
+    if (details && !details.open) details.open = true;
+    el.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, []);
+  useEffect(() => {
+    if (!visible || !["#gf-accounts", "#connections"].includes(window.location.hash))
+      return;
+    const frame = window.requestAnimationFrame(() => {
+      toAccounts();
+      // A one-time jump: the next launch opens where the person left off.
+      if (window.location.hash === "#gf-accounts")
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search,
+        );
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [visible, toAccounts]);
+
+  return (
+    <div className="gf-results-page">
+      <StoryHeader story={story} />
+      <PostedClips
+        rows={rows}
+        untracked={untracked}
+        error={data.error}
+        onAccounts={toAccounts}
+      />
+      {visible && w.profileId && (
+        <StrategistPanel
+          key={w.profileId}
+          profileId={w.profileId}
+          onOpenStyleRules={onEditingRules}
+          onView={onView}
+          learnedExtra={<LearnedExtra memory={data.memory} />}
+          extraWaitingCount={memoryPending.length + drafts.length}
+          extraWaiting={
+            <>
+              {memoryPending.map((p) => (
+                <article key={p.id} className="gf-strategist-proposal">
+                  <span>
+                    New Style rules
+                    {p.version !== null ? ` version ${p.version}` : ""} to review
+                    {"source" in p ? "" : " · from a measured test"}
+                  </span>
+                  <button
+                    type="button"
+                    className="gf-strategist-link"
+                    onClick={onEditingRules}
+                    disabled={!onEditingRules}
+                  >
+                    Review in Style rules
+                  </button>
+                </article>
+              ))}
+              {drafts.map(({ experiment, clip }) => (
+                <article key={experiment.id} className="gf-strategist-proposal">
+                  <span>
+                    New draft to review: changes the{" "}
+                    {textOf(experiment.variable).replace(/_/g, " ") || "edit"} ·{" "}
+                    “{clip.hook || clip.name}”
+                    {experiment.trigger === "demo_override" && (
+                      <span className="gf-automation-badge">
+                        Demo override · measured early
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    className="gf-strategist-link"
+                    onClick={() => onReview?.(clip)}
+                    disabled={!onReview}
+                  >
+                    Review draft
+                  </button>
+                </article>
+              ))}
+            </>
+          }
+        />
+      )}
+      <div ref={accounts} className="gf-results-accounts">
+        <AutomationPanel
+          w={w}
+          factory={factory}
+          visible={visible}
+          onReview={onReview}
+          onEditingRules={onEditingRules}
+          layout="accounts"
+        />
+      </div>
+      <Disclosure title="Add a result by hand" icon="upload">
+        <p className="gf-help">
+          For numbers from somewhere the app can't read. Each one keeps its
+          source and window; nothing here proves why a clip did well.
+        </p>
+        <HandEnteredResults w={w} factory={factory} next={next} />
+      </Disclosure>
+    </div>
   );
 }

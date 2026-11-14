@@ -24,17 +24,17 @@ export const LANES: { layer: StrategistLayer; title: string; note: string }[] =
     {
       layer: "craft",
       title: "Craft",
-      note: "Per post: hook, length, opening, captions, framing → Style rules",
+      note: "How a clip is made: hook, length, opening, captions, framing.",
     },
     {
       layer: "selection",
       title: "Selection",
-      note: "Every few posts: which moments scouts should prefer",
+      note: "Which moments the scouts should pick.",
     },
     {
       layer: "campaign",
       title: "Posting plan",
-      note: "Monthly: posting time and channel plan",
+      note: "When to post.",
     },
   ];
 
@@ -101,7 +101,7 @@ export function BeliefCard({
       </div>
       <small>
         {percent}% confidence · {belief.matching} measured post
-        {belief.matching === 1 ? "" : "s"} · observational
+        {belief.matching === 1 ? "" : "s"}
       </small>
       {belief.rationale && belief.origin === "model" && (
         <p className="gf-strategist-rationale">{belief.rationale}</p>
@@ -140,7 +140,7 @@ export function BeliefLedger({
         return (
           <section
             key={lane.layer}
-            className="gf-strategist-lane"
+            className={`gf-strategist-lane is-${lane.layer}`}
             aria-label={`${lane.title} beliefs`}
           >
             <h3>{lane.title}</h3>
@@ -154,7 +154,7 @@ export function BeliefLedger({
                 />
               ))
             ) : (
-              <p className="gf-strategist-empty">No beliefs yet.</p>
+              <p className="gf-strategist-empty">Nothing learned here yet.</p>
             )}
           </section>
         );

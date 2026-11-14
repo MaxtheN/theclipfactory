@@ -12,10 +12,9 @@ import { Studio } from "./Studio";
 import { Results } from "./Results";
 import { Onboarding, OFFLINE_KEY } from "./Onboarding";
 import { FactoryHome, type OpenProduction } from "./FactoryHome";
+import { FactoryTabs } from "./FactoryMap";
 import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
-import { AutomationPanel } from "./AutomationPanel";
-import { StrategistPanel } from "./StrategistPanel";
 import { QuickActions, type QuickAction } from "./QuickActions";
 import { BrandMark } from "./BrandMark";
 import "./growth.css";
@@ -47,8 +46,8 @@ const views = {
   },
   results: {
     label: "Results",
-    title: "Results & next test",
-    sub: "What worked, and what to try next.",
+    title: "Results",
+    sub: "What you posted, what it taught us, and what to try next.",
     icon: "results",
   },
   setup: {
@@ -78,7 +77,8 @@ const views = {
 } as const;
 export type Stage = keyof typeof views;
 function storedView(): Stage {
-  if (window.location.hash === "#connections") return "results";
+  if (["#connections", "#gf-accounts"].includes(window.location.hash))
+    return "results";
   try {
     const saved = localStorage.getItem("growth-view-v2");
     return saved && saved in views ? (saved as Stage) : "factory";
@@ -576,16 +576,22 @@ export function GrowthApp() {
                 className="gf-stage"
                 hidden={onboarding || !usable || stage !== "factory"}
               >
-                <FactoryHome
-                  key={contextKey}
+                <FactoryTabs
                   w={w}
                   factory={factory}
                   active={!tools && !onboarding && stage === "factory"}
-                  onProduce={openProduction}
-                  onReview={reviewClip}
-                  onLibrary={() => go("library")}
-                  onDirection={() => go("research")}
-                />
+                >
+                  <FactoryHome
+                    key={contextKey}
+                    w={w}
+                    factory={factory}
+                    active={!tools && !onboarding && stage === "factory"}
+                    onProduce={openProduction}
+                    onReview={reviewClip}
+                    onLibrary={() => go("library")}
+                    onDirection={() => go("research")}
+                  />
+                </FactoryTabs>
               </div>
               <div
                 className="gf-stage"
@@ -612,7 +618,10 @@ export function GrowthApp() {
                   factory={factory}
                   next={() => go("research")}
                   onNewCampaign={() => go("campaign")}
-                  onAccounts={() => go("results")}
+                  onAccounts={() => {
+                    window.history.replaceState(null, "", "#gf-accounts");
+                    go("results");
+                  }}
                   goals={
                     <Setup
                       key={`goals-${contextKey}`}
@@ -700,22 +709,10 @@ export function GrowthApp() {
                   w={w}
                   factory={factory}
                   next={(source, mode) => openProduction(source, mode)}
-                />
-                <AutomationPanel
-                  key={`automation-${contextKey}`}
-                  w={w}
-                  factory={factory}
                   visible={!onboarding && stage === "results"}
                   onReview={reviewClip}
                   onEditingRules={() => go("research")}
                 />
-                {!onboarding && stage === "results" && w.profileId && (
-                  <StrategistPanel
-                    key={`strategist-${contextKey}`}
-                    profileId={w.profileId}
-                    onOpenStyleRules={() => go("research")}
-                  />
-                )}
               </div>
             </main>
           </div>

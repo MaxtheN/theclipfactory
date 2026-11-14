@@ -10,7 +10,7 @@ import type {
 } from "../types";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
-import { Results } from "./Results";
+import { HandEnteredResults as Results } from "./Results";
 import { Setup } from "./Setup";
 import { workspaceApi } from "./workspaceApi";
 

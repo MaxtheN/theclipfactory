@@ -60,7 +60,7 @@ export function parseAutomationState(value: unknown): State {
       typeof row.auto_drafts !== "boolean"
     )
       throw new Error(
-        "Saved learning policy is incomplete. Refresh before changing anything.",
+        "Saved tracking settings are incomplete. Refresh before changing anything.",
       );
   }
   for (const row of [
@@ -273,13 +273,17 @@ export function AutomationPanel({
   visible,
   onReview,
   onEditingRules,
+  layout = "full",
 }: {
   w: Workspace;
   factory: FactoryState;
   visible: boolean;
   onReview?: (clip: Clip) => void;
   onEditingRules?: () => void;
+  /** "accounts": only accounts, tracking and measurement (Results shows the rest). */
+  layout?: "full" | "accounts";
 }) {
+  const full = layout === "full";
   const [state, setState] = useState<State>(empty),
     [accounts, setAccounts] = useState<Row[]>([]);
   const [error, setError] = useState(""),
@@ -424,9 +428,9 @@ export function AutomationPanel({
   }
   if (reviewPreview)
     return (
-      <section className="gf-automation">
-        <span className="gf-kicker">The learning loop</span>
-        <h2>Every result informs the next draft.</h2>
+      <section className="gf-automation" id={full ? undefined : "gf-accounts"}>
+        <span className="gf-kicker">{full ? "The learning loop" : "Instagram accounts"}</span>
+        <h2>{full ? "Every result informs the next draft." : "Connect and track your posts"}</h2>
         <p>
           Connect accounts and collect real performance in the Mac app. This
           hosted design preview contains illustrative data.
@@ -434,21 +438,32 @@ export function AutomationPanel({
       </section>
     );
   return (
-    <section className="gf-automation" aria-labelledby="automation-title">
+    <section
+      className={`gf-automation${full ? "" : " is-accounts"}`}
+      id={full ? undefined : "gf-accounts"}
+      aria-labelledby="automation-title"
+    >
       <div className="gf-automation-heading">
         <div>
-          <span className="gf-kicker">The learning loop</span>
-          <h2 id="automation-title">A better next draft. With receipts.</h2>
+          <span className="gf-kicker">
+            {full ? "The learning loop" : "Instagram accounts"}
+          </span>
+          <h2 id="automation-title">
+            {full
+              ? "A better next draft. With receipts."
+              : "Connect, track and measure"}
+          </h2>
           <p>
-            Real post metrics → one creative hypothesis → a new draft for your
-            review.
+            {full
+              ? "Real post metrics → one creative hypothesis → a new draft for your review."
+              : "Choose the account, how long to wait before measuring, and which approved clip each post uses."}
           </p>
         </div>
         <span className="gf-automation-policy">
           Drafts run automatically · You approve publishing
         </span>
       </div>
-      <ol className="gf-automation-steps">
+      {full && <ol className="gf-automation-steps">
         <li>
           <strong>Connect</strong>
           <span>Choose the exact Instagram account.</span>
@@ -465,7 +480,7 @@ export function AutomationPanel({
           <strong>Review</strong>
           <span>Your new draft stays unpublished.</span>
         </li>
-      </ol>
+      </ol>}
       {error && (
         <p role="alert" className="gf-automation-error">
           {error}
@@ -494,7 +509,7 @@ export function AutomationPanel({
           </select>
         </label>
         <label>
-          Review performance after
+          Measure after
           <select
             value={cadence}
             onChange={(e) => setCadence(Number(e.target.value) as 3 | 6)}
@@ -533,7 +548,7 @@ export function AutomationPanel({
             })
           }
         >
-          {policy?.enabled ? "Update learning" : "Start the loop"}
+          {policy?.enabled ? "Update tracking" : "Start the loop"}
         </button>
         {policy?.enabled === true && (
           <button
@@ -804,9 +819,9 @@ export function AutomationPanel({
       </details>
       <div className="gf-automation-ledger">
         <div>
-          <h3>Upcoming checks</h3>
+          <h3>Measurement</h3>
           {!publications.length && (
-            <p>No published posts tracked for this workspace yet.</p>
+            <p>No published posts tracked for this brand yet.</p>
           )}
           {publications.slice(0, 6).map((row) => {
             const due = Date.parse(text(row.next_due_at));
@@ -823,7 +838,7 @@ export function AutomationPanel({
               <article key={row.id}>
                 <strong>Post {text(row.media_id)}</strong>
                 <span>
-                  Next check: {new Date(text(row.next_due_at)).toLocaleString()}
+                  Next reading: {new Date(text(row.next_due_at)).toLocaleString()}
                 </span>
                 {override && text(override.due_at) === text(row.next_due_at) && (
                   <span className="gf-automation-badge">
@@ -871,7 +886,7 @@ export function AutomationPanel({
             </article>
           ))}
         </div>
-        <div>
+        {full && <div>
           <h3>What the factory is testing</h3>
           {!experiments.length && (
             <p>
@@ -899,9 +914,9 @@ export function AutomationPanel({
               </details>
             </article>
           ))}
-        </div>
+        </div>}
       </div>
-      <section
+      {full && <section
         className="gf-automation-learned"
         aria-labelledby="automation-learned-title"
       >
@@ -984,11 +999,11 @@ export function AutomationPanel({
         {memory?.truncated && (
           <small>Older learning is summarized; the full record is saved.</small>
         )}
-      </section>
+      </section>}
       {!!snapshots.length && (
         <details>
           <summary>
-            Observed metrics · {snapshots.length} saved snapshots
+            Observed metrics · {snapshots.length} saved readings
           </summary>
           {snapshots.slice(0, 6).map((row) => (
             <article key={row.id}>
@@ -1020,7 +1035,8 @@ export function AutomationPanel({
           ))}
         </details>
       )}
-      {onReview &&
+      {full &&
+        onReview &&
         experiments.some((row) => typeof row.clip_id === "string") && (
           <div className="gf-automation-drafts">
             {experiments.map((row) => {

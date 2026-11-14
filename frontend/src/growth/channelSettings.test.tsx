@@ -509,7 +509,7 @@ describe("app routing", () => {
     render(<GrowthApp />);
     const main = await screen.findByRole("main");
     expect(
-      await within(main).findByRole("heading", { name: "Results & next test" }),
+      await within(main).findByRole("heading", { name: "Results" }),
     ).toBeTruthy();
     expect(
       within(main).queryByRole("heading", { name: "Brand profile" }),
