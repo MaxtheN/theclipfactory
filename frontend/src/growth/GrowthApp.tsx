@@ -606,6 +606,7 @@ export function GrowthApp() {
                   preferredMode={preferredMode}
                   preferredClip={preferredClip}
                   next={() => go("results")}
+                  onDirection={() => go("research")}
                 />
               </div>
               <div

@@ -59,9 +59,12 @@ describe("Growth Factory interface", () => {
         "All-In clips",
       ),
     );
-    fireEvent.change(screen.getByRole("textbox", { name: "Who are we speaking to?" }), {
-      target: { value: "A retained audience" },
-    });
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Who are we speaking to?" }),
+      {
+        target: { value: "A retained audience" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     expect(
       screen.queryByRole("navigation", { name: "Main navigation" }),
@@ -73,9 +76,9 @@ describe("Growth Factory interface", () => {
     expect(
       screen.getByRole("navigation", { name: "Main navigation" }),
     ).toBeVisible();
-    expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
-      "A retained audience",
-    );
+    expect(
+      screen.getByRole("textbox", { name: "Who are we speaking to?" }),
+    ).toHaveValue("A retained audience");
   });
   it("opens quick actions by keyboard or click and preserves drafts through navigation", async () => {
     render(<GrowthApp />);
@@ -86,7 +89,9 @@ describe("Growth Factory interface", () => {
         "All-In clips",
       ),
     );
-    const audience = screen.getByRole("textbox", { name: "Who are we speaking to?" });
+    const audience = screen.getByRole("textbox", {
+      name: "Who are we speaking to?",
+    });
     fireEvent.change(audience, { target: { value: "My unsaved audience" } });
     audience.focus();
     fireEvent.keyDown(window, { key: "k", metaKey: true });
@@ -99,16 +104,14 @@ describe("Growth Factory interface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open quick actions" }));
     fireEvent.change(search, { target: { value: "library" } });
     fireEvent.keyDown(search, { key: "Enter" });
-    expect(
-      screen.getByRole("heading", { name: "Library" }),
-    ).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Library" })).toHaveFocus();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     fireEvent.change(search, { target: { value: "setup" } });
     fireEvent.keyDown(search, { key: "Enter" });
-    expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
-      "My unsaved audience",
-    );
+    expect(
+      screen.getByRole("textbox", { name: "Who are we speaking to?" }),
+    ).toHaveValue("My unsaved audience");
   });
   it("does not bypass unsaved-campaign navigation gates through quick actions", async () => {
     render(<GrowthApp />);
@@ -132,7 +135,9 @@ describe("Growth Factory interface", () => {
     expect(screen.getByRole("dialog", { name: "Quick actions" })).toBeVisible();
     fireEvent.keyDown(search, { key: "Escape" });
     expect(screen.getByLabelText("Podcast or workspace name")).toHaveValue("");
-    expect(screen.getByRole("button", { name: "Creative direction" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Creative direction" }),
+    ).toBeDisabled();
   });
   it("saves a campaign, requires explicit direction approval, then opens Studio", async () => {
     render(<GrowthApp />);
@@ -160,9 +165,7 @@ describe("Growth Factory interface", () => {
     expect((await previewRequest<Campaign>(path)).active_strategy_id).toBe(
       "preview-strategy-v1",
     );
-    expect(
-      screen.getByLabelText("Production mode"),
-    ).toHaveValue("agent");
+    expect(screen.getByLabelText("Production mode")).toHaveValue("agent");
     expect(
       screen.queryByRole("link", { name: /Export/ }),
     ).not.toBeInTheDocument();
@@ -176,14 +179,17 @@ describe("Growth Factory interface", () => {
         "All-In clips",
       ),
     );
-    fireEvent.change(screen.getByRole("textbox", { name: "Who are we speaking to?" }), {
-      target: { value: "A very specific audience" },
-    });
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Who are we speaking to?" }),
+      {
+        target: { value: "A very specific audience" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Creative direction" }));
     fireEvent.click(screen.getByRole("button", { name: "Workspace settings" }));
-    expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
-      "A very specific audience",
-    );
+    expect(
+      screen.getByRole("textbox", { name: "Who are we speaking to?" }),
+    ).toHaveValue("A very specific audience");
   });
 });
 
@@ -292,9 +298,7 @@ describe("approval transition regressions", () => {
         "preview-source-b",
       ),
     );
-    expect(
-      screen.getByLabelText("Production mode"),
-    ).toHaveValue("agent");
+    expect(screen.getByLabelText("Production mode")).toHaveValue("agent");
     expect(
       screen.queryByRole("button", { name: /^Approve this clip\b/ }),
     ).not.toBeInTheDocument();
@@ -311,7 +315,9 @@ describe("approval transition regressions", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "New workspace" }));
     expect(screen.getByLabelText("Podcast or workspace name")).toHaveValue("");
-    expect(screen.getByRole("button", { name: "Creative direction" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Creative direction" }),
+    ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Library" })).toBeDisabled();
   });
 });
@@ -375,5 +381,83 @@ describe("review transport boundaries", () => {
         end: 30,
       }),
     ).rejects.toThrow(/changed|stale|current|approved/i);
+  });
+});
+
+describe("direction approval guidance", () => {
+  it("walks the creator through save, edit and approve in plain words", async () => {
+    render(<GrowthApp />);
+    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    menu?.setAttribute("open", "");
+    await waitFor(() =>
+      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+        "All-In clips",
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Creative direction" }));
+    const status = () =>
+      screen.getByRole("list", { name: "Direction approval steps" })
+        .nextElementSibling;
+    expect(status()).toHaveTextContent(
+      /Step 2 of 2: draft v1 is saved but not active yet/,
+    );
+    expect(screen.getByText(/Draft, not active/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Reference & inspection details"));
+    fireEvent.change(
+      screen.getByLabelText("Reference link or source locator"),
+      {
+        target: { value: "Episode A" },
+      },
+    );
+    expect(status()).toHaveTextContent(/edited this since draft v1 was saved/);
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Save direction draft\b/ }),
+    );
+    await screen.findByRole("button", { name: /^Approve direction\b/ });
+    expect(status()).toHaveTextContent(/Step 2 of 2: draft v2 is saved/);
+  });
+});
+
+describe("approvalStep", () => {
+  it("explains each state of save-then-approve", async () => {
+    const { approvalStep } = await import("./Research");
+    const fresh = approvalStep({
+      pending: false,
+      active: false,
+      changed: true,
+      draftCurrent: false,
+    });
+    expect(fresh.saved).toBe(false);
+    expect(fresh.message()).toMatch(/Step 1 of 2/);
+    const ready = approvalStep({
+      pending: true,
+      active: false,
+      changed: false,
+      draftCurrent: true,
+    });
+    expect([ready.saved, ready.approved]).toEqual([true, false]);
+    expect(ready.message(2)).toMatch(/draft v2 is saved but not active/);
+    const stale = approvalStep({
+      pending: true,
+      active: false,
+      changed: false,
+      draftCurrent: false,
+    });
+    expect(stale.message(1)).toMatch(/out of date: a profile was added/);
+    const live = approvalStep({
+      pending: false,
+      active: true,
+      changed: false,
+      draftCurrent: false,
+    });
+    expect(live.approved).toBe(true);
+    expect(live.message(undefined, 3)).toMatch(/v3 is approved and active/);
+    const editingLive = approvalStep({
+      pending: false,
+      active: true,
+      changed: true,
+      draftCurrent: false,
+    });
+    expect(editingLive.message()).toMatch(/approved direction stays active/);
   });
 });

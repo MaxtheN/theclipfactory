@@ -162,3 +162,14 @@ describe("Studio production integration", () => {
   });
 
 });
+
+describe("failed agent runs", () => {
+  it("points to Start agent production instead of a render retry it cannot do", () => {
+    const f = factory();
+    f.data.jobs = [{ ...queued("failed-team"), kind: "team", status: "failed", error: "This FFmpeg build lacks libass", context: { video_id: "v1", campaign_id: "camp", profile_id: "profile", team_run_id: "run" } }];
+    render(<Studio w={workspace()} factory={f} next={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Retry saved render" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/belongs to another source/)).not.toBeInTheDocument();
+    expect(screen.getByText(/use Start agent production/)).toBeInTheDocument();
+  });
+});
