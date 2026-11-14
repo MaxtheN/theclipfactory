@@ -21,12 +21,8 @@ test -f clip_factory/demo_ui/index.html
 for test_file in scripts/tests/test_packaging.py tests/test_demo_loop.py; do
   "$PACKAGE_PYTHON" -m pytest "$test_file" -q
 done
-# Bundle FFmpeg/ffprobe (static builds that link only system frameworks) so a double-clicked app works
-# without Homebrew or a PATH. Override the source with GF_FFMPEG_DIR.
-FFMPEG_DIR="${GF_FFMPEG_DIR:-$HOME/WIN/.growth-factory-tools/bin}"
-FFMPEG_BIN="$(cd "$(dirname "$FFMPEG_DIR/ffmpeg")" && /usr/bin/readlink -f "$FFMPEG_DIR/ffmpeg")"
-FFPROBE_BIN="$(/usr/bin/readlink -f "$FFMPEG_DIR/ffprobe")"
-test -x "$FFMPEG_BIN" && test -x "$FFPROBE_BIN" || { echo "FFmpeg/ffprobe not found in $FFMPEG_DIR (set GF_FFMPEG_DIR)." >&2; exit 1; }
+# FFmpeg is not bundled: the available static builds are not redistributable. Users install it
+# (`brew install ffmpeg`); the app finds Homebrew's copy even with a bare launch PATH.
 # Freeze source assets directly; never erase clip_factory/ui or other tracked source material.
 # Model weights and inference runtime packages are installed separately by the app.
 "$PACKAGE_PYTHON" -m PyInstaller --noconfirm --clean --windowed --name 'Growth Factory' \
@@ -36,7 +32,6 @@ test -x "$FFMPEG_BIN" && test -x "$FFPROBE_BIN" || { echo "FFmpeg/ffprobe not fo
   --add-data "$ROOT/clip_factory/demo_ui:clip_factory/demo_ui" \
   --add-data "$ROOT/clip_factory/inference_worker.py:clip_factory" \
   --add-data "$ROOT/clip_factory/cloud_config.json:clip_factory" \
-  --add-binary "$FFMPEG_BIN:bin" --add-binary "$FFPROBE_BIN:bin" \
   --collect-all webview --collect-all keyring --copy-metadata keyring --collect-all uvicorn \
   --collect-submodules clip_factory --collect-submodules platformdirs \
   --hidden-import clip_factory.app --hidden-import clip_factory.main \
@@ -45,11 +40,6 @@ test -x "$FFMPEG_BIN" && test -x "$FFPROBE_BIN" || { echo "FFmpeg/ffprobe not fo
   --distpath "$ROOT/dist" --workpath "$ROOT/build/pyinstaller" --specpath "$ROOT/build" \
   "$ROOT/scripts/desktop-entry.py"
 "$PACKAGE_PYTHON" "$ROOT/scripts/verify-bundle-assets.py" "$ROOT/dist/Growth Factory.app"
-for tool in ffmpeg ffprobe; do
-  "$ROOT/dist/Growth Factory.app/Contents/Frameworks/bin/$tool" -hide_banner -version >/dev/null \
-    || "$ROOT/dist/Growth Factory.app/Contents/Resources/bin/$tool" -hide_banner -version >/dev/null \
-    || { echo "Bundled $tool does not run." >&2; exit 1; }
-done
 /usr/bin/codesign --verify --deep --strict "$ROOT/dist/Growth Factory.app"
 "$PACKAGE_PYTHON" "$ROOT/scripts/smoke-headless.py" --executable "$ROOT/dist/Growth Factory.app/Contents/MacOS/Growth Factory"
 # ditto retains bundle symlinks and resource metadata.

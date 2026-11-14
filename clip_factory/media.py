@@ -51,7 +51,7 @@ FRAME_SIZE = 768
 def probe(path: Path) -> dict:
     tool = find_tool("ffprobe")
     if not tool:
-        raise WorkError("Install FFmpeg (including ffprobe) before importing videos.")
+        raise WorkError(INSTALL_FFMPEG)
     try:
         result = subprocess.run(
             [tool, "-v", "error", "-show_format", "-show_streams", "-of", "json", str(path)],
@@ -143,7 +143,7 @@ def inspect(path: Path) -> dict:
     """Stream facts used by technical checks; unlike probe(), audio-only or odd files are reported."""
     tool = find_tool("ffprobe")
     if not tool:
-        raise WorkError("Install FFmpeg (including ffprobe) before checking media.")
+        raise WorkError(INSTALL_FFMPEG)
     try:
         result = subprocess.run(
             [tool, "-v", "error", "-show_format", "-show_streams", "-of", "json", str(path)],
@@ -192,6 +192,8 @@ def inspect(path: Path) -> dict:
 # Homebrew's default ffmpeg ships without libass/drawtext, so it cannot burn captions.
 # The keg-only ffmpeg-full formula can; prefer it (ffmpeg and ffprobe together) when installed.
 FULL_FFMPEG_DIRS = ("/opt/homebrew/opt/ffmpeg-full/bin", "/usr/local/opt/ffmpeg-full/bin")
+# A double-clicked app gets a bare PATH, so look where Homebrew installs plain `ffmpeg` too.
+HOMEBREW_BIN_DIRS = ("/opt/homebrew/bin", "/usr/local/bin")
 
 
 def bundled_tool_dirs() -> list[str]:
@@ -202,12 +204,18 @@ def bundled_tool_dirs() -> list[str]:
     return dirs
 
 
+INSTALL_FFMPEG = (
+    "Install FFmpeg (includes ffprobe) to process video: open Terminal, run `brew install ffmpeg` "
+    "(get Homebrew from brew.sh first if needed), then retry."
+)
+
+
 def find_tool(name: str) -> str | None:
     """Homebrew ffmpeg-full first (libass/drawtext), then the copy bundled in the app, then PATH.
 
     A double-clicked macOS app gets a bare PATH, so the bundled copy is what makes a fresh install work.
     """
-    for directory in (*FULL_FFMPEG_DIRS, *bundled_tool_dirs()):
+    for directory in (*FULL_FFMPEG_DIRS, *bundled_tool_dirs(), *HOMEBREW_BIN_DIRS):
         if found := shutil.which(f"{directory}/{name}"):
             return found
     return shutil.which(name)
@@ -216,7 +224,7 @@ def find_tool(name: str) -> str | None:
 def ffmpeg() -> str:
     tool = find_tool("ffmpeg")
     if not tool:
-        raise WorkError("Install FFmpeg before processing media.")
+        raise WorkError(INSTALL_FFMPEG)
     return tool
 
 

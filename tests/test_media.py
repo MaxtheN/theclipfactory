@@ -398,3 +398,18 @@ def test_find_tool_uses_the_copy_bundled_in_the_packaged_app(tmp_path, monkeypat
     assert _media.find_tool("ffprobe") == str(tool)
     monkeypatch.setattr(_sys, "frozen", False, raising=False)
     assert _media.find_tool("ffprobe") is None
+
+
+def test_find_tool_finds_homebrew_ffmpeg_with_a_bare_path(tmp_path, monkeypatch):
+    from clip_factory import media as _media
+
+    brew = tmp_path / "homebrew-bin"
+    brew.mkdir()
+    tool = brew / "ffmpeg"
+    tool.write_text("#!/bin/sh\nexit 0\n")
+    tool.chmod(0o755)
+    monkeypatch.setattr(_media, "FULL_FFMPEG_DIRS", ())
+    monkeypatch.setattr(_media, "HOMEBREW_BIN_DIRS", (str(brew),))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")  # launchd PATH for a double-clicked app
+    assert _media.find_tool("ffmpeg") == str(tool)
+    assert "brew install ffmpeg" in _media.INSTALL_FFMPEG

@@ -85,8 +85,6 @@ if [[ "$1" == -m && "$2" == PyInstaller ]]; then
   cp -R clip_factory/demo_ui "$destination/demo_ui"
   cp clip_factory/cloud_config.json "$destination/"
   if [[ "$OMIT_WORKER" == 0 ]]; then cp clip_factory/inference_worker.py "$destination/"; fi
-  mkdir -p "$PWD/dist/Growth Factory.app/Contents/Resources/bin"
-  cp "$GF_FFMPEG_DIR/ffmpeg" "$GF_FFMPEG_DIR/ffprobe" "$PWD/dist/Growth Factory.app/Contents/Resources/bin/"
 elif [[ "$1" == */verify-bundle-assets.py || "$1" == */write-release-manifest.py ]]; then
   "$REAL_PYTHON" "$@"
 fi
@@ -98,14 +96,11 @@ fi
 "$REAL_PYTHON" -c 'import sys,zipfile; z=zipfile.ZipFile(sys.argv[1],"w"); z.writestr("Growth Factory.app/Contents/Info.plist","fixture"); z.close()' "${@: -1}"
 ''')
     executable(tools / "codesign", 'printf "codesign\\n" >> "$OUTPUT"\n')
-    executable(tools / "ffbin/ffmpeg", "exit 0\n")
-    executable(tools / "ffbin/ffprobe", "exit 0\n")
     result = subprocess.run(
         ["bash", str(script)], cwd=tmp_path,
         env={**os.environ, "PATH": f"{tools}:/usr/bin:/bin", "PYTHON": str(tools / "bin/python"), "GF_PACKAGE_VENV": str(tools),
              "REAL_PYTHON": sys.executable, "OUTPUT": str(log), "DITTO": str(tools / "ditto"),
-             "OMIT_WORKER": str(int(omit_worker)), "CODESIGN": str(tools / "codesign"),
-             "GF_FFMPEG_DIR": str(tools / "ffbin")},
+             "OMIT_WORKER": str(int(omit_worker)), "CODESIGN": str(tools / "codesign")},
         capture_output=True, text=True, check=False,
     )
     calls = log.read_text().splitlines()

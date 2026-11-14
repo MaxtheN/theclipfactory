@@ -110,7 +110,11 @@ test("Mac availability is honest and no standalone web rehearsal or invented ins
   assert.match(download, /Apple Silicon/);
   assert.match(download, /notariz/i);
   assert.match(download, /github.com\/MaxtheN\/theclipfactory/);
+  // The only installer link allowed is the published GitHub release asset of this repository.
+  const RELEASE = "https://github.com/MaxtheN/theclipfactory/releases/latest/download/growth-factory-mac-arm64.zip";
+  assert.ok(download.includes(`href="${RELEASE}"`), "download.html links the published Mac release");
   for (const [name, source] of pageSources) {
-    assert.doesNotMatch(source, /href="[^"]*(?:releases\/download|\.dmg|\.zip|demo-loop|rehearsal)[^"]*"/, `${name}: unverified artifact/demo link`);
+    const cleaned = source.split(`href="${RELEASE}"`).join("");
+    assert.doesNotMatch(cleaned, /href="[^"]*(?:releases\/download|\.dmg|\.zip|demo-loop|rehearsal)[^"]*"/, `${name}: unverified artifact/demo link`);
   }
 });
