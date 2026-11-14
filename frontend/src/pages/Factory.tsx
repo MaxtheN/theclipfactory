@@ -39,7 +39,15 @@ export function getCandidates(analysis: unknown): Candidate[] {
       objective: typeof c.objective === "string" ? c.objective : "discovery",
     }));
 }
-function Editor({ state, video, onProduction }: { state: FactoryState; video: Video; onProduction: () => void }) {
+function Editor({
+  state,
+  video,
+  onProduction,
+}: {
+  state: FactoryState;
+  video: Video;
+  onProduction: () => void;
+}) {
   const [start, setStart] = useState("0");
   const [end, setEnd] = useState(
     typeof video.duration === "number"
@@ -178,31 +186,57 @@ function Editor({ state, video, onProduction }: { state: FactoryState; video: Vi
                   post(endpoint("videos", video.id, "produce"), {
                     model_id: model,
                   }).then(onProduction),
-                "Variant pipeline queued. It transcribes audio, analyzes moments, and renders up to 3 clips serially; review the job result and clips.",
+                "Production queued using the saved strategy. Review the ledger, job result and clips; nothing is automatically approved.",
               );
             }}
           >
             Produce variants ({strategy})
           </button>
-          <Field label="Team revision budget" hint="Maximum correction cycles, 0–2. Default 2.">
-            <select value={revisionBudget} onChange={(e) => setRevisionBudget(Number(e.target.value))}>
-              {[0, 1, 2].map((n) => <option key={n} value={n}>{n}</option>)}
+          <Field
+            label="Team revision budget"
+            hint="Maximum correction cycles, 0–2. Default 2."
+          >
+            <select
+              value={revisionBudget}
+              onChange={(e) => setRevisionBudget(Number(e.target.value))}
+            >
+              {[0, 1, 2].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
             </select>
           </Field>
-          <button disabled={state.busy || !productionReady} onClick={() => {
-            if (!productionReady) return;
-            void state.run(async () => {
-              await post<{ job: Job; run: TeamRun }>(endpoint("videos", video.id, "team"), { model_id: model, revision_budget: revisionBudget });
-              onProduction();
-            }, "Team run queued. Inspect the ledger and review outputs; nothing is approved or published automatically.");
-          }}>Start team run</button>
-          <button className="secondary" disabled={state.busy || !productionReady} onClick={() => {
-            if (!productionReady) return;
-            void state.run(async () => {
-              await post<Job>(endpoint("videos", video.id, "baseline"), { model_id: model });
-              onProduction();
-            }, "Baseline queued for explicit comparison. The source must have no active task; load comparisons after production finishes.");
-          }}>Run comparative baseline</button>
+          <button
+            disabled={state.busy || !productionReady}
+            onClick={() => {
+              if (!productionReady) return;
+              void state.run(async () => {
+                await post<{ job: Job; run: TeamRun }>(
+                  endpoint("videos", video.id, "team"),
+                  { model_id: model, revision_budget: revisionBudget },
+                );
+                onProduction();
+              }, "Team run queued. Inspect the ledger and review outputs; nothing is approved or published automatically.");
+            }}
+          >
+            Start team run
+          </button>
+          <button
+            className="secondary"
+            disabled={state.busy || !productionReady}
+            onClick={() => {
+              if (!productionReady) return;
+              void state.run(async () => {
+                await post<Job>(endpoint("videos", video.id, "baseline"), {
+                  model_id: model,
+                });
+                onProduction();
+              }, "Baseline queued for explicit comparison. The source must have no active task; load comparisons after production finishes.");
+            }}
+          >
+            Run comparative baseline
+          </button>
         </div>
         {!installed.length && (
           <p className="muted">
@@ -211,10 +245,12 @@ function Editor({ state, video, onProduction }: { state: FactoryState; video: Vi
           </p>
         )}
         <p className="muted">
-          Produce variants follows the saved strategy ({strategy}) via the compatible produce route. Team mode adds bounded critique and revisions. The baseline pipeline will transcribe when audio
-          is present, analyze, then render up to 3 variants. Requires an
-          installed analysis model and ready runtime; audio transcription also
-          requires Whisper. Clips still need your review.
+          Produce variants follows the saved strategy ({strategy}) via the
+          compatible produce route. Team mode adds bounded critique and
+          revisions. The baseline pipeline will transcribe when audio is
+          present, analyze, then render up to 3 variants. Requires an installed
+          analysis model and ready runtime; audio transcription also requires
+          Whisper. Clips still need your review.
         </p>
         {!productionReady && (
           <p className="muted">
@@ -345,8 +381,13 @@ export function Factory({
               ))}
             </select>
           </Field>
-          <Editor key={video.id} state={state} video={video} onProduction={() => setLedgerVersion((v) => v + 1)} />
-          <TeamComparisons key={video.id} videoId={video.id} />
+          <Editor
+            key={`editor-${video.id}`}
+            state={state}
+            video={video}
+            onProduction={() => setLedgerVersion((v) => v + 1)}
+          />
+          <TeamComparisons key={`comparison-${video.id}`} videoId={video.id} />
         </>
       ) : (
         <Empty title="Start with a source video">
@@ -354,7 +395,11 @@ export function Factory({
           selection.
         </Empty>
       )}
-      <TeamLedger videos={state.data.videos} sourceId={video?.id} refreshToken={ledgerVersion} />
+      <TeamLedger
+        videos={state.data.videos}
+        sourceId={video?.id}
+        refreshToken={ledgerVersion}
+      />
       <Jobs state={state} />
       <Section
         title="Clip review"

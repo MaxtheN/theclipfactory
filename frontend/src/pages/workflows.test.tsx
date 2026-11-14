@@ -13,7 +13,10 @@ afterEach(() => vi.unstubAllGlobals());
 const mockFetch = () => {
   const fetch = vi
     .fn()
-    .mockImplementation(async () => new Response('{"id":"j1"}'));
+    .mockImplementation(
+      async (path: string) =>
+        new Response(path === "/api/team/runs" ? "[]" : '{"id":"j1"}'),
+    );
   vi.stubGlobal("fetch", fetch);
   return fetch;
 };
@@ -156,8 +159,11 @@ describe("local production controls", () => {
     await user.click(
       screen.getByRole("button", { name: /Queue subtitled render/ }),
     );
-    expect(fetch.mock.calls[0][0]).toBe("/api/videos/v1/render");
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+    const renderCall = fetch.mock.calls.find(
+      ([path]) => path === "/api/videos/v1/render",
+    )!;
+    expect(renderCall[0]).toBe("/api/videos/v1/render");
+    expect(JSON.parse(renderCall[1].body)).toEqual({
       start: 0,
       end: 30,
       hook: "",
@@ -197,7 +203,9 @@ describe("local production controls", () => {
       screen.getByRole("button", { name: /Queue subtitled render/ }),
     );
     expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid range");
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch.mock.calls.every(([path]) => path === "/api/team/runs")).toBe(
+      true,
+    );
   });
   it("uploads multipart video files with the contract file field", async () => {
     const fetch = mockFetch();

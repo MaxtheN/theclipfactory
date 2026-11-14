@@ -188,10 +188,22 @@ export interface TeamRun {
 }
 export interface TeamComparison {
   video_id: string;
-  runs: Array<Pick<TeamRun, "id" | "mode" | "status" | "model_id" | "objective" | "elapsed_seconds" | "clip_ids" | "resource_observations"> & {
-    feedback: unknown;
-    outcomes: unknown;
-    comparable: boolean | null;
-  }>;
+  runs: Array<
+    Pick<
+      TeamRun,
+      | "id"
+      | "mode"
+      | "status"
+      | "model_id"
+      | "objective"
+      | "elapsed_seconds"
+      | "clip_ids"
+      | "resource_observations"
+    > & {
+      feedback: unknown;
+      outcomes: unknown;
+      comparable: boolean | null;
+    }
+  >;
   notes: string[];
 }

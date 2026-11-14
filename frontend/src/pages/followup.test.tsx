@@ -54,19 +54,23 @@ function fetchMock() {
     async (path: string) =>
       new Response(
         JSON.stringify(
-          path === "/api/ads/accounts"
-            ? {
-                accounts: [adAccount],
-                supported: false,
-                note: "Creation is not supported",
-              }
-            : path === "/api/ads/insights"
+          path === "/api/team/runs"
+            ? []
+            : path === "/api/ads/accounts"
               ? {
-                  rows: [{ ad_id: "actual-ad", impressions: null, clicks: 0 }],
-                  source: "Meta ads reads",
-                  attribution: "Unmapped",
+                  accounts: [adAccount],
+                  supported: false,
+                  note: "Creation is not supported",
                 }
-              : { id: "job1" },
+              : path === "/api/ads/insights"
+                ? {
+                    rows: [
+                      { ad_id: "actual-ad", impressions: null, clicks: 0 },
+                    ],
+                    source: "Meta ads reads",
+                    attribution: "Unmapped",
+                  }
+                : { id: "job1" },
         ),
       ),
   );
@@ -80,12 +84,16 @@ describe("full local production", () => {
     const user = userEvent.setup();
     render(<Factory state={readyState()} />);
     await user.selectOptions(screen.getByLabelText("Source video"), "v2");
-    await user.click(screen.getByRole("button", { name: "Produce variants" }));
-    expect(fetch.mock.calls[0][0]).toBe("/api/videos/v2/produce");
+    await user.click(
+      screen.getByRole("button", { name: "Produce variants (team)" }),
+    );
+    const productionCall = fetch.mock.calls.find(
+      ([path]) => path === "/api/videos/v2/produce",
+    )!;
+    expect(productionCall[0]).toBe("/api/videos/v2/produce");
     expect(
       JSON.parse(
-        (fetch.mock.calls[0] as unknown as [string, RequestInit])[1]
-          .body as string,
+        (productionCall as unknown as [string, RequestInit])[1].body as string,
       ),
     ).toEqual({ model_id: "qwen-small" });
     expect(
@@ -99,7 +107,7 @@ describe("full local production", () => {
       state.data.system = { model_runtime: runtime };
       render(<Factory state={state} />);
       expect(
-        screen.getByRole("button", { name: "Produce variants" }),
+        screen.getByRole("button", { name: "Produce variants (team)" }),
       ).toBeDisabled();
     },
   );
@@ -108,7 +116,7 @@ describe("full local production", () => {
     state.errors.models = "Unavailable";
     render(<Factory state={state} />);
     expect(
-      screen.getByRole("button", { name: "Produce variants" }),
+      screen.getByRole("button", { name: "Produce variants (team)" }),
     ).toBeDisabled();
   });
   it("submits Kokoro text and shows completed same-origin audio/download", async () => {

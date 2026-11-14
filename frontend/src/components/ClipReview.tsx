@@ -11,7 +11,8 @@ export function ClipReview({
   state: FactoryState;
   clip: Clip;
 }) {
-  const reviewBlocked = !!clip.team_run_id && clip.team_review_status !== "pass";
+  const reviewBlocked =
+    !!clip.team_run_id && clip.team_review_status !== "pass";
   const [caption, setCaption] = useState(clip.caption || "");
   const [hook, setHook] = useState(clip.hook || "");
   const [rating, setRating] = useState("3");
@@ -55,12 +56,28 @@ export function ClipReview({
               ? "No"
               : "Unknown"}
         </p>
-        {clip.team_run_id && <div className="render-warning">
-          <p>Team run: {clip.team_run_id} · Critic review: {clip.team_review_status ?? "unknown"}</p>
-          {reviewBlocked && <p role="alert">Unresolved critic warnings: failed or unknown review prevents approval. Review the ledger’s checks, evidence and revisions.</p>}
-          <details><summary>Team critic findings</summary><StructuredData value={clip.team_findings} /></details>
-          <p className="muted">A critic pass is not human approval. Revision history is in the Factory team ledger.</p>
-        </div>}
+        {clip.team_run_id && (
+          <div className="render-warning">
+            <p>
+              Team run: {clip.team_run_id} · Critic review:{" "}
+              {clip.team_review_status ?? "unknown"}
+            </p>
+            {reviewBlocked && (
+              <p role="alert">
+                Unresolved critic warnings: failed or unknown review prevents
+                approval. Review the ledger’s checks, evidence and revisions.
+              </p>
+            )}
+            <details>
+              <summary>Team critic findings</summary>
+              <StructuredData value={clip.team_findings} />
+            </details>
+            <p className="muted">
+              A critic pass is not human approval. Revision history is in the
+              Factory team ledger.
+            </p>
+          </div>
+        )}
         {clip.publish_attempt && (
           <p className="muted">
             Publish attempt recorded: {clip.publish_attempt}. Reconcile with
