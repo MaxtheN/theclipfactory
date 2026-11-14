@@ -12,6 +12,7 @@ import type { LibraryView, OpenProduction } from "./FactoryHome";
 import { SourceDetails, sourceLabel } from "./sourcePresentation";
 import { ClipPreview, QuickLook } from "./ClipPreview";
 import { undirected } from "./productionState";
+import { SpeechlessChip } from "./SpeechSetup";
 
 export function Library({
   w,
@@ -135,6 +136,7 @@ export function Library({
                         {sourceLabel(clip.video_id, ids)}
                       </small>
                     </span>
+                    {clip.made_without_speech && <SpeechlessChip />}
                     <Pill tone={clip.approved ? "approved" : ""}>
                       {clip.approved ? "Approved" : "Needs review"}
                     </Pill>
@@ -230,9 +232,11 @@ export function Library({
                         <span className="gf-num">
                           {made.length} clip{made.length === 1 ? "" : "s"}
                         </span>
-                        {source.has_audio === true && source.transcript == null
-                          ? " · Transcript not available"
-                          : ""}
+                        {source.has_audio === false
+                          ? " · No speech in this footage"
+                          : source.has_audio === true && source.transcript == null
+                            ? " · Transcript not available"
+                            : ""}
                       </p>
                       <div className="gf-episode-actions">
                         <SourceDetails source={source} />
@@ -288,7 +292,7 @@ const posted = (c: Clip) => !!(c.published_at || c.instagram_media_id);
 function clipStatus(c: Clip) {
   if (posted(c)) return { label: "Posted", tone: "gf-status-posted" };
   if (c.approved) return { label: "Approved", tone: "gf-status-approved" };
-  if (c.rank?.below_bar) return { label: "Below the bar", tone: "gf-status-below" };
+  if (c.rank?.below_bar || c.made_without_speech) return { label: "Below the bar", tone: "gf-status-below" };
   return { label: "Needs review", tone: "gf-status-review" };
 }
 const reducedMotion = () =>
@@ -331,6 +335,7 @@ function ReviewWall({
     (c) =>
       !c.approved &&
       !c.rank?.below_bar &&
+      !c.made_without_speech &&
       (!c.team_run_id ||
         c.team_review_status === "not_applicable" ||
         c.team_review_status === "pass"),
@@ -508,6 +513,11 @@ function WallCard({
             )}
             <span className={`gf-pill ${status.tone}`}>{status.label}</span>
           </span>
+          {clip.made_without_speech && (
+            <span className="gf-wall-warning">
+              <SpeechlessChip />
+            </span>
+          )}
           <span className="gf-wall-duration">
             {illustrative ? "Illustrative" : formatTime(clip.end - clip.start)}
           </span>

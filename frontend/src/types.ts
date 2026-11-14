@@ -11,6 +11,35 @@ export interface SystemInfo {
   ollama?: boolean | null;
   desktop?: boolean | null;
   data_dir?: string;
+  integrity?: Record<string, { state: IntegrityState; problems: string[] }>;
+  engine?: EngineStatus;
+}
+export type IntegrityState = "ok" | "missing" | "damaged";
+/** One one-time download the engine still needs (runtime packages, then the Whisper model). */
+export interface EngineStep {
+  id: string;
+  label: string;
+  approx_gb: number;
+  state: IntegrityState;
+}
+/** Speech readiness: production never runs speechless on footage with sound. */
+export interface EngineStatus {
+  ready: boolean;
+  blocker: FactoryBlocker | null;
+  runtime: { state: IntegrityState; problems: string[] };
+  whisper: { state: IntegrityState; problems: string[] };
+  steps: EngineStep[];
+  job: {
+    id: string;
+    kind: string;
+    status: string;
+    progress: number | null;
+    message: string | null;
+    step?: string | null;
+    step_index?: number | null;
+    step_count?: number | null;
+  } | null;
+  last_error: string | null;
 }
 export const objectives = [
   "discovery",
@@ -117,6 +146,8 @@ export interface Clip {
   approval_override?: { at: string; review_status: string } | null;
   /** Swarm ranking: score 0-100, review position, and whether it fell under the quality floor. */
   rank?: ClipRank | null;
+  /** Cut from footage with sound while its speech was never transcribed: no captions, ranked below the bar. */
+  made_without_speech?: boolean;
   /** Brief tags (M1, T1 …) the clip serves, or ["none"]. */
   brief_serves?: string[] | null;
   id: string;
@@ -202,6 +233,10 @@ export interface FactorySource {
   error: string | null;
   can_produce: boolean;
   blocked_reason: string | null;
+  blocked_code?: string | null;
+  speech?: "none" | "ready" | "pending";
+  speech_label?: string | null;
+  made_without_speech?: number;
   storyboard: StoryboardSummary | null;
   thumbnail: string | null;
 }
@@ -209,6 +244,10 @@ export interface FactoryBlocker {
   code: string;
   message: string;
   tab: string | null;
+  scope?: string;
+  action?: "speech_setup" | null;
+  steps?: EngineStep[];
+  download_gb?: number;
 }
 /** GET /api/factory: the production line, computed by the local service. */
 export interface FactoryLine {
@@ -216,6 +255,7 @@ export interface FactoryLine {
   model_id: string | null;
   ready: boolean;
   blockers: FactoryBlocker[];
+  engine?: EngineStatus;
   sources: FactorySource[];
 }
 export interface StoryboardFrame {

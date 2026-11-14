@@ -27,6 +27,7 @@ import psutil
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_serializer, model_validator
 
 from . import craft, media, ranking, scouts
+from . import speech as asr
 from . import storyboard as boards
 from .brief import (
     avoid_label,
@@ -473,11 +474,14 @@ class TeamEngine:
         frames: Callable,
         baseline: Callable,
         can_transcribe: Callable[[], bool] = lambda: True,
+        speech_blocker: Callable[[], dict | None] | None = None,
         render_workers: int = 1,
     ):
         self.store, self.jobs, self.models = store, jobs, models
         self.transcribe, self.render, self.baseline = transcribe, render, baseline
         self.can_transcribe = can_transcribe
+        # speech_blocker() -> None when speech can be transcribed, else the setup/repair blocker.
+        self.speech_blocker = speech_blocker
         # Swarm clips render side by side while the model writes the next ideas.
         self.render_workers = max(1, render_workers)
         # storyboard(job_id, video, model_id, progress) -> whole-source scene map (built once, reused).
@@ -1525,6 +1529,18 @@ class TeamEngine:
             video = self.store.get("videos", run["video_id"])
             if not video:
                 raise WorkError("Source video is no longer available.")
+            if asr.needs_speech(video):
+                # Footage with sound is never produced speechless: stop before any model or render work.
+                blocker = self.speech_blocker() if self.speech_blocker else None
+                if blocker is None and not self.can_transcribe():
+                    blocker = asr.blocker("asr_missing")
+                if blocker:
+                    task = self._task(run_id, "transcribe")
+                    self._update_task(
+                        run_id, task["id"], status="failed", error=blocker["message"], finished_at=now()
+                    )
+                    self.store.patch("team_runs", run_id, blocker=blocker)
+                    raise asr.SpeechUnavailable(blocker)
             if run["mode"] == "baseline":
                 result = self._operation(
                     run_id,
@@ -1563,29 +1579,16 @@ class TeamEngine:
             count = run.get("clip_count", 3)
             source_ref = f"source:{video['id']}"
             self.models.require(model_id, "llm")
-            unheard = False
             swarming = run["mode"] == "swarm"
-            if video.get("has_audio") and not video.get("transcript"):
-                if self.can_transcribe():
-                    self._operation(
-                        run_id,
-                        job_id,
-                        "transcribe",
-                        lambda: self.transcribe(job_id, video, run["context"]["settings"]["language"]),
-                        refs=[source_ref],
-                    )
-                    video = self.store.get("videos", video["id"])
-                else:
-                    # No speech model installed: the footage is still watched and clipped, without captions.
-                    unheard = True
-                    task = self._task(run_id, "transcribe")
-                    self._update_task(
-                        run_id,
-                        task["id"],
-                        status="skipped",
-                        error="The speech model is not installed; continuing from pictures and sound levels only.",
-                        finished_at=now(),
-                    )
+            if asr.needs_speech(video):
+                self._operation(
+                    run_id,
+                    job_id,
+                    "transcribe",
+                    lambda: self.transcribe(job_id, video, run["context"]["settings"]["language"]),
+                    refs=[source_ref],
+                )
+                video = self.store.get("videos", video["id"])
             watched = {}
 
             def watch():
@@ -1616,8 +1619,6 @@ class TeamEngine:
                 note = f"{result['clips']} clips from {result['stretches']} stretches; each needs your review."
                 if result["failed_renders"]:
                     note += f" {result['failed_renders']} renders failed."
-                if unheard:
-                    note += " Speech was not transcribed (no speech model installed), so clips have no captions."
                 self._finish(run_id, "needs_review", note)
                 final = self.store.get("team_runs", run_id)
                 return {
@@ -2137,11 +2138,6 @@ class TeamEngine:
                 stop = (
                     f"{stop or 'Human review is required.'} Moments were shortlisted from measured signals "
                     "because the footage analyst's selection was unavailable."
-                )
-            if unheard:
-                stop = (
-                    f"{stop or 'Human review is required.'} Speech was not transcribed (no speech model "
-                    "installed), so clips have no captions."
                 )
             self._finish(run_id, "needs_review", stop)
             return {

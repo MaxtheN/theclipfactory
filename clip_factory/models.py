@@ -287,7 +287,45 @@ class Models:
             installed = True
         except (OSError, ValueError, TypeError, KeyError):
             pass
-        return {**item, "installed": installed, "status": "installed" if installed else "not installed"}
+        # A recorded install whose files no longer verify (removed or truncated on disk) is damaged:
+        # it needs a repair download, not a first install.
+        damaged = not installed and (path / ".complete").is_file()
+        return {
+            **item,
+            "installed": installed,
+            "integrity": "ok" if installed else "damaged" if damaged else "missing",
+            "status": "installed" if installed else "damaged" if damaged else "not installed",
+        }
+
+    def metallibs(self) -> list[Path]:
+        return list(self.runtime.glob("lib/python3*/site-packages/mlx/lib/mlx.metallib"))
+
+    def integrity(self) -> dict:
+        """Cheap file checks (no imports): is the runtime and the speech model still on disk?
+
+        "missing" means never set up; "damaged" means set up once but files were removed since.
+        """
+        whisper = self.item("whisper-turbo")
+        state = whisper.get("integrity") or ("ok" if whisper.get("installed") else "missing")
+        return {
+            "runtime": self.runtime_integrity(),
+            "whisper-turbo": {"state": state, "problems": ["files"] if state == "damaged" else []},
+        }
+
+    def runtime_integrity(self) -> dict:
+        problems = []
+        if self.runtime.is_symlink():
+            problems.append("runtime symlink")
+        elif (self.runtime / ".ready").is_file():
+            if not self.python.is_file():
+                problems.append("python")
+            packages = list(self.runtime.glob("lib/python3*/site-packages/mlx"))
+            if packages and not self.metallibs():
+                problems.append("mlx.metallib")
+        runtime_state = (
+            "damaged" if problems else "ok" if (self.runtime / ".ready").is_file() else "missing"
+        )
+        return {"state": runtime_state, "problems": problems}
 
     def catalog(self) -> list[dict]:
         local = [self._ollama_item(m) for m in self.ollama.status()["models"]]
@@ -493,7 +531,13 @@ class Models:
         if item.get("source") == "ollama":
             return  # Ollama schedules its own memory and does not need the MLX runtime.
         if not item["installed"]:
+            if item.get("integrity") == "damaged":
+                raise WorkError("This model's files are damaged or were removed — repair (re-download) it in Models.")
             raise WorkError("Download and accept this model's license in Models first.")
+        if self.runtime_integrity()["state"] == "damaged":
+            raise WorkError(
+                "The local inference runtime's files are damaged or were removed — repair (reinstall) it in Models."
+            )
         if not self.ready():
             raise WorkError("Set up the local inference runtime in Models first.")
         if not apple_silicon():

@@ -11,7 +11,7 @@ from unittest.mock import Mock
 import pytest
 from conftest import board
 
-from clip_factory import ranking
+from clip_factory import ranking, speech
 from clip_factory.jobs import JobCancelled, WorkError
 from clip_factory.models import Models
 from clip_factory.store import Store
@@ -1122,16 +1122,36 @@ def test_audio_is_transcribed_before_watching_and_uses_snapshot_language(harness
     assert harness.rendered[0]["evidence_refs"] == ["transcript:0"]
 
 
-def test_missing_speech_model_still_produces_clips_from_pictures(harness):
+def test_missing_speech_model_stops_before_any_model_or_render_work(harness):
     harness.video["has_audio"] = True
+    harness.store.put("videos", harness.video)
+    harness.engine.can_transcribe = lambda: False
+    with pytest.raises(WorkError, match="Speech recognition isn't set up yet"):
+        harness.execute()
+    run = harness.store.get("team_runs", harness.store.all("team_runs")[0]["id"])
+    harness.transcribe.assert_not_called()
+    assert not harness.models.calls and not harness.rendered
+    listen = role(run, "transcribe")
+    assert listen["status"] == "failed" and "Set it up once" in listen["error"]
+    assert run["status"] == "failed" and run["blocker"]["code"] == "asr_missing"
+
+
+def test_damaged_speech_model_blocks_with_a_repair_message(harness):
+    harness.video["has_audio"] = True
+    harness.store.put("videos", harness.video)
+    harness.engine.speech_blocker = lambda: speech.blocker("asr_damaged")
+    with pytest.raises(WorkError, match="damaged or were removed"):
+        harness.execute()
+    assert not harness.models.calls and not harness.rendered
+
+
+def test_footage_without_an_audio_stream_runs_without_speech(harness):
+    harness.video["has_audio"] = False
     harness.store.put("videos", harness.video)
     harness.engine.can_transcribe = lambda: False
     run, result = harness.execute()
     harness.transcribe.assert_not_called()
-    listen = role(run, "transcribe")
-    assert listen["status"] == "skipped" and "speech model is not installed" in listen["error"]
     assert run["status"] == "needs_review" and len(result["clip_ids"]) == 1
-    assert "no captions" in run["stop_reason"]
 
 
 def test_text_only_model_gets_no_frames(harness):

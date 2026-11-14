@@ -459,3 +459,25 @@ describe("production response contract", () => {
     expect(() => parseAgentProductionResponse(envelope("swarm"), {}, "team")).toThrow();
   });
 });
+
+describe("speech setup on the Factory screen", () => {
+  it("shows the engine setup card and blocks Find clips for footage with sound until speech works", async () => {
+    const message = "Speech recognition isn't set up yet. Set it up once (about 1.6 GB download) and run again.";
+    const blocker = { code: "asr_missing", message, tab: "Models", scope: "speech", action: "speech_setup" as const };
+    const steps = [
+      { id: "runtime", label: "Speech engine packages", approx_gb: 1.4, state: "missing" as const },
+      { id: "whisper-turbo", label: "Speech model (Whisper)", approx_gb: 1.6, state: "missing" as const },
+    ];
+    const f = factory({ can_produce: false, blocked_reason: message, blocked_code: "asr_missing" });
+    f.data.factory!.blockers = [blocker];
+    f.data.factory!.engine = {
+      ready: false, blocker, steps, job: null, last_error: null,
+      runtime: { state: "missing", problems: [] }, whisper: { state: "missing", problems: [] },
+    };
+    home(workspace(), f);
+    expect(screen.getByRole("heading", { name: "Setting up your engine" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /set up speech recognition/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Find clips" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getAllByText(message).length).toBeGreaterThan(0);
+  });
+});

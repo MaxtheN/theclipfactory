@@ -179,7 +179,9 @@ export function Models({ state }: { state: FactoryState }) {
                         )
                       }
                     >
-                      Install model
+                      {m.status === "damaged"
+                        ? "Repair (re-download)"
+                        : "Install model"}
                     </button>
                   </>
                 )}

@@ -1,0 +1,107 @@
+/* Speech setup: the inline blocker where clips are found, and the first-run engine card. */
+.gf-speech-blocker {
+  display: grid;
+  gap: var(--gf-s2, 8px);
+  justify-items: start;
+  margin-top: var(--gf-s2, 8px);
+  padding: var(--gf-s3, 12px);
+  border: 1px solid var(--gf-card-line, rgba(255, 255, 255, 0.16));
+  border-radius: var(--gf-radius-control, 8px);
+  background: var(--gf-card-fill, rgba(118, 128, 136, 0.2));
+}
+.gf-speech-blocker > p {
+  margin: 0;
+}
+.gf-speech-error {
+  margin: 0;
+  color: #e6c3b8;
+}
+.gf-speech-progress {
+  display: grid;
+  gap: var(--gf-s1, 4px);
+  width: 100%;
+  font-size: 13px;
+}
+.gf-speech-progress progress {
+  width: 100%;
+}
+.gf-engine-setup {
+  display: grid;
+  gap: var(--gf-s4, 16px);
+  padding: var(--gf-s5, 24px);
+  border: 1px solid var(--gf-card-line, rgba(255, 255, 255, 0.16));
+  border-radius: var(--gf-radius, 12px);
+  background: var(--gf-card-fill, rgba(118, 128, 136, 0.2));
+  box-shadow: var(--gf-card-shadow);
+}
+.gf-engine-setup > header {
+  display: flex;
+  gap: var(--gf-s3, 12px);
+  align-items: flex-start;
+}
+.gf-engine-setup h2 {
+  margin: 0 0 var(--gf-s1, 4px);
+  font-size: 17px;
+}
+.gf-engine-setup p {
+  margin: 0;
+}
+.gf-engine-symbol {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+}
+.gf-engine-steps {
+  display: grid;
+  gap: var(--gf-s2, 8px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.gf-engine-steps li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--gf-s3, 12px);
+  align-items: center;
+  opacity: 0.8;
+}
+.gf-engine-steps li.is-current,
+.gf-engine-steps li.is-complete {
+  opacity: 1;
+}
+.gf-engine-marker {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--gf-card-line, rgba(255, 255, 255, 0.16));
+  font-size: 12px;
+}
+.gf-engine-steps li.is-current .gf-engine-marker {
+  border-color: currentColor;
+}
+.gf-engine-steps li.is-complete .gf-engine-marker {
+  background: rgba(155, 211, 176, 0.9);
+  color: #12301f;
+}
+.gf-engine-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gf-s3, 12px);
+  align-items: center;
+}
+.gf-app .gf-pill.gf-status-speechless {
+  background: rgba(70, 40, 20, 0.75);
+  color: #f9d3a6;
+}
+.gf-wall-warning {
+  position: absolute;
+  left: var(--gf-s2, 8px);
+  bottom: var(--gf-s2, 8px);
+  z-index: 1;
+}

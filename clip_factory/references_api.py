@@ -254,12 +254,18 @@ def install(app: FastAPI, campaigns: Campaigns, *, render):
             return None
         return model if app.state.models.vision(model) else None
 
-    def whisper_ready() -> bool:
+    def speech_blocker() -> dict | None:
+        check = getattr(app.state, "speech_blocker", None)
+        if check:
+            return check()
         try:
             app.state.models.require("whisper-turbo", "asr")
-            return True
-        except WorkError:
-            return False
+            return None
+        except WorkError as exc:
+            return {"code": "asr_missing", "message": str(exc)}
+
+    def whisper_ready() -> bool:
+        return speech_blocker() is None
 
     def context(item: dict) -> tuple[dict, dict, dict | None, dict | None, dict | None]:
         campaign = store.get("campaigns", item["campaign_id"]) or {}
@@ -368,6 +374,12 @@ def install(app: FastAPI, campaigns: Campaigns, *, render):
                 clip = store.get("clips", target)
                 if not clip or clip.get("campaign_id") != item["campaign_id"]:
                     raise HTTPException(422, "Choose one of this campaign's clips to test the pattern on.")
+            # References with sound are measured from their speech: never speechless. (A linked reel is
+            # checked once it is fetched; its analysis then reports the same blocker.)
+            if any(ref.get("has_audio") is True for ref in item["references"]):
+                blocker = speech_blocker()
+                if blocker:
+                    raise HTTPException(409, blocker["message"])
             reset_results(item)
             item.update(status="queued", target_clip_id=target, error=None)
             try:

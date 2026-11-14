@@ -216,7 +216,7 @@ def test_build_watches_every_scene_and_records_what_was_measured_and_seen(studio
     assert service.frame_path("v1", "s000-0.jpg").read_bytes() == b"\xff\xd8still"
     assert store.get("videos", "v1")["storyboard"] == {
         "scenes": 15, "usable_scenes": 15, "vision": True, "model_id": "qwen-small",
-        "updated_at": result["created_at"], "thumbnail": "s000-0.jpg",
+        "updated_at": result["created_at"], "thumbnail": "s000-0.jpg", "speech_available": True,
     }
     assert not (service.root / "v1.building").exists()
     assert jobs.updates[0]["message"].startswith("Measuring") and jobs.updates[-1]["progress"] == 95

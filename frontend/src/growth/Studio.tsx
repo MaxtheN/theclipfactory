@@ -14,6 +14,7 @@ import { ClipEvidence } from "./ClipEvidence";
 import { SourceTranscript } from "./SourceTranscript";
 import { CraftControls, craftFromPlan, craftPlan, freshCraft } from "./CraftControls";
 import { JourneyProgress } from "./JourneyProgress";
+import { SpeechSetup, SpeechlessChip } from "./SpeechSetup";
 import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
 import { PostToInstagram } from "./PostToInstagram";
@@ -21,6 +22,7 @@ import { ReferenceResearchLauncher } from "./ReferenceResearch";
 import { briefSummary } from "./briefModel";
 import { rankOf, reviewOrder } from "./clipRanking";
 import "./campaign-brief.css";
+import "./review-panel.css";
 import { DIRECTION_MAX, parseProductionClip, type CampaignRenderRequest, type ExportRecord, type ProductionClip } from "./productionContracts";
 import { changedEditFields, clipInScope, editErrors, jobInScope, object, readiness, retryBlocker, reviewBlocker } from "./productionState";
 
@@ -255,7 +257,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     const status = reviewPreview || c.provenance_mode === "preview_fixture" ? "Illustrative edit" : c.approved ? "Approved" : "Needs review";
     return <button className={selected?.id === c.id ? "selected" : ""} key={c.id} onClick={() => { setSelectedId(c.id); setRevisionParent(undefined); setFreshProduction(false); }}>
       <span>{String(i + 1).padStart(2, "0")}</span>
-      <div><strong>{c.name}</strong><small title={rank?.why || undefined}>{rank?.why || status}</small>{rank?.why && <small>{rank.top_pick ? "Top pick · " : ""}{rank.below_bar && rank.reason ? `${rank.reason} · ` : ""}{status}</small>}</div>
+      <div><strong title={c.name}>{c.name}</strong><small title={rank?.why || undefined}>{rank?.why || status}</small>{rank?.why && <small>{rank.top_pick ? "Top pick · " : ""}{rank.below_bar && rank.reason ? `${rank.reason} · ` : ""}{status}</small>}</div>
       {rank && <span className={`gf-score-chip${rank.below_bar ? " is-low" : ""}`} title="Score out of 100" aria-label={`Score ${rank.score} out of 100`}>{rank.score}</span>}
       <Icon name={c.approved ? "check" : "play"} size={15} />
     </button>;
@@ -280,7 +282,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   </Disclosure>;
   return <div className="gf-studio-grid">
     <section className="gf-card gf-edit-surface">
-      <div className="gf-card-header"><div><h2>{selected?.name || (source ? visibleLabel : "Choose an episode")}</h2>{selected && <p>{formatTime(selected.start)} — {formatTime(selected.end)} · {visibleLabel}</p>}</div>{selected && <Pill tone={selected.approved && !illustrativeSelected ? "mint" : "quiet"}>{illustrativeSelected ? "Illustrative edit" : selected.approved ? "Approved" : "Needs review"}</Pill>}</div>
+      <div className="gf-card-header"><div><h2>{selected?.name || (source ? visibleLabel : "Choose an episode")}</h2>{selected && <p>{formatTime(selected.start)} — {formatTime(selected.end)} · {visibleLabel}</p>}</div>{selected?.made_without_speech && <SpeechlessChip />}{selected && <Pill tone={selected.approved && !illustrativeSelected ? "mint" : "quiet"}>{illustrativeSelected ? "Illustrative edit" : selected.approved ? "Approved" : "Needs review"}</Pill>}</div>
       {journey && <JourneyProgress {...journey} source={sourceLabel(journeySourceId, w.campaign.video_ids)} progress={journeyJob?.progress} receipts={journey?.state === "working" && !ledgerError ? journeyRun?.tasks.filter(task => task.status === "completed").slice(-3).map(task => task.label) : []} label="Current production" />}
       {journeyJob && activeJob(journeyJob) && <FactoryMiniMap w={w} factory={factory} runs={runs} />}
       <div className="gf-studio-media is-simple">
@@ -313,7 +315,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
       </Disclosure>}
     </section>
     <aside className="gf-card gf-review-inspector">
-      <div className="gf-card-header"><div><h2>{!making ? "Review this clip" : revisionParent ? "Request a change" : "Find clips"}</h2></div></div>
+      <div className="gf-card-header"><div><h2>{!making ? "Review this clip" : revisionParent ? "Request a change" : "Find clips"}</h2></div>{!making && <Pill tone={selected.approved && !illustrativeSelected ? "mint" : "quiet"}>{illustrativeSelected ? "Illustrative edit" : selected.approved ? "Approved" : "Needs review"}</Pill>}</div>
       {making ? <div className="gf-form-fields">
         {!revisionParent && (() => { const summary = briefSummary(w.campaign!.brief, w.campaign!.objective, w.campaign!.primary_metric); return <p className="gf-brief-summary" aria-label="Goals and brief summary"><span title={summary}>{summary}</span>{onEditBrief && <button type="button" className="gf-button ghost compact" onClick={onEditBrief}>Edit brief</button>}</p>; })()}
         {sources.length > 1 && <Field label="Episode">{id => <select id={id} value={sourceId} disabled={!!revisionParent || busy} onChange={e => { setSourceId(e.target.value); setStart("0"); const s = sources.find(v => v.id === e.target.value); setEnd(String(Math.min(direction?.duration_seconds || 30, s?.duration || 30))); }}><option value="" disabled>Choose an episode</option>{sources.map(s => <option value={s.id} key={s.id}>{sourceLabel(s.id, w.campaign!.video_ids)}</option>)}</select>}</Field>}
@@ -321,6 +323,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
         {/* One reason at a time: the first thing to fix. */}
         {mode === "agent" && !revisionParent && <Field label="What should the agents look for? (optional)" hint="Used for this run only, within your style rules.">{id => <AutoTextarea id={id} rows={2} maxLength={DIRECTION_MAX} value={lookFor} disabled={busy} placeholder="e.g. the spiciest takes on AI policy, under 40s" onChange={e => setLookFor(e.target.value)} />}</Field>}
         {!direction ? <ClipStyleSheet w={w} onFullRules={onDirection} /> : blockers[0] && <p className="gf-help">{blockers[0]}</p>}
+        {mode === "agent" && !!source && source.has_audio !== false && source.transcript == null && <SpeechSetup factory={factory} />}
         <PrimaryAction full label={busy ? "Queuing…" : mode === "agent" ? "Let agents find clips" : revisionParent ? "Render a new revision" : "Make this clip"} intent="produce" disabled={busy || blockers.length > 0} onClick={() => void render()} />
         {revisionParent && <button className="gf-button ghost full" onClick={() => setRevisionParent(undefined)}>Back to review</button>}
         {fineTune}
@@ -333,7 +336,8 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
             {selected.approved ? <button className="gf-button full" disabled={!reviewReady || reviewPreview || uncertainExports.has(selected.id)} onClick={() => void exportClip(selected)}><Icon name="download" size={16} />{reviewPreview ? "Export · Mac app only" : "Export approved MP4"}</button> : <PrimaryAction full label="Approve this clip" intent="approve" disabled={!reviewReady} onClick={() => void perform(() => productionApi.review(selected, true), reviewPreview ? "Sample accepted; no real approval recorded." : "Approved. You can export it now.")} />}
             <button className="gf-button secondary full" disabled={busy} onClick={() => revise(selected)}>Request a change<Icon name="settings" size={15} /></button>
           </div>
-          {!reviewPreview && !illustrativeSelected && <PostToInstagram clip={selected} disabled={!reviewReady} approve={async () => { const box: { clip?: ProductionClip } = {}; const ok = await perform(async () => { box.clip = await productionApi.review(selected, true); }, "Approved this exact revision."); return ok ? box.clip : false; }} />}
+          {/* The hosted preview shows the post package with illustrative data; posting stays off there. */}
+          {(reviewPreview || !illustrativeSelected) && <PostToInstagram clip={selected} disabled={!reviewReady || reviewPreview} approve={async () => { const box: { clip?: ProductionClip } = {}; const ok = await perform(async () => { box.clip = await productionApi.review(selected, true); }, "Approved this exact revision."); return ok ? box.clip : false; }} />}
         </div>
         <div className="gf-review-details">
           <Disclosure title="Details" icon="info">

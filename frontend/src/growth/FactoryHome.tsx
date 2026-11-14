@@ -17,6 +17,7 @@ import { Pill, formatTime } from "./parts";
 import { JourneyProgress } from "./JourneyProgress";
 import { reviewOrder } from "./clipRanking";
 import { sourceLabel, SourceDetails } from "./sourcePresentation";
+import { SpeechSetup, engineOf, speechBlocked } from "./SpeechSetup";
 
 export type OpenProduction = (
   sourceId?: string,
@@ -577,6 +578,10 @@ export function FactoryHome({
       {!direction && sources.length > 0 && (
         <ClipStyleSheet w={w} onFullRules={onDirection} />
       )}
+      {/* First run: the one-time engine downloads, with progress, before footage can be heard. */}
+      {speechBlocked(engineOf(factory)) && (
+        <SpeechSetup factory={factory} variant="engine" />
+      )}
       {!sources.length && !importing && !pending && !unknown && w.profileId && (
         <FirstRunInstagram profileId={w.profileId} />
       )}
@@ -889,7 +894,9 @@ export function FactoryHome({
                       ? `${lowCount} clip${lowCount === 1 ? "" : "s"} below the bar`
                       : own.length
                       ? `${own.length} clip${own.length === 1 ? "" : "s"} approved`
-                      : "Ready to make clips";
+                      : status.blocked_code?.startsWith("asr_") && status.blocked_reason
+                        ? status.blocked_reason
+                        : "Ready to make clips";
               let action;
               if (working && status?.job_id)
                 action = (
@@ -958,9 +965,11 @@ export function FactoryHome({
                         {reviewPreview
                           ? "Illustrative source"
                           : formatTime(source.duration)}
-                        {source.has_audio === true && source.transcript == null
-                          ? " · Needs a transcript for captions"
-                          : ""}
+                        {source.has_audio === false
+                          ? " · No speech in this footage"
+                          : source.has_audio === true && source.transcript == null
+                            ? " · Speech not transcribed yet"
+                            : ""}
                       </span>
                     </div>
                     {illustrative && <Pill tone="sand">Illustrative edit</Pill>}

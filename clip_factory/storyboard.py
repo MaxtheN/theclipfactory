@@ -284,6 +284,9 @@ class Storyboards:
         board = self.get(video["id"])
         if not board or board.get("transcript_stamp") != video.get("transcript_updated_at"):
             return None
+        if board.get("speech_available") is False and video.get("transcript") is not None:
+            # Watched while speech recognition was unavailable: rebuild now that the words exist.
+            return None
         if model_id and not board.get("vision") and self.models.vision(model_id):
             return None
         return board
@@ -444,6 +447,8 @@ class Storyboards:
                 "elapsed_seconds": round(time.monotonic() - clock, 1),
                 "duration": duration,
                 "transcript_stamp": video.get("transcript_updated_at"),
+                # False: the footage has sound but was watched without a transcript (speech unavailable).
+                "speech_available": video.get("has_audio") is False or video.get("transcript") is not None,
                 "speech": (video.get("transcript") or {}).get("speech", "throughout")
                 if video.get("has_audio")
                 else "none",
@@ -484,4 +489,5 @@ def summary(board: dict) -> dict:
         "model_id": board["model_id"],
         "updated_at": board["created_at"],
         "thumbnail": first,
+        "speech_available": board.get("speech_available", True),
     }

@@ -38,7 +38,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from . import brief as briefs
-from . import craft, media, storyboard
+from . import craft, media, speech, storyboard
 from .jobs import WorkError
 from .store import new_id, now
 
@@ -699,9 +699,9 @@ class Analyzer:
             ref["transcript_status"] = "no_audio"
             return None
         if not self.whisper_ready():
+            # A reference with sound is never measured speechless (pace, first word, hook all need it).
             ref["transcript_status"] = "not_transcribed"
-            ref["transcript_note"] = "The local speech model is not installed; speech was not measured."
-            return None
+            raise WorkError(speech.MISSING)
         if self._held():
             ref["transcript_status"] = "held"
             return None

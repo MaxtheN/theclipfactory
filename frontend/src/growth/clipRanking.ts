@@ -6,9 +6,10 @@ export function rankOf(clip: Pick<Clip, "rank">): ClipRank | undefined {
   return rank && typeof rank === "object" && typeof rank.score === "number" ? rank : undefined;
 }
 
-export function belowBar(clip: Pick<Clip, "rank" | "approved">): boolean {
-  // An approved clip is always shown, whatever its score said.
-  return !clip.approved && rankOf(clip)?.below_bar === true;
+export function belowBar(clip: Pick<Clip, "rank" | "approved" | "made_without_speech">): boolean {
+  // An approved clip is always shown, whatever its score said. A clip cut without its speech
+  // is always under the bar, ranked or not.
+  return !clip.approved && (rankOf(clip)?.below_bar === true || clip.made_without_speech === true);
 }
 
 /**

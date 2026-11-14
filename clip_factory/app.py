@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from platformdirs import user_data_path
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import craft, media, scouts
+from . import craft, media, ranking, scouts, speech
 from .ads import AdsClient
 from .brief import brief_block, must_avoid_hits
 from .campaign_api import install as install_campaign_api
@@ -332,6 +332,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             RoutedModels(app.state.models, app.state.llm, "agents"),  # cloud only when opted in
             transcribe=transcribe_task,
             can_transcribe=whisper_ready,
+            speech_blocker=asr_blocker,
             render_workers=3,
             render=render_team,
             storyboard=lambda job, video, model, progress=(5, 95): app.state.storyboards.ensure(
@@ -414,12 +415,31 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         )
         return [{**frame, "range": owner[frame["path"]]} for frame in frames]
 
+    def asr_blocker() -> dict | None:
+        """None when speech can be transcribed now; else the actionable setup/repair blocker."""
+        return speech.check(models())
+
     def whisper_ready() -> bool:
-        try:
-            models().require("whisper-turbo", "asr")
-            return True
-        except WorkError:
-            return False
+        return asr_blocker() is None
+
+    app.state.speech_blocker = asr_blocker
+
+    def refuse_speechless(video: dict):
+        """Footage with sound is never produced without its words: stop before any work is queued."""
+        if speech.needs_speech(video):
+            found = asr_blocker()
+            if found:
+                raise HTTPException(409, found["message"])
+
+    def ensure_speech(job_id: str, video: dict) -> dict:
+        """Transcribe a source with sound before model work; refuse to continue speechless."""
+        if not speech.needs_speech(video):
+            return video
+        found = asr_blocker()
+        if found:
+            raise speech.SpeechUnavailable(found)
+        transcribe_task(job_id, video, settings()["language"])
+        return require("videos", video["id"])
 
     def usable_llms() -> list[dict]:
         return [m for m in models().catalog() if m["kind"] == "llm" and m["installed"]]
@@ -458,7 +478,49 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             models().require(model_id, "llm")
         except WorkError as exc:
             found.append({"code": "model", "message": str(exc), "tab": "Models"})
+        # Applies to footage with sound only (see source_blockers); a silent source can still run.
+        asr = asr_blocker()
+        if asr:
+            found.append(asr)
         return found
+
+    def source_blockers(video: dict, ready: list[dict]) -> list[dict]:
+        return [b for b in ready if b.get("scope") != "speech" or speech.needs_speech(video)]
+
+    UNKNOWN = object()
+
+    def engine_status(found=UNKNOWN) -> dict:
+        """First-run engine: the one-time runtime and speech-model downloads, and any setup job."""
+        health = models().integrity()
+        if found is UNKNOWN:
+            found = asr_blocker()
+        setup = next(
+            (
+                j
+                for j in store.all("jobs")
+                if j["status"] in {"queued", "running"}
+                and (
+                    j["kind"] == "speech_setup"
+                    or j.get("context", {}).get("runtime") == "setup"
+                    or j.get("context", {}).get("model_id") == speech.ASR_MODEL and j["kind"] == "download"
+                )
+            ),
+            None,
+        )
+        last = next((j for j in store.all("jobs") if j["kind"] == "speech_setup"), None)
+        return {
+            "ready": found is None,
+            "blocker": found,
+            "runtime": health["runtime"],
+            "whisper": health[speech.ASR_MODEL],
+            "steps": (found or {}).get("steps", []),
+            "job": (
+                {k: setup.get(k) for k in ("id", "kind", "status", "progress", "message", "step", "step_index", "step_count")}
+                if setup
+                else None
+            ),
+            "last_error": last.get("error") if last and last["status"] == "failed" else None,
+        }
 
     def valid_session(value: str) -> bool:
         return hmac.compare_digest(value.encode("utf-8"), auth.encode("utf-8"))
@@ -547,6 +609,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     @app.get("/api/system")
     def system():
         runtime_ready = models().ready()
+        whisper = models().item("whisper-turbo")["installed"] and runtime_ready
         return {
             "platform": f"{platform.system()} {platform.machine()}",
             "apple_silicon": apple_silicon(),
@@ -554,8 +617,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "free_disk_gb": round(shutil.disk_usage(root).free / 1e9, 1),
             "ffmpeg": bool(media.find_tool("ffmpeg")),
             "ffprobe": bool(media.find_tool("ffprobe")),
-            "whisper": models().item("whisper-turbo")["installed"] and runtime_ready,
+            "whisper": whisper,
             "model_runtime": runtime_ready,
+            # Cheap file checks: files removed from disk after setup show up as "damaged".
+            "integrity": models().integrity(),
+            "engine": engine_status(None if whisper else speech.classify(models())),
             "ollama": models().ollama.status()["running"],
             "desktop": app.state.desktop,
             "data_dir": str(root),
@@ -588,6 +654,54 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             if jobs().busy("runtime", "setup"):
                 raise HTTPException(409, "Runtime setup is already queued or running.")
             return jobs().submit("runtime", models().setup, runtime="setup")
+
+    @app.post("/api/speech/setup", status_code=202)
+    def speech_setup(body: License):
+        """One job for the one-time speech setup or repair: runtime packages (when needed), then Whisper.
+
+        Reuses the Models runtime setup and the resumable model download; progress is reported as
+        one bar across both steps.
+        """
+        if not body.accept_license:
+            raise HTTPException(422, "Accept the model license before downloading.")
+        with operations_lock:
+            if (
+                jobs().busy("runtime", "setup")
+                or jobs().busy("model_id", speech.ASR_MODEL)
+                or any(j["status"] in {"queued", "running"} and j["kind"] == "speech_setup" for j in store.all("jobs"))
+            ):
+                raise HTTPException(409, "Speech setup is already queued or running.")
+            health = models().integrity()
+            runtime_needed = health["runtime"]["state"] != "ok" or not models().ready()
+            whisper_needed = health[speech.ASR_MODEL]["state"] != "ok"
+            if not runtime_needed and not whisper_needed:
+                raise HTTPException(409, "Speech recognition is already set up.")
+            needed_gb = (2 if runtime_needed else 0) + (
+                models().item(speech.ASR_MODEL)["estimated_gb"] if whisper_needed else 0
+            )
+            if shutil.disk_usage(root).free < (needed_gb + 3) * 1e9:
+                raise HTTPException(400, "Not enough free disk space for the speech setup and download headroom.")
+            steps = (["runtime"] if runtime_needed else []) + ([speech.ASR_MODEL] if whisper_needed else [])
+
+            def run(job: str) -> dict:
+                done = []
+                for index, step in enumerate(steps):
+                    # Size-weighted share of one progress bar for each step.
+                    weights = [speech.STEPS[s]["approx_gb"] for s in steps]
+                    low = round(98 * sum(weights[:index]) / sum(weights))
+                    high = round(98 * sum(weights[: index + 1]) / sum(weights))
+                    banded = speech.BandedJobs(jobs(), job, low, high, step=step, step_index=index + 1, step_count=len(steps))
+                    worker = Models(root, banded)
+                    banded.update(job, progress=0, message=f"Step {index + 1} of {len(steps)}: {speech.STEPS[step]['label']}")
+                    if step == "runtime":
+                        worker.setup(job)
+                    else:
+                        worker.download(job, step)
+                    done.append(step)
+                models().ready(force=True)
+                return {"installed": done, "speech_ready": whisper_ready()}
+
+            return jobs().submit("speech_setup", run, speech_setup=speech.ASR_MODEL, steps=steps)
 
     @app.post("/api/models/{identifier}/download", status_code=202)
     def download_model(identifier: str, body: License):
@@ -1284,7 +1398,10 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def pipeline_task(job_id: str, video: dict, model_id="qwen-small", config: dict | None = None) -> dict:
         config = config or settings()
         models().require(model_id, "llm")
-        if video.get("has_audio") and not video.get("transcript") and whisper_ready():
+        if speech.needs_speech(video):
+            found = asr_blocker()
+            if found:
+                raise speech.SpeechUnavailable(found)
             transcribe_task(job_id, video, config["language"])
             video = require("videos", video["id"])
         analysis = analyze_task(job_id, video, model_id, config)
@@ -1357,7 +1474,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 model = choose_model()
                 # Autopilot: start only when it can actually run; otherwise the source waits, with the
                 # reason shown on the factory screen.
-                if not blockers(model):
+                if not source_blockers(video, blockers(model)):
                     submit_production(identifier, model, settings()["production_strategy"], preflight=False)
             return listed(video)
         except Exception:
@@ -1420,18 +1537,24 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             models().require(model, "llm")
         except WorkError:
             usable = False  # still useful: measured motion, loudness and speech without descriptions
+        refuse_speechless(require("videos", identifier))
         return submit_source(
             identifier,
             "storyboard",
             lambda job, video: {
                 "video_id": video["id"],
-                **summary_of(storyboards().build(job, video, model if usable else None)),
+                **summary_of(storyboards().build(job, ensure_speech(job, video), model if usable else None)),
             },
             **({"model_id": model} if usable else {}),
         )
 
     def summary_of(board: dict) -> dict:
-        return {"scenes": len(board["scenes"]), "vision": board["vision"], "watched_by": board["model_id"]}
+        return {
+            "scenes": len(board["scenes"]),
+            "vision": board["vision"],
+            "watched_by": board["model_id"],
+            "speech_available": board.get("speech_available", True),
+        }
 
     @app.get("/api/videos/{identifier}/media")
     def video_media(identifier: str):
@@ -1492,10 +1615,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def analyze_video(identifier: str, body: Analysis):
         model = choose_model(body.model_id)
         models().require(model, "llm")
+        refuse_speechless(require("videos", identifier))
         return submit_source(
             identifier,
             "analyze",
-            lambda job, video: analyze_task(job, video, model),
+            lambda job, video: analyze_task(job, ensure_speech(job, video), model),
             model_id=model,
         )
 
@@ -1517,10 +1641,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             if jobs().busy("video_id", identifier):
                 raise HTTPException(409, "This source already has a queued or running task.")
             dependencies = [model_id]
-            # Speech is transcribed when the speech model is ready; without it the source is still
-            # watched and clipped from its pictures.
-            if video.get("has_audio") and not video.get("transcript") and whisper_ready():
-                dependencies.append("whisper-turbo")
+            # Footage with sound is transcribed first; without a working speech model nothing is
+            # queued (a source with no audio stream is the only speechless run).
+            if speech.needs_speech(video):
+                refuse_speechless(video)
+                dependencies.append(speech.ASR_MODEL)
             if preflight:
                 models().require(model_id, "llm")
             config = settings()
@@ -1583,6 +1708,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         """One source on the production line: where it is, in plain words."""
         run = runs[0] if runs else None
         tasks = (run or {}).get("tasks", [])
+        ready = source_blockers(video, ready)
+        clips = [with_speech_flag(c, runs, video) for c in clips]
         live = bool(active) and bool(run) and run.get("job_id") == active["id"]
         # Ranked clips under the quality floor stay saved but are not counted as waiting for review.
         below_bar = sum(1 for c in clips if not c.get("approved") and (c.get("rank") or {}).get("below_bar"))
@@ -1607,8 +1734,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         details = {}
         statuses = {"import": "done"}
         transcript, board = video.get("transcript"), video.get("storyboard")
-        if not video.get("has_audio"):
-            statuses["listen"], details["listen"] = "skipped", "No audio track"
+        if video.get("has_audio") is False:
+            statuses["listen"], details["listen"] = "skipped", speech.NO_SPEECH
         elif transcript is not None:
             lines = len(media.foreground(transcript))
             statuses["listen"] = "done"
@@ -1617,7 +1744,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             )
         if board:
             statuses["watch"] = "done"
-            details["watch"] = f"{board['scenes']} scenes" + ("" if board.get("vision") else ", sound and motion only")
+            details["watch"] = (
+                f"{board['scenes']} scenes"
+                + ("" if board.get("vision") else ", sound and motion only")
+                + ("" if board.get("speech_available", True) else ", without speech")
+            )
         # The latest run fills in the rest; a finished or stopped run keeps its last picture.
         stopped = bool(run) and run["status"] in {"failed", "interrupted", "cancelled"}
         failed_at = None
@@ -1660,11 +1791,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             key = JOB_STAGE.get(active["kind"])
             if key and active["status"] == "running":
                 statuses[key] = "active"
-        blocked = None
+        blocked = blocked_code = None
         if active:
             blocked = "This source is already being worked on."
         elif ready:
-            blocked = ready[0]["message"]
+            blocked, blocked_code = ready[0]["message"], ready[0]["code"]
         error = None
         if state in {"failed", "cancelled"}:
             error = run.get("stop_reason") or "Production stopped before any clip was made."
@@ -1702,6 +1833,12 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "error": error,
             "can_produce": blocked is None,
             "blocked_reason": blocked,
+            "blocked_code": blocked_code,
+            "speech": (
+                "none" if video.get("has_audio") is False else "ready" if transcript is not None else "pending"
+            ),
+            "speech_label": speech.NO_SPEECH if video.get("has_audio") is False else None,
+            "made_without_speech": sum(1 for c in clips if c.get("made_without_speech")),
             "storyboard": (
                 {k: board.get(k) for k in ("scenes", "vision", "model_id", "updated_at")} if board else None
             ),
@@ -1742,6 +1879,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "model_id": None if any(b["code"] == "model" for b in ready) else model,
             "ready": not ready,
             "blockers": ready,
+            "engine": engine_status(),
             "sources": sources,
         }
 
@@ -1842,9 +1980,27 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         """Self-check did not pass and no reviewer has explicitly approved over it."""
         return clip.get("team_review_status") in {"fail", "unknown"} and not clip.get("approval_override")
 
+    def with_speech_flag(clip: dict, runs: list[dict] | dict, video: dict | None) -> dict:
+        """Mark clips made from footage with sound while its speech was never transcribed.
+
+        Such clips (from runs before production refused to go speechless) carry a visible warning
+        and rank below the bar, whatever score they had.
+        """
+        run = runs.get(clip.get("team_run_id")) if isinstance(runs, dict) else next(
+            (r for r in runs if r["id"] == clip.get("team_run_id")), None
+        )
+        skipped = bool(run) and any(
+            t.get("role") == "transcribe" and t.get("status") == "skipped" for t in run.get("tasks", [])
+        )
+        if not (clip.get("made_without_speech") or (skipped and (video or {}).get("has_audio") is not False)):
+            return clip
+        return {**clip, "made_without_speech": True, "rank": ranking.speechless(clip.get("rank"))}
+
     @app.get("/api/clips")
     def get_clips():
-        return [public(c) for c in store.all("clips")]
+        runs = {r["id"]: r for r in store.all("team_runs")}
+        videos = {v["id"]: v for v in store.all("videos")}
+        return [public(with_speech_flag(c, runs, videos.get(c.get("video_id")))) for c in store.all("clips")]
 
     @app.put("/api/clips/{identifier}")
     def edit_clip(identifier: str, body: ClipEdit):

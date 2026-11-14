@@ -53,7 +53,7 @@ export function readiness(input: {
     : transcript !== null && typeof transcript === "object" ? Object.keys(transcript).length > 0
     : !!transcript;
   const missingAgentTranscript = !!source?.has_audio && !hasAgentTranscript;
-  if (missingAgentTranscript && (system?.model_runtime !== true || !models.some(m => m.id === "whisper-turbo" && m.installed === true))) agent.push("Agent production needs Whisper for this audio source, or an imported transcript.");
+  if (missingAgentTranscript && (system?.model_runtime !== true || !models.some(m => m.id === "whisper-turbo" && m.installed === true))) agent.push(system?.engine?.blocker?.message || "Speech recognition isn't set up yet. Set it up once (about 1.6 GB download) and run again.");
   return { manual, agent, canRender: manual.length === 0, canProduce: agent.length === 0, needsTranscript: missingTranscript };
 }
 

@@ -138,13 +138,19 @@ def rank(clips: list[dict], *, board: dict | None = None, brief: dict | None = N
             "signals": signals,
             "why": why(clip, brief),
             "duplicate_of": twin["id"] if twin else None,
-            "below_bar": bool(twin) or value < floor,
+            "below_bar": bool(twin) or value < floor or bool(clip.get("made_without_speech")),
             "reason": (
-                "Similar to a better clip" if twin else f"Score under {floor}" if value < floor else None
+                "Similar to a better clip"
+                if twin
+                else SPEECHLESS_REASON
+                if clip.get("made_without_speech")
+                else f"Score under {floor}"
+                if value < floor
+                else None
             ),
             "floor": floor,
         }
-        if not twin:
+        if not twin and not clip.get("made_without_speech"):
             kept.append(clip)
         records[clip["id"]] = record
     position = 0
@@ -158,6 +164,17 @@ def rank(clips: list[dict], *, board: dict | None = None, brief: dict | None = N
             record["position"] = None
             record["top_pick"] = False
     return records
+
+
+SPEECHLESS_REASON = "Made without speech"
+
+
+def speechless(record: dict | None) -> dict:
+    """A rank record for a clip cut without its speech: kept, but always under the bar."""
+    record = dict(record or {"version": RANK_VERSION, "score": None, "signals": {}, "why": "", "floor": FLOOR})
+    record.update(below_bar=True, top_pick=False, position=None, reason=SPEECHLESS_REASON)
+    record.setdefault("duplicate_of", None)
+    return record
 
 
 def summary(records: dict[str, dict], top_picks: int | None = None) -> dict:
