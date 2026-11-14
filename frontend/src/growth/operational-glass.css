@@ -1,0 +1,580 @@
+/* Workspace tools share the campaign shell's smoked-slate and warm glass. */
+.gf-operational {
+  --ink: var(--material-ink);
+  --bg: var(--material-canvas-top);
+  --panel: var(--material-pane);
+  --line: var(--material-divider);
+  --border: var(--material-line);
+  --muted: var(--material-secondary);
+  --accent: var(--material-button);
+  --danger: var(--material-danger);
+  --radius: 12px;
+  color-scheme: dark;
+  color: var(--ink);
+  min-height: 100vh;
+  background: var(--material-canvas);
+  background-attachment: fixed;
+  font-family: var(--material-font);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.gf-operational .app-shell,
+.gf-operational .workspace {
+  background: transparent;
+}
+.gf-operational select {
+  text-transform: none;
+}
+.gf-operational [hidden] {
+  display: none !important;
+}
+.gf-operational .tools-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 28px;
+}
+.gf-operational .tools-brand-row .brand {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  gap: 8px;
+  font-size: 16px;
+  line-height: 1.1;
+}
+.gf-operational .tools-brand-row .brand > div {
+  min-width: 0;
+}
+.gf-operational .tools-brand-row .brand small {
+  font-size: 8px;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+.gf-operational .tools-brand-row .brand-symbol {
+  width: 30px;
+  height: 32px;
+  flex-shrink: 0;
+  font-size: 20px;
+}
+.gf-operational .sidebar .gf-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  padding: 6px;
+  border: 1px solid var(--material-line);
+  border-radius: 7px;
+  background: var(--material-hover);
+  color: var(--material-ink);
+}
+.gf-operational .sidebar .gf-sidebar-toggle:hover:not(:disabled) {
+  background: var(--material-selected);
+  border-color: var(--material-field-line);
+  color: var(--material-ink);
+}
+.gf-operational.is-sidebar-collapsed .app-shell {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+.gf-operational.is-sidebar-collapsed .sidebar {
+  width: 64px;
+  flex-basis: 64px;
+  flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  padding: 16px;
+  align-items: center;
+  border-right: 1px solid var(--line);
+  border-bottom: 0;
+}
+.gf-operational.is-sidebar-collapsed .tools-brand-row {
+  justify-content: center;
+  margin: 0;
+}
+.gf-operational .sidebar,
+.gf-operational .topbar,
+.gf-operational .gf-tools-return,
+.gf-operational .panel,
+.gf-operational .hero,
+.gf-operational .stat,
+.gf-operational .clip-card,
+.gf-operational .model-card,
+.gf-operational .analytics-card,
+.gf-operational .campaign-direction,
+.gf-operational .campaign-version,
+.gf-operational .campaign-observation,
+.gf-operational .ledger-task,
+.gf-operational .sticky-save {
+  background: var(--panel);
+  border-color: var(--material-line);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.gf-operational .sidebar {
+  background: var(--material-shell);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-right-color: var(--line);
+}
+.gf-operational .topbar,
+.gf-operational .gf-tools-return {
+  background: var(--material-shell);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom-color: var(--line);
+  color: var(--muted);
+}
+.gf-operational .gf-tools-return button {
+  background: var(--material-hover);
+  border: 1px solid var(--line);
+  color: var(--material-ink);
+}
+.gf-operational .gf-tools-return button:hover:not(:disabled) {
+  background: var(--material-selected);
+  border-color: var(--material-field-line);
+  color: var(--material-ink);
+}
+.gf-operational .gf-tools-return .gf-command-trigger {
+  background: rgba(255, 255, 255, 0.065);
+  color: #e6e2da;
+  box-shadow: none;
+}
+.gf-operational .gf-tools-return kbd {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.17);
+  color: #d6d3cd;
+}
+.gf-operational .brand,
+.gf-operational h1,
+.gf-operational h2,
+.gf-operational h3 {
+  color: var(--ink);
+}
+.gf-operational h1 {
+  font-size: clamp(26px, 2.4vw, 32px);
+  font-weight: 600;
+  line-height: 1.16;
+  letter-spacing: -1px;
+}
+.gf-operational .hero h2 {
+  font-size: clamp(24px, 2.2vw, 30px);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+.gf-operational .brand-symbol {
+  border-color: var(--material-field-line);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f1e7d8;
+}
+.gf-operational .sidebar .tools-nav-group > summary {
+  color: #d0ccc4;
+}
+.gf-operational .sidebar .tools-nav-group > summary:hover {
+  color: var(--material-ink);
+  background: rgba(255, 255, 255, 0.055);
+  border-radius: 7px;
+}
+.gf-operational .sidebar .nav-item {
+  background: transparent;
+  color: #e1ddd5;
+  border-color: transparent;
+}
+.gf-operational .sidebar .nav-item:hover:not(:disabled) {
+  background: var(--material-hover);
+  color: var(--material-ink);
+}
+.gf-operational .sidebar .nav-item.active,
+.gf-operational .sidebar .nav-item.active:hover:not(:disabled) {
+  background: var(--material-selected);
+  color: var(--material-ink);
+  border-color: transparent;
+  box-shadow: none;
+}
+.gf-operational .nav-count {
+  background: var(--material-selected);
+  color: #f1e3cf;
+}
+.gf-operational .sidebar-footer strong {
+  color: #e5dfd4;
+}
+.gf-operational .sidebar-footer,
+.gf-operational .info-list > div,
+.gf-operational .workspace-footer {
+  border-color: var(--line);
+}
+.gf-operational .status-dot {
+  background: #dca675;
+}
+.gf-operational .workspace-footer {
+  background: rgba(255, 255, 255, 0.025);
+  color: #c0bab0;
+}
+.gf-operational .slash {
+  color: #a9aaa6;
+}
+.gf-operational .eyebrow {
+  color: var(--material-secondary);
+}
+.gf-operational a {
+  color: #ecd4b2;
+}
+.gf-operational button,
+.gf-operational .button {
+  background: var(--material-button);
+  color: var(--material-button-ink);
+  border-color: transparent;
+}
+.gf-operational button:hover:not(:disabled),
+.gf-operational .button:hover:not([aria-disabled="true"]) {
+  background: #f7f4ee;
+  color: var(--material-button-ink);
+}
+.gf-operational .secondary {
+  background: var(--material-hover);
+  color: var(--material-ink);
+  border-color: var(--material-line);
+}
+.gf-operational .secondary:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--material-selected);
+  color: var(--material-ink);
+  border-color: var(--material-field-line);
+}
+.gf-operational .text-button {
+  background: transparent;
+  color: #ded7ca;
+  border-color: transparent;
+}
+.gf-operational .text-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff7e9;
+}
+.gf-operational .danger-button {
+  background: rgba(159, 75, 56, 0.14);
+  color: #ffd0c0;
+  border-color: rgba(219, 154, 134, 0.36);
+}
+.gf-operational .danger-button:hover:not(:disabled) {
+  background: rgba(170, 77, 56, 0.26);
+  color: #ffded1;
+  border-color: rgba(226, 167, 149, 0.52);
+}
+.gf-operational button:disabled,
+.gf-operational [aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.gf-operational button:disabled:hover {
+  background: var(--material-button);
+  color: var(--material-button-ink);
+}
+.gf-operational .secondary:disabled:hover,
+.gf-operational .secondary[aria-disabled="true"]:hover {
+  background: var(--material-hover);
+  color: var(--material-ink);
+}
+.gf-operational .danger-button:disabled:hover {
+  background: rgba(159, 75, 56, 0.14);
+  color: #ffd0c0;
+}
+.gf-operational .text-button:disabled:hover {
+  background: transparent;
+  color: #ded7ca;
+}
+.gf-operational input:not([type="checkbox"]),
+.gf-operational select,
+.gf-operational textarea {
+  background: var(--material-field);
+  border-color: var(--material-field-line);
+  color: var(--material-ink);
+  box-shadow: none;
+}
+.gf-operational select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 40px;
+  padding: 9px 34px 9px 12px;
+  line-height: 1.4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='m3 4.5 3 3 3-3' stroke='%23F3F1EC' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 12px;
+}
+.gf-operational select option {
+  color: var(--material-ink);
+  background: var(--material-canvas-top);
+}
+.gf-operational .topbar select {
+  min-height: 34px;
+  padding: 6px 26px 6px 8px;
+  background-color: transparent;
+  background-position: right 7px center;
+}
+.gf-operational input::placeholder,
+.gf-operational textarea::placeholder {
+  color: var(--material-secondary);
+}
+.gf-operational input:disabled,
+.gf-operational select:disabled,
+.gf-operational textarea:disabled {
+  background: rgba(255, 255, 255, 0.035);
+  color: #aaa69f;
+}
+.gf-operational input[type="checkbox"] {
+  accent-color: var(--material-button);
+}
+.gf-operational .field > label,
+.gf-operational .check,
+.gf-operational .optin strong {
+  color: #e4ded3;
+}
+.gf-operational :is(button, a, summary):focus-visible,
+.gf-operational .gf-tools-return :is(button, a):focus-visible {
+  outline: 0;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 2px var(--material-focus);
+}
+.gf-operational
+  button:not(.secondary):not(.text-button):not(.danger-button):not(
+    .nav-item
+  ):not(.source-item):not(.candidate):not(.gf-sidebar-toggle):focus-visible {
+  box-shadow: inset 0 0 0 2px #5f4b3a;
+}
+.gf-operational .gf-tools-return button:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--material-focus);
+}
+.gf-operational :is(input, select, textarea):focus-visible,
+.gf-operational :is(input, select, textarea):focus {
+  outline: 0;
+  outline-offset: 0;
+  border-color: var(--material-focus);
+  box-shadow: 0 0 0 2px var(--material-focus-ring);
+}
+.gf-operational .badge {
+  background: var(--material-hover);
+  color: #e1dcd2;
+  border-color: var(--material-line);
+}
+.gf-operational .badge.success {
+  background: rgba(84, 128, 108, 0.2);
+  color: #caedd9;
+  border-color: rgba(152, 197, 173, 0.36);
+}
+.gf-operational .badge.danger {
+  background: rgba(159, 75, 56, 0.18);
+  color: #ffd0c0;
+  border-color: rgba(219, 154, 134, 0.38);
+}
+.gf-operational .banner {
+  background: rgba(255, 255, 255, 0.065);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #e6dfd4;
+}
+.gf-operational .banner strong {
+  color: #f3e7d4;
+}
+.gf-operational .banner.success {
+  background: rgba(81, 121, 97, 0.18);
+  border-color: rgba(152, 197, 164, 0.32);
+  color: #d5ebd7;
+}
+.gf-operational .banner.success strong {
+  color: #e0f0dd;
+}
+.gf-operational .banner.error {
+  background: rgba(153, 66, 46, 0.2);
+  border-color: rgba(221, 155, 133, 0.42);
+  color: #ffd1bf;
+}
+.gf-operational .banner.error strong {
+  color: #ffdfd1;
+}
+.gf-operational .gate-list,
+.gf-operational .render-warning {
+  background: var(--material-warning-fill);
+  color: var(--material-warning);
+  border-color: transparent;
+}
+.gf-operational .requirements {
+  color: #d4cec4;
+}
+.gf-operational .hero {
+  background: var(--material-pane);
+}
+.gf-operational .hero p:not(.eyebrow),
+.gf-operational .stat > span,
+.gf-operational .pipeline small,
+.gf-operational .dropzone small,
+.gf-operational .candidate > span:last-child {
+  color: var(--material-secondary);
+}
+.gf-operational .pipeline > div,
+.gf-operational .empty,
+.gf-operational .source-item,
+.gf-operational .dropzone,
+.gf-operational .candidate {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: var(--material-line);
+  color: var(--ink);
+}
+.gf-operational .empty-mark,
+.gf-operational .upload-symbol,
+.gf-operational .source-thumbnail {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ecd7b9;
+}
+.gf-operational .source-item:hover:not(:disabled),
+.gf-operational .candidate:hover:not(:disabled) {
+  background: var(--material-hover);
+  color: var(--ink);
+}
+.gf-operational .source-item.selected,
+.gf-operational .source-item.selected:hover:not(:disabled),
+.gf-operational .dropzone.dragging {
+  background: var(--material-selected);
+  border-color: transparent;
+  color: var(--material-ink);
+  box-shadow: inset 2px 0 0 var(--material-focus);
+}
+.gf-operational .read-only,
+.gf-operational .transcript,
+.gf-operational .artifact-data {
+  background: rgba(17, 24, 29, 0.3);
+  color: #e1ddd5;
+  border-color: var(--material-line);
+}
+.gf-operational .source-player,
+.gf-operational .clip-player,
+.gf-operational .cover-preview {
+  background: rgba(16, 20, 23, 0.55);
+}
+.gf-operational .sticky-save > span {
+  color: #e4d8c5;
+}
+.gf-operational .job progress {
+  accent-color: #d6a26f;
+}
+.gf-operational summary:hover {
+  color: #f6dfbc;
+}
+.gf-operational .skip-link {
+  background: var(--material-button);
+  color: var(--material-button-ink);
+}
+
+.gf-operational .source-item.selected > span:last-child,
+.gf-operational .source-item.selected small,
+.gf-operational .source-item:hover:not(:disabled) small,
+.gf-operational .source-item:hover:not(:disabled) > span:last-child,
+.gf-operational .candidate.selected > span:last-child,
+.gf-operational .candidate:hover:not(:disabled) > span:last-child {
+  color: var(--material-ink);
+}
+
+/* Operational pages use the same flat content surfaces as campaign setup. */
+.gf-operational .panel {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+.gf-operational .panel :is(.stat, .clip-card, .model-card, .analytics-card, .campaign-direction, .campaign-version, .campaign-observation, .ledger-task),
+.gf-operational :is(.pipeline > div, .source-item, .candidate) {
+  background: var(--material-field);
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.gf-operational .source-item.selected,
+.gf-operational .source-item.selected:hover:not(:disabled) {
+  background: var(--material-selected);
+  box-shadow: inset 2px 0 0 var(--material-focus);
+}
+.gf-operational .dropzone {
+  background: var(--material-field);
+  border-color: var(--material-field-line);
+}
+.gf-operational .dropzone.dragging {
+  background: var(--material-selected);
+  border-color: var(--material-focus);
+  box-shadow: none;
+}
+.gf-operational .sidebar .gf-sidebar-toggle {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.gf-operational .sidebar .gf-sidebar-toggle:hover:not(:disabled) {
+  color: var(--material-ink);
+  background: var(--material-hover);
+  border-color: transparent;
+}
+.gf-operational .sidebar :is(.tools-nav-group > summary, .nav-item),
+.gf-operational .field > label,
+.gf-operational .check,
+.gf-operational .optin strong {
+  color: var(--material-ink);
+}
+.gf-operational .workspace-footer,
+.gf-operational .slash {
+  color: var(--material-metadata);
+}
+
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .gf-operational .sidebar,
+  .gf-operational .topbar,
+  .gf-operational .gf-tools-return,
+  .gf-operational .panel,
+  .gf-operational .hero,
+  .gf-operational .stat,
+  .gf-operational .clip-card,
+  .gf-operational .model-card,
+  .gf-operational .analytics-card,
+  .gf-operational .campaign-direction,
+  .gf-operational .campaign-version,
+  .gf-operational .campaign-observation,
+  .gf-operational .ledger-task,
+  .gf-operational .sticky-save {
+    background: var(--material-pane-solid);
+  }
+  .gf-operational .sidebar {
+    background: var(--material-canvas-top);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .gf-operational {
+    background: var(--material-canvas-top);
+    --panel: var(--material-pane-solid);
+  }
+  .gf-operational .sidebar,
+  .gf-operational .topbar,
+  .gf-operational .gf-tools-return,
+  .gf-operational .panel,
+  .gf-operational .hero,
+  .gf-operational .stat,
+  .gf-operational .clip-card,
+  .gf-operational .model-card,
+  .gf-operational .analytics-card,
+  .gf-operational .campaign-direction,
+  .gf-operational .campaign-version,
+  .gf-operational .campaign-observation,
+  .gf-operational .ledger-task,
+  .gf-operational .sticky-save {
+    background: var(--material-pane-solid);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .gf-operational .sidebar {
+    background: var(--material-canvas-top);
+  }
+}

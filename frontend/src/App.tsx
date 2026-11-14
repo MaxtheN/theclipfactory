@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFactory } from "./useFactory";
 import { Campaigns } from "./pages/Campaigns";
 import { Dashboard } from "./pages/Dashboard";
@@ -8,6 +8,8 @@ import { Models } from "./pages/Models";
 import { Instagram } from "./pages/Instagram";
 import { Results } from "./pages/Results";
 import { SettingsPage } from "./pages/Settings";
+import { Icon } from "./growth/Icon";
+import "./growth/operational-glass.css";
 const tabs = [
   "Campaigns",
   "Dashboard",
@@ -19,6 +21,29 @@ const tabs = [
   "Settings",
 ] as const;
 type Tab = (typeof tabs)[number];
+const navigationGroups: { label: string; icon: string; items: Tab[] }[] = [
+  {
+    label: "Create",
+    icon: "studio",
+    items: ["Campaigns", "Library", "Factory"],
+  },
+  { label: "Review", icon: "results", items: ["Dashboard", "Results"] },
+  {
+    label: "Workspace",
+    icon: "settings",
+    items: ["Models", "Instagram", "Settings"],
+  },
+];
+const navigationIcons: Record<Tab, string> = {
+  Campaigns: "setup",
+  Dashboard: "results",
+  Library: "folder",
+  Factory: "studio",
+  Models: "spark",
+  Instagram: "link",
+  Results: "results",
+  Settings: "settings",
+};
 const descriptions: Record<Tab, string> = {
   Campaigns: "Saved profiles. Approved direction. Evidence-led revisions.",
   Dashboard: "Your creative intent. A local production system.",
@@ -37,12 +62,30 @@ function initialTab(): Tab {
     return "Campaigns";
   }
 }
-export function App() {
+export function App({
+  sidebarToggle,
+  sidebarCollapsed = false,
+}: {
+  sidebarToggle?: ReactNode;
+  sidebarCollapsed?: boolean;
+}) {
   const state = useFactory();
   const [tab, setTab] = useState<Tab>(initialTab);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
+    () => ({
+      Create: true,
+      Review: true,
+      Workspace: navigationGroups[2].items.includes(tab),
+    }),
+  );
   const [sourceId, setSourceId] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
   const previous = useRef(tab);
+  useEffect(() => {
+    const group = navigationGroups.find((item) => item.items.includes(tab));
+    if (group)
+      setExpandedGroups((current) => ({ ...current, [group.label]: true }));
+  }, [tab]);
   useEffect(() => {
     if (previous.current !== tab) {
       heading.current?.focus();
@@ -69,33 +112,63 @@ export function App() {
         Skip to content
       </a>
       <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-symbol" aria-hidden="true">
-            c<span>f</span>
-          </span>
-          <div>
-            Clip Factory<small>LOCAL STUDIO</small>
+        <div className="tools-brand-row">
+          <div className="brand" hidden={sidebarCollapsed}>
+            <span className="brand-symbol" aria-hidden="true">
+              c<span>f</span>
+            </span>
+            <div>
+              Growth Factory<small>WORKSPACE TOOLS</small>
+            </div>
           </div>
+          {sidebarToggle}
         </div>
-        <nav aria-label="Main navigation">
-          {tabs.map((item, index) => (
-            <button
-              key={item}
-              aria-current={tab === item ? "page" : undefined}
-              className={tab === item ? "nav-item active" : "nav-item"}
-              onClick={() => setTab(item)}
+        <nav
+          className="tools-navigation"
+          aria-label="Main navigation"
+          hidden={sidebarCollapsed}
+        >
+          {navigationGroups.map((group) => (
+            <details
+              className="tools-nav-group"
+              key={group.label}
+              open={expandedGroups[group.label]}
+              onToggle={(event) => {
+                const open = event.currentTarget.open;
+                setExpandedGroups((current) =>
+                  current[group.label] === open
+                    ? current
+                    : { ...current, [group.label]: open },
+                );
+              }}
             >
-              <span className="nav-icon" aria-hidden="true">
-                {["▦", "◫", "▤", "◈", "⬡", "◎", "↗", "⚙"][index]}
-              </span>
-              {item}
-              {item === "Factory" && active > 0 && (
-                <span className="nav-count">{active}</span>
-              )}
-            </button>
+              <summary>
+                <Icon name={group.icon} size={16} />
+                <span>{group.label}</span>
+                <Icon name="down" size={14} />
+              </summary>
+              <div className="tools-nav-items">
+                {group.items.map((item) => (
+                  <button
+                    key={item}
+                    aria-current={tab === item ? "page" : undefined}
+                    className={tab === item ? "nav-item active" : "nav-item"}
+                    onClick={() => setTab(item)}
+                  >
+                    <span className="nav-icon" aria-hidden="true">
+                      <Icon name={navigationIcons[item]} size={18} />
+                    </span>
+                    <span className="tools-nav-label">{item}</span>
+                    {item === "Factory" && active > 0 && (
+                      <span className="nav-count">{active}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </details>
           ))}
         </nav>
-        <div className="sidebar-footer">
+        <div className="sidebar-footer" hidden={sidebarCollapsed}>
           <span className="status-dot" />
           <strong>Local-first workspace</strong>
           <p>
@@ -103,7 +176,7 @@ export function App() {
             <br />
             Meta actions require your opt-in.
           </p>
-          <small>CLIP FACTORY / MVP</small>
+          <small>GROWTH FACTORY / MVP</small>
         </div>
       </aside>
       <div className="workspace">

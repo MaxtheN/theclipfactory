@@ -5,28 +5,31 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "dev:review": "VITE_REVIEW_PREVIEW=true vite --host 127.0.0.1 --port 5178 --strictPort",
+    "desktop:review": "../.venv/bin/python ../scripts/preview-interface.py",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "lucide-react": "^1.73.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^5.2.0",
+    "jsdom": "^25.0.1",
+    "rollup": "^4.59.0",
+    "typescript": "^5.7.3",
     "vite": "^7.3.8",
     "vite-plugin-singlefile": "^2.3.4",
-    "typescript": "^5.7.3",
-    "vitest": "^4.1.12",
-    "jsdom": "^25.0.1",
-    "@testing-library/react": "^16.1.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/user-event": "^14.5.2",
-    "@testing-library/dom": "^10.4.1",
-    "rollup": "^4.59.0"
+    "vitest": "^4.1.12"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

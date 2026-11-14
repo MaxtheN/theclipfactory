@@ -1,0 +1,71 @@
+/* Native dialog/details keep their focus and keyboard behavior. Motion only
+   interpolates their existing states; commands never wait for an animation. */
+.gf-command-dialog {
+  opacity: 0;
+  transform: translateY(6px) scale(.97);
+  transform-origin: 50% 15%;
+  transition:
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(.2, .75, .25, 1),
+    display 220ms allow-discrete,
+    overlay 220ms allow-discrete;
+}
+.gf-command-dialog[open] {
+  opacity: 1;
+  transform: none;
+}
+.gf-command-dialog::backdrop {
+  opacity: 0;
+  transition:
+    opacity 180ms ease,
+    display 220ms allow-discrete,
+    overlay 220ms allow-discrete;
+}
+.gf-command-dialog[open]::backdrop { opacity: 1; }
+@starting-style {
+  .gf-command-dialog[open] {
+    opacity: 0;
+    transform: translateY(8px) scale(.97);
+  }
+  .gf-command-dialog[open]::backdrop { opacity: 0; }
+}
+
+@supports (interpolate-size: allow-keywords) and selector(details::details-content) {
+  .gf-app .gf-disclosure::details-content,
+  .gf-operational details::details-content {
+    interpolate-size: allow-keywords;
+    block-size: 0;
+    opacity: 0;
+    overflow: clip;
+    transition:
+      block-size 260ms cubic-bezier(.2, .7, .2, 1),
+      opacity 180ms ease,
+      content-visibility 260ms allow-discrete;
+  }
+  .gf-app .gf-disclosure[open]::details-content,
+  .gf-operational details[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+  }
+}
+@supports not (interpolate-size: allow-keywords) {
+  .gf-app .gf-disclosure[open] > .gf-disclosure-body,
+  .gf-operational details[open] > :not(summary) {
+    animation: gf-disclosure-reveal 220ms ease-out;
+  }
+}
+@keyframes gf-disclosure-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-command-dialog,
+  .gf-command-dialog::backdrop,
+  .gf-app .gf-disclosure::details-content,
+  .gf-operational details::details-content {
+    transition: none !important;
+    transform: none !important;
+  }
+  .gf-app .gf-disclosure-body,
+  .gf-operational details > :not(summary) { animation: none !important; }
+}

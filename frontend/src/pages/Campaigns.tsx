@@ -1,3 +1,4 @@
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, endpoint, post, put } from "../api";
 import { Field, Section } from "../components/ui";
@@ -320,7 +321,7 @@ function ProfileForm({
     label: string,
   ) => (
     <Field label={label}>
-      <textarea
+      <AutoTextarea
         required={key === "name" || key === "audience"}
         rows={2}
         value={draft[key]}
@@ -464,20 +465,23 @@ function CampaignForm({
     >
       <fieldset disabled={blocked || stale}>
         <Field label="Campaign name">
-          <input
+          <AutoTextarea
+            rows={1}
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </Field>
         <Field label="Campaign audience">
-          <textarea
+          <AutoTextarea
+            rows={2}
             value={brief.audience}
             onChange={(e) => setBrief({ ...brief, audience: e.target.value })}
           />
         </Field>
         <Field label="Constraints (one per line)">
-          <textarea
+          <AutoTextarea
+            rows={2}
             value={brief.constraints.join("\n")}
             onChange={(e) =>
               setBrief({ ...brief, constraints: e.target.value.split("\n") })
@@ -485,7 +489,8 @@ function CampaignForm({
           />
         </Field>
         <Field label="Requested outputs (one per line)">
-          <textarea
+          <AutoTextarea
+            rows={2}
             value={brief.requested_outputs.join("\n")}
             onChange={(e) =>
               setBrief({
@@ -496,7 +501,8 @@ function CampaignForm({
           />
         </Field>
         <Field label="Measurement intent">
-          <textarea
+          <AutoTextarea
+            rows={2}
             value={brief.measurement_intent}
             onChange={(e) =>
               setBrief({ ...brief, measurement_intent: e.target.value })
@@ -564,7 +570,7 @@ function DirectionEditor({
     <div className="direction-editor">
       {Object.entries(textFields).map(([key, label]) => (
         <Field key={key} label={label}>
-          <textarea
+          <AutoTextarea
             required={key === "moment_selection" || key === "limitations"}
             rows={2}
             value={direction[key as keyof typeof textFields]}
@@ -574,7 +580,7 @@ function DirectionEditor({
       ))}
       {Object.entries(arrayFields).map(([key, label]) => (
         <Field key={key} label={`${label} (one per line)`}>
-          <textarea
+          <AutoTextarea
             rows={2}
             value={direction[key as keyof typeof arrayFields].join("\n")}
             onChange={(e) =>
@@ -951,7 +957,8 @@ function ProposalForm({
     >
       <fieldset disabled={blocked}>
         <Field label="Proposal reason">
-          <textarea
+          <AutoTextarea
+            rows={2}
             required
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -1063,7 +1070,7 @@ function VersionCard({
           </>
         )}
         <Field label={`Reason for version ${v.version} action`}>
-          <input value={reason} onChange={(e) => setReason(e.target.value)} />
+          <AutoTextarea rows={1} value={reason} onChange={(e) => setReason(e.target.value)} />
         </Field>
         {v.status === "proposed" && (
           <button
@@ -1273,16 +1280,18 @@ function ProductionForm({
           </Field>
         </div>
         <Field label="Hook override" hint="Blank uses strategy hook selection.">
-          <input value={hook} onChange={(e) => setHook(e.target.value)} />
+          <AutoTextarea rows={1} value={hook} onChange={(e) => setHook(e.target.value)} />
         </Field>
         <Field label="Output caption">
-          <textarea
+          <AutoTextarea
+            rows={2}
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
           />
         </Field>
         <Field label="Creator instructions">
-          <textarea
+          <AutoTextarea
+            rows={2}
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
           />
@@ -1495,7 +1504,8 @@ function EvidenceForm({
               />
             </Field>
             <Field label="Observation notes">
-              <textarea
+              <AutoTextarea
+                rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
@@ -1586,14 +1596,16 @@ function EvidenceForm({
         >
           <fieldset disabled={blocked || !active?.directions[profileId]}>
             <Field label="Learning hypothesis">
-              <textarea
+              <AutoTextarea
+                rows={2}
                 required
                 value={hypothesis}
                 onChange={(e) => setHypothesis(e.target.value)}
               />
             </Field>
             <Field label="Learning reason">
-              <textarea
+              <AutoTextarea
+                rows={2}
                 required
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}

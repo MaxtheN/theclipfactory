@@ -13,6 +13,10 @@ export async function api<T>(
 ): Promise<T> {
   if (!path.startsWith("/api/"))
     throw new Error("Only same-origin API requests are allowed.");
+  if (import.meta.env.VITE_REVIEW_PREVIEW === "true") {
+    const { previewRequest } = await import("./growth/previewApi");
+    return previewRequest<T>(path, options);
+  }
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData))
     headers.set("Content-Type", "application/json");
@@ -25,7 +29,7 @@ export async function api<T>(
     });
   } catch {
     throw new ApiError(
-      "Cannot reach the local service. Start Clip Factory and retry.",
+      "Cannot reach the local service. Start Growth Factory and retry.",
       0,
     );
   }

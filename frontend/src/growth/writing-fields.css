@@ -1,0 +1,30 @@
+/* Writing fields grow with content; identifiers and search retain native sizing. */
+.gf-app textarea.gf-autosize-field,
+.gf-operational textarea.gf-autosize-field {
+  min-height: 0;
+  resize: none;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  transition:
+    height 140ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.gf-app .gf-brief .gf-field-group:first-child > legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-app textarea.gf-autosize-field,
+  .gf-operational textarea.gf-autosize-field { transition: none !important; }
+}

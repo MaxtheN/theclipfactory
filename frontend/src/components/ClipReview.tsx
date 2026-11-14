@@ -1,3 +1,4 @@
+import { AutoTextarea } from "./AutoTextarea";
 import { useEffect, useRef, useState } from "react";
 import { endpoint, post, put, remove } from "../api";
 import type { Clip, Job } from "../types";
@@ -277,14 +278,15 @@ export function ClipReview({
               : undefined
           }
         >
-          <input
+          <AutoTextarea
+            rows={1}
             value={hook}
             disabled={clip.hook_rendered === true}
             onChange={(e) => setHook(e.target.value)}
           />
         </Field>
         <Field label="Clip caption">
-          <textarea
+          <AutoTextarea
             rows={3}
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
@@ -382,7 +384,7 @@ export function ClipReview({
               </select>
             </Field>
             <Field label="Feedback notes">
-              <textarea
+              <AutoTextarea
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

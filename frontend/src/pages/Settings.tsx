@@ -1,3 +1,4 @@
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useEffect, useState } from "react";
 import { put } from "../api";
 import { objectives, type Settings } from "../types";
@@ -74,7 +75,8 @@ export function SettingsPage({ state }: { state: FactoryState }) {
       >
         <div className="form-grid">
           <Field label="Brand or studio name">
-            <input
+            <AutoTextarea
+              rows={1}
               value={draft.brand}
               onChange={(e) => update("brand", e.target.value)}
               placeholder="Your studio"

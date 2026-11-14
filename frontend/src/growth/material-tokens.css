@@ -1,0 +1,40 @@
+/* Shared material contract for the campaign shell, tools and command palette. */
+.gf-app,
+.gf-operational,
+.gf-command-dialog {
+  --material-font: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+  --material-choice-fill: rgba(255, 255, 255, 0.045);
+  --material-choice-line: rgba(240, 236, 228, 0.7);
+  --material-choice-disabled-line: rgba(226, 196, 157, 0.5);
+  --material-canvas-top: #40515f;
+  --material-canvas-bottom: #594137;
+  --material-canvas:
+    linear-gradient(
+      160deg,
+      var(--material-canvas-top) 0%,
+      #495664 28%,
+      #665347 53%,
+      #724a34 75%,
+      var(--material-canvas-bottom) 100%
+    );
+  --material-pane: rgba(118, 128, 136, 0.22);
+  --material-pane-solid: #4b555d;
+  --material-shell: rgba(35, 43, 49, 0.18);
+  --material-ink: #f3f1ec;
+  --material-secondary: #e8e4dc;
+  --material-metadata: #dedbd3;
+  --material-line: rgba(255, 255, 255, 0.23);
+  --material-divider: rgba(255, 255, 255, 0.12);
+  --material-field-line: rgba(255, 255, 255, 0.24);
+  --material-field: rgba(255, 255, 255, 0.035);
+  --material-hover: rgba(255, 255, 255, 0.055);
+  --material-selected: rgba(255, 255, 255, 0.085);
+  --material-button: #f0ece4;
+  --material-button-ink: #292d2e;
+  --material-focus: #e2c49d;
+  --material-focus-ring: rgba(226, 196, 157, 0.14);
+  --material-warning: #f9e1bf;
+  --material-warning-fill: rgba(163, 109, 55, 0.14);
+  --material-danger: #f0b9ac;
+  --material-command: rgba(71, 79, 87, 0.35);
+}
