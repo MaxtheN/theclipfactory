@@ -1,39 +1,44 @@
 # Growth Factory finish line
 
-## Product flow
+Refreshed 2026-11-14 after the Pearl UI merge into `master` (`5e6c6a0`). Current
+submission preparation and claim boundaries: [submission guide](submission/README.md)
+and [evidence ledger](submission/evidence.md).
 
-Set audience and goal once. Upload footage, inspect agent work, review real cuts and approve the exact file. Results connects an explicit account, tracks an existing post, collects its metrics after three or six days and generates a bounded new draft. Library retains sources, revisions and exports.
+## The product
 
-## Implemented on our feature branch
+A Mac growth department with two connected loops: source-backed content becomes
+reviewed drafts and evidence-led creative decisions; missing editing capabilities
+become coding work orders, tested renderer extensions and human-reviewed changes.
 
-- Animated four-step onboarding; daily Factory/Library/Results flow and real production/review/export wiring.
-- Teammate master through dab3066 merged; reviewed fixes preserve exact selected speech for editor/critic, reject invalid scout ranges and release warm models.
-- SQLite persists policies, publication mappings, cumulative snapshots, work leases/backoff, experiments and verified production receipts. Paused or unknown work does not blindly repeat an external effect.
-- Composio adapter verifies exact connected-account/user/configuration, professional Instagram identity, media ownership and provider publication time. Each local clip-to-post mapping requires an explicit human confirmation.
-- Three-/six-day local collection and bounded analyst trigger. One hook or duration change per experiment; active approved strategy remains intact; resulting drafts start unapproved.
-- Learning calls use bounded local context and at most one validation repair. Invalid citations, both-field edits and unchanged edits are rejected. Smaller1.7B failed actual quality contracts;4B with8K context produced a validated source-faithful proposal and real recovered render. See the exact local proof readout; do not call the failed1.7B runs successes.
-- Supabase project nywbjxmratokyplwjjhu has3private metadata tables and7owner RLS policies. Provider rollback isolation checks passed and all test rows were removed. The app still uses SQLite; cloud Auth/sync/hosted workers are not wired.
+## Implemented
 
-## Demo acceptance
+- Brand/website-assisted onboarding, explicit Style rules, account sign-in/offline use.
+- Factory, Library, Results and Brand profile in one Pearl Studio navigation.
+- Local speech transcription; local or configured cloud agent routing; source-grounded moment selection, ranking, captioned 9:16 craft and exact-version review/export.
+- Human-approved Composio publication, Supabase media hosting, durable attempts, captions/covers/accounts, scheduling while open and unknown-outcome reconciliation.
+- Persistent observations, three-/six-day collection while open, cited bounded proposals, unapproved revised drafts and Strategist simulation.
+- Builder work orders, isolated extension generation, checks/sample render and explicit review/PR flow. A recorded temporary-clone build passed; its extension was not merged.
+- Library source/clip deletion, retention explanations, source cleanup and autopilot activation after style approval.
 
-1. Real source with timestamps → playable9:16captioned draft and checksum.
-2. Review/exact-file approval and export; agent quality alone never grants publication permission.
-3. Exact Instagram identity/post and traceable observation window; sample metrics clearly labeled.
-4. Analyst cites the saved snapshot, changes one concrete field or abstains with a reason.
-5. Real changed render exposes parent/source/base/experiment/job/hash and remains unapproved until review.
-6. Restart/reconcile recovers saved work and never duplicates an unknown render submission.
-7. Report elapsed time, human intervention minutes, direct cost with exclusions and reviewer acceptance. Audience growth/ROAS require real observations and attribution; no manufactured winner.
+## Live acceptance still required
 
-## Remaining live gates
+1. Generate fresh clips with intact speech assets and the reviewed current engine.
+2. Watch/listen to the selected clip; verify meaning, captions, context, hook, framing and audio. A high rank is not acceptance.
+3. Show the exact clip revision, cover and caption to the founder before the first post.
+4. Execute the first approved app publication and verify account/media/attempt state. Reconcile unknown outcomes without blind retries.
+5. Map real observations, cite the saved evidence and review the next changed draft. Distinguish organic observations from causal claims.
+6. Record the actual builder artifacts/checks/sample and retain human integration control.
+7. Complete the current submission fields/video, verify hosted CI and finish team finalization before the event deadline.
 
-- Completed: scoped Composio key saved in native Keychain; @kartik._builds and @kartikey_bihani verified through actual provider readbacks and bound in the app.
-- Provider post listing and owned-media insights passed for both accounts. Still required: map a real published post to its exact approved local clip. The provider can verify account/media/time; it cannot prove remote bytes equal a local MP4.
-- Composio publishing execution remains disabled. Existing direct-Meta publishing is a separate path. A reviewed publish flow needs exact approval, trusted public HTTPS media hosting, durable attempt state and unknown-outcome reconciliation.
-- External precedent research/EvidenceBrief ingestion remains separate work. Source footage analysis is not a cited internet research result.
-- Paid activation/spending, attribution and causal-lift claims are outside this prototype.
-- Local scheduling needs the app running; always-on operation requires an actual hosted worker. Supabase tables do not supply that worker.
-- Cloud authentication, explicit safe field projections, conflict handling, team access, signed/notarized Mac release and single-instance hardening remain required later.
+## Later work
 
-## Team handoff
+Always-on hosted workers, owner-safe state synchronization, team access, broader
+channels, controlled paid experiments and signed/notarized distribution remain
+separate milestones. Auth and publish storage already exist; they do not imply
+that state sync or hosted workers exist. No paid activation/spending or measured
+ROAS lift is claimed.
 
-Kartik owns interface, account integration and the persistent learning/experiment layer. James owns reliable transcription/scouting/clipping. Nur coordinates saved workflow state against explicit contracts. New work stays on kartik/backend-integration and draftPR8; no main/master push or merge. README files remain unchanged.
+The founder authorized branch/master integration and README refresh. The earlier
+“PR8 only / no master / README unchanged” handoff instructions are superseded.
+Preserve other active worktrees and unfinished changes; use exact commits and
+readback when promoting new backend/demo work into submission claims.

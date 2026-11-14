@@ -42,8 +42,16 @@ Production value: elapsed time, human intervention minutes, cost per accepted as
 
 ## Required later
 
-- Public HTTPS asset hosting, production OAuth configuration and per-account grants.
-- Always-on scheduler and operational monitoring; cloud schema is prepared but app Auth/sync/worker deployment remain separate.
+- Implemented: temporary Supabase-approved-media hosting and account sign-in. Still verify the first live publication, production account-connection flow and exact per-account grants.
+- Always-on scheduler, operational monitoring and general cloud state sync; app Auth exists, hosted workers and sync remain separate.
 - Controlled creative comparisons, attribution and conversion measurement.
 - Paid experiment proposals before any separately approved ad execution.
 - Notarized Mac release and single-instance hardening.
+
+## Software-factory loop
+
+The Factory builder translates a missing editing capability into a structured work
+order, isolated renderer extension, tests and sample-render evidence. Human review
+and integration remain explicit. This code-building path is the concrete EVOLVE
+theme fit; the marketing workflow supplies its use case. The recorded temporary-clone
+progress-bar build passed checks but was not merged. See [Factory builder](factory-builder.md).

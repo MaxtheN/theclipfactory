@@ -1,40 +1,55 @@
-# The 12 hardest judge questions
+# Growth Factory — judge questions
 
-**1. How do you know the hook change *caused* better performance?**
-We don't, and the product says so. Organic Instagram data is observational: different posts, times and audiences, and the counts are blended with paid and crossposted reach. That's why each experiment changes one variable, compares against the account's own median baseline, labels every comparison "observational", and needs a human to promote any rule. Causal evidence comes with the brand line, where a paid A/B split randomizes delivery. <!-- docs/learning-loop.md; docs/composio-setup.md "Attribution is not_separated" -->
+Current submission baseline: the integrated Pearl Studio app. These answers describe implemented mechanisms separately from live proof and remaining launch gates. Recheck the [engineering handoff](../HANDOFF.md) and final submission evidence before presenting.
 
-**2. Then what does the loop actually prove today?**
-Execution, not outcomes. Here's the chain we verified: a real post maps to an exact approved clip. A real provider snapshot is saved. The analyst cites that snapshot and proposes one bounded change. The changed variant is really rendered with lineage and starts unapproved. Audience growth is a separate claim, and we don't make it. <!-- docs/finish-line.md "Demo acceptance" -->
+**1. How does this fit “software builds software”?**
 
-**3. Why local models instead of GPT or Claude?**
-There are three reasons. Privacy: unreleased episodes and transcripts never leave the Mac. Cost: no per-token bill, so watching a whole multi-hour source scene by scene costs nothing at the margin. Control: grammar-constrained output and deterministic repair. The trade-off is capability and memory, which is why the code does the measuring and a bounded 4B model only chooses and describes.
+The Factory builder is an implemented code-producing workflow. A missing editing capability becomes a structured work order. After a person starts it, a builder works on an isolated Git branch, writes a renderer extension and tests, runs static checks and a sample render, and returns a reviewable diff and receipts. The documented `progress_bar` build passed 12 generated tests and the sample render in a temporary clone. Nothing from that build was pushed or merged. This is the concrete software-building mechanism; content production is its use case. [Factory builder](../factory-builder.md)
 
-**4. A 4B model is small. Is the quality good enough?**
-Our tests show 4B is the floor. The 1.7B model fit in memory but failed our handoff and quality contracts, and we record those runs as failures. 4B with an 8K context produced a validated, source-faithful proposal, and a 90-second source produced a complete, critic-checked 15.1-second clip in 119.2 seconds. Editorial acceptance is still a human judgement. <!-- docs/learning-loop.md; docs/demo-acceptance.md -->
+**2. What is Growth Factory beyond that builder?**
 
-**5. What does a clip cost? Is this BYOK?**
-Inference has no per-call API cost because it runs on your hardware. The only external service is Composio for Instagram reads, and that uses your own project key, stored in macOS Keychain. We haven't published a fully loaded cost per accepted clip. The acceptance plan tracks elapsed time, human minutes, direct cost with exclusions, and reviewer acceptance against a manual baseline before we claim any saving. <!-- docs/finish-line.md item 7; docs/composio-setup.md -->
+An AI growth department for Mac, starting with video and Instagram. Brand direction informs source analysis, editing, review and publication preparation. Post evidence can lead to a proposed next experiment and versioned Style rules. The product connects these decisions rather than treating every clip as an isolated prompt. Broader commerce, channels and paid optimization remain roadmap work. [Product direction](../product-roadmap.md)
 
-**6. What happens if the laptop closes?**
-Nothing is lost, and nothing is duplicated. Work, leases and receipts live in SQLite. Due measurements catch up when the app reopens. An unknown render submission is reconciled against exactly one saved job and never blindly resubmitted. Always-on collection needs a hosted worker, which is on the roadmap. The Supabase schema alone isn't a worker. <!-- docs/learning-loop.md; docs/finish-line.md -->
+**3. Does the builder deploy its own code?**
 
-**7. How is this different from Opus Clip or other AI clippers?**
-They stop at the clip. We close the loop: the clip maps to a real post, the post becomes a snapshot, the snapshot leads to one cited change, and the change becomes a rendered next draft and a proposed Style rule, all with lineage. We also watch every scene with a vision model instead of just reading a transcript, run locally, and require human approval of the exact file. The clipping is the entry point. The moat is account-specific creative memory.
+No. It prepares code, tests and a sample for review. Generated code is constrained and checked before execution; the running app does not import the builder's unreviewed worktree. A human reviews and integrates a change, and the extension loader checks the committed code before making it available. The recorded build proves generation and checks, not automatic deployment or a merged production feature. [Builder checks and integration](../factory-builder.md)
 
-**8. Who is the enterprise buyer?**
-First, podcast networks and media teams with a backlog of long-form content and a small social team. They need volume and a defensible record of what was approved and why. Next, D2C brands, through the brand line (catalog → formats → paid tests → ROAS). The buyer is whoever owns content performance: a head of social or a digital media head. The audit trail (who approved which exact bytes, on what evidence) is what enterprise compliance asks for.
+**4. What has actually been proven?**
 
-**9. What about data privacy?**
-Footage, transcripts and model calls stay on the Mac. Credentials sit in Keychain, never in SQLite or Git. Composio has four read-only Instagram tools, and publishing tools are rejected. The cloud schema holds 3 owner-private tables under 7 forced RLS policies, with no service-role key in the app. Syncing anything requires a reviewed field-level projection that excludes credentials, local paths, media and raw logs. App sync is not yet enabled. <!-- docs/cloud-state.md; docs/composio-setup.md -->
+The repository records real source-backed clip renders, provider account/insight readbacks and a real builder code/test/sample-render run. These are separate evidence items. The first app-initiated Instagram publication and its complete post → aged metrics → changed draft rehearsal remain a live gate until verified. Unit tests, rendered media, provider reads and synthetic simulation establish different things; none alone proves audience growth. [Engineering handoff](../HANDOFF.md), [render evidence](../engine.md), [builder evidence](../factory-builder.md)
 
-**10. How does this scale beyond one laptop?**
-Today it's deliberately one Mac, one heavy lane and serial inference. To scale: hosted workers for collection and learning, cloud sync over the existing RLS schema with conflict and version handling, team membership, and optionally hosted inference for teams that accept it. The ledger, lineage and evidence model don't change. Only where the workers run changes.
+**5. Does everything run locally?**
 
-**11. Why not auto-publish? Isn't that the point of automation?**
-Publishing is irreversible and public, and Instagram's publish API has no idempotency key. A timeout after a write is an unknown outcome. Safe publishing needs exact approval, public HTTPS hosting, a durable claim before the write, and reconciliation. We documented that design but didn't ship a half-version of it. Automation here covers the expensive parts: finding moments, rendering, measuring and proposing. <!-- docs/composio-setup.md "Later: approved publishing handshake" -->
+The Mac app runs its local service and SQLite execution state; Whisper transcription and supported local model inference are available. Optional cloud routing uses the configured provider and may send selected text or still frames. Approved publishing uploads the media so Instagram can fetch it. We show the chosen route and do not claim universal on-device privacy. [Model routing](../HANDOFF.md), [publishing](../instagram-publishing.md)
 
-**12. Is the Strategist real or a slide?**
-The code exists and is being integrated: three layers (craft, moment selection, campaign), a deterministic Beta-Bernoulli confidence ledger, and a seeded explore/exploit portfolio with a 25% explore share. The model only names beliefs from a fixed vocabulary and writes the rationale. In the demo it runs in a labelled Simulation on synthetic posts, because a single account doesn't yet have enough measured posts for real beliefs to leave "testing" (minimum 3 matching posts). <!-- clip_factory/strategist.py constants -->
+**6. What does it cost?**
 
-**Bonus: is this "AI learning" just prompt stuffing?**
-It's policy memory, not weight training. It's a versioned, human-approved creative policy plus a bounded, deterministic digest of evidence, cited by ID. That makes it inspectable and reversible, and nothing changes without a person approving it.
+Local inference avoids a per-call model API charge but still uses hardware, time, memory and power. Optional cloud calls have usage costs, and connected services have their own limits. The documented builder run cost $0.0535 as reported by its provider; that is one run, not a forecast or a fully loaded cost per accepted asset. We have not established an agency-savings or cost-per-customer claim. [Recorded builder run](../factory-builder.md), [resource policy](../runtime-resource-policy.md)
+
+**7. How do you know an edit caused better performance?**
+
+We do not infer causality from organic post comparisons. Audiences, posting times and distribution differ. The learning system preserves evidence and uncertainty, compares compatible account-specific observations, and proposes bounded changes for review. Synthetic outcomes illustrate the decision process, not audience lift. Controlled paid experimentation is a future direction and would still need an appropriate experimental design. [Learning contract](../learning-loop.md), [roadmap](../product-roadmap.md)
+
+**8. What do the quality scores mean?**
+
+The engine ranks candidates and separately checks technical/review readiness. These scores help triage drafts; they are not predicted views, a guarantee of editorial quality or permission to publish. A critic pass never substitutes for human approval of the saved version. Unknown or failing checks stay visible; a supported quality override is an explicit recorded decision. Do not claim the newer experimental scoring backend is part of the submitted build until it lands. [Engine](../engine.md), [pre-post gate](../instagram-publishing.md)
+
+**9. What prevents the agents from publishing or spending freely?**
+
+Production and learning prepare drafts and proposals. The posting flow requires an approved clip/version, an explicit verified destination and a deliberate publication action; it records attempt state before external writes. Uncertain outcomes require reconciliation rather than a blind retry. Scheduling requires the app to be open, and overdue work needs attention. No paid activation or spending is part of this demo. Implemented safeguards still need the first real publishing rehearsal. [Publishing state machine](../instagram-publishing.md), [execution boundaries](../autonomous-marketing-factory.md)
+
+**10. What happens when the Mac closes or a provider fails?**
+
+SQLite retains saved jobs, evidence and attempt receipts. Due local work can be recovered when the app reopens; ambiguous external writes are held for reconciliation. This is recovery behavior, not an absolute promise that every failure is lossless. Collection while the Mac is closed needs a hosted worker, which remains later work. [Learning and recovery](../learning-loop.md), [publishing recovery](../instagram-publishing.md)
+
+**11. How is “learning” different from retraining a model?**
+
+Here learning means evidence-backed policy memory: saved observations, proposed experiments and versioned creative rules. A human decides whether a proposal becomes active. Model weights are not retrained by the app, a simulation does not become a real observation, and a higher quality score does not prove business improvement. [Strategist](../strategist.md), [learning loop](../learning-loop.md)
+
+**12. What remains before a public launch?**
+
+A fresh-user rehearsal, the first approved app publication and mapping, and an inspectable real feedback cycle; independent-account connection verification and provider permissions; distribution/release hardening; and, later, cloud state sync, hosted workers and team access. Growth Factory sign-in is implemented, but that is separate from Instagram authorization and from cloud synchronization. The app's broader marketing department and paid-media vision are not all shipped. [Current handoff and gates](../HANDOFF.md), [Instagram connection requirements](../instagram-connect.md), [product roadmap](../product-roadmap.md)
+
+## Disclosure reminders
+
+Use the submission's final work/pre-event disclosure and tool/license list. Attribute dependencies and third-party media. Never show credentials, private account identifiers or unredacted provider payloads. Keep every simulation label visible, and identify prepared historical proof as prepared historical proof.

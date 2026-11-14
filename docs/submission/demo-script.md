@@ -1,35 +1,41 @@
-# 3-minute live demo script
+# Growth Factory — live demo script
 
-Rule for the whole demo: say "real" only about real things. Anything synthetic is on screen under a SIMULATION banner, and you say the word out loud.
+Working edit target: **2 minutes**. This is an editorial target, not a claimed event duration rule. Confirm the submission dashboard before recording or exporting.
 
-## Pre-demo checklist (T-30 min)
+**Lead with software building software.** Growth Factory is an AI growth department for Mac; its content workflow exposes missing editing capabilities, and its Factory builder turns an explicit request into a code change, tests and a sample render for human review. A chatbot description or a marketing-only content demo does not show that mechanism.
 
-- [ ] **Memory.** Quit Chrome, Slack, Docker, IDEs and any other Ollama or MLX processes. In Activity Monitor, memory pressure should be green, with at least 6 GiB free plus the model weights plus 3 GiB. The admission guard holds below max(6 GiB, weights + 3 GiB). <!-- docs/runtime-resource-policy.md -->
-- [ ] Plug in power. Turn on Do Not Disturb. Disable sleep.
-- [ ] **App on real data.** Open the channel with a real episode already imported and storyboarded, and at least one approved, rendered clip with a checksum.
-- [ ] **Signed in** with the Supabase email+password account. Composio key present (Settings shows the Keychain key).
-- [ ] **Verified Instagram account bound** (e.g. @kartik._builds), visible in Results.
-- [ ] **A real post tracked and mapped to its exact approved clip**, ideally published more than 3 days ago so a real scheduled snapshot exists. If not, confirm the **Measure now (demo — window not elapsed)** button is available on that publication.
-- [ ] One learning experiment already completed, with a rendered unapproved variant, in case the live analyst run is held.
-- [ ] Warm Ollama `qwen3-vl:4b` with one trivial run so the first call isn't a cold load.
-- [ ] Backup screen recording of the full flow, one tap away.
-- [ ] A second episode or a 90-second clip queued for the live "Find clips" beat. Use something short. Do not live-run the full 85-minute source.
+## Prepare before recording
 
-## Beat sheet
+- Use the current Pearl Studio app: **Factory / Library / Results / Brand profile**. Runtime and model controls are in **Brand profile → Advanced → Engine & models**; ⌘K opens quick actions.
+- Prepare one real source-backed clip with playable media, captions and its saved review/quality details. A browser sample-data preview is useful for UI review, not render proof.
+- Prepare the recorded Factory builder `progress_bar` result: generated diff, test log and sample render. The documented live run used a temporary clone, passed 12 generated tests and the sample render, and was **not pushed or merged**. Keep those qualifications visible.
+- Locate **Results → Factory upgrades** (also reachable from the Factory map). If the live capability request is a demo trigger, retain its demo label. Do not present it as a request inferred from a real customer's results.
+- Prepare source footage and model/runtime readiness in advance. Show the chosen local/cloud routing truthfully. Cloud inference may send selected text or still frames to the configured provider; publishing uploads approved media for Instagram to fetch.
+- Keep credentials, session values, private account identifiers and raw provider payloads out of frame. Confirm every external action separately; a recording checklist does not authorize publishing, paid work, building or pushing new code.
+- Keep a backup recording and artifact views ready. If a model or provider is held, show the actual recorded state and use prepared evidence; do not invent progress.
 
-| Time | On screen | Say | Real / Sim | Fallback |
-|---|---|---|---|---|
-| 0:00–0:20 | Notebook sketch, then the app's Factory screen | "Every podcast has a dozen great clips that never get posted, and when clips do go out, nobody turns the numbers into the next edit. Growth Factory is a marketing team on your Mac that makes the clips *and* learns from your own posts." | — | — |
-| 0:20–0:50 | Factory: click **Add episode** / **Find clips** on the short source. The stage tracker runs Listen → Watch → Pick moments → Render. Open *What the factory saw*. | "Everything runs locally: Whisper transcribes, a 4B vision model watches every scene, and FFmpeg measures and renders. The models describe and the code measures. Clip timestamps come from scene IDs the agent cites, never from numbers it makes up." | REAL | **Memory hold:** the guard shows "held: memory pressure". Say: "That's on purpose. It refuses to run rather than crash your laptop." Then cut to the prepared episode that already has clips. **Model/provider error:** open the Production log, show the recorded error, and move to the prepared clips. |
-| 0:50–1:20 | Studio review: big player on a prepared clip. Open **Details** to show the agent ledger: footage analyst → strategist → editor → critic, with findings and checksum. | "A team of agents (producer, footage analyst, strategist, editor, critic) hand off through strict schemas. The critic checks claims against what was actually said. Its pass is *not* approval. I approve this exact file." Click **Approve**. | REAL | Player stalls: open the clip in Library → Clips instead. |
-| 1:20–1:50 | Results: the verified Instagram account, then the tracked post with its mapping to the approved clip and its metric snapshot. | "This is my real Instagram, verified through Composio with read-only access. I posted this clip myself, and the app knows which approved file it was because I confirmed it. Three days later it saved this snapshot. These are real numbers from the provider, never summed, and unknowns stay unknown." | REAL (badge says `demo_override` if Measure now was used) | **Composio/provider error:** the error banner is bounded, and no provider text leaks. Say "provider read failed, nothing fabricated" and show the existing saved snapshot. If you use **Measure now**, say: "This button only skips the wait. The read is real and the record is badged as early." |
-| 1:50–2:25 | Results → **What we've learned**: the account baseline, the experiment (hook before → after, cited snapshot ID, limitations), the rendered variant (unapproved, with parent/experiment/hash lineage) and the proposed Style rule. | "The analyst compares this post with *my own* account's median. It can change exactly one thing, the hook or the duration, and it must cite the snapshot, or it abstains. Here it rewrote the hook, and the app actually rendered the new version. It's unapproved, and the matching Style rule waits for me." | REAL (prepared earlier if the live analyst was held) | **Analyst held or timed out:** show the completed prepared experiment and say "this one ran yesterday on the same code path". **Analyst abstains:** that's a feature. Read its reason out loud. |
-| 2:25–2:45 | The Strategist panel under the **SIMULATION** banner: beliefs with confidence, the explore/exploit portfolio. | "This is the next layer, still in progress: a Strategist that tracks beliefs like 'question hooks beat my baseline' with deterministic confidence, and keeps 25% of clips exploring. This is a **simulation on synthetic data**, labelled as such, so you can see how it reasons before it has enough real posts." | **SIMULATION** | If the panel isn't merged or stable at demo time, skip it and say it in one line over the Results screen. |
-| 2:45–3:00 | Back to the sketch, right page: the brand line. | "Next is the brand line: paid ads, real A/B splits, ROAS by format. That's where 'what worked' becomes causal instead of observational. Today: your podcast, your Mac, your numbers. Thank you." | — | — |
+Sources: [Factory builder](../factory-builder.md), [current engineering handoff](../HANDOFF.md), [publishing](../instagram-publishing.md), [model resource policy](../runtime-resource-policy.md).
 
-## Lines never to say
+## Two-minute beat sheet
 
-- "It grew my audience", "went viral", "X% lift", or "ROAS". None of that is measured.
-- "It posts for you." Publishing is human. Composio is read-only.
-- "Six agents in parallel." There is one shared model on a serial heavy lane.
-- "Strategist is shipped." It is in progress unless that has changed by demo day.
+| Time | Show | Say | Evidence boundary |
+| --- | --- | --- | --- |
+| 0:00–0:15 | Pearl Factory, then the Factory map | “Growth Factory is an AI growth department for Mac. Agents turn brand direction into content—but when the factory lacks an editing capability, another agent can build the software it needs.” | Product vision; no growth claim. |
+| 0:15–0:30 | Factory upgrades: the `progress_bar` request and its work order | “Here the factory needs a progress bar. The request becomes a bounded work order: one optional renderer extension, explicit constraints and acceptance checks.” | If created by the demo trigger, say “This is a labeled demo request.” |
+| 0:30–1:00 | Actual builder result: code diff → 12 generated tests → sample render with and without the bar | “A builder worked in an isolated Git worktree. It wrote the extension and tests, passed static checks, and rendered a sample that proves the frames changed. This recorded build succeeded; the change is waiting for human review. It was not automatically merged or shipped.” | Use the documented real build artifacts. A diagram alone is not execution proof. |
+| 1:00–1:20 | A real clip in Studio, then quality and version details | “The use case is a connected content workflow. Speech and source analysis guide the cut; FFmpeg renders the draft. Ranking and technical checks help review, but I approve the exact version.” | Real media only for a real-render claim. A score is not predicted engagement. |
+| 1:20–1:40 | Prepare your post, then Results → Insights | “The app prepares the cover, caption, destination and timing. Publication needs my approval. Account-specific results can inform a proposed next edit, and the active rules change only after review.” | Publishing is implemented; the first real app-initiated post and its full live feedback cycle remain an outstanding rehearsal gate until verified. Do not click the publish CTA merely for the video. |
+| 1:40–1:52 | Strategist simulation, with its full label visible | “This is simulation on synthetic post data. It shows how evidence can become a proposed next experiment; it is not measured audience improvement.” | Keep **SIMULATION — synthetic data** visible. Skip this beat if the labeled mode or evidence is unavailable. |
+| 1:52–2:00 | Return to the code/test/render result and logo | “One factory creates the content. Another builds a reviewed capability the factory was missing. Growth Factory connects both, with people controlling what ships.” | Do not imply the generated extension was merged. |
+
+## Fallbacks and lines to avoid
+
+- If builder artifacts are unavailable, show the architecture and state that the recorded build cannot be inspected. Do not substitute a fake test log or claim theme-fit execution from the UI alone.
+- If live production is slow or held, show its recorded job and switch to a clearly identified prepared real render. Short video edits may compress waiting, never conceal a failed job.
+- If there is no real app post or aged metric snapshot, say so. The synthetic simulation remains visibly separate from real account readbacks and render receipts.
+- Never claim “guaranteed growth,” “causal lift,” “zero cost,” “everything stays local,” “the model trains itself,” or “the code ships itself.”
+- Do not describe the unfinished newer scoring/demo-loop backend as landed until its owning agent has committed and verified it.
+
+## After the rehearsal
+
+Record what was actually shown: application commit, builder artifact provenance, clip/version, real versus synthetic screens, and any skipped live gates. Use that evidence to update the final submission copy. Do not turn a planned demo beat into a completion claim.
