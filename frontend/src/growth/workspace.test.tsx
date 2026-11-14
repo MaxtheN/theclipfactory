@@ -11,6 +11,10 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { previewRequest, resetPreview } from "./previewApi";
 import type { Campaign, Clip, Job, Profile, StrategyVersion } from "../types";
 
+// Full-app journeys traverse persistent panels and async saves. Give these
+// integration tests a bounded CI budget; unit files keep Vitest's 5-second default.
+vi.setConfig({ testTimeout: 15_000 });
+
 vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
   const { previewRequest: request } = await import("./previewApi");

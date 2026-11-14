@@ -19,6 +19,10 @@ import {
 import type { Campaign, Clip, Job, Profile } from "../types";
 import { previewRequest, resetPreview } from "./previewApi";
 
+// These full-app journeys include async saves and the finite launch handoff.
+// Bound shared-runner time here; unit files keep Vitest's 5-second default.
+vi.setConfig({ testTimeout: 15_000 });
+
 vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
   const { previewRequest: request } = await import("./previewApi");
