@@ -1266,3 +1266,46 @@
     transform: none !important;
   }
 }
+
+/* Library Clips tab: the same 2-up card grid as Episodes and the wall (1 under 720px). */
+.gf-app .gf-library-edits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--gf-s5);
+}
+@media (min-width: 1600px) {
+  .gf-app .gf-library-edits { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .gf-app .gf-library-edits { grid-template-columns: minmax(0, 1fr); gap: var(--gf-s4); }
+}
+.gf-app.gf-flow-app .gf-library-edit,
+.gf-app .gf-library-edit {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--gf-card-fill);
+  border: 1px solid var(--gf-card-line);
+  border-radius: var(--gf-radius);
+  box-shadow: var(--gf-card-shadow);
+}
+.gf-app .gf-library-edit .gf-library-edit-art {
+  justify-self: center;
+  width: auto;
+  height: min(440px, 60vw);
+  aspect-ratio: 9 / 16;
+  margin-top: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.gf-app .gf-library-edit-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  text-align: left;
+}
