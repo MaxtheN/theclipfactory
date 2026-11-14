@@ -596,7 +596,8 @@ class TeamEngine:
                 moment = Moment.model_validate({
                     "start": candidate["start"],
                     "end": candidate["end"],
-                    "summary": candidate.get("reason") or candidate.get("hook"),
+                    # Reuse timing, not another campaign's creative metadata.
+                    "summary": "Previously analyzed source range; reassess its current source evidence.",
                     "evidence_refs": [
                         ref for ref, item in evidence.items()
                         if (

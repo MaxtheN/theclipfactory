@@ -409,6 +409,7 @@ def test_rejected_footage_can_only_reuse_same_source_time_grounded_analysis(harn
     reused = next(t for t in run["tasks"] if t["role"] == "reuse_footage")
     assert reused["kind"] == "tool" and reused["status"] == "completed"
     assert reused["output"]["moments"][0]["evidence_refs"] == ["frame:0", "frame:1"]
+    assert analysis["candidates"][0]["reason"] not in json.dumps(harness.models.calls[3]["data"])
     assert len(harness.rendered) == 1
     assert not harness.store.all("clips")[0]["approved"]
 
