@@ -1,5 +1,5 @@
 import { AutoTextarea } from "../components/AutoTextarea";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../api";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -17,6 +17,31 @@ import { objectives, type BrandKit, type Campaign, type Profile } from "../types
 import { campaignGoalBody } from "./learningState";
 import { CampaignBriefEditor } from "./CampaignBrief";
 import { sameBrief } from "./briefModel";
+import {
+  briefFromDraft,
+  editableFrom,
+  statusLine,
+  websiteBriefApi,
+  type Research as SiteResearch,
+} from "./websiteBriefApi";
+
+/** The brand's website, remembered on this Mac (the backend brand has no URL field). */
+const websiteKey = (profileId: string) => `gf-brand-website:${profileId}`;
+export function rememberWebsite(profileId: string, url: string) {
+  try {
+    if (url.trim()) localStorage.setItem(websiteKey(profileId), url.trim());
+  } catch {
+    /* preference only */
+  }
+}
+function storedWebsite(profileId: string) {
+  try {
+    return localStorage.getItem(websiteKey(profileId)) || "";
+  } catch {
+    return "";
+  }
+}
+type SiteProposal = { name: string; audience: string; voice: string };
 
 /** Human-readable labels for the existing backend objective enum. */
 export const objectiveLabels: Record<(typeof objectives)[number], string> = {
@@ -154,6 +179,19 @@ export function Setup({
       "Preserve the speaker's meaning. Keep captions readable.",
   );
   const [creative, setCreative] = useState(profile?.creative_preferences || "");
+  const [website, setWebsite] = useState(() =>
+    profile ? storedWebsite(profile.id) : "",
+  );
+  const [reading, setReading] = useState<SiteResearch | null>(null);
+  const [siteError, setSiteError] = useState("");
+  const [proposal, setProposal] = useState<SiteProposal | null>(null);
+  const siteLive = useRef(true);
+  useEffect(
+    () => () => {
+      siteLive.current = false;
+    },
+    [],
+  );
   // Brand kit: sent only when it already exists or is edited here.
   const savedKit = profile?.brand_kit || null;
   const [kitEdited, setKitEdited] = useState(false);
@@ -397,6 +435,46 @@ export function Setup({
     }, "Brand created. Save goals to share them with it. No social account was connected.");
   }
 
+  /** Reads the website again and shows what would change; nothing is applied until accepted. */
+  async function rereadWebsite() {
+    const url = website.trim();
+    if (!url || reading) return;
+    setSiteError("");
+    setProposal(null);
+    try {
+      let run = await websiteBriefApi.start(url);
+      setReading(run);
+      for (let i = 0; run.status === "running" && i < 240; i++) {
+        await new Promise((done) => setTimeout(done, 1000));
+        if (!siteLive.current) return;
+        run = await websiteBriefApi.get(run.id);
+        setReading(run);
+      }
+      if (!siteLive.current) return;
+      if (run.status !== "done" || !run.draft)
+        throw new Error(run.error || "We couldn't read that website. Check the address and try again.");
+      const result = briefFromDraft(editableFrom(run.draft), run.draft);
+      if (profile) rememberWebsite(profile.id, url);
+      setProposal({
+        name: result.name || brandName,
+        audience: result.audience || audience,
+        voice: [result.voice, ...result.boundaries].filter(Boolean).join("\n") || voice,
+      });
+    } catch (error) {
+      if (siteLive.current) setSiteError(message(error, "The website could not be read."));
+    } finally {
+      if (siteLive.current) setReading(null);
+    }
+  }
+  function acceptProposal() {
+    if (!proposal) return;
+    setBrandName(proposal.name);
+    setAudience(proposal.audience);
+    setVoice(proposal.voice);
+    setProposal(null);
+    edited();
+  }
+
   if (!campaign)
     return (
       <Empty title="Nothing open yet" icon="settings">
@@ -429,6 +507,92 @@ export function Setup({
             />
           )}
         </Field>
+        <div className="gf-website-row">
+          <Field label="Website" hint="Optional. We read public pages to draft your brand.">
+            {(id) => (
+              <input
+                id={id}
+                type="url"
+                inputMode="url"
+                maxLength={500}
+                placeholder="https://yourbrand.com"
+                value={website}
+                onChange={(e) => {
+                  setWebsite(e.target.value);
+                  setSiteError("");
+                }}
+                onBlur={() => profile && rememberWebsite(profile.id, website)}
+              />
+            )}
+          </Field>
+          <button
+            type="button"
+            className="gf-button secondary compact"
+            disabled={!website.trim() || !!reading || w.busy}
+            onClick={() => void rereadWebsite()}
+          >
+            <Icon name="refresh" size={14} />
+            {reading ? "Reading…" : "Re-read website"}
+          </button>
+        </div>
+        {reading && (
+          <p className="gf-website-progress" role="status">
+            <span className="gf-skeleton is-dot" aria-hidden="true" />
+            {reading.events.length
+              ? statusLine(reading.events[reading.events.length - 1], website)
+              : "Opening your website…"}
+          </p>
+        )}
+        {siteError && (
+          <p className="gf-help" role="alert">
+            {siteError}
+          </p>
+        )}
+        {proposal && (
+          <section className="gf-website-diff" aria-label="Changes from your website">
+            <h3>From your website</h3>
+            <dl>
+              {(
+                [
+                  ["Brand name", brandName, proposal.name],
+                  ["Who it's for", audience, proposal.audience],
+                  ["Voice & boundaries", voice, proposal.voice],
+                ] as const
+              ).map(([label, before, after]) => (
+                <div key={label} style={{ display: "contents" }}>
+                  <dt>{label}</dt>
+                  <dd>
+                    {before.trim() === after.trim() ? (
+                      <span>No change</span>
+                    ) : (
+                      <>
+                        {before && <del>{before}</del>}
+                        <ins>{after}</ins>
+                      </>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <footer>
+              <button
+                type="button"
+                className="gf-button ghost compact"
+                onClick={() => setProposal(null)}
+              >
+                Keep mine
+              </button>
+              <button
+                type="button"
+                className="gf-button compact"
+                onClick={acceptProposal}
+              >
+                <Icon name="check" size={14} />
+                Use these
+              </button>
+            </footer>
+          </section>
+        )}
         <Field label="Who it's for">
           {(id) => (
             <AutoTextarea
@@ -482,7 +646,6 @@ export function Setup({
             </button>
           )}
         </div>
-        <CloudAccountRow />
       </FieldGroup>
       <FieldGroup title="Brand kit">
         <div className="gf-form-pair">
@@ -768,6 +931,12 @@ export function Setup({
       className="gf-setup-grid gf-channel-settings-grid"
       id={part === "campaign" ? "gf-goals" : undefined}
     >
+      {part === "brand" && (
+        <section className="gf-profile-account" aria-label="Your account">
+          <h2>Account</h2>
+          <CloudAccountRow showLocal />
+        </section>
+      )}
       <section
         className="gf-card gf-brief"
         aria-label={part === "brand" ? "Brand profile form" : "Goals & brief form"}
