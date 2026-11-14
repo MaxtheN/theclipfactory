@@ -321,7 +321,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         # Per-job scratch (extracted audio, stills, worker requests) does not outlive its job.
         app.state.jobs.cleanup = lambda job: shutil.rmtree(root / "work" / job, ignore_errors=True)
         app.state.models = Models(root, app.state.jobs)
-        app.state.storyboards = Storyboards(root, store, app.state.jobs, app.state.models, source_path)
+        # Scene descriptions follow the clip-agent route: local by default, Claude via OpenRouter only when
+        # the creator turned on cloud agents (and still frames, for vision).
+        app.state.storyboards = Storyboards(
+            root, store, app.state.jobs, RoutedModels(app.state.models, app.state.llm, "agents"), source_path
+        )
         app.state.team = TeamEngine(
             store,
             app.state.jobs,
