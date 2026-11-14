@@ -308,7 +308,17 @@ def caption_entries(transcript: dict | None, segments: list[dict]) -> list[dict]
                     a, b = max(start, chunk[0]["start"]), min(end, chunk[-1]["end"])
                     text = clean_caption(" ".join(w["text"] for w in chunk))
                     if b > a and text:
-                        local.append({"start": a - start, "end": b - start, "text": text, "words": True})
+                        timed = [
+                            {
+                                "text": clean_caption(w["text"]),
+                                "start": max(a, w["start"]) - start,
+                                "end": min(b, w["end"]) - start,
+                            }
+                            for w in chunk
+                        ]
+                        local.append(
+                            {"start": a - start, "end": b - start, "text": text, "words": True, "timed": timed}
+                        )
             else:
                 a = max(start, number(item.get("start")) or 0.0)
                 b = min(end, number(item.get("end")) or 0.0)
@@ -322,9 +332,13 @@ def caption_entries(transcript: dict | None, segments: list[dict]) -> list[dict]
                 entry["end"] = max(
                     entry["end"], min(entry["start"] + CAPTION_MIN_DISPLAY, following, span_out)
                 )
-            entries.append(
-                {"start": entry["start"] + offset, "end": entry["end"] + offset, "text": entry["text"]}
-            )
+            placed = {"start": entry["start"] + offset, "end": entry["end"] + offset, "text": entry["text"]}
+            if entry.get("timed"):
+                placed["timed"] = [
+                    {"text": w["text"], "start": w["start"] + offset, "end": w["end"] + offset}
+                    for w in entry["timed"]
+                ]
+            entries.append(placed)
         offset += span_out
     return entries
 
@@ -334,6 +348,53 @@ def srt_text(entries: list[dict]) -> str:
         f"{index + 1}\n{stamp(entry['start'])} --> {stamp(entry['end'])}\n{entry['text']}\n"
         for index, entry in enumerate(entries)
     )
+
+
+def ass_stamp(seconds: float) -> str:
+    centiseconds = max(0, round(seconds * 100))
+    return f"{centiseconds // 360000}:{centiseconds // 6000 % 60:02}:{centiseconds // 100 % 60:02}.{centiseconds % 100:02}"
+
+
+def pop_captions(entries: list[dict]) -> str:
+    """Word-by-word captions: the cue stays on screen while the word being spoken lights up.
+
+    Same verbatim words and timings as the plain captions; only the presentation differs. Cues
+    without word timings are shown whole.
+    """
+    lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        "PlayResX: 1080",
+        "PlayResY: 1920",
+        "WrapStyle: 0",
+        "[V4+ Styles]",
+        (
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, "
+            "Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
+            "MarginL, MarginR, MarginV, Encoding"
+        ),
+        "Style: Pop,Arial,78,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,6,2,2,90,90,380,1",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    for entry in entries:
+        words = entry.get("timed") or []
+        if not words:
+            text = entry["text"].upper()
+            lines.append(f"Dialogue: 0,{ass_stamp(entry['start'])},{ass_stamp(entry['end'])},Pop,,0,0,0,,{text}")
+            continue
+        for index, word in enumerate(words):
+            begin = entry["start"] if index == 0 else word["start"]
+            finish = words[index + 1]["start"] if index + 1 < len(words) else entry["end"]
+            if finish <= begin:
+                continue
+            text = " ".join(
+                # The spoken word: warm yellow and slightly larger; the rest stay white.
+                f"{{\\c&H00E5FF&\\fscx112\\fscy112}}{w['text'].upper()}{{\\r}}" if n == index else w["text"].upper()
+                for n, w in enumerate(words)
+            )
+            lines.append(f"Dialogue: 0,{ass_stamp(begin)},{ass_stamp(finish)},Pop,,0,0,0,,{text}")
+    return "\n".join(lines) + "\n"
 
 
 def subtitles(transcript: dict | None, start: float, end: float) -> str:
@@ -793,12 +854,17 @@ def render(
     hdr: bool | None = None,
     crop_width: float | None = None,
     report: bool = True,
+    motion: str = "static",
 ) -> dict:
     """report=False: the caller owns the job's progress line (several clips rendering at once)."""
     output.parent.mkdir(parents=True, exist_ok=True)
     # "fit" and "blur" keep the complete source frame instead of silently cropping subjects/products.
-    if framing not in {"fit", "fill", "blur"} or caption_style not in {"standard", "high_contrast"}:
-        raise WorkError("Unsupported framing or caption style.")
+    if (
+        framing not in {"fit", "fill", "blur"}
+        or caption_style not in {"standard", "high_contrast", "pop"}
+        or motion not in {"static", "push_in"}
+    ):
+        raise WorkError("Unsupported framing, caption style or motion.")
     if not 0 <= float(focus_x) <= 1:
         raise WorkError("Crop focus must be between 0 (left) and 1 (right).")
     if crop_width is not None and not 0.2 <= float(crop_width) <= 1:
@@ -855,7 +921,11 @@ def render(
                 "This FFmpeg build lacks libass subtitles. Install full Homebrew FFmpeg or render without captions."
             )
         # cwd is output directory; filename consists exclusively of generated hexadecimal IDs.
-        if caption_text:
+        if caption_text and caption_style == "pop":
+            pop_file = output.with_suffix(".pop.ass")
+            pop_file.write_text(pop_captions(entries), encoding="utf-8")
+            overlays += f",subtitles={pop_file.name}"
+        elif caption_text:
             # Use output-pixel coordinates instead of libass's small default script canvas.
             font_size = 52 if caption_style == "standard" else 60
             style = (
@@ -881,6 +951,13 @@ def render(
                 encoding="utf-8",
             )
             overlays += f",subtitles={hook_file.name}"
+    # A slow push toward the centre keeps a static shot alive. Applied under the text, which stays put.
+    push = (
+        f",scale=w='trunc(1080*(1+0.07*t/{total:.3f})/2)*2':h='trunc(1920*(1+0.07*t/{total:.3f})/2)*2':eval=frame,"
+        "crop=1080:1920"
+        if motion == "push_in" and len(segments) == 1
+        else ""
+    )
     temporary = output.with_name(output.stem + ".partial.mp4")
     encode = [
         "-r",
@@ -917,7 +994,7 @@ def render(
             "-map",
             "0:a:0?",
             "-vf",
-            layout_for() + overlays,
+            layout_for() + push + overlays,
             *encode,
         ]
     else:
@@ -994,6 +1071,7 @@ def render(
             "caption_style": caption_style,
             "focus_x": float(focus_x),
             "crop_width": float(crop_width) if zoom else None,
+            "motion": "push_in" if push else "static",
             "tone_mapped": tone_mapped,
             "width": actual["width"],
             "height": actual["height"],
@@ -1012,6 +1090,7 @@ def render(
         if not completed:
             srt.unlink(missing_ok=True)
             hook_file.unlink(missing_ok=True)
+            output.with_suffix(".pop.ass").unlink(missing_ok=True)
 
 
 def extract_audio(jobs: Jobs, job_id: str, source: Path, output: Path):

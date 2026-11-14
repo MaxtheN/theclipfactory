@@ -69,6 +69,8 @@ class Settings(Body):
         default="", pattern=r"^(|qwen-small|qwen-large|ollama:[A-Za-z0-9][A-Za-z0-9._:/-]{0,199})$"
     )
     clip_count: int = Field(default=3, ge=1, le=MAX_CLIPS, strict=True)
+    # Making clips again for a video first removes its earlier drafts that nobody approved.
+    replace_drafts: bool = True
 
 
 class SettingsPatch(Body):
@@ -89,6 +91,7 @@ class SettingsPatch(Body):
         default=None, pattern=r"^(|qwen-small|qwen-large|ollama:[A-Za-z0-9][A-Za-z0-9._:/-]{0,199})$"
     )
     clip_count: int | None = Field(default=None, ge=1, le=MAX_CLIPS, strict=True)
+    replace_drafts: bool | None = None
 
 
 class Render(Body):
@@ -101,7 +104,10 @@ class Render(Body):
     format: Literal["vertical"] = "vertical"
     # fit: whole frame on black; blur: whole frame over a blurred copy; fill: crop to fill the screen.
     framing: Literal["fit", "fill", "blur"] = "fit"
-    caption_style: Literal["standard", "high_contrast"] = "standard"
+    # pop: the same verbatim captions, large, with the word being spoken highlighted.
+    caption_style: Literal["standard", "high_contrast", "pop"] = "standard"
+    # push_in: a slow zoom toward the centre under the captions.
+    motion: Literal["static", "push_in"] = "static"
     hook_overlay: bool = False
     # Opening treatment: None keeps the legacy rule (text overlay when hook_overlay and a hook exist).
     opening_treatment: Literal["text_overlay", "cold_open", "none"] | None = None
@@ -124,6 +130,7 @@ PLAN_EXTRAS = {
     "cold_open_end",
     "focus_x",
     "crop_width",
+    "motion",
     "changed_variable",
     *PLAN_CONTEXT,
 }
@@ -960,6 +967,10 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             options["focus_x"] = body.focus_x
         if body.crop_width is not None:
             options["crop_width"] = body.crop_width
+        if body.motion != "static":
+            options["motion"] = body.motion
+        if body.caption_style == "pop":
+            options["caption_style"] = "pop"
         if body.cold_open_start is not None and body.cold_open_end is not None:
             options["cold_open"] = (body.cold_open_start, body.cold_open_end)
             options["has_audio"] = bool(video.get("has_audio"))
@@ -1087,6 +1098,12 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         if metadata.pop("burn_hook", False) and body.hook.strip():
             body.hook_overlay = True
         report = not metadata.pop("parallel", False)
+        # Presentation is a hypothesis too: the swarm varies it across clips and records which was used.
+        treatment = metadata.get("treatment") or {}
+        if treatment.get("captions") in {"standard", "pop"}:
+            body.caption_style = treatment["captions"]
+        if treatment.get("motion") in {"static", "push_in"}:
+            body.motion = treatment["motion"]
         if metadata.get("strategy_snapshot"):
             direction = metadata["strategy_snapshot"]
             body.framing = direction["framing"]
@@ -1376,6 +1393,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             if preflight:
                 models().require(model_id, "llm")
             config = settings()
+            cleared = clear_drafts(identifier) if config["replace_drafts"] else 0
             if campaign_snapshot:
                 profile = campaign_snapshot["profile_snapshot"]
                 config.update(
@@ -1391,6 +1409,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 model_id=model_id,
                 team_run_id=run["id"],
                 required_model_ids=dependencies,
+                cleared_drafts=cleared,
             )
             app.state.team.bind_job(run["id"], job["id"])
             return {"job": job, "run": app.state.team.get(run["id"])}
@@ -1584,6 +1603,49 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "blockers": ready,
             "sources": sources,
         }
+
+    def discard_clip(clip: dict):
+        """Remove a clip's files and records. Callers decide whether it may go."""
+        path = root / clip["path"]
+        path.unlink(missing_ok=True)
+        for suffix in [".srt", ".jpg", ".hook.ass", ".pop.ass"]:
+            path.with_suffix(suffix).unlink(missing_ok=True)
+        store.delete("clips", clip["id"])
+        for kind in ["events", "feedback"]:
+            for entry in store.all(kind):
+                if entry["clip_id"] == clip["id"]:
+                    store.delete(kind, entry["id"])
+
+    def clear_drafts(video_id: str) -> int:
+        """Before making clips again, drop this video's earlier factory drafts that nobody kept.
+
+        A draft goes only if it was made by a production run and has not been approved, published,
+        scheduled, exported, rated, or revised into a later version. Hand-made renders stay.
+        """
+        clips = store.all("clips")
+        parents = {c.get("parent_clip_id") for c in clips}
+        kept = (
+            {e.get("clip_id") for e in store.all("exports")}
+            | {f.get("clip_id") for f in store.all("feedback")}
+            | {s.get("clip_id") for s in store.all("schedules")}
+            | parents
+        )
+        cleared = 0
+        for clip in clips:
+            if (
+                clip.get("video_id") != video_id
+                or not clip.get("path")
+                or not clip.get("team_run_id")
+                or clip.get("approved")
+                or clip.get("instagram_media_id")
+                or clip.get("publish_attempt")
+                or clip["id"] in kept
+                or jobs().busy("clip_id", clip["id"])
+            ):
+                continue
+            discard_clip(clip)
+            cleared += 1
+        return cleared
 
     @app.get("/api/team/runs")
     def team_runs():
@@ -1898,13 +1960,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                     "This exact version was exported. It is kept so the export can be verified against it.",
                 )
             source_path(clip).unlink()
-            for suffix in [".srt", ".jpg", ".hook.ass"]:
-                (root / clip["path"]).with_suffix(suffix).unlink(missing_ok=True)
-            store.delete("clips", identifier)
-            for kind in ["events", "feedback"]:
-                for entry in store.all(kind):
-                    if entry["clip_id"] == identifier:
-                        store.delete(kind, entry["id"])
+            discard_clip(clip)
         return {"deleted": identifier, "note": "Deleting locally does not remove published Instagram media."}
 
     @app.post("/api/clips/{identifier}/feedback", status_code=201)

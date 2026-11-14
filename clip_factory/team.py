@@ -1108,11 +1108,21 @@ class TeamEngine:
             }
 
         hooks_burn = " subtitles " in media.filters()
+        # How a clip is presented is tested as well as what it says: treatments rotate across clips.
+        treatments = [
+            {"captions": "pop", "motion": "push_in"},
+            {"captions": "standard", "motion": "static"},
+            {"captions": "pop", "motion": "static"},
+            {"captions": "standard", "motion": "push_in"},
+        ]
         clip_ids, failures, taken = [], [], []
         ideas_found = 0
         state = {"rendered": 0}
 
-        def render(idea: dict, scene: dict):
+        def render(idea: dict, scene: dict, treatment: dict):
+            look = ("word-by-word captions" if treatment["captions"] == "pop" else "plain captions") + (
+                ", slow push-in" if treatment["motion"] == "push_in" else ", static frame"
+            )
             try:
                 result = self.render(
                     job_id,
@@ -1130,7 +1140,8 @@ class TeamEngine:
                             "team_review_status": "not_applicable",
                             "team_findings": [],
                             "hypothesis": idea["hypothesis"],
-                            "reason": f"Hypothesis: {idea['hypothesis'].replace('_', ' ')}.",
+                            "treatment": treatment,
+                            "reason": f"Hypothesis: {idea['hypothesis'].replace('_', ' ')}. Treatment: {look}.",
                             "moment_summary": scene.get("visual") or scene.get("said") or "",
                             "scene_refs": [boards.scene_ref(scene["index"])],
                             "burn_hook": hooks_burn,
@@ -1192,8 +1203,15 @@ class TeamEngine:
                                 continue
                             seen_here.add(idea["hypothesis"])
                             taken.append((start, end))
+                            pending.append(
+                                pool.submit(
+                                    render,
+                                    {**idea, "start": start, "end": end},
+                                    scene,
+                                    treatments[ideas_found % len(treatments)],
+                                )
+                            )
                             ideas_found += 1
-                            pending.append(pool.submit(render, {**idea, "start": start, "end": end}, scene))
                 for future in pending:
                     future.result()
             except BaseException:

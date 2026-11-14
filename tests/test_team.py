@@ -1488,6 +1488,12 @@ def test_swarm_makes_about_a_clip_a_minute_each_on_its_own_hypothesis(harness):
     first = harness.rendered[0]
     assert (first["start"], first["end"], first["hook"]) == (0.0, 15.0, "spectacle at 0")
     assert first["_team"]["hypothesis"] == "spectacle" and first["_team"]["team_review_status"] == "not_applicable"
+    # Presentation rotates across clips: four treatments, each recorded with its clip.
+    looks = [(c["_team"]["treatment"]["captions"], c["_team"]["treatment"]["motion"]) for c in harness.rendered]
+    assert looks[:5] == [
+        ("pop", "push_in"), ("standard", "static"), ("pop", "static"), ("standard", "push_in"), ("pop", "push_in"),
+    ]
+    assert first["_team"]["reason"] == "Hypothesis: spectacle. Treatment: word-by-word captions, slow push-in."
     assert first["_team"]["scene_refs"] == ["scene:0"] and first["_team"]["team_run_id"] == run["id"]
     # No committee: the only model work is one short prompt per stretch.
     assert not harness.models.calls and len(harness.models.batches) == 1

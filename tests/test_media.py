@@ -94,7 +94,7 @@ def sample(tmp_path, request):
 
 @pytest.mark.parametrize(
     "sample,caption_style",
-    [(False, "standard"), (True, "standard"), (True, "high_contrast")],
+    [(False, "standard"), (True, "standard"), (True, "high_contrast"), (True, "pop")],
     indirect=["sample"],
 )
 def test_real_render_preserves_audio_and_truthful_subtitles(tmp_path, sample, caption_style):
@@ -112,7 +112,8 @@ def test_real_render_preserves_audio_and_truthful_subtitles(tmp_path, sample, ca
     try:
         job = jobs.submit("render", lambda identifier: media.render(
             jobs, identifier, source, output, start=0.1, end=0.5, transcript=transcript,
-            caption_style=caption_style))
+            caption_style=caption_style, motion="push_in" if caption_style == "pop" else "static",
+            framing="blur" if caption_style == "pop" else "fit"))
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             final = store.get("jobs", job["id"])
@@ -340,3 +341,26 @@ def test_render_rejects_an_impossible_crop(tmp_path):
             media.render(Mock(), "job", tmp_path / "s.mp4", tmp_path / "o.mp4", start=0, end=1, crop_width=crop)
     with pytest.raises(WorkError, match="framing"):
         media.render(Mock(), "job", tmp_path / "s.mp4", tmp_path / "o.mp4", start=0, end=1, framing="tilt")
+
+
+def test_word_by_word_captions_highlight_the_spoken_word_with_the_same_verbatim_text():
+    transcript = {"segments": [{"start": 10.0, "end": 12.0, "text": "it is {really} good", "words": [
+        {"word": "it", "start": 10.0, "end": 10.3}, {"word": "is", "start": 10.3, "end": 10.6},
+        {"word": "{really}", "start": 10.6, "end": 11.4}, {"word": "good", "start": 11.4, "end": 12.0},
+    ]}, {"start": 13.0, "end": 14.0, "text": "No word timings here"}]}
+    entries = media.caption_entries(transcript, [{"start": 10.0, "end": 15.0}])
+    script = media.pop_captions(entries)
+    events = [line.split(",,0,0,0,,", 1) for line in script.splitlines() if line.startswith("Dialogue:")]
+    # One event per spoken word; the cue text is identical each time, only the highlight moves.
+    assert [text.replace("{\\c&H00E5FF&\\fscx112\\fscy112}", "[").replace("{\\r}", "]") for _, text in events] == [
+        "[IT] IS (REALLY) GOOD", "IT [IS] (REALLY) GOOD", "IT IS [(REALLY)] GOOD", "IT IS (REALLY) [GOOD]",
+        "NO WORD TIMINGS HERE",
+    ]
+    assert [head.split(",")[1:3] for head, _ in events] == [
+        ["0:00:00.00", "0:00:00.30"], ["0:00:00.30", "0:00:00.60"], ["0:00:00.60", "0:00:01.40"],
+        ["0:00:01.40", "0:00:02.00"], ["0:00:03.00", "0:00:04.00"],
+    ]
+    # Source braces cannot open an override tag: only the highlight uses them.
+    assert script.count("{") == 2 * 4 and "PlayResY: 1920" in script
+    assert media.srt_text(entries).count("-->") == 2  # the sidecar captions are unchanged
+    assert media.pop_captions([]).count("Dialogue:") == 0

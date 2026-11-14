@@ -960,7 +960,11 @@ def test_swarm_is_the_default_and_turns_one_source_into_many_reviewable_clips(cl
     assert len(clips) == 2 and {c["hypothesis"] for c in clips} == {"question"}  # as scripted
     assert all(c["team_review_status"] == "not_applicable" and c["approved"] is False for c in clips)
     assert sorted((c["start"], c["end"]) for c in clips) == [(5.0, 35.0), (305.0, 335.0)]
-    assert all(c["reason"] == "Hypothesis: question." and c["scene_refs"] for c in clips)
+    assert all(c["reason"].startswith("Hypothesis: question. Treatment: ") and c["scene_refs"] for c in clips)
+    # Presentation is varied across clips and recorded, so results can be compared later.
+    assert sorted(json.dumps(c["treatment"], sort_keys=True) for c in clips) == [
+        '{"captions": "pop", "motion": "push_in"}', '{"captions": "standard", "motion": "static"}',
+    ]
     assert all(isinstance(render["_team"]["burn_hook"], bool) for render in renders)  # the hook goes on screen
     assert len(renders) == 2
     source = client.get("/api/factory").json()["sources"][0]
@@ -969,3 +973,45 @@ def test_swarm_is_the_default_and_turns_one_source_into_many_reviewable_clips(cl
     assert next(s for s in source["stages"] if s["key"] == "render")["detail"] == "2 clips"
     # Swarm clips have no self-check to wait for: plain approval works.
     assert client.put(f"/api/clips/{clips[0]['id']}", json={"approved": True}).status_code == 200
+
+
+def test_making_clips_again_replaces_earlier_drafts_but_keeps_everything_someone_kept(
+    client, monkeypatch, scripted
+):
+    video = upload_mock(client, monkeypatch)
+    root, store = client.app.state.root, client.app.state.store
+
+    def draft(identifier, **fields):
+        (root / "clips" / f"{identifier}.mp4").write_bytes(b"old draft")
+        (root / "clips" / f"{identifier}.jpg").write_bytes(b"cover")
+        return store.put("clips", {
+            "id": identifier, "video_id": video["id"], "path": f"clips/{identifier}.mp4", "approved": False,
+            "team_run_id": "earlier-run", "status": "ready", "instagram_media_id": None, **fields,
+        })
+
+    draft("stale")
+    draft("approved", approved=True)
+    draft("exported")
+    store.put("exports", {"id": "e1", "clip_id": "exported", "folder": "exports/e1", "file": "x.mp4"})
+    draft("published", instagram_media_id="m1")
+    draft("parent")
+    draft("revision", parent_clip_id="parent", approved=True)
+    draft("handmade", team_run_id=None)
+    draft("other-source", video_id="another-video")
+    scripted.outputs = script()
+    install_mock_render(client, monkeypatch)
+    submission = submit(client, video)
+    assert submission["job"]["context"]["cleared_drafts"] == 1
+    assert store.get("clips", "stale") is None
+    assert not (root / "clips" / "stale.mp4").exists() and not (root / "clips" / "stale.jpg").exists()
+    for kept in ["approved", "exported", "published", "parent", "revision", "handmade", "other-source"]:
+        assert store.get("clips", kept) and (root / "clips" / f"{kept}.mp4").exists()
+    terminal_run(client, submission)
+    # Turning the setting off keeps every earlier draft.
+    assert client.patch("/api/settings", json={"replace_drafts": False}).status_code == 200
+    before = {c["id"] for c in store.all("clips")}
+    scripted.outputs = script()
+    again = submit(client, video)
+    assert again["job"]["context"]["cleared_drafts"] == 0
+    terminal_run(client, again)
+    assert before <= {c["id"] for c in store.all("clips")}
