@@ -15,6 +15,7 @@ cp -R frontend/dist/. clip_factory/ui/
 "$PYTHON" -m PyInstaller --noconfirm --clean --windowed --name 'Clip Factory' \
   --osx-bundle-identifier ai.clipfactory.desktop \
   --add-data "$ROOT/clip_factory/ui:clip_factory/ui" \
+  --add-data "$ROOT/clip_factory/inference_worker.py:clip_factory" \
   --collect-all webview --collect-all keyring --collect-all uvicorn \
   --collect-submodules clip_factory --collect-submodules platformdirs \
   --hidden-import clip_factory.app --hidden-import clip_factory.main \

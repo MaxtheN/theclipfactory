@@ -1,16 +1,17 @@
 """Small transactional local store. Credentials never belong here."""
+
 from __future__ import annotations
 
 import json
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def new_id() -> str:
@@ -24,7 +25,9 @@ class Store:
         self.lock = threading.RLock()
         with self.connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
-            db.execute("CREATE TABLE IF NOT EXISTS records (kind TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(kind,id))")
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS records (kind TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY(kind,id))"
+            )
         try:
             self.path.chmod(0o600)
         except OSError:
@@ -45,8 +48,10 @@ class Store:
 
     def put(self, kind: str, item: dict) -> dict:
         with self.lock, self.connect() as db:
-            db.execute("INSERT INTO records(kind,id,data) VALUES (?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data",
-                       (kind, item["id"], json.dumps(item, allow_nan=False)))
+            db.execute(
+                "INSERT INTO records(kind,id,data) VALUES (?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data",
+                (kind, item["id"], json.dumps(item, allow_nan=False)),
+            )
         return item
 
     def patch(self, kind: str, identifier: str, **changes) -> dict:

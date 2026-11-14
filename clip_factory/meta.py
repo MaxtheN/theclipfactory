@@ -380,6 +380,8 @@ class MetaClient:
             data={"media_type": "REELS", "video_url": public_video_url, "caption": caption},
         )
         container_id = _id(result.get("id"))
+        if poll_callback:
+            poll_callback({"container_id": container_id, "status_code": "CREATED", "attempt": 0})
         deadline = time.monotonic() + self.POLL_TIMEOUT
         for attempt in range(1, self.MAX_POLL_ATTEMPTS + 1):
             check_cancel()

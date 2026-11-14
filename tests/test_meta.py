@@ -199,7 +199,7 @@ def test_publish_finished_only_and_callback():
             "id": "50",
             "container_id": "40",
         }
-    assert [event["status_code"] for event in events] == ["IN_PROGRESS", "FINISHED"]
+    assert [event["status_code"] for event in events] == ["CREATED", "IN_PROGRESS", "FINISHED"]
     assert len([r for r in calls if r.url.path.endswith("/media_publish")]) == 1
 
 

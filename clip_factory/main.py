@@ -1,4 +1,5 @@
 """Local desktop entry point; application lifespan owns all pipeline processes."""
+
 from __future__ import annotations
 
 import argparse
@@ -54,8 +55,14 @@ def port_number(value: str) -> int:
     return port
 
 
-def wait_ready(server: uvicorn.Server, thread: threading.Thread, url: str, token: str,
-               stop: threading.Event, timeout: float = 30.0) -> None:
+def wait_ready(
+    server: uvicorn.Server,
+    thread: threading.Thread,
+    url: str,
+    token: str,
+    stop: threading.Event,
+    timeout: float = 30.0,
+) -> None:
     """Check authenticated HTTP readiness without consuming the bootstrap cookie."""
     opener = build_opener(ProxyHandler({}))  # Never send the token through a system proxy.
     deadline = time.monotonic() + timeout
@@ -107,14 +114,21 @@ def main(argv: list[str] | None = None) -> int:
         host = f"[{args.host}]" if family == socket.AF_INET6 else args.host
         url = f"http://{host}:{listener.getsockname()[1]}"
         bootstrap = f"{url}/?boot={token}"
-        server = uvicorn.Server(uvicorn.Config(
-            app, host=args.host, port=args.port, log_level="warning", access_log=False,
-            timeout_graceful_shutdown=10,
-        ))
+        server = uvicorn.Server(
+            uvicorn.Config(
+                app,
+                host=args.host,
+                port=args.port,
+                log_level="warning",
+                access_log=False,
+                timeout_graceful_shutdown=10,
+            )
+        )
         for sig in (signal.SIGINT, signal.SIGTERM):
             previous_handlers[sig] = signal.signal(sig, lambda *_: stop.set())
-        thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]},
-                                  name="clip-factory-server", daemon=True)
+        thread = threading.Thread(
+            target=server.run, kwargs={"sockets": [listener]}, name="clip-factory-server", daemon=True
+        )
         thread.start()
         wait_ready(server, thread, url, token, stop)
         if args.headless:
@@ -127,8 +141,9 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 import webview
 
-                window = webview.create_window("Clip Factory", bootstrap, width=1440, height=960,
-                                               min_size=(900, 640))
+                window = webview.create_window(
+                    "Clip Factory", bootstrap, width=1440, height=960, min_size=(900, 640)
+                )
                 closed = threading.Event()
 
                 def on_closed():
@@ -136,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
                     stop.set()
 
                 window.events.closed += on_closed
+
                 # Signal callbacks only set an event; GUI destruction stays out of signal handlers.
                 def monitor_window():
                     while not stop.wait(0.2):
@@ -147,8 +163,9 @@ def main(argv: list[str] | None = None) -> int:
                 webview.start(monitor_window, private_mode=True)
             except Exception:  # noqa: BLE001 - native backends vary; never expose URL-bearing errors
                 # GUI exceptions can contain the bootstrap URL. Never log those details.
-                raise LauncherError("native window failed; install .[desktop] and retry, "
-                                   "or explicitly launch with --browser") from None
+                raise LauncherError(
+                    "native window failed; install .[desktop] and retry, or explicitly launch with --browser"
+                ) from None
             return 0
         while not stop.wait(0.2):
             if not thread.is_alive():
@@ -157,8 +174,10 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 - redact errors at the process boundary
         # Only our credential-free messages are exposed; app errors may contain secrets.
         message = str(exc) if isinstance(exc, LauncherError) else None
-        print(f"Clip Factory: {message or 'startup failed; check local dependencies and port availability'}",
-              file=sys.stderr)
+        print(
+            f"Clip Factory: {message or 'startup failed; check local dependencies and port availability'}",
+            file=sys.stderr,
+        )
         return 1
     finally:
         stop.set()

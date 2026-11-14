@@ -1,4 +1,5 @@
 """One heavy worker, durable job states, cooperative cancellation, bounded child processes."""
+
 from __future__ import annotations
 
 import os
@@ -8,8 +9,8 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from .store import Store, new_id, now
 
@@ -27,12 +28,18 @@ class Jobs:
         self.store = store
         self.pending: queue.Queue = queue.Queue()
         self.stopping = threading.Event()
-        self.lock = threading.RLock()
+        self.lock = store.lock
         self.cancellations: dict[str, threading.Event] = {}
         for job in store.all("jobs"):
             if job["status"] in {"queued", "running"}:
-                store.patch("jobs", job["id"], status="failed", error="Interrupted by app shutdown. Review before retrying.",
-                            message="Interrupted", updated_at=now())
+                store.patch(
+                    "jobs",
+                    job["id"],
+                    status="failed",
+                    error="Interrupted by app shutdown. Review before retrying.",
+                    message="Interrupted",
+                    updated_at=now(),
+                )
         self.thread = threading.Thread(target=self._run, name="factory-heavy-worker", daemon=True)
         self.thread.start()
 
@@ -41,9 +48,18 @@ class Jobs:
             if self.stopping.is_set():
                 raise WorkError("The application is shutting down.")
             identifier = new_id()
-            item = {"id": identifier, "kind": kind, "status": "queued", "progress": 0,
-                    "message": "Queued", "error": None, "result": None, "context": context,
-                    "created_at": now(), "updated_at": now()}
+            item = {
+                "id": identifier,
+                "kind": kind,
+                "status": "queued",
+                "progress": 0,
+                "message": "Queued",
+                "error": None,
+                "result": None,
+                "context": context,
+                "created_at": now(),
+                "updated_at": now(),
+            }
             self.cancellations[identifier] = threading.Event()
             self.store.put("jobs", item)
             self.pending.put((identifier, operation))
@@ -68,12 +84,16 @@ class Jobs:
                 self.cancellations[identifier].set()
                 if job["status"] == "queued":
                     return self.update(identifier, status="cancelled", message="Cancelled before starting")
-                return self.update(identifier, message="Cancellation requested; external writes cannot be undone")
+                return self.update(
+                    identifier, message="Cancellation requested; external writes cannot be undone"
+                )
             return job
 
     def busy(self, key: str, value: str) -> bool:
-        return any(j["status"] in {"queued", "running"} and j.get("context", {}).get(key) == value
-                   for j in self.store.all("jobs"))
+        return any(
+            j["status"] in {"queued", "running"} and j.get("context", {}).get(key) == value
+            for j in self.store.all("jobs")
+        )
 
     def _run(self):
         while not self.stopping.is_set():
@@ -89,22 +109,45 @@ class Jobs:
                 self.update(identifier, status="completed", progress=100, message="Completed", result=result)
             except JobCancelled:
                 self.update(identifier, status="cancelled", message="Cancelled", error=None)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - task boundary must preserve queue availability
                 from .meta import MetaError
-                error = str(exc) if isinstance(exc, (WorkError, MetaError)) else "Local task failed. Check tools, model compatibility, and available memory."
+
+                if isinstance(exc, MetaError) and exc.code == "cancelled":
+                    self.update(
+                        identifier,
+                        status="cancelled",
+                        message="Cancelled; reconcile external container",
+                        error=str(exc),
+                    )
+                    continue
+                error = (
+                    str(exc)
+                    if isinstance(exc, (WorkError, MetaError))
+                    else "Local task failed. Check tools, model compatibility, and available memory."
+                )
                 self.update(identifier, status="failed", message="Failed", error=error)
             finally:
                 with self.lock:
                     self.cancellations.pop(identifier, None)
                 self.pending.task_done()
 
-    def process(self, identifier: str, command: list[str], *, timeout=3600, cwd: Path | None = None,
-                env: dict | None = None, failure="Local tool failed.", log_path: Path | None = None) -> str:
+    def process(
+        self,
+        identifier: str,
+        command: list[str],
+        *,
+        timeout=3600,
+        cwd: Path | None = None,
+        env: dict | None = None,
+        failure="Local tool failed.",
+        log_path: Path | None = None,
+    ) -> str:
         self.check(identifier)
         # File-backed output prevents a verbose tool from deadlocking a pipe or consuming unbounded RAM.
         with tempfile.TemporaryFile() as output:
-            process = subprocess.Popen(command, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT,
-                                       start_new_session=True)
+            process = subprocess.Popen(
+                command, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT, start_new_session=True
+            )
             deadline = time.monotonic() + timeout
             try:
                 while process.poll() is None:
