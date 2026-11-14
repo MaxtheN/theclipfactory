@@ -1,0 +1,83 @@
+/*
+ * Studio review area. The right column is a fixed ~380–420px inspector so the post form never
+ * squeezes into a narrow sub-column; the left column's clip tiles clamp titles to two lines.
+ */
+.gf-app .gf-studio-grid {
+  grid-template-columns: minmax(0, 1fr) clamp(380px, 29vw, 420px);
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .gf-app .gf-studio-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.gf-app .gf-review-inspector {
+  --gf-review-pad: 22px;
+  min-width: 0;
+}
+.gf-app .gf-review-inspector .gf-card-header { align-items: center; }
+.gf-app .gf-review-inspector .gf-card-header > div { flex: 1; }
+
+/* (1) Status + primary actions. */
+.gf-app .gf-review-inspector .gf-review-action-panel {
+  display: grid;
+  gap: var(--gf-s3, 12px);
+  padding: 0 var(--gf-review-pad) var(--gf-s4, 16px);
+  border-bottom: 1px solid var(--material-divider, rgba(255, 255, 255, 0.12));
+}
+.gf-app .gf-review-inspector .gf-review-action-panel > .gf-help { margin: 0; }
+.gf-app .gf-review-inspector .gf-inspector-footer { margin: 0; gap: var(--gf-s2, 8px); }
+.gf-app .gf-review-inspector .gf-review-action-panel > .gf-post-instagram {
+  margin: 0 calc(-1 * var(--gf-review-pad)) calc(-1 * var(--gf-s4, 16px));
+}
+.gf-app .gf-review-inspector .gf-review-action-panel > .gf-post-instagram > .gf-review-section:last-child {
+  border-bottom: 0;
+}
+.gf-app .gf-review-inspector .gf-review-details { padding: 0 var(--gf-review-pad); }
+
+/* Pills are labels: never squeezed or clipped by their row. */
+.gf-app .gf-pill {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Left column: readable list label, two-line tile titles. */
+.gf-app .gf-clip-strip-title {
+  padding: var(--gf-s4, 16px) 20px var(--gf-s1, 4px);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--material-secondary, #e8e4dc);
+  white-space: nowrap;
+  overflow: visible;
+}
+.gf-app .gf-clip-strip { align-items: stretch; padding-block: 10px 14px; }
+.gf-app .gf-clip-strip > button {
+  width: 236px;
+  max-width: none;
+  align-items: flex-start;
+  text-align: left;
+  padding: 10px;
+}
+.gf-app .gf-clip-strip > button:first-child { width: auto; align-items: center; }
+.gf-app .gf-clip-strip > button > div { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.gf-app .gf-clip-strip > button > span:first-child { padding-top: 1px; font-variant-numeric: tabular-nums; }
+.gf-app .gf-clip-strip > button strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  max-width: none;
+  overflow: hidden;
+  white-space: normal;
+  text-overflow: clip;
+  line-height: 1.3;
+}
+.gf-app .gf-clip-strip > button small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin-top: 0;
+  line-height: 1.35;
+}
+.gf-app .gf-clip-strip > button > .gf-score-chip,
+.gf-app .gf-clip-strip > button > svg { flex: none; }
