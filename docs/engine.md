@@ -1,14 +1,15 @@
 # What the engine actually does
 
-Short answer: **more than clipping and subtitles, less than a full editor.** The engine
-watches and listens to a whole episode, uses local-model agents to choose moments and
-write hooks, and then makes a 9:16 clip with a fixed set of FFmpeg edits. Its strength
-is choosing and grounding moments. Its weakness is editing craft: no jump cuts, no
-face tracking, no brand kit and no audio polish.
+The engine turns source-backed moments into captioned 9:16 drafts using a defined
+set of rendering operations. It supports measured jump cuts, optional face-follow
+framing, brand styling and loudness normalization; it is not a general-purpose
+nonlinear editor. Transcription is local; agent roles may use local models or
+explicitly configured OpenRouter cloud routing.
 
-Code references are `file:function` under `clip_factory/` unless a path says otherwise.
-Read on branch `kartik/backend-integration`. Some files had uncommitted changes from
-other work at the time, and those are labelled *in flight*.
+Refreshed 2026-11-14 against published master `5e6c6a0`. Code references below are
+`file:function` under `clip_factory/` unless otherwise stated. Historical execution
+numbers do not replace fresh human editorial review. New creative-score/re-cut/demo
+work in an uncommitted checkout is not included until reviewed and merged.
 
 ## 1. Ingest
 
@@ -26,7 +27,7 @@ starts on import (`app.py:submit_production`).
 | Signals | FFmpeg measures picture change (scene score) and RMS loudness across the whole source. No model is involved. | `media.py:signals` |
 | Storyboard | Splits the source into roughly 48 scenes (max 96, 8–90 s each) at cuts. It samples 3–8 frames per scene, and the vision model returns `visual`, `action`, `on_screen_text`, `usable`, `said`, `highlight 0–10` and a reason. It is built once and reused. | `storyboard.py:plan_scenes`, `frame_times`, `observation_prompt`, `Storyboards` |
 | Scene score | Without a model reading: `0.7·motion + 0.3·loudness`. With one: `0.6·highlight/10 + 0.4·measured`. | `storyboard.py:score` |
-| Speakers | ❌ **No diarization or face detection.** `speaker_role` exists only as a strategist belief dimension. | `strategist.py` |
+| Speakers | **No diarization.** Apple Vision face detection can drive the optional face-follow crop; it does not identify speakers. `speaker_role` is a strategist belief dimension. | `strategist.py` |
 
 Models: the LLM/VLM is chosen per run. The default for 16 GB machines is `qwen3-vl:4b`
 through Ollama (`docs/local-model-setup.md`). The catalog also lists Qwen3.5 9B and
@@ -77,8 +78,8 @@ and a one-line why; "Below the bar (K)" is collapsed. Approval stays per clip.
 
 **Guardrails:** every agent output must match a Pydantic schema, and the decoder is
 grammar-constrained with `narrowed`. A failed output gets one retry with
-`format_correction`. Citations must point to known evidence (`_refs`). The model never
-supplies timestamps. If moment selection fails, the engine falls back to the
+`format_correction`. Citations must point to known evidence (`_refs`). Scene-ID moment selection derives timestamps in code. Swarm/editor range
+proposals are validated against source limits and measured speech before use. If moment selection fails, the engine falls back to the
 measured-signal shortlist (`_shortlist`). Prompts are capped at 96,000 characters
 (`inference_worker.MAX_PROMPT`).
 
@@ -123,7 +124,7 @@ request; each resolved decision is stored in the clip's `craft` record and rende
 | Creative critic | Checks `context`, `claims`, `captions` and `duplicates` against the transcript and frames from inside each clip. Returns pass, revise or unknown. A "pass" that contains failures is downgraded. | `team.py:Critique`, `_agent("critic")` |
 | Revision loop | Critic → producer `Revision` (revise or stop) → editor. The budget is 0–2 rounds. The Factory screen defaults to 0, while Studio and campaigns opt in. Non-progressing edits stop the loop. | `team.py:execute`, `app.py:submit_production` |
 | Technical checks | Codec, dimensions, frame rate, source timing, audio stream and level, A/V length, caption timing, display time and length. A failed check means no clip is saved. | `media.py:verify` |
-| Pre-post gate (*in flight*) | Decodes, 9:16, 7–90 s, audio, captions, ≤50 MB, hash, black or frozen frames. | `quality.py:evaluate` |
+| Pre-post gate | Decodes, 9:16, 7–90 s, audio, captions, ≤50 MB, hash, black or frozen frames. | `quality.py:evaluate` |
 | Recheck | Re-runs the critic on edited metadata. | `team.py:review_clip` |
 | Request change | Makes a new immutable version with `parent_clip_id`, a required `change_reason` and a `plan_changes` diff. A hook that is burned into the video cannot be edited in place. | `app.py:revision_fields`, `edit_clip` |
 
@@ -211,31 +212,26 @@ automatically. Details are in `docs/learning-loop.md` and `docs/strategist.md`.
 | Fact | Source |
 | --- | --- |
 | 60 s of audio transcribed in 6.2 s, with 174 word timestamps | `docs/local-model-setup.md` |
-| 90 s source → one critic-checked 15.1 s clip in **119.2 s** (team mode, qwen3-vl:4b) | `docs/local-model-setup.md`, `docs/submission/devpost.md` |
+| 90 s source → one critic-checked 15.1 s clip in **119.2 s** (team mode, qwen3-vl:4b) | `docs/local-model-setup.md`, `docs/demo-acceptance.md` |
 | 3.4 h stream: a single pass gave 72–158 s ranges, while scouts kept every clip ≤60 s and spread across the source | `scouts.py` header, `scripts/experiments/long_video_ab.py` |
 | Swarm at ~1.2 clips per usable minute | A design **target** (`team.py:SWARM_CLIPS_PER_MINUTE`), not measured |
 | A full 85-minute episode end to end, and audience lift | **Untested** (`docs/local-model-setup.md`) |
 
-## Gap vs vision
+## Current gaps and next evaluations
 
-Vision: *a campaign brief plus podcast footage goes in; the factory edits, clips, posts,
-experiments and re-edits around the goal and the brand.* Moment choice and grounding are
-already strong. The largest gaps are in turning the brief into output and in editing
-craft. Effort uses S/M/L. Every upgrade assumes a 16 GB M5, local models only, FFmpeg 4.4
-with libass and drawtext, and no Homebrew.
+The operations table above is the implementation inventory. A/B variants, title
+cards, jump cuts, emphasis captions, loudness normalization, covers and brand
+styling are implemented; they are not future backlog items. Local and configured
+cloud agents are both supported, with different data/cost/resource trade-offs.
 
-| # | Upgrade | Impact | Effort | Extends | 16 GB / local risk |
-| --- | --- | --- | --- | --- | --- |
-| 1 | ✅ **Brief-driven agents** (shipped: `brief.py`, see §6) | High | S | — | Block bounded at 2,600 / 1,400 characters. Selection by message fit is the model's judgement; only must-avoid is enforced |
-| 2 | ✅ **Per-run direction note** (shipped, inside the brief block as untrusted data) | High | S | — | — |
-| 3 | **A/B variants per moment**: 2–3 hooks or openings for one range, tagged `changed_variable` | High | M | `_swarm` treatments, `Render.changed_variable`, `parent_clip_id` | Each variant is another render (about 2× disk and time). Render variants serially. |
-| 4 | **Silence / filler jump cuts** using word timestamps | High | M | Generalize `render` segments beyond cold_open and main, `caption_entries` offsets | Many-segment concat graphs in FFmpeg 4.4. Caption re-timing must stay verified by `verify`. |
-| 5 | **Hook craft**: rewrite hooks into a designed title card for the first 2 s | High | S–M | `.hook.ass` style, critic `claims` check | Rewritten hooks may overclaim, so the critic must still ground them. |
-| 6 | ✅ **Speaker / face reframing for 9:16** (shipped: `reframe.py`, `crop_focus=auto_face`) | High | L | — | Apple Vision via pyobjc on-device; about 0.5 s of detection per 20 s window. Grid/multi-cam layouts may pan between tiles. |
-| 7 | **Loudness normalization** (`loudnorm` to −14 LUFS) | Medium | S | `render` audio chain, `verify` audio_level | Two-pass loudnorm doubles audio decode time. One pass is fine for clips. |
-| 8 | **Emphasis captions**: highlight keywords, configurable font and position | Medium | S–M | `pop_captions`, `Direction.caption_style` (add `pop`) | Keyword picks need an LLM call per clip, or a cheap TF-IDF fallback. |
-| 9 | **Brand kit + CTA end card** (logo, colors, font, closing slate) | Medium | M | `Profile` assets, `render` overlay and concat tail | Font files must be bundled because libass falls back to Arial. Logo upload validation. |
-| 10 | **Cover frame selection + punch-in on emphasis** | Medium | M | `render_task` cover step and the close-up `peak_frame`, `push` expression | Zoom expressions per keyframe are slow on CPU. Cap them at 2–3 per clip. |
+Remaining work is primarily verification and editorial quality: fresh semantic
+review, a human-labeled multi-episode benchmark, measured acceptance/cost against a
+matched manual baseline, and the first verified live publication/feedback cycle.
+Optional auto-variants for top picks, diarization, more sophisticated audio/story
+signals, general B-roll/music mixing and a broader reviewed extension library are
+separate proposals. The builder's documented progress-bar code passed in a
+rehearsal but is not a merged built-in operation.
 
-Upgrades 1–2 and 7 are cheap and bring the engine closer to "edits around the brief."
-Upgrades 3–6 are what make output look edited rather than just trimmed.
+Use [submission evidence](submission/evidence.md) for the current proof boundaries
+and [product roadmap](product-roadmap.md) for expansion plans. A higher proxy rank,
+more model calls or a new filter does not by itself establish a better clip.

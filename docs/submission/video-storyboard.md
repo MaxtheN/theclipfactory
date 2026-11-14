@@ -1,25 +1,30 @@
-# 2-minute submission video storyboard
+# Growth Factory — submission video storyboard
 
-Format: 16:9 screen recording of the real app plus a few insert shots, with founder voiceover. Burned-in captions throughout. Any synthetic screen gets a persistent on-screen tag: **SIMULATION — synthetic data**.
+**Working edit target: 2:00.** The target below is a production choice, not an assertion about the official limit. Confirm the dashboard requirements before export.
 
-| # | Time | Shot | On-screen caption | VO |
-|---|---|---|---|---|
-| 1 | 0:00–0:08 | Close-up of the notebook sketch, slow push in on "what could work? Double down" | *The analytics tab is where learning stops.* | "Every podcast has a dozen great clips buried in it. And when clips do go out, nobody turns the numbers into the next edit." |
-| 2 | 0:08–0:15 | App launch, Factory screen, the channel name | **Growth Factory** · a marketing team on your Mac | "So I built a marketing team that runs on my Mac and learns from my own posts." |
-| 3 | 0:15–0:28 | Drag a full episode onto **Add episode**. The stage tracker runs Listen → Watch → Pick moments. | Local: MLX Whisper · Qwen3-VL 4B · FFmpeg | "Drop in a full episode. It transcribes locally, and a vision model watches every scene, not just the transcript." |
-| 4 | 0:28–0:40 | *What the factory saw* storyboard, scenes with timestamps. Zoom on a scene ID. | Models describe. Code measures. | "Agents cite scene IDs. The code computes the timestamps, so clips can't drift to moments that don't exist." |
-| 5 | 0:40–0:55 | Agent ledger: producer → footage analyst → strategist → editor → critic, with handoffs and findings | One shared local model · strict schemas · ≤2 revisions | "A producer, footage analyst, strategist, editor and critic hand off through strict schemas. The critic checks every claim against what was actually said." |
-| 6 | 0:55–1:05 | Big 9:16 player with a captioned clip. Click **Approve**, and the checksum appears. | You approve the exact file. | "A critic's pass isn't approval. I approve the exact file." |
-| 7 | 1:05–1:20 | Results: verified Instagram account, then the tracked post mapped to the approved clip, then the metric snapshot | Real account · read-only · I post, then confirm which clip | "I post it myself, then tell the app which clip it was. Three days later it reads the real numbers through Composio. Read-only, never summed, unknowns stay unknown." |
-| 8 | 1:20–1:38 | **What we've learned**: account baseline → experiment (hook before → after, cited snapshot) → rendered variant (Unapproved badge, lineage) → proposed Style rule | One change. Cited evidence. Or it abstains. | "The analyst compares the post with my own account's baseline and changes exactly one thing, or says it doesn't know. Then it renders the new version and proposes a rule I can approve." |
-| 9 | 1:38–1:48 | Strategist panel with the **SIMULATION** banner visible: beliefs and confidence bars, explore/exploit split | **SIMULATION — synthetic data** · Strategist (in progress) | "Next is a Strategist that tracks what's working with real confidence math. Shown here on synthetic data so you can see it think." |
-| 10 | 1:48–1:58 | Back to the sketch, right page: Paid Ads → formats → ROAS → change format | Next: brand line · real A/B splits · YouTube · TikTok | "Then the brand line: paid A/B splits, where 'what worked' becomes causal. Then YouTube and TikTok." |
-| 11 | 1:58–2:00 | Logo card | **Growth Factory** · 8090 EVOLVE | "Growth Factory. Make it, measure it, change one thing." |
+Format: 16:9 screen recording with founder voiceover and captions. Lead with the code-producing Factory builder to make the “software builds software” mechanism inspectable. Then show why the content workflow needs it. Use actual recorded code/test/render evidence; do not substitute animated mock logs.
 
-## Production notes
+| Shot | Time | Picture | On-screen text | Voiceover |
+| --- | --- | --- | --- | --- |
+| 1 | 0:00–0:12 | Pearl Studio Factory → Factory map; select Factory builder | **Growth Factory** · Your AI growth department on Mac | “Growth Factory coordinates content production. When the factory needs an editing capability it doesn't have, a builder can create the software for it.” |
+| 2 | 0:12–0:28 | Factory upgrades: `progress_bar` request → bounded work order | **Request → work order** · Demo request, if applicable | “A missing progress bar becomes a work order with an exact interface, constraints and acceptance checks.” |
+| 3 | 0:28–0:42 | Recorded generated extension diff; briefly show isolated branch/worktree context | **Real generated code** · Isolated worktree | “A builder writes the renderer extension and its tests in an isolated worktree.” |
+| 4 | 0:42–0:55 | Actual static-check/test result and sample-render comparison | **12 generated tests passed** · Sample render checked | “The recorded build passed static checks, twelve generated tests and a real sample render.” |
+| 5 | 0:55–1:05 | Reviewable diff and sample, with ready-for-review state | **Human review required** · Not merged or shipped | “It returned a reviewable change. This build was not automatically merged or shipped.” |
+| 6 | 1:05–1:20 | Real source-backed clip in Studio; captions and quality/version details | **Real rendered draft** · Exact-version review | “The same factory turns brand direction and source footage into edited drafts. Quality checks help me review; I approve the saved version.” |
+| 7 | 1:20–1:34 | Prepare your post: cover, caption and explicit destination; do not activate publication | **Approved publishing implemented** · First real app-post rehearsal pending | “The app prepares publication, but I choose the destination and approve the post. The first real app-post rehearsal is still a validation gate.” |
+| 8 | 1:34–1:48 | Existing Strategist simulation, full banner visible; one evidence-to-proposal path | **SIMULATION — synthetic post data** | “This simulation shows evidence becoming a proposed next experiment. These are synthetic outcomes, not measured growth.” |
+| 9 | 1:48–1:57 | Return to builder diff/test/sample artifact beside the Factory map | **Build → test → render → review** | “The content workflow exposes the need. The builder prepares a tested capability. People control what enters the factory and what goes live.” |
+| 10 | 1:57–2:00 | Logo and repository/demo destination | **Growth Factory** | “Growth Factory.” |
 
-- Record every app shot on real data. For the snapshot shot, if **Measure now** was used, keep the `demo_override` badge in frame. Don't crop it out.
-- No metric counts on screen implying growth. Blur or keep small any absolute numbers that aren't the point of the shot.
-- Don't show the Composio key, the Settings key field, or the Supabase project ID.
-- Shot 9 must keep the SIMULATION banner visible for its whole duration. If the Strategist UI isn't stable, replace the shot with a static diagram of the three layers, labelled "in progress".
-- Music: low, no lyrics. Total runtime ≤ 2:00.
+## Evidence and edit rules
+
+- **Builder:** use the actual documented `progress_bar` build artifact, generated tests and sample render. It ran in a temporary clone and was not pushed or merged. If the request came from “Try with a demo request,” retain its demo badge. [Builder proof](../factory-builder.md)
+- **Clip:** a real-render shot must use playable, source-backed media. A sample-data UI preview does not prove transcription, editing or a provider operation. Identify prepared output honestly. [Engine evidence](../engine.md)
+- **Publication:** implemented code/UI and an actual provider post are different claims. Do not imply successful publication or a completed live measurement cycle until the receipt/readback exists. Recording is not permission to post. [Publishing](../instagram-publishing.md), [current live gates](../HANDOFF.md)
+- **Simulation:** keep **SIMULATION — synthetic post data** visible throughout the shot. If early real collection uses Measure now, show its `demo_override` label and real elapsed window; do not call it a three-day result.
+- **Routing:** do not caption the entire app “100% local.” Local and optional cloud routes coexist; approved publication shares media externally.
+- **Privacy:** redact credentials, session values, private account identifiers and raw provider payloads. Use cleared footage; do not imply example brands endorse the product.
+- **Pacing:** show short recorded proof segments rather than waiting for a full model/render job. Time compression must not conceal failed checks or replace evidence with decoration.
+- **Fallback:** if the code/test/render artifacts cannot be inspected, label that gap and revise the submission claim. If Strategist simulation is unavailable, replace shot 8 with a plainly labeled architecture diagram, not invented metrics.
+- **Final check:** match the video to the submitted commit, tool/license and pre-event-work disclosures. No claim of audience lift, agency savings, autonomous ad spend or self-deployment is supported by this storyboard.

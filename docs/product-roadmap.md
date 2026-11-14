@@ -20,14 +20,22 @@ Shopify, landing pages, paid media buying and ROAS are expansion points. They do
 
 Brand/audience memory, explicit account authorization, versioned creative policy, agent/job ledger, source/output lineage, immutable evidence, experiment receipts and human publication control. Agents adapt policy and editing decisions; this is not self-training model weights.
 
-Supabase’s owner-private metadata foundation is prepared. App Auth/sync and hosted workers are still separate from the working local SQLite execution layer.
+Supabase Auth and media storage are integrated. Operational records still live in
+SQLite. General owner-scoped state sync and hosted workers are separate work.
 
-## Account and release roadmap — later
+## Account and release roadmap
 
-- Signup/sign-in for Growth Factory users (separate from Instagram OAuth); browser-based PKCE flow and secure desktop session storage.
-- Supabase Auth, owner-scoped cloud synchronization, offline reconciliation and explicit team membership/invitations.
-- Safe field-by-field metadata projection, version conflict protocol and evidence retention/deletion rules before uploading local state.
+- Already implemented: email/password sign-in, offline continuation and approved media hosting.
+- Later: owner-scoped synchronization, offline reconciliation and explicit team membership/invitations.
+- Safe field-by-field metadata projection, conflict handling and evidence retention/deletion rules before syncing local state.
 - Hosted collection/learning workers for operation while the Mac app is closed.
 - Signed/notarized Mac distribution and single-instance coordination.
 
-The database foundation is applied; these application features are intentionally later work. No signup screen or working cloud sync is claimed by this milestone.
+## Software that extends the factory
+
+The capability-request/builder path is implemented: a bounded work order produces
+an isolated renderer extension, tests and sample-render evidence for human review.
+The documented progress-bar rehearsal passed but was not merged. Expanding the
+reviewed extension library, evaluating generated-code quality and improving
+reproducibility are next milestones. This is the concrete software-factory path
+for EVOLVE; future business outcomes remain separate from build/test success.

@@ -1,5 +1,7 @@
 # Instagram publishing (Approve & post)
 
+**Current status (2026-11-14):** publishing and storage migrations are implemented/applied according to the current handoff; the first real app publication remains a live acceptance gate. Earlier metadata-only research below is historical evidence, not proof of a successful publish.
+
 App-initiated Reels publishing through the user's Composio-connected Instagram
 account, guarded by a pre-post quality gate and a durable attempt record. This is
 separate from the older direct-Meta path (`POST /api/clips/{id}/publish` →
@@ -119,7 +121,7 @@ still needs it.
 
 - 50 MB per object (Supabase free tier global limit); larger clips are refused with
   a clear error before upload. The migration sets the same `file_size_limit`.
-- Migration (write-only, **not applied**):
+- Migration (applied per the 2026-11-14 engineering handoff; first live publish still unverified):
   `supabase/migrations/202611140002_publish_bucket.sql`. Policies: authenticated
   insert/select/delete only within the caller's own `auth.uid()` prefix and only
   `<uuid>/<64 hex>.mp4` names; no update (no overwrite); public reads via the

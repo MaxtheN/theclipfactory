@@ -6,7 +6,7 @@
 2. Add footage in Factory. The import surface confirms storage and attachment separately; no guessed upload percentage.
 3. Start agent production, or choose a moment manually. By default the swarm covers the whole episode (about a clip a minute), then ranks the clips best first with a quality floor; similar clips are merged and weaker ones wait under "Below the bar" (kept, not deleted). Studio → Fine-tune → "Deep edit" runs the slower team engine for a few self-checked clips.
 4. Review the exact generated clip. Technical checks and version history are available in the inspector. Approve and export that exact revision.
-5. Results connects an exact Instagram account and tracks a real post only after the creator confirms its matching approved clip. Three-/six-day measurements inform a bounded next draft; they do not establish causal lift.
+5. Studio prepares a human-approved Instagram post through Composio/Supabase; Results binds the exact account and tracks confirmed publication mappings. Manual tracking requires explicit matching-clip confirmation. Three-/six-day measurements inform a bounded next draft; they do not establish causal lift. The first live app publication remains an acceptance gate.
 
 ## Workspace → campaigns
 
@@ -26,7 +26,7 @@ Edit the brief in **New campaign** or **Brand profile → Goals & brief** ("Save
 
 **Brand profile** (the UI word for a workspace/profile) edits the brand's name, audience, voice & boundaries and brand kit (colours, font, PNG logo; sent only when edited, and a save that omits the kit keeps the saved one), with links to Style rules and Connected accounts and the account sign-in row; "Save brand" writes only the profile. Below it, **Goals & brief** edits the selected campaign's goal, metric, notes and brief; "Save goals" writes only the campaign. Each save reads back its own record. It does not require onboarding again or start an agent.
 
-**Campaigns are hidden by default.** Every brand gets one automatic campaign named "<Brand> — main" at onboarding, and the word "campaign" does not appear in the default UI. A second one is created only through Brand profile → Advanced → "Run a separate push (campaign)"; after that the top bar shows "Campaign: <name>" (with "Goals & brief…" and "New campaign…") and Goals & brief shows the campaign name. Backend semantics are unchanged. Workspace style rules are a contextual advanced control: save a proposed version, then explicitly approve it. A metadata save never silently replaces approved strategy. Model/tool setup remains in Advanced tools.
+**Campaigns are hidden by default.** Every brand gets one automatic campaign named "<Brand> — main" at onboarding, and the word "campaign" does not appear in the default UI. A second one is created only through Brand profile → Advanced → "Run a separate push (campaign)"; after that the top bar shows "Campaign: <name>" (with "Goals & brief…" and "New campaign…") and Goals & brief shows the campaign name. Backend semantics are unchanged. Workspace style rules are a contextual advanced control: save a proposed version, then explicitly approve it. A metadata save never silently replaces approved strategy. Model/tool setup is in Brand profile → Advanced → Engine & models, also reachable through ⌘K. The old Advanced tools interface is removed.
 
 ## Required controls retained
 
@@ -48,4 +48,4 @@ Old test campaigns are archived rather than having media/history deleted. Defaul
 
 ## Still required for a public release
 
-Signup/Auth, cloud synchronization and conflict handling, team access, an always-on worker, signed/notarized packaging and single-instance hardening remain separate release work. Supabase's private tables are prepared; this Mac app still uses local SQLite. Publishing via Composio and paid activation remain disabled. The quality/resource gates must pass before claiming a new autonomous end-to-end learning run.
+Signup/Auth and approved Composio/Supabase publishing are implemented; the first real app post still needs verification. The Mac app retains local SQLite state. General cloud synchronization/conflict handling, team access, always-on workers, signed/notarized packaging and single-instance hardening remain release work. Paid activation is not implemented. Quality/resource checks and human editorial acceptance remain distinct from a completed live feedback cycle.

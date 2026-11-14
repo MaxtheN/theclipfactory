@@ -1,7 +1,31 @@
 # Growth Factory — engineering handoff
 
-Snapshot: 2026-11-14, updated ~11:15 America/Los_Angeles (master e869666). Supersedes the earlier pasted
-handoff for current state. Read this first, then `docs/engine.md`.
+Current documentation refresh: 2026-11-14, after published master **`5e6c6a0`**.
+The operational snapshot below began at `e869666`; this update supersedes its old
+UI/status and submission instructions. Read [submission/README.md](submission/README.md)
+for the actual Devpost fields/deadlines, [submission/evidence.md](submission/evidence.md)
+for claim boundaries, and `docs/engine.md` for implementation details.
+
+- **Pearl Studio is merged:** single navigation; Brand profile section rail and
+  focused editors; Engine & models in Brand profile → Advanced (also ⌘K).
+  Old Make/Grow/Advanced tools screens are removed. Upstream Library deletion,
+  source cleanup and autopilot-after-style changes are preserved.
+- **Docs and licensing:** founder authorized README refresh and MIT publication;
+  founder declared no pre-event project code/prototype/design/templates.
+- **Verification:** merge had 145 targeted frontend checks + one backend regression
+  and a build. Full hosted CI then exposed five-second integration-test timeouts;
+  a two-worker cap passed 421 tests locally, but hosted CI still needed more time
+  for two full-app journey files. Those two integration files now have a bounded
+  15-second budget; unit files retain five seconds. All 421 tests pass locally
+  with no retries/assertion changes. Hosted CI must be checked separately.
+- **Active work is not published proof:** the shared checkout has ongoing creative
+  scoring, preference/re-cut, richer demo-loop, onboarding, landing and semantic-hook
+  fixes. Preserve it; do not absorb dirty files into a docs/UI commit. The draft
+  engine evaluation is now present there but is not part of published `5e6c6a0`.
+- **Still pending:** fresh editorially accepted clip, first real app publication,
+  verified post mapping and current full live measurement/learning rehearsal.
+- **Devpost:** inspected read-only, 2/5 steps done. Leave video blank per founder;
+  do not accept terms or submit. Deadline Nov 14 3:15 PM PT; code freeze 3:30 PM PT.
 
 ## 1. Where the code is
 
@@ -104,8 +128,9 @@ human approve → post to Instagram → measure → learn → better next clips.
   Live demo built `progress_bar` (29 s, $0.05).
 - **Reference research** ("Learn from examples"), post copy, website brief,
   Factory map + run ledger, Results (Post → Measure → Learn).
-- **Submission docs**: `docs/submission/` (devpost, demo script, judge Q&A,
-  video storyboard). They pre-date most of the above — refresh them.
+- **Submission docs**: `docs/submission/` now contains refreshed project story,
+  exact field copy, evidence ledger, readiness checklist, demo script, judge Q&A
+  and storyboard. Builder code/tests/render evidence leads the software-factory story.
 - CI (`.github/workflows/ci.yml`) now installs FFmpeg.
 
 ## 5. Live test results (founder, 2026-11-14)
@@ -143,8 +168,10 @@ Landed and pushed to master:
   the 10-min All-In test (cloud Haiku, $0.03, 57 calls): 13 clips, top 8 all
   31–36 s, all `hook_first`, 16–30 caption cues each, scores 69–72, ~7 of 8
   reference moments hit (pillow talk, Blackwell/wafer, Swalwell, low-level
-  leakers, useful idiot, "why now", leak-is-a-crime). `docs/engine-eval.md` was
-  NOT written (agent stopped). Scratch run DBs/clips:
+  leakers, useful idiot, "why now", leak-is-a-crime). The original stop handoff had no written
+  evaluation. A later draft `docs/engine-eval.md` exists in the active checkout,
+  including a semantic-hook issue; it remains uncommitted and is not a quality
+  acceptance certificate. Scratch run DBs/clips:
   `/private/tmp/claude-501/-Users-kartikbihani--claude-spares-spare-rlRLTC/6f48ede3-19e1-4f92-8c6d-324c91c091c6/scratchpad/engine-runs/{1..6}/`
   (temporary). All backend/engine files are free for other agents now.
 
@@ -161,7 +188,7 @@ Possible next step: render 2 hook variants automatically for the top picks.
 
 ### For a UI-only agent
 Frontend: `frontend/src/growth/` (React/TS/Vite). Shared tokens in
-`polish.css`. Review preview with sample data:
+`material-tokens.css`, with final overrides in `pearl-studio.css`. Review preview with sample data:
 `cd frontend && VITE_REVIEW_PREVIEW=true npx vite --host 127.0.0.1 --port 5179 --strictPort`
 (`?fixtures=flow` adds Factory-map sample data). Tests: `npx vitest run <file>`
 (1–2 files at a time), `npx tsc --noEmit`, `npm run build`. Coordinate with the
@@ -170,8 +197,8 @@ everything else in the UI is free.
 
 ## 7. Next steps (priority)
 
-1. Land/verify §6 work; run `tsc`, affected vitest files, affected pytest files;
-   push branch + master.
+1. Preserve the completed UI/master integration. Review and land the active
+   backend/demo wave separately, with affected tests and exact evidence. Check CI.
 2. Re-run the 10-min clip in `fresh-test-2` (Find clips) with cloud agents:
    confirm transcript, captions, ~30 s, hook-first punchline, title card off
    face; compare against `allin-reference-moments.md`.
@@ -185,9 +212,9 @@ everything else in the UI is free.
    upload zip to GitHub Releases for the landing page download; note right-click
    → Open (unsigned). Fresh Macs must run the in-app engine setup (runtime +
    Whisper download).
-6. Refresh `docs/submission/*` to match §4 (Strategist, editing craft, posting,
-   website brief, OpenRouter, self-improving factory). Keep claims honest: no
-   growth/causality claims, posting not yet exercised live.
+6. Review the refreshed `docs/submission/*`, record the actual builder and media
+   demo, add its video URL when ready, and have the team complete finalization.
+   Do not claim audience growth or live publishing before verifying it.
 
 ## 8. Founder-approved next focus: the visible closed loop (over raising the score)
 

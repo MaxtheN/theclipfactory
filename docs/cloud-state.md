@@ -2,7 +2,7 @@
 
 Target: user-created **GrowthFactory**, Supabase project `nywbjxmratokyplwjjhu` (Free).
 
-**Migration applied and verified in the named Supabase project on 2026-11-14. The Mac app still uses SQLite. There is no sync client, automatic upload, cloud credential in the app, storage bucket, or cloud publishing worker.**
+**Current update (2026-11-14):** the metadata migration was applied and verified. Later work added Supabase Auth and publishing media storage. The Mac app still uses SQLite for operational state; there is no general metadata sync client or always-on hosted publishing/learning worker. The metadata/RLS design below is distinct from Auth and the publish bucket. See [publishing](instagram-publishing.md) and the [current handoff](HANDOFF.md).
 
 ## Three tables
 
