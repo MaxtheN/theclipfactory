@@ -100,11 +100,11 @@ def test_ready_verifies_interpreter_and_packages(models, monkeypatch):
     runtime_ready(models, monkeypatch)
     assert models.ready()
     monkeypatch.setattr("clip_factory.models.subprocess.run", Mock(return_value=SimpleNamespace(stdout="{}")))
-    assert not models.ready()
+    assert not models.ready(force=True)
     monkeypatch.setattr(
         "clip_factory.models.subprocess.run", Mock(side_effect=subprocess.TimeoutExpired("probe", 90))
     )
-    assert not models.ready()
+    assert not models.ready(force=True)
     models.python.unlink()
     assert not models.ready()
 

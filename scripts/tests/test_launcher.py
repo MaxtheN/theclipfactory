@@ -1,4 +1,5 @@
 """Launcher tests use a real local server and a minimal parent-app seam."""
+
 import argparse
 import signal
 import socket
@@ -29,6 +30,11 @@ def parent(monkeypatch):
             state["stopped"] = True
 
         app = FastAPI(lifespan=lifespan)
+
+        @app.get("/api/health")
+        def health(request: FastAPIRequest):
+            assert request.headers["x-clip-token"] == token
+            return {"status": "ready"}
 
         @app.get("/api/system")
         def system(request: FastAPIRequest):
@@ -100,8 +106,11 @@ def test_native_close_cleanup(monkeypatch, parent):
         event.callback()
         callback()
 
-    monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(
-        create_window=lambda *args, **kwargs: window, start=start))
+    monkeypatch.setitem(
+        sys.modules,
+        "webview",
+        types.SimpleNamespace(create_window=lambda *args, **kwargs: window, start=start),
+    )
     assert launcher.main([]) == 0
     assert parent["app"].state.desktop
     assert parent["stopped"]

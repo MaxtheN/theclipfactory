@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import ipaddress
+import json
 import os
+import platform
 import secrets
 import signal
 import socket
@@ -73,7 +75,7 @@ def wait_ready(
             raise LauncherError("local server stopped during startup")
         if server.started:
             try:
-                request = Request(f"{url}/api/system", headers={"X-Clip-Token": token})
+                request = Request(f"{url}/api/health", headers={"X-Clip-Token": token})
                 with opener.open(request, timeout=0.5) as response:
                     if response.status == 200:
                         return
@@ -81,6 +83,42 @@ def wait_ready(
                 pass
         stop.wait(0.1)
     raise LauncherError("local server did not become ready within 30 seconds")
+
+
+def startup_event(root: Path | None, event: str, message: str | None = None):
+    """Credential-free launch diagnostics, including Finder's windowed launches."""
+    if root is None:
+        return
+    try:
+        directory = root / "logs"
+        if directory.is_symlink():
+            return
+        directory.mkdir(exist_ok=True)
+        path = directory / "startup.log"
+        if path.is_symlink():
+            return
+        if path.exists() and path.stat().st_size > 65536:
+            path.unlink()
+        with path.open("a", encoding="utf-8") as output:
+            output.write(json.dumps({"time": time.time(), "event": event, "message": message}) + "\n")
+        path.chmod(0o600)
+    except OSError:
+        pass  # Diagnostics must not introduce a new launch failure.
+
+
+def show_launch_error(message: str):
+    if not getattr(sys, "frozen", False) or platform.system() != "Darwin":
+        return
+    try:
+        from AppKit import NSAlert
+
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("Clip Factory could not start")
+        alert.setInformativeText_(message + "\n\nDetails: Application Support/ClipFactory/logs/startup.log")
+        alert.addButtonWithTitle_("OK")
+        alert.runModal()
+    except Exception:  # noqa: BLE001 - best-effort native alert must not cause another crash
+        return
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -91,19 +129,25 @@ def main(argv: list[str] | None = None) -> int:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--browser", action="store_true", help="explicitly use the system browser")
     mode.add_argument("--headless", action="store_true", help="serve only; print a local bootstrap URL")
+    parser.add_argument("--native-smoke", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.native_smoke and (args.browser or args.headless or args.data_dir is None):
+        parser.error("--native-smoke requires an explicit --data-dir and native mode")
     preserve_tool_path()
     stop = threading.Event()
     previous_handlers = {}
     server = None
     thread = None
     listener = None
+    diagnostic_root = args.data_dir
     try:
         # Import lazily: CLI help/validation do not require desktop GUI or app startup.
         from clip_factory.app import create_app
 
         token = secrets.token_urlsafe(32)
         app = create_app(data_dir=args.data_dir, token=token)
+        diagnostic_root = getattr(app.state, "root", diagnostic_root)
+        startup_event(diagnostic_root, "server-starting")
         # The parent exposes this flag in /api/system. Native only means native.
         app.state.desktop = not (args.browser or args.headless)
         family = socket.AF_INET6 if ":" in args.host else socket.AF_INET
@@ -131,6 +175,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         thread.start()
         wait_ready(server, thread, url, token, stop)
+        startup_event(diagnostic_root, "server-ready")
         if args.headless:
             print(f"Clip Factory local bootstrap URL: {bootstrap}", flush=True)
         elif args.browser:
@@ -141,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 import webview
 
+                startup_event(diagnostic_root, "native-window-starting")
                 window = webview.create_window(
                     "Clip Factory", bootstrap, width=1440, height=960, min_size=(900, 640)
                 )
@@ -149,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
                 def on_closed():
                     closed.set()
                     stop.set()
+                    startup_event(diagnostic_root, "native-window-closed")
 
                 window.events.closed += on_closed
 
@@ -160,11 +207,44 @@ def main(argv: list[str] | None = None) -> int:
                     if not closed.is_set():
                         window.destroy()
 
-                webview.start(monitor_window, private_mode=True)
+                smoke_result = {"passed": False}
+
+                def smoke_window():
+                    deadline = time.monotonic() + 30
+                    try:
+                        while time.monotonic() < deadline and not stop.is_set():
+                            if window.evaluate_js(
+                                "document.title === 'Clip Factory' && !!document.querySelector('#root') && document.querySelector('#root').textContent.includes('Clip Factory')"
+                            ):
+                                break
+                            time.sleep(0.2)
+                        else:
+                            return
+                        window.evaluate_js(
+                            "window.__clipSmokeHealth = 'checking'; fetch('/api/health', {credentials:'same-origin'}).then(r => {window.__clipSmokeHealth = r.ok ? 'ready' : 'failed'}).catch(() => {window.__clipSmokeHealth = 'failed'}); true"
+                        )
+                        while time.monotonic() < deadline and not stop.is_set():
+                            state = window.evaluate_js("window.__clipSmokeHealth")
+                            if state == "ready":
+                                smoke_result["passed"] = True
+                                (args.data_dir / "native-smoke.json").write_text(
+                                    json.dumps({"native_window": True, "ui": True, "authenticated": True})
+                                )
+                                startup_event(diagnostic_root, "native-window-verified")
+                                return
+                            if state == "failed":
+                                return
+                            time.sleep(0.2)
+                    finally:
+                        window.destroy()
+
+                webview.start(smoke_window if args.native_smoke else monitor_window, private_mode=True)
+                if args.native_smoke and not smoke_result["passed"]:
+                    raise LauncherError("native window smoke failed before authenticated UI was verified")
             except Exception:  # noqa: BLE001 - native backends vary; never expose URL-bearing errors
                 # GUI exceptions can contain the bootstrap URL. Never log those details.
                 raise LauncherError(
-                    "native window failed; install .[desktop] and retry, or explicitly launch with --browser"
+                    "native window failed; see startup.log, or explicitly launch with --browser"
                 ) from None
             return 0
         while not stop.wait(0.2):
@@ -174,10 +254,15 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 - redact errors at the process boundary
         # Only our credential-free messages are exposed; app errors may contain secrets.
         message = str(exc) if isinstance(exc, LauncherError) else None
-        print(
-            f"Clip Factory: {message or 'startup failed; check local dependencies and port availability'}",
-            file=sys.stderr,
-        )
+        safe_message = message or "startup failed; check local dependencies and port availability"
+        startup_event(diagnostic_root, "startup-failed", safe_message)
+        if sys.stderr is not None:
+            print(f"Clip Factory: {safe_message}", file=sys.stderr)
+        stop.set()
+        if server is not None:
+            server.should_exit = True
+        if not args.browser and not args.headless and not args.native_smoke:
+            show_launch_error(safe_message)
         return 1
     finally:
         stop.set()

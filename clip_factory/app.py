@@ -329,8 +329,14 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             },
         )
 
+    @app.get("/api/health")
+    async def health():
+        # Authentication middleware still applies. No disk/model imports or probes.
+        return {"status": "ready"}
+
     @app.get("/api/system")
     def system():
+        runtime_ready = models().ready()
         return {
             "platform": f"{platform.system()} {platform.machine()}",
             "apple_silicon": apple_silicon(),
@@ -338,8 +344,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "free_disk_gb": round(shutil.disk_usage(root).free / 1e9, 1),
             "ffmpeg": bool(shutil.which("ffmpeg")),
             "ffprobe": bool(shutil.which("ffprobe")),
-            "whisper": models().item("whisper-turbo")["installed"] and models().ready(),
-            "model_runtime": models().ready(),
+            "whisper": models().item("whisper-turbo")["installed"] and runtime_ready,
+            "model_runtime": runtime_ready,
             "desktop": app.state.desktop,
             "data_dir": str(root),
         }

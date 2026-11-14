@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
@@ -189,30 +190,57 @@ class Models:
         self.logs.mkdir(exist_ok=True)
         self._download_lock = threading.RLock()
         self._download_reservations: dict[str, int] = {}
+        self._ready_lock = threading.Lock()
+        self._ready_cache = None
 
     @property
     def python(self) -> Path:
         return self.runtime / "bin" / "python"
 
-    def ready(self) -> bool:
-        try:
-            if self.runtime.is_symlink() or not self.python.is_file():
+    def ready(self, *, force=False) -> bool:
+        # UI polling and preflight calls share one probe, not dozens of simultaneous
+        # MLX/Torch/spaCy imports. Marker/interpreter changes invalidate the cache.
+        with self._ready_lock:
+            key = None
+            try:
+                marker_path = self.runtime / ".ready"
+                if self.runtime.is_symlink() or marker_path.is_symlink() or not self.python.is_file():
+                    self._ready_cache = None
+                    return False
+                marker_stat, python_stat = marker_path.stat(), self.python.stat()
+                if marker_stat.st_size > 4096:
+                    return False
+                marker = json.loads(marker_path.read_text())
+                if marker != {"python": [3, 12], "machine": "arm64", "packages": RUNTIME_VERSIONS}:
+                    self._ready_cache = None
+                    return False
+                key = (
+                    marker_stat.st_ino,
+                    marker_stat.st_mtime_ns,
+                    marker_stat.st_size,
+                    python_stat.st_ino,
+                    python_stat.st_mtime_ns,
+                    python_stat.st_size,
+                )
+                if not force and self._ready_cache:
+                    cached_key, expires, value = self._ready_cache
+                    if key == cached_key and time.monotonic() < expires:
+                        return value
+                probe = subprocess.run(
+                    [str(self.python), "-c", RUNTIME_PROBE],
+                    env=child_env(),
+                    capture_output=True,
+                    text=True,
+                    timeout=90,
+                    check=True,
+                )
+                actual = json.loads(probe.stdout)
+                value = actual == {**marker, "system": "Darwin"}
+                self._ready_cache = (key, time.monotonic() + (60 if value else 5), value)
+                return value
+            except (OSError, ValueError, subprocess.SubprocessError):
+                self._ready_cache = (key, time.monotonic() + 5, False) if key else None
                 return False
-            marker = json.loads((self.runtime / ".ready").read_text())
-            if marker != {"python": [3, 12], "machine": "arm64", "packages": RUNTIME_VERSIONS}:
-                return False
-            probe = subprocess.run(
-                [str(self.python), "-c", RUNTIME_PROBE],
-                env=child_env(),
-                capture_output=True,
-                text=True,
-                timeout=90,
-                check=True,
-            )
-            actual = json.loads(probe.stdout)
-            return actual == {**marker, "system": "Darwin"}
-        except (OSError, ValueError, subprocess.SubprocessError):
-            return False
 
     def item(self, identifier: str) -> dict:
         item = next((m for m in CATALOG if m["id"] == identifier), None)
