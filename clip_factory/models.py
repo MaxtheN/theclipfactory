@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 import psutil
 
 from .jobs import Jobs, WorkError
+from .python_runtime import bootstrap_python, native_python
 
 # Opt out before huggingface_hub first import: HTTP tqdm hooks support cancellation.
 os.environ["HF_HUB_DISABLE_XET"] = "1"
@@ -45,6 +46,14 @@ def child_env() -> dict:
                 "AWS_ACCESS_KEY_ID",
                 "AWS_SECRET_ACCESS_KEY",
                 "GOOGLE_APPLICATION_CREDENTIALS",
+                "PYTHONHOME",
+                "PYTHONPATH",
+                "VIRTUAL_ENV",
+                "__PYVENV_LAUNCHER__",
+                "DYLD_LIBRARY_PATH",
+                "DYLD_FRAMEWORK_PATH",
+                "DYLD_INSERT_LIBRARIES",
+                "LD_LIBRARY_PATH",
             }
         },
         "HF_HUB_OFFLINE": "1",
@@ -231,38 +240,25 @@ class Models:
             candidates.append(sys.executable)
         python = None
         for candidate in filter(None, candidates):
-            try:
-                probe = subprocess.run(
-                    [
-                        candidate,
-                        "-c",
-                        "import platform,sys; print(platform.system(), platform.machine(), sys.version_info[:2])",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                    check=True,
-                    env=child_env(),
-                )
-                if probe.stdout.strip() == "Darwin arm64 (3, 12)":
-                    python = candidate
-                    break
-            except (OSError, subprocess.SubprocessError):
-                continue
+            self.jobs.check(job_id)
+            if native_python(candidate, child_env()):
+                python = candidate
+                break
         if not python:
-            raise WorkError("Install native Python 3.12 with Homebrew, then restart and run runtime setup.")
+            python = str(bootstrap_python(self.root, self.jobs, job_id, child_env()))
+        self.jobs.check(job_id)
         # Never overlay an old venv (it may be Rosetta or a different Python version).
         if self.runtime.is_symlink():
             raise WorkError("Runtime directory must not be a symlink.")
         if self.runtime.exists():
             shutil.rmtree(self.runtime)
-        self.jobs.update(job_id, progress=5, message="Creating isolated Python runtime")
+        self.jobs.update(job_id, progress=15, message="Creating isolated Python runtime")
         self.jobs.process(
             job_id,
             [python, "-m", "venv", str(self.runtime)],
             env=child_env(),
             timeout=180,
-            failure="Cannot create runtime. Install native Python 3.12 and ensure data directory is writable.",
+            failure="Cannot create runtime. Ensure the app data directory is writable and retry setup.",
         )
         self.jobs.update(
             job_id, progress=20, message="Installing MLX vision, Whisper, and Kokoro (network download)"
