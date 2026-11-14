@@ -17,7 +17,7 @@ Measure elapsed time, active human minutes, accepted outputs, revisions and know
 
 - Team repo: https://github.com/MaxtheN/theclipfactory ; default branch is `master`.
 - Local checkout: `/Users/kartikbihani/WIN/theclipfactory`.
-- UI branch: `kartik/growth-factory-interface`.
+- UI branch: `kartik/growth-factory-interface`; draft team PR: https://github.com/MaxtheN/theclipfactory/pull/3 .
 - Fork: https://github.com/kartikeybihani/theclipfactory . Current CLI user lacks push permission on the team repo, so the UI handoff uses the fork branch. Do not merge or overwrite teammates' work.
 - README files are explicitly out of editing scope. Architecture/journey are in `docs/interface-architecture.md`. Execution/review evidence is in `.sw-factory/WO-3/`.
 

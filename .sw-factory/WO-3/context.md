@@ -30,7 +30,7 @@ Blueprints reached through `@…` mentions and links while reading linked bluepr
 ## Delivery
 
 - Branch: kartik/growth-factory-interface
-- Pull Request URL:
+- Pull Request URL: https://github.com/MaxtheN/theclipfactory/pull/3
 
 ## Verified interface delivery
 
@@ -40,3 +40,6 @@ Blueprints reached through `@…` mentions and links while reading linked bluepr
 - Actual packaged Cocoa window, authenticated cookie, close/reopen smoke passed; runtime slow-import check uses a test double, not inference.
 - Native single-file build excludes preview seed; hosted fixture bundle matches deployed bytes.
 - README files and master remain unchanged. Interface-first scope; production integration remains separate.
+
+- Native live interface viewer is open at http://127.0.0.1:5178/; keep the current Vite/viewer processes running for the design continuation.
+- Design continuation: Codex chat 01a1d9ad-95d2-7c60-a340-728d99d8b57c (Refine UI design), user-authorized context handoff.
