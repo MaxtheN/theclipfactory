@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { workspaceApi, initialDirection, reviewPreview } from "./workspaceApi";
 import type { Workspace } from "./useCampaignWorkspace";
-import { Disclosure, Field, Pill, Poster, Empty } from "./parts";
+import {
+  Disclosure,
+  Field,
+  FieldGroup,
+  Pill,
+  Poster,
+  Empty,
+  PrimaryAction,
+} from "./parts";
 import { Icon } from "./Icon";
 
 export function Research({ w, next }: { w: Workspace; next: () => void }) {
@@ -124,64 +132,74 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
                 : "Draft"}
           </Pill>
         </div>
-        <Field label="The idea worth testing">
-          {(id) => (
-            <input
-              className="gf-idea-input"
-              id={id}
-              value={angle}
-              onChange={(e) => setAngle(e.target.value)}
-              placeholder="Put the point before the context"
-            />
-          )}
-        </Field>
-        <Field label="What should the source moment do?">
-          {(id) => (
-            <textarea
-              id={id}
-              value={selection}
-              onChange={(e) => setSelection(e.target.value)}
-              rows={2}
-            />
-          )}
-        </Field>
-        <div className="gf-variant-pair">
-          <div>
-            <span className="gf-variant-letter">A</span>
-            <span className="gf-overline">FIRST APPROACH</span>
-            <Field label="Opening A">
-              {(id) => (
-                <input
-                  id={id}
-                  value={hookA}
-                  onChange={(e) => setHookA(e.target.value)}
-                  maxLength={250}
-                />
-              )}
-            </Field>
+        <FieldGroup
+          title="The idea & source moment"
+          className="gf-direction-group"
+        >
+          <Field label="The idea worth testing">
+            {(id) => (
+              <input
+                className="gf-idea-input"
+                id={id}
+                value={angle}
+                onChange={(e) => setAngle(e.target.value)}
+                placeholder="Put the point before the context"
+              />
+            )}
+          </Field>
+          <Field label="What should the source moment do?">
+            {(id) => (
+              <textarea
+                id={id}
+                value={selection}
+                onChange={(e) => setSelection(e.target.value)}
+                rows={2}
+              />
+            )}
+          </Field>
+        </FieldGroup>
+        <FieldGroup
+          title="The opening experiment"
+          className="gf-experiment-group"
+        >
+          <div className="gf-variant-pair">
+            <div>
+              <span className="gf-variant-letter">A</span>
+              <span className="gf-overline">FIRST APPROACH</span>
+              <Field label="Opening A">
+                {(id) => (
+                  <input
+                    id={id}
+                    value={hookA}
+                    onChange={(e) => setHookA(e.target.value)}
+                    maxLength={250}
+                  />
+                )}
+              </Field>
+            </div>
+            <div>
+              <span className="gf-variant-letter">B</span>
+              <span className="gf-overline">THE ALTERNATIVE</span>
+              <Field label="Opening B">
+                {(id) => (
+                  <input
+                    id={id}
+                    value={hookB}
+                    onChange={(e) => setHookB(e.target.value)}
+                    maxLength={250}
+                  />
+                )}
+              </Field>
+            </div>
           </div>
-          <div>
-            <span className="gf-variant-letter">B</span>
-            <span className="gf-overline">THE ALTERNATIVE</span>
-            <Field label="Opening B">
-              {(id) => (
-                <input
-                  id={id}
-                  value={hookB}
-                  onChange={(e) => setHookB(e.target.value)}
-                  maxLength={250}
-                />
-              )}
-            </Field>
+          <div className="gf-test-variable">
+            <Icon name="settings" size={15} />
+            <span>
+              One variable: <strong>opening treatment</strong>
+            </span>
+            <span>Same source. Same context.</span>
           </div>
-        </div>
-        <div className="gf-test-variable">
-          <Icon name="settings" size={15} />
-          <span>
-            One variable: <strong>opening treatment</strong>
-          </span>
-          <span>Same source. Same context.</span>
-        </div>
+        </FieldGroup>
         <Disclosure title="Reasoning & limits" icon="info">
           <Field label="Why try this?">
             {(id) => (
@@ -205,8 +223,19 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
             {w.profiles.find((p) => p.id === w.profileId)?.name ||
               "this profile"}
           </span>
-          <button
-            className="gf-button"
+          <PrimaryAction
+            label={
+              w.busy
+                ? "Saving…"
+                : canApprove
+                  ? "Approve direction"
+                  : "Save direction draft"
+            }
+            hoverLabel={
+              canApprove
+                ? "Approve & bring it to life"
+                : "Save a little brilliance"
+            }
             disabled={
               blocked ||
               !angle.trim() ||
@@ -216,14 +245,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
               !reason.trim()
             }
             onClick={() => void primary()}
-          >
-            {w.busy
-              ? "Saving…"
-              : canApprove
-                ? "Approve direction"
-                : "Save direction draft"}
-            <Icon name={canApprove ? "arrow" : "check"} size={16} />
-          </button>
+          />
         </div>
       </section>
     </div>

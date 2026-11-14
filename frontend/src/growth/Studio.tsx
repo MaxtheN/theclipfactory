@@ -8,9 +8,11 @@ import {
   Disclosure,
   Empty,
   Field,
+  FieldGroup,
   Pill,
   Poster,
   PreviewNote,
+  PrimaryAction,
   formatTime,
 } from "./parts";
 import { Icon } from "./Icon";
@@ -338,92 +340,96 @@ export function Studio({
         </div>
         {!selected || revision ? (
           <div className="gf-form-fields">
-            <Field label="Source footage">
-              {(id) => (
-                <select
-                  id={id}
-                  value={sourceId}
-                  onChange={(e) => {
-                    setSourceId(e.target.value);
-                    setStart("0");
-                    const s = sources.find((v) => v.id === e.target.value);
-                    setEnd(String(Math.min(30, s?.duration || 30)));
-                  }}
-                >
-                  <option value="" disabled>
-                    Choose a source
-                  </option>
-                  {sources.map((s) => (
-                    <option value={s.id} key={s.id}>
-                      {s.name}
+            <FieldGroup title="Source & moment">
+              <Field label="Source footage">
+                {(id) => (
+                  <select
+                    id={id}
+                    value={sourceId}
+                    onChange={(e) => {
+                      setSourceId(e.target.value);
+                      setStart("0");
+                      const s = sources.find((v) => v.id === e.target.value);
+                      setEnd(String(Math.min(30, s?.duration || 30)));
+                    }}
+                  >
+                    <option value="" disabled>
+                      Choose a source
                     </option>
-                  ))}
-                </select>
+                    {sources.map((s) => (
+                      <option value={s.id} key={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+              <div className="gf-form-pair">
+                <Field label="Start (seconds)">
+                  {(id) => (
+                    <input
+                      id={id}
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={start}
+                      onChange={(e) => setStart(e.target.value)}
+                    />
+                  )}
+                </Field>
+                <Field label="End (seconds)">
+                  {(id) => (
+                    <input
+                      id={id}
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={end}
+                      onChange={(e) => setEnd(e.target.value)}
+                    />
+                  )}
+                </Field>
+              </div>
+            </FieldGroup>
+            <FieldGroup title="Edit treatment">
+              <Field label="Opening treatment">
+                {(id) => (
+                  <select
+                    id={id}
+                    value={hook || direction?.hooks[0] || ""}
+                    onChange={(e) => setHook(e.target.value)}
+                  >
+                    {(direction?.hooks.length
+                      ? direction.hooks
+                      : ["Choose approved direction first"]
+                    ).map((h) => (
+                      <option value={h} key={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+              {revision && (
+                <Field label="What would make it better?">
+                  {(id) => (
+                    <textarea
+                      id={id}
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                      placeholder="Start two seconds later. Keep captions static."
+                      rows={3}
+                    />
+                  )}
+                </Field>
               )}
-            </Field>
-            <div className="gf-form-pair">
-              <Field label="Start (seconds)">
-                {(id) => (
-                  <input
-                    id={id}
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={start}
-                    onChange={(e) => setStart(e.target.value)}
-                  />
-                )}
-              </Field>
-              <Field label="End (seconds)">
-                {(id) => (
-                  <input
-                    id={id}
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={end}
-                    onChange={(e) => setEnd(e.target.value)}
-                  />
-                )}
-              </Field>
-            </div>
-            <Field label="Opening treatment">
-              {(id) => (
-                <select
-                  id={id}
-                  value={hook || direction?.hooks[0] || ""}
-                  onChange={(e) => setHook(e.target.value)}
-                >
-                  {(direction?.hooks.length
-                    ? direction.hooks
-                    : ["Choose approved direction first"]
-                  ).map((h) => (
-                    <option value={h} key={h}>
-                      {h}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Field>
-            {revision && (
-              <Field label="What would make it better?">
-                {(id) => (
-                  <textarea
-                    id={id}
-                    value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
-                    placeholder="Start two seconds later. Keep captions static."
-                    rows={3}
-                  />
-                )}
-              </Field>
-            )}
-            <div className="gf-spec-row">
-              <span>FORMAT</span>
-              <strong>Vertical · 9:16</strong>
-              <span>CAPTIONS</span>
-              <strong>Source subtitles</strong>
-            </div>
+              <div className="gf-spec-row">
+                <span>FORMAT</span>
+                <strong>Vertical · 9:16</strong>
+                <span>CAPTIONS</span>
+                <strong>Source subtitles</strong>
+              </div>
+            </FieldGroup>
             {!renderReady && (
               <p className="gf-help">
                 {!direction
@@ -441,20 +447,25 @@ export function Studio({
                 the video's duration.
               </p>
             )}
-            <button
-              className="gf-button full"
+            <PrimaryAction
+              full
+              label={
+                w.busy
+                  ? "Queuing…"
+                  : revision
+                    ? "Render a new revision"
+                    : "Make the first cut"
+              }
+              hoverLabel={
+                revision
+                  ? "Make the next version shine"
+                  : "Let’s make a great cut"
+              }
               disabled={
                 !renderReady || !rangeReady || (revision && !feedback.trim())
               }
               onClick={() => void render()}
-            >
-              {w.busy
-                ? "Queuing…"
-                : revision
-                  ? "Render a new revision"
-                  : "Make the first cut"}
-              <Icon name="spark" size={16} />
-            </button>
+            />
             {revision && (
               <button
                 className="gf-button ghost full"
@@ -571,8 +582,10 @@ export function Studio({
                   </button>
                 </>
               ) : (
-                <button
-                  className="gf-button full"
+                <PrimaryAction
+                  full
+                  label="Approve this clip"
+                  hoverLabel="Approve a keeper"
                   disabled={!canReview || !!playbackError}
                   onClick={() =>
                     void w.run(
@@ -583,10 +596,7 @@ export function Studio({
                         : "This exact clip is approved. Your export is ready.",
                     )
                   }
-                >
-                  Approve this clip
-                  <Icon name="check" size={16} />
-                </button>
+                />
               )}
               <button
                 className="gf-button secondary full"

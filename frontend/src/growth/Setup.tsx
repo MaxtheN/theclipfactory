@@ -2,7 +2,16 @@ import { useRef, useState, type DragEvent } from "react";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, reviewPreview } from "./workspaceApi";
-import { Disclosure, Empty, Field, Pill, Poster, formatTime } from "./parts";
+import {
+  Disclosure,
+  Empty,
+  Field,
+  FieldGroup,
+  Pill,
+  Poster,
+  PrimaryAction,
+  formatTime,
+} from "./parts";
 import { Icon } from "./Icon";
 
 export function Setup({
@@ -202,121 +211,125 @@ export function Setup({
           </div>
         </div>
         <div className="gf-form-fields">
-          <Field label="Campaign name">
-            {(id) => (
-              <input
-                id={id}
-                maxLength={200}
-                placeholder="e.g. Founder stories · November"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            )}
-          </Field>
-          <Field label="Who are we speaking to?">
-            {(id) => (
-              <input
-                id={id}
-                placeholder="Builders, founders and curious minds"
-                value={audience}
-                onChange={(e) => setAudience(e.target.value)}
-              />
-            )}
-          </Field>
-          <Field label="What are we working toward?">
-            {(id) => (
-              <select
-                id={id}
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-              >
-                {![
-                  "Discovery",
-                  "Full episode visits",
-                  "Qualified engagement",
-                  "Brand awareness",
-                ].includes(goal) && <option>{goal}</option>}
-                <option>Discovery</option>
-                <option>Full episode visits</option>
-                <option>Qualified engagement</option>
-                <option>Brand awareness</option>
-              </select>
-            )}
-          </Field>
-          <div className="gf-field">
-            <span className="gf-label">
-              Account context <span>local profiles</span>
-            </span>
-            <div className="gf-profile-options">
-              {w.profiles.map((p) => (
-                <label
-                  key={p.id}
-                  className={selected.includes(p.id) ? "selected" : ""}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(p.id)}
-                    disabled={blocked || campaign?.profile_ids.includes(p.id)}
-                    onChange={(e) =>
-                      setSelected((old) =>
-                        e.target.checked
-                          ? [...old, p.id]
-                          : old.filter((i) => i !== p.id),
-                      )
-                    }
-                  />
-                  <Icon name="headphones" size={14} />
-                  {p.name}
-                  {selected.includes(p.id) && <Icon name="check" size={13} />}
-                </label>
-              ))}
-            </div>
-          </div>
-          <Disclosure title="Add an account profile" icon="plus">
-            <Field label="Profile name">
+          <FieldGroup title="Campaign essentials">
+            <Field label="Campaign name">
               {(id) => (
                 <input
                   id={id}
-                  placeholder="e.g. Founder stories"
-                  value={profileName}
-                  onChange={(e) => setProfileName(e.target.value)}
+                  maxLength={200}
+                  placeholder="e.g. Founder stories · November"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                 />
               )}
             </Field>
-            <button
-              className="gf-button secondary compact"
-              disabled={!profileName.trim() || blocked}
-              onClick={() =>
-                void w.run(async () => {
-                  const p = await workspaceApi.profile({
-                    name: profileName.trim(),
-                    audience,
-                    objective: "discovery",
-                    primary_metric: null,
-                    brand_context: "",
-                    creative_preferences: constraints,
-                  });
-                  setSelected((old) => [...old, p.id]);
-                  setProfileName("");
-                }, "Local profile created. No social account was connected.")
-              }
-            >
-              Create profile
-              <Icon name="plus" size={14} />
-            </button>
-          </Disclosure>
-          <Disclosure title="Brand guardrails" icon="lock">
-            <Field label="What should every edit respect?">
+            <Field label="Who are we speaking to?">
               {(id) => (
-                <textarea
+                <input
                   id={id}
-                  value={constraints}
-                  onChange={(e) => setConstraints(e.target.value)}
-                  rows={3}
+                  placeholder="Builders, founders and curious minds"
+                  value={audience}
+                  onChange={(e) => setAudience(e.target.value)}
                 />
               )}
             </Field>
-          </Disclosure>
+            <Field label="What are we working toward?">
+              {(id) => (
+                <select
+                  id={id}
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                >
+                  {![
+                    "Discovery",
+                    "Full episode visits",
+                    "Qualified engagement",
+                    "Brand awareness",
+                  ].includes(goal) && <option>{goal}</option>}
+                  <option>Discovery</option>
+                  <option>Full episode visits</option>
+                  <option>Qualified engagement</option>
+                  <option>Brand awareness</option>
+                </select>
+              )}
+            </Field>
+          </FieldGroup>
+          <FieldGroup title="Profile & guardrails">
+            <div className="gf-field">
+              <span className="gf-label">
+                Account context <span>local profiles</span>
+              </span>
+              <div className="gf-profile-options">
+                {w.profiles.map((p) => (
+                  <label
+                    key={p.id}
+                    className={selected.includes(p.id) ? "selected" : ""}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(p.id)}
+                      disabled={blocked || campaign?.profile_ids.includes(p.id)}
+                      onChange={(e) =>
+                        setSelected((old) =>
+                          e.target.checked
+                            ? [...old, p.id]
+                            : old.filter((i) => i !== p.id),
+                        )
+                      }
+                    />
+                    <Icon name="headphones" size={14} />
+                    {p.name}
+                    {selected.includes(p.id) && <Icon name="check" size={13} />}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <Disclosure title="Add an account profile" icon="plus">
+              <Field label="Profile name">
+                {(id) => (
+                  <input
+                    id={id}
+                    placeholder="e.g. Founder stories"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                  />
+                )}
+              </Field>
+              <button
+                className="gf-button secondary compact"
+                disabled={!profileName.trim() || blocked}
+                onClick={() =>
+                  void w.run(async () => {
+                    const p = await workspaceApi.profile({
+                      name: profileName.trim(),
+                      audience,
+                      objective: "discovery",
+                      primary_metric: null,
+                      brand_context: "",
+                      creative_preferences: constraints,
+                    });
+                    setSelected((old) => [...old, p.id]);
+                    setProfileName("");
+                  }, "Local profile created. No social account was connected.")
+                }
+              >
+                Create profile
+                <Icon name="plus" size={14} />
+              </button>
+            </Disclosure>
+            <Disclosure title="Brand guardrails" icon="lock">
+              <Field label="What should every edit respect?">
+                {(id) => (
+                  <textarea
+                    id={id}
+                    value={constraints}
+                    onChange={(e) => setConstraints(e.target.value)}
+                    rows={3}
+                  />
+                )}
+              </Field>
+            </Disclosure>
+          </FieldGroup>
         </div>
         <div className="gf-card-action">
           <span>
@@ -324,14 +337,12 @@ export function Setup({
               ? `${sourceIds.length} source${sourceIds.length === 1 ? "" : "s"}. One clear direction.`
               : "You can save the brief before adding footage."}
           </span>
-          <button
-            className="gf-button"
+          <PrimaryAction
+            label={w.busy ? "Saving…" : "Save & find direction"}
+            hoverLabel="Let’s make this one count"
             disabled={blocked || !name.trim() || !selected.length}
             onClick={() => void save()}
-          >
-            {w.busy ? "Saving…" : "Save & find direction"}
-            <Icon name="arrow" size={16} />
-          </button>
+          />
         </div>
       </section>
     </div>

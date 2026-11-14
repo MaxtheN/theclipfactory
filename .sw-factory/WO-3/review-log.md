@@ -110,3 +110,31 @@ Reviewed the primary agent's observed Setup, Research, Studio and Results screen
 ### Round 4 advisory resolution
 
 Both advisories were resolved during the same review pass. Re-inspected the final selectors: real video now shares preview responsive maximum widths at 1190px/980px/520px and the 210px small-layout width. Source thumbnail title sizes also shrink appropriately at 1190px/520px. Re-inspected the architecture paragraph, which now describes the delivered neutral surfaces, forest-green selection, sticky navigation and stacked reference-preserving layout. `git diff --check` remains clean. Final verdict remains **APPROVED**, with no new unresolved findings in this design pass; the pre-existing API response-shape advisory remains separate.
+
+## Round 5 — hierarchy, glass and primary-action feedback
+
+### Scope and alignment
+
+Independent review of the next bounded presentation delta on `kartik/growth-factory-interface`: shared `FieldGroup`/`PrimaryAction`, paper-plane icon, grouped Setup/Research/Studio fields, Results primary-action presentation, and scoped glass/feedback CSS. Prior rounds continue to cover unchanged shell/service/launcher behavior. The updated implementation plan describes the scope before delivery. The change stays within the user-authorized interface lane and preserves the four-stage campaign architecture.
+
+### Architecture, behavior and accessibility
+
+Compared the stage diffs against their prior handlers, controlled values, disabled predicates and approval branches. No production-state, API, storage, job, export-link or approval-gate changes were found. Semantic fieldsets contain legends and existing labeled controls; their min-width and float/clear rules prevent the default fieldset minimum from forcing grid overflow. Shared action buttons specify `type="button"`, retain the original dynamic accessible name and disabled behavior, and keep decorative copy/icon spans out of the accessibility tree. Both visual labels reserve the same grid area so a hover does not change the available action width. Reduced-motion rules override the plane's infinite animation and all transitions. Disabled actions do not trigger the visual swap or animation.
+
+The frosting uses only web-surface backdrop layers; it introduces no native desktop-through transparency or new security boundary. Unsupported-blur and reduced-transparency conditions restore opaque surfaces. Existing readable input surfaces, focus outlines, version/scope labels, sample limitations and exact-version approval remain intact. README files and default branch remain outside the changes.
+
+### Verification
+
+Independently ran `npm test`: 9 files / 148 tests passed. Independently ran `npm run build`: TypeScript and single-file Vite build passed (344.27 kB native HTML). `git diff --check` passed. No additional cosmetic tests were added. Primary agent reports legible Setup browser presentation, stable accessible action name, expected focus-driven hover text and active plane animation, and continues remaining-stage/compact checks. Browser evidence is credited to the primary agent; the reviewer did not change user app state, reset drafts or claim an independent native/render-quality smoke.
+
+### Advisory
+
+**Advisory — `PrimaryAction` visual labels, user-facing accessibility:** the replacement celebratory copy differs from the stable accessible label while hovered/focused. Keeping the actual action phrase visible in that state would improve voice-control label matching and preserve unambiguous action meaning, especially for Setup's generic celebratory phrase. The underlying accessible name and click behavior remain correct, so this is not a blocking workflow finding. The architecture visual-system notes should also describe the new in-app frosting without implying native transparency.
+
+### Verdict
+
+**APPROVED** — no blocking findings in this bounded pass. Preserve the live viewer/server and draft state. Delivery belongs only on the existing team-repository feature branch; this review authorizes no default-branch merge or push.
+
+### Round 5 advisory resolution
+
+Re-inspected `PrimaryAction`: enabled buttons now expose the complete original action phrase followed by the celebratory phrase in one accessible name, stable across hover/focus. Disabled buttons expose only the original visible action, matching their non-swapping presentation. This includes either visible label in the accessible name and resolves the label-matching advisory without changing handlers or conditions. Existing journey tests now use anchored action-prefix matches with a word boundary; their approval/state assertions are unchanged. `git diff --check` passes. Primary agent is rerunning suite/build after this accessibility-only correction. Verdict remains **APPROVED**; no new blocking findings.

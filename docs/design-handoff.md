@@ -17,8 +17,8 @@ Measure elapsed time, active human minutes, accepted outputs, revisions and know
 
 - Team repo: https://github.com/MaxtheN/theclipfactory ; default branch is `master`.
 - Local checkout: `/Users/kartikbihani/WIN/theclipfactory`.
-- UI branch: `kartik/growth-factory-interface`; draft team PR: https://github.com/MaxtheN/theclipfactory/pull/3 .
-- Fork: https://github.com/kartikeybihani/theclipfactory . Current CLI user lacks push permission on the team repo, so the UI handoff uses the fork branch. Do not merge or overwrite teammates' work.
+- UI branch: `kartik/growth-factory-interface`. Earlier fork-backed draft PR: https://github.com/MaxtheN/theclipfactory/pull/3 . Current delivery is the same-named branch directly in the team repo; the older fork PR does not automatically track this branch.
+- Team feature branch: https://github.com/MaxtheN/theclipfactory/tree/kartik/growth-factory-interface . Kartik accepted the repository invitation; WRITE access was verified and the completed refinement was pushed directly to this branch. Use this team-repo branch for subsequent pushes. The earlier fork at https://github.com/kartikeybihani/theclipfactory is historical delivery. Latest instruction: keep all changes on the dedicated feature branch; do not push or merge to master or overwrite teammates' work.
 - README files are explicitly out of editing scope. Architecture/journey are in `docs/interface-architecture.md`. Execution/review evidence is in `.sw-factory/WO-3/`.
 
 ## What exists now
@@ -42,7 +42,7 @@ This is an interface-first build. Native requests use the existing real API adap
 
 ## Design direction and sources
 
-The user now wants substantial taste-driven design feedback and refinement. Current direction: cloud-blue canvas, legible frosted panels, ink typography, restrained mint, clear grouping, one primary decision per step, progressive disclosures and short reduced-motion-aware transitions. These are starting points, not a reason to resist the user's new design choices.
+Current refinement: readable type and controls, forest-green navigation, and frosted shell/panels over a quiet blue/mint in-app backdrop. Related controls have semantic groups: campaign essentials, profile/guardrails, creative hypothesis, opening experiment, source/moment and edit treatment. Enabled primary actions swap to celebratory visual copy on hover/focus and loop a decorative paper plane; reduced motion disables the loop. Glass has solid fallbacks for unsupported blur and reduced transparency. This does not make the native desktop wallpaper visible through the window. One primary decision per step, preserved drafts and explicit approval remain intact.
 
 Shared Google Doc: https://docs.google.com/document/d/1z4zDtS_dWYrqE_WLMYj71QUsTgEuI9U_ImV6mCc5n6o/edit?tab=t.4nefn0b39miw . Tabs: MVP & Visuals (six-page current plan), Build Notes, Archive · Early notes (historical; preserve).
 

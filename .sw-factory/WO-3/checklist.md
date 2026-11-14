@@ -71,3 +71,15 @@
 - [x] Independent review Round 4 APPROVED; responsive real-video sizing and architecture-copy advisories resolved. No new unresolved findings in this pass.
 - [x] Existing Vite server and native viewer processes preserved. No storage reset or competing native window opened; fresh native visual automation was unavailable, so no new native smoke is claimed.
 - [x] Work order returned to In Review. Latest user instruction keeps the entire change set on `kartik/growth-factory-interface`; no main/master push or merge occurred.
+
+## Hierarchy, glass and primary-action delight
+
+- [x] Bounded implementation plan recorded before product edits; existing requirements/blueprint and approval boundaries retained.
+- [x] Related campaign, profile, hypothesis, experiment, source/range and edit-treatment controls grouped semantically; no persistence/API changes.
+- [x] Frosted web surfaces with readable fields, unsupported-blur fallback and reduced-transparency preference; native wallpaper transparency is not claimed.
+- [x] Primary CTA visual text swaps on enabled hover/focus and decorative plane loops. Accessible name covers both visual labels; disabled action remains unchanged. Reduced motion disables the loop.
+- [x] All 148 frontend tests and TypeScript/Vite build passed after final accessibility fix; no redundant cosmetic tests added.
+- [x] Desktop screens and 390px Setup/Studio/Results layouts inspected; no page overflow. Button dimensions stayed 225.39×48px before/after focus; invalid range disabled production and removed flight animation. No console errors.
+- [x] Independent review Round 5 APPROVED; label-in-name advisory resolved. Screenshot: `/Users/kartikbihani/WIN/design/growth-factory/interface-frosted-hierarchy.jpg`.
+- [x] Existing native viewer and Vite processes preserved; no user draft reset, README change or default-branch push.
+- [x] Team WRITE permission verified after invitation acceptance; existing delivery pushed to `MaxtheN/theclipfactory:kartik/growth-factory-interface`, which is now upstream. Work order returned to In Review for this pass.

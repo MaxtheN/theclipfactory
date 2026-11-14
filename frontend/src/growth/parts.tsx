@@ -1,6 +1,53 @@
 import { useId, type ReactNode } from "react";
 import { Icon } from "./Icon";
 import { reviewPreview } from "./workspaceApi";
+export function PrimaryAction({
+  label,
+  hoverLabel,
+  disabled,
+  onClick,
+  full = false,
+}: {
+  label: string;
+  hoverLabel: string;
+  disabled?: boolean;
+  onClick: () => void;
+  full?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={`gf-button gf-primary-action${full ? " full" : ""}`}
+      aria-label={disabled ? label : `${label}. ${hoverLabel}`}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span className="gf-action-copy" aria-hidden="true">
+        <span className="gf-action-default">{label}</span>
+        <span className="gf-action-win">{hoverLabel}</span>
+      </span>
+      <span className="gf-plane-slot" aria-hidden="true">
+        <Icon name="send" size={18} />
+      </span>
+    </button>
+  );
+}
+export function FieldGroup({
+  title,
+  children,
+  className = "",
+}: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <fieldset className={`gf-field-group ${className}`}>
+      <legend>{title}</legend>
+      {children}
+    </fieldset>
+  );
+}
 export function Field({
   label,
   children,

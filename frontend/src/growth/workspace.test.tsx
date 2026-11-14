@@ -33,14 +33,14 @@ describe("Growth Factory interface", () => {
       ),
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Save & find direction" }),
+      screen.getByRole("button", { name: /^Save & find direction\b/ }),
     );
     await screen.findByRole("heading", {
       name: "Choose a creative direction.",
     });
     const before = await previewRequest<Campaign>(path);
     expect(before.active_strategy_id).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Approve direction" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Approve direction\b/ }));
     await screen.findByRole("heading", {
       name: "Make the cut.",
     });
@@ -48,7 +48,7 @@ describe("Growth Factory interface", () => {
       "preview-strategy-v1",
     );
     expect(
-      screen.getByRole("button", { name: "Make the first cut" }),
+      screen.getByRole("button", { name: /^Make the first cut\b/ }),
     ).toBeEnabled();
     expect(
       screen.queryByRole("link", { name: /Export/ }),
@@ -82,19 +82,19 @@ describe("approval transition regressions", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /02 Research/ }));
     expect(
-      screen.getByRole("button", { name: "Approve direction" }),
+      screen.getByRole("button", { name: /^Approve direction\b/ }),
     ).toBeEnabled();
     fireEvent.change(
       screen.getByLabelText("Reference link or source locator"),
       { target: { value: "Episode A, 00:18–00:25" } },
     );
     expect(
-      screen.queryByRole("button", { name: "Approve direction" }),
+      screen.queryByRole("button", { name: /^Approve direction\b/ }),
     ).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: "Save direction draft" }),
+      screen.getByRole("button", { name: /^Save direction draft\b/ }),
     );
-    await screen.findByRole("button", { name: "Approve direction" });
+    await screen.findByRole("button", { name: /^Approve direction\b/ });
     const versions = await previewRequest<StrategyVersion[]>(
       `${path}/strategies`,
     );
@@ -148,20 +148,20 @@ describe("approval transition regressions", () => {
     });
     localStorage.setItem("growth-stage", "results");
     render(<GrowthApp />);
-    await screen.findByRole("button", { name: "Approve next test" });
+    await screen.findByRole("button", { name: /^Approve next test\b/ });
     fireEvent.change(screen.getByLabelText("Proposed source-selection rule"), {
       target: { value: "An unsaved different rule." },
     });
     expect(
-      screen.queryByRole("button", { name: "Approve next test" }),
+      screen.queryByRole("button", { name: /^Approve next test\b/ }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Save next test draft" }),
+      screen.getByRole("button", { name: /^Save next test draft\b/ }),
     ).toBeEnabled();
     fireEvent.change(screen.getByLabelText("Proposed source-selection rule"), {
       target: { value: "A saved specific rule." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Approve next test" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Approve next test\b/ }));
     await screen.findByRole("heading", {
       name: "Make the cut.",
     });
@@ -171,10 +171,10 @@ describe("approval transition regressions", () => {
       ),
     );
     expect(
-      screen.getByRole("button", { name: "Make the first cut" }),
+      screen.getByRole("button", { name: /^Make the first cut\b/ }),
     ).toBeEnabled();
     expect(
-      screen.queryByRole("button", { name: "Approve this clip" }),
+      screen.queryByRole("button", { name: /^Approve this clip\b/ }),
     ).not.toBeInTheDocument();
     expect(await previewRequest<Clip[]>("/api/clips")).toHaveLength(1);
   });

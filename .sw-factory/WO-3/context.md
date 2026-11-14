@@ -48,4 +48,10 @@ Blueprints reached through `@…` mentions and links while reading linked bluepr
 
 Neutral solid surfaces, readable type/controls, forest-green navigation, concise stage headings and persistent sidebar replace the earlier low-contrast glass presentation. All four stages retain their workflow and saved-draft boundaries. Round 4 independent review APPROVED; 148 tests and TypeScript/Vite build passed. Desktop and compact browser review completed with no page overflow at 390px/900px. Existing native viewer/Vite processes remain running; no fresh native visual smoke was obtained in this pass. Screenshot: `/Users/kartikbihani/WIN/design/growth-factory/interface-refined-setup.jpg`.
 
-Latest user branch instruction supersedes the brief frontend-only default-branch authorization: keep all changes on the dedicated feature branch. No default-branch push or merge occurred. Team repository permission remains READ; delivery uses the existing writable fork branch.
+Latest user branch instruction supersedes the brief frontend-only default-branch authorization: keep all changes on the dedicated feature branch. No default-branch push or merge occurred. At this earlier delivery the team repository permission was READ and delivery used the writable fork; see the updated team delivery below.
+
+## Current team delivery and glass refinement
+
+Kartik accepted the team-repo invitation; `gh repo view` confirmed WRITE. Existing commit `0c7c207` was pushed to `origin/kartik/growth-factory-interface` in MaxtheN/theclipfactory and upstream changed to that team branch. Continue pushing there, never to master. Earlier fork/PR #3 remains historical context; the team feature branch is current delivery.
+
+Semantic related-control groups, frosted web surfaces over a soft in-app backdrop, and enabled primary-action win copy/paper-plane loops are delivered. Native wallpaper-through transparency is not implemented. Reduced motion/transparency and unsupported-blur fallbacks are present. Round 5 review APPROVED with its accessibility advisory resolved; final 148 tests and TS/Vite build passed. Browser checks verified desktop/390px layouts, disabled rendering, no CTA size jump, and no console errors. Saved screenshot: `/Users/kartikbihani/WIN/design/growth-factory/interface-frosted-hierarchy.jpg`. Native/Vite processes and user drafts were preserved.

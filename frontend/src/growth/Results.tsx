@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
 import { reviewPreview, workspaceApi } from "./workspaceApi";
-import { Disclosure, Empty, Field, Pill, Poster } from "./parts";
+import { Disclosure, Empty, Field, Pill, Poster, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
 
 export function Results({
@@ -374,8 +374,23 @@ export function Results({
           <span>
             <Icon name="lock" size={13} /> Other profiles stay unchanged.
           </span>
-          <button
-            className="gf-button"
+          <PrimaryAction
+            label={
+              w.busy
+                ? "Saving…"
+                : canApprove
+                  ? "Approve next test"
+                  : pending
+                    ? "Save next test draft"
+                    : "Propose next test"
+            }
+            hoverLabel={
+              canApprove
+                ? "Approve & keep growing"
+                : pending
+                  ? "Save the next good idea"
+                  : "Find your next good idea"
+            }
             disabled={
               blocked ||
               !active ||
@@ -383,16 +398,7 @@ export function Results({
                 (!known.length || !rule.trim() || !hypothesis.trim()))
             }
             onClick={() => void primary()}
-          >
-            {w.busy
-              ? "Saving…"
-              : canApprove
-                ? "Approve next test"
-                : pending
-                  ? "Save next test draft"
-                  : "Propose next test"}
-            <Icon name="arrow" size={16} />
-          </button>
+          />
         </div>
         <Disclosure title="Production impact & receipts" icon="clock">
           <p>

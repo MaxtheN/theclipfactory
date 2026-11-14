@@ -6,6 +6,7 @@ const paths: Record<string, string> = {
     "M3 8h18v12H3z M3 8V4h18v4 M8 4l-3 4 M14 4l-3 4 M20 4l-3 4 M10 12l5 3-5 3z",
   results: "M4 20V12 M10 20V4 M16 20V8 M22 20V2",
   arrow: "M4 12h16 M14 6l6 6-6 6",
+  send: "M22 2L9 15 M22 2l-8 20-5-7-7-5 20-8z",
   back: "M20 12H4 M10 6l-6 6 6 6",
   check: "M5 12l4 4L19 6",
   plus: "M12 5v14 M5 12h14",
