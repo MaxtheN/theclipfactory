@@ -503,7 +503,8 @@ class Models:
                 "Not enough currently available memory. Close other apps or use the smaller model."
             )
 
-    def run(self, job_id: str, identifier: str, action: str, **payload) -> dict:
+    def run(self, job_id: str, identifier: str, action: str, *, keep_warm: bool = False, **payload) -> dict:
+        """keep_warm: one of many calls in a row (scout swarm); Ollama keeps weights loaded between them."""
         if action not in {"generate", "transcribe", "narrate"}:
             raise WorkError("Unsupported inference action.")
         from .inference_worker import validate_request
@@ -515,7 +516,7 @@ class Models:
             raise WorkError("Inference input exceeds limits or is invalid.") from exc
         self.require(identifier, {"generate": "llm", "transcribe": "asr", "narrate": "tts"}[action])
         if is_ollama(identifier):
-            return self._run_ollama(job_id, identifier, data)
+            return self._run_ollama(job_id, identifier, data, keep_warm=keep_warm)
         worker = Path(__file__).with_name("inference_worker.py")
         if not worker.is_file():
             raise WorkError(
@@ -565,9 +566,10 @@ class Models:
         except (OSError, ValueError, TypeError) as exc:
             raise WorkError("Inference worker returned an invalid result.") from exc
 
-    def _run_ollama(self, job_id: str, identifier: str, data: dict) -> dict:
+    def _run_ollama(self, job_id: str, identifier: str, data: dict, *, keep_warm: bool = False) -> dict:
         name = model_name(identifier)
-        self.jobs.update(job_id, progress=35, message=f"Running {name} through local Ollama")
+        if not keep_warm:  # swarm callers report their own per-scout progress
+            self.jobs.update(job_id, progress=35, message=f"Running {name} through local Ollama")
         try:
             text = self.ollama.generate(
                 name,
@@ -575,7 +577,23 @@ class Models:
                 images=data.get("images", []),
                 max_tokens=data.get("max_tokens", 1500),
                 check=lambda: self.jobs.check(job_id),
+                keep_alive="10m" if keep_warm else 0,
             )
         except OllamaError as exc:
+            self._log_ollama(job_id, name, f"ERROR: {exc}")
             raise WorkError(f"{exc} No output was fabricated.") from exc
+        self._log_ollama(job_id, name, text)
         return {"output": text}
+
+    def _log_ollama(self, job_id: str, name: str, text: str):
+        """Keep the raw reply in the local job log, like the MLX worker's output, for diagnosis."""
+        path = self.logs / f"{job_id}.log"
+        try:
+            if path.is_symlink():
+                return
+            with path.open("a", encoding="utf-8") as log:
+                log.write(f"--- {time.strftime('%Y-%m-%dT%H:%M:%S')} ollama:{name} raw reply ---\n")
+                log.write(text[:65536] + ("\n[truncated]" if len(text) > 65536 else "") + "\n")
+            path.chmod(0o600)
+        except OSError:
+            pass

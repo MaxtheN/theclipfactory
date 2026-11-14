@@ -17,6 +17,9 @@ from typing import Literal
 import psutil
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from . import scouts
+from .evidence import bounded_transcript
+from .inference_worker import MAX_PROMPT
 from .jobs import JobCancelled, Jobs, WorkError
 from .models import Models
 from .store import Store, new_id, now
@@ -169,6 +172,10 @@ class Critique(TypedOutput):
 class Revision(TypedOutput):
     decision: Literal["revise", "stop"]
     instruction: str = Field(min_length=1, max_length=1500)
+
+
+class UngroundedMoment(WorkError):
+    """No cited frame or transcript segment falls inside the proposed range."""
 
 
 def decode_output(text: str, schema: type[TypedOutput]) -> dict:
@@ -498,6 +505,12 @@ class TeamEngine:
                     + "\nDATA:\n"
                     + json.dumps(request_data, ensure_ascii=False)
                 )
+                if len(request) > MAX_PROMPT:
+                    raise WorkError(
+                        f"The {LABELS[role]} prompt is {len(request):,} characters, over the "
+                        f"{MAX_PROMPT:,} local limit. Shorten brand notes, campaign direction or feedback "
+                        "history and retry."
+                    )
                 output = self.models.run(
                     job_id, run["model_id"], "generate", prompt=request, images=list(images), max_tokens=2200
                 )
@@ -538,37 +551,105 @@ class TeamEngine:
             raise WorkError("Agent cited unknown evidence. Handoff was rejected before rendering.")
 
     @classmethod
-    def _source_refs(cls, refs: list[str], evidence: dict, start: float, end: float):
+    def _source_refs(cls, refs: list[str], evidence: dict, start: float, end: float) -> list[str]:
+        """Return the refs that ground [start, end].
+
+        Unknown IDs and performance observations still reject the handoff. A frame or transcript
+        segment that merely falls outside the range is dropped: local models often cite a
+        neighbouring segment a few seconds off, which should not discard the rest of the evidence.
+        """
         cls._refs(refs, evidence)
-        observed = False
+        kept, mismatch = [], None
         for ref in refs:
             item = evidence[ref]
             if ref.startswith("frame:"):
                 if not start <= item["time"] <= end:
-                    raise WorkError("Frame evidence does not support the proposed source range.")
-                observed = True
+                    mismatch = "Frame evidence does not support the proposed source range."
+                    continue
             elif ref.startswith("transcript:"):
                 if min(end, item["end"]) <= max(start, item["start"]):
-                    raise WorkError("Transcript evidence does not overlap the proposed source range.")
-                observed = True
+                    mismatch = "Transcript evidence does not overlap the proposed source range."
+                    continue
             elif not ref.startswith("source:"):
                 raise WorkError("Performance observations cannot ground footage or quoted speech.")
-        if not observed:
-            raise WorkError(
-                "Source metadata alone cannot ground a moment; cite sampled frames or time-associated speech."
+            kept.append(ref)
+        if not any(ref.startswith(("frame:", "transcript:")) for ref in kept):
+            raise UngroundedMoment(
+                mismatch
+                or "Source metadata alone cannot ground a moment; cite sampled frames or time-associated speech."
             )
+        return kept
+
+    def _scout_footage(self, run_id, job_id, run, video, context, validate) -> dict:
+        evidence, settings = context["evidence"], context["settings"]
+        found = scouts.scout(
+            generate=lambda prompt, images, max_tokens: self.models.run(
+                job_id,
+                run["model_id"],
+                "generate",
+                keep_warm=True,
+                prompt=prompt,
+                images=list(images),
+                max_tokens=max_tokens,
+            )["output"],
+            video=video,
+            frames_for=lambda index, times: self.frames(
+                job_id, video, times, f"scout-frames/chunk-{index:02}"
+            ),
+            objective=settings.get("objective", "discovery"),
+            brand=settings.get("brand", ""),
+            count=5,
+            direction=context.get("campaign_snapshot"),
+            check=lambda: self.jobs.check(job_id),
+            progress=lambda message: self.jobs.update(job_id, message=message),
+        )
+        self.store.patch(
+            "team_runs",
+            run_id,
+            scouting={k: found[k] for k in ["chunks", "skipped", "selector"]}
+            | {"candidates_found": len(found["pool"])},
+        )
+        moments = []
+        for moment in found["moments"]:
+            # Cite the run's own evidence IDs that fall inside the range, so the usual checks apply.
+            refs = [
+                key
+                for key, item in evidence.items()
+                if (
+                    key.startswith("transcript:")
+                    and min(moment["end"], item["end"]) > max(moment["start"], item["start"])
+                )
+                or (key.startswith("frame:") and moment["start"] <= item["time"] <= moment["end"])
+            ]
+            if refs:
+                summary = f"{moment['hook']}. {moment['reason']}".strip(". ")
+                moments.append(
+                    {
+                        "start": moment["start"],
+                        "end": moment["end"],
+                        "summary": summary[:1200] or "Scout moment",
+                        "evidence_refs": refs[:16],
+                    }
+                )
+        if not moments:
+            raise WorkError("Scouts found no speech-backed moments in this source. Select a range manually.")
+        output = Footage.model_validate(
+            {
+                "moments": moments,
+                "limitations": f"{found['chunks']} scouts each reviewed one time window and its sampled frames; "
+                "nothing between sampled frames was seen.",
+            }
+        ).model_dump()
+        validate(output)
+        return output
 
     def _evidence(self, video: dict, frames: list[dict], context: dict) -> dict:
         result = {f"source:{video['id']}": context["source"]}
-        # Bound transcript context without breaking JSON. Segment references remain inspectable.
-        used = 0
-        for index, segment in enumerate((video.get("transcript") or {}).get("segments", [])):
-            text = str(segment.get("text", ""))[:2000]
-            if used + len(text) > 18000:
-                break
-            result[f"transcript:{index}"] = {k: segment.get(k) for k in ["start", "end"]}
-            result[f"transcript:{index}"]["text"] = text
-            used += len(text)
+        # Bound serialized size, not just text, and cover the whole source: long streams become
+        # time windows with excerpts. Each reference keeps the start/end the range checks use.
+        rows, merged = bounded_transcript((video.get("transcript") or {}).get("segments", []))
+        for index, row in enumerate(rows):
+            result[f"transcript:{index}"] = {**row, "type": "transcript_window"} if merged else row
         for index, frame in enumerate(frames):
             result[f"frame:{index}"] = {"time": frame["time"], "type": "sampled_frame"}
         for previous in context["previous_observations"]:
@@ -701,7 +782,10 @@ class TeamEngine:
                             or moment["end"] - moment["start"] > 180
                         ):
                             raise WorkError("Footage analyst proposed an invalid source range.")
-                        self._source_refs(moment["evidence_refs"], evidence, moment["start"], moment["end"])
+                        # Keeps the citations that ground the range; drops ones a few seconds off.
+                        moment["evidence_refs"] = self._source_refs(
+                            moment["evidence_refs"], evidence, moment["start"], moment["end"]
+                        )
                     except WorkError as exc:
                         rejected = exc
                         continue
@@ -717,16 +801,26 @@ class TeamEngine:
 
             reused_footage = False
             try:
-                footage = self._agent(
-                    run_id,
-                    job_id,
-                    "footage_analyst",
-                    Footage,
-                    {"assignment": assignments["footage_analyst"], "context": context},
-                    refs=refs,
-                    images=[f["path"] for f in sampled],
-                    validate=validate_footage,
-                )
+                if scouts.is_long(video):
+                    # Long sources: a scout swarm reads every time window instead of one thinned prompt.
+                    footage = self._operation(
+                        run_id,
+                        job_id,
+                        "footage_analyst",
+                        lambda: self._scout_footage(run_id, job_id, run, video, context, validate_footage),
+                        refs=refs,
+                    )
+                else:
+                    footage = self._agent(
+                        run_id,
+                        job_id,
+                        "footage_analyst",
+                        Footage,
+                        {"assignment": assignments["footage_analyst"], "context": context},
+                        refs=refs,
+                        images=[f["path"] for f in sampled],
+                        validate=validate_footage,
+                    )
             except WorkError:
                 saved = self._saved_footage(video, evidence)
                 if saved is None:

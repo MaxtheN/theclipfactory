@@ -170,3 +170,23 @@ def test_llm_id_accepts(value):
 def test_llm_id_rejects(value):
     with pytest.raises(ValidationError):
         TypeAdapter(LlmId).validate_python(value)
+
+
+def test_raw_reply_is_kept_in_the_job_log(models):
+    models.ollama = fake()
+    models.run("job-1", "ollama:llama3.2:3b", "generate", prompt="p")
+    models.ollama = fake(chat=[{"error": "boom"}])
+    with pytest.raises(WorkError):
+        models.run("job-1", "ollama:llama3.2:3b", "generate", prompt="p")
+    log = (models.logs / "job-1.log").read_text()
+    assert "hello" in log and "ERROR: Ollama error: boom" in log
+    assert (models.logs / "job-1.log").stat().st_mode & 0o777 == 0o600
+
+
+def test_keep_warm_calls_keep_the_model_loaded_and_skip_generic_progress(models):
+    seen = []
+    models.ollama = fake(seen=seen)
+    models.run("job", "ollama:llama3.2:3b", "generate", keep_warm=True, prompt="p")
+    models.run("job", "ollama:llama3.2:3b", "generate", prompt="p")
+    assert [body["keep_alive"] for body in seen] == ["10m", 0]
+    assert models.jobs.update.call_count == 1
