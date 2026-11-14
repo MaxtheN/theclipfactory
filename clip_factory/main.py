@@ -90,6 +90,9 @@ def startup_event(root: Path | None, event: str, message: str | None = None):
     if root is None:
         return
     try:
+        if root.is_symlink():
+            return
+        root.mkdir(parents=True, exist_ok=True, mode=0o700)
         directory = root / "logs"
         if directory.is_symlink():
             return
@@ -142,6 +145,10 @@ def main(argv: list[str] | None = None) -> int:
     diagnostic_root = args.data_dir
     try:
         # Import lazily: CLI help/validation do not require desktop GUI or app startup.
+        if getattr(sys, "frozen", False) and diagnostic_root is None:
+            from platformdirs import user_data_dir
+
+            diagnostic_root = Path(user_data_dir("ClipFactory", "ClipFactory"))
         from clip_factory.app import create_app
 
         token = secrets.token_urlsafe(32)
@@ -198,6 +205,12 @@ def main(argv: list[str] | None = None) -> int:
                     startup_event(diagnostic_root, "native-window-closed")
 
                 window.events.closed += on_closed
+                if hasattr(window.events, "loaded"):
+
+                    def on_loaded():
+                        startup_event(diagnostic_root, "native-window-loaded")
+
+                    window.events.loaded += on_loaded
 
                 # Signal callbacks only set an event; GUI destruction stays out of signal handlers.
                 def monitor_window():
@@ -213,18 +226,18 @@ def main(argv: list[str] | None = None) -> int:
                     deadline = time.monotonic() + 30
                     try:
                         while time.monotonic() < deadline and not stop.is_set():
-                            if window.evaluate_js(
+                            if window.run_js(
                                 "document.title === 'Clip Factory' && !!document.querySelector('#root') && document.querySelector('#root').textContent.includes('Clip Factory')"
                             ):
                                 break
                             time.sleep(0.2)
                         else:
                             return
-                        window.evaluate_js(
+                        window.run_js(
                             "window.__clipSmokeHealth = 'checking'; fetch('/api/health', {credentials:'same-origin'}).then(r => {window.__clipSmokeHealth = r.ok ? 'ready' : 'failed'}).catch(() => {window.__clipSmokeHealth = 'failed'}); true"
                         )
                         while time.monotonic() < deadline and not stop.is_set():
-                            state = window.evaluate_js("window.__clipSmokeHealth")
+                            state = window.run_js("window.__clipSmokeHealth")
                             if state == "ready":
                                 smoke_result["passed"] = True
                                 (args.data_dir / "native-smoke.json").write_text(

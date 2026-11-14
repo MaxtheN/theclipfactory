@@ -218,9 +218,15 @@ local socket. They do not assert real model inference or Meta permissions.
 
 ### Troubleshooting and known limits
 
-- **Native window fails:** rerun setup using native Python, inspect installed
-  pywebview/Cocoa dependencies, or deliberately use `--browser`. A terminal launch
-  can expose safe startup errors that a windowed bundle cannot display.
+- **App bounces then closes / native window fails:** launch errors are recorded
+  without session tokens in `logs/startup.log` inside the app data directory
+  (normally `~/Library/Application Support/ClipFactory` on macOS). Packaged native
+  launches show an error dialog when Cocoa is available. Startup readiness uses
+  a lightweight authenticated health endpoint, not MLX imports; runtime status
+  probes are serialized and briefly cached. Do not delete downloaded models or
+  your database to troubleshoot. The Mac workflow now opens/closes the real Cocoa
+  window and reopens it with a deliberately slow runtime-status test double;
+  target-machine inference still needs separate validation.
 - **Port unavailable:** omit `--port` for ephemeral binding or select another
   loopback port. Startup readiness is bounded to 30 seconds.
 - **UI missing/stale:** rerun setup/build; packaged UI must be built before

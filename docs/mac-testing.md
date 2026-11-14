@@ -62,7 +62,11 @@ below are **manual acceptance work**, not claims of tests already passed.
   `inference_worker.py` and every built UI asset are present and byte-matched.
   On the no-checkout Mac, run a real model task through external runtime Python
   to confirm worker launch/imports, not just existence of files.
-- [ ] Cocoa window opens and packaged `clip_factory/ui/index.html` serves. Test
+- [ ] Cocoa window opens and packaged `clip_factory/ui/index.html` serves.
+  Quit and reopen after runtime setup. Readiness must not import model packages;
+  repeated status polling must not create concurrent runtime-probe processes.
+  The packaged native CI smoke verifies rendered UI, session-cookie auth, close,
+  and reopen with synthetic slow runtime status (not actual M5 inference). Test
   shell/Finder with minimal PATH; installed `/opt/homebrew/bin/ffmpeg` is found.
 - [ ] Writable data is outside the app bundle; app replacement preserves data.
   Runtime setup uses a native Python and separate venv, not the frozen executable

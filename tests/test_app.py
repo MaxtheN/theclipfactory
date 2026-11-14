@@ -1,4 +1,5 @@
 """Authenticated real TestClient coverage with isolated storage and offline Meta."""
+
 import json
 import shutil
 import subprocess
@@ -26,9 +27,11 @@ def client(tmp_path, monkeypatch):
     for name in ("CLIP_META_APP_ID", "CLIP_META_APP_SECRET", "CLIP_META_REDIRECT_URI"):
         monkeypatch.delenv(name, raising=False)
     app = create_app(tmp_path, token=SESSION)
+
     # No ordinary test may accidentally contact Graph or Hugging Face.
     def no_network(*args, **kwargs):
         pytest.fail("External network is forbidden")
+
     app.state.meta_factory = no_network
     monkeypatch.setattr("clip_factory.models.Models.download", no_network)
     with TestClient(app, base_url="http://127.0.0.1", headers={"X-Clip-Token": SESSION}) as active:
@@ -51,17 +54,30 @@ def wait_job(client, identifier, timeout=30):
 def seed_clip(client, *, approved=False, **extra):
     root = client.app.state.root
     (root / "clips" / "testclip.mp4").write_bytes(b"local-media")
-    clip = {"id": "testclip", "video_id": "source", "name": "Actual clip", "objective": "sales",
-            "start": 0, "end": 1, "hook": "Actual hook", "caption": "Actual caption", "approved": approved,
-            "status": "ready", "instagram_media_id": None, "published_at": None,
-            "path": "clips/testclip.mp4", **extra}
+    clip = {
+        "id": "testclip",
+        "video_id": "source",
+        "name": "Actual clip",
+        "objective": "sales",
+        "start": 0,
+        "end": 1,
+        "hook": "Actual hook",
+        "caption": "Actual caption",
+        "approved": approved,
+        "status": "ready",
+        "instagram_media_id": None,
+        "published_at": None,
+        "path": "clips/testclip.mp4",
+        **extra,
+    }
     client.app.state.store.put("clips", clip)
     return clip
 
 
 def upload_mock(client, monkeypatch, **info):
-    monkeypatch.setattr(media, "probe", lambda _: {"duration": 5, "width": 320, "height": 180,
-                                                  "has_audio": False, **info})
+    monkeypatch.setattr(
+        media, "probe", lambda _: {"duration": 5, "width": 320, "height": 180, "has_audio": False, **info}
+    )
     response = client.post("/api/videos", files={"file": ("../../source.mp4", b"video", "video/mp4")})
     assert response.status_code == 201, response.text
     return response.json()
@@ -97,8 +113,18 @@ def graph(client, monkeypatch):
             assert request.headers["Authorization"] == f"Bearer {USER_TOKEN}"
             if controls["deny"]:
                 return httpx.Response(400, json={"error": {"code": 190, "message": USER_TOKEN}})
-            return httpx.Response(200, json={"data": [{"id": "20", "access_token": PAGE_TOKEN,
-                "instagram_business_account": {"id": controls["account"], "username": "creator"}}]})
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "id": "20",
+                            "access_token": PAGE_TOKEN,
+                            "instagram_business_account": {"id": controls["account"], "username": "creator"},
+                        }
+                    ]
+                },
+            )
         assert request.headers["Authorization"] == f"Bearer {PAGE_TOKEN}"
         if request.method == "POST":
             # External writes must always have a durable local attempt already recorded.
@@ -120,7 +146,8 @@ def graph(client, monkeypatch):
         pytest.fail(f"Unexpected Graph request: {request.method} {path}")
 
     client.app.state.meta_factory = lambda token, version: MetaClient(
-        token, version, transport=httpx.MockTransport(handler))
+        token, version, transport=httpx.MockTransport(handler)
+    )
     return controls, calls, saved, published
 
 
@@ -166,10 +193,15 @@ def test_auth_required_and_bootstrap_cookie(client):
     assert client.get("/api/settings", headers={"X-Clip-Token": "wrong"}).status_code == 401
 
 
-@pytest.mark.parametrize("headers", [
-    {"Host": "evil.example"}, {"Origin": "https://evil.example"},
-    {"Origin": "http://localhost"}, {"Origin": "null"},
-])
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Host": "evil.example"},
+        {"Origin": "https://evil.example"},
+        {"Origin": "http://localhost"},
+        {"Origin": "null"},
+    ],
+)
 def test_host_and_origin_rejection_even_with_valid_token(client, headers):
     assert client.put("/api/settings", json={"brand": "bad"}, headers=headers).status_code == 403
     assert client.get("/api/settings").json()["brand"] == ""
@@ -178,8 +210,12 @@ def test_host_and_origin_rejection_even_with_valid_token(client, headers):
 def test_same_origin_and_security_headers(client):
     response = client.get("/api/settings", headers={"Origin": "http://127.0.0.1"})
     assert response.status_code == 200
-    for name, expected in {"cache-control": "no-store", "x-content-type-options": "nosniff",
-                           "referrer-policy": "no-referrer", "x-frame-options": "DENY"}.items():
+    for name, expected in {
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "no-referrer",
+        "x-frame-options": "DENY",
+    }.items():
         assert response.headers[name] == expected
 
 
@@ -195,20 +231,38 @@ def test_unicode_bootstrap_is_invalid_not_server_error(client, monkeypatch):
     assert response.status_code == 401
 
 
-@pytest.mark.parametrize("body", [
-    {"objective": "viral"}, {"daily_budget": -1}, {"total_budget": 10000001},
-    {"daily_budget": "NaN"}, {"total_budget": "Infinity"}, {"daily_budget": 1000001},
-    {"ads_enabled": True, "unexpected": "field"}, {"objective": "custom", "custom_event": "  "},
-])
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"objective": "viral"},
+        {"daily_budget": -1},
+        {"total_budget": 10000001},
+        {"daily_budget": "NaN"},
+        {"total_budget": "Infinity"},
+        {"daily_budget": 1000001},
+        {"ads_enabled": True, "unexpected": "field"},
+        {"objective": "custom", "custom_event": "  "},
+    ],
+)
 def test_invalid_settings_do_not_persist(client, body):
     assert client.put("/api/settings", json=body).status_code == 422
     assert client.get("/api/settings").json()["objective"] == "discovery"
 
 
-@pytest.mark.parametrize("objective", ["discovery", "awareness", "engagement", "followers", "traffic", "leads", "sales", "custom"])
+@pytest.mark.parametrize(
+    "objective", ["discovery", "awareness", "engagement", "followers", "traffic", "leads", "sales", "custom"]
+)
 def test_objectives_and_budgets_persist_without_authorizing_ads(client, objective):
-    response = client.put("/api/settings", json={"objective": objective, "custom_event": "qualified demo",
-                                               "daily_budget": 12.5, "total_budget": 90, "ads_enabled": True})
+    response = client.put(
+        "/api/settings",
+        json={
+            "objective": objective,
+            "custom_event": "qualified demo",
+            "daily_budget": 12.5,
+            "total_budget": 90,
+            "ads_enabled": True,
+        },
+    )
     assert response.status_code == 200
     assert client.get("/api/settings").json() == response.json()
     assert Store(client.app.state.root).get("config", "settings")["value"] == response.json()
@@ -217,11 +271,15 @@ def test_objectives_and_budgets_persist_without_authorizing_ads(client, objectiv
     assert not status["connected"]
 
 
-@pytest.mark.parametrize("body", [
-    {"access_token": USER_TOKEN, "account_id": "../../30"},
-    {"access_token": USER_TOKEN, "extra_secret": PAGE_TOKEN},
-    {"access_token": ""}, {"access_token": USER_TOKEN * 500},
-])
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"access_token": USER_TOKEN, "account_id": "../../30"},
+        {"access_token": USER_TOKEN, "extra_secret": PAGE_TOKEN},
+        {"access_token": ""},
+        {"access_token": USER_TOKEN * 500},
+    ],
+)
 def test_token_validation_never_echoes_credentials(client, body):
     response = client.post("/api/instagram/connect", json=body)
     assert response.status_code == 422
@@ -245,6 +303,7 @@ def test_upload_mock_probe_public_redaction_and_media(client, monkeypatch):
 def test_invalid_upload_cleans_file_and_library(client, monkeypatch):
     def invalid(_):
         raise WorkError("This file is not a readable video.")
+
     monkeypatch.setattr(media, "probe", invalid)
     assert client.post("/api/videos", files={"file": ("bad.mp4", b"bad")}).status_code == 400
     assert client.post("/api/videos", files={"file": ("bad.txt", b"bad")}).status_code == 422
@@ -256,15 +315,35 @@ def test_actual_upload_and_manual_render_without_models(client, tmp_path):
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         pytest.skip("FFmpeg/ffprobe not installed")
     sample = tmp_path / "sample.mp4"
-    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i",
-                    "color=c=red:s=160x90:r=10:d=0.6", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(sample)],
-                   capture_output=True, check=True, timeout=20)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-nostdin",
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=red:s=160x90:r=10:d=0.6",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(sample),
+        ],
+        capture_output=True,
+        check=True,
+        timeout=20,
+    )
     with sample.open("rb") as file:
         uploaded = client.post("/api/videos", files={"file": ("sample.mp4", file, "video/mp4")})
     assert uploaded.status_code == 201, uploaded.text
     video = uploaded.json()
     assert video["duration"] == pytest.approx(0.6, abs=0.1)
-    response = client.post(f"/api/videos/{video['id']}/render", json={"start": 0.1, "end": 0.4, "subtitles": True})
+    response = client.post(
+        f"/api/videos/{video['id']}/render", json={"start": 0.1, "end": 0.4, "subtitles": True}
+    )
     assert response.status_code == 202, response.text
     final = wait_job(client, response.json()["id"])
     assert final["status"] == "completed", final
@@ -282,8 +361,10 @@ def test_actual_upload_and_manual_render_without_models(client, tmp_path):
     assert all(not row["installed"] for row in client.get("/api/models").json())
 
 
-@pytest.mark.parametrize("body", [{"start": 2, "end": 1}, {"start": 0, "end": 6},
-                                  {"start": -1, "end": 1}, {"start": "NaN", "end": 1}])
+@pytest.mark.parametrize(
+    "body",
+    [{"start": 2, "end": 1}, {"start": 0, "end": 6}, {"start": -1, "end": 1}, {"start": "NaN", "end": 1}],
+)
 def test_invalid_render_never_enqueues(client, monkeypatch, body):
     video = upload_mock(client, monkeypatch)
     assert client.post(f"/api/videos/{video['id']}/render", json=body).status_code == 422
@@ -313,10 +394,14 @@ def test_auto_mode_missing_model_fails_truthfully(client, monkeypatch):
 
 def test_manual_events_are_separate_unknown_is_not_zero(client):
     clip = seed_clip(client)
-    assert client.post("/api/analytics/events", json={"clip_id": clip["id"], "event": "custom"}).status_code == 422
+    assert (
+        client.post("/api/analytics/events", json={"clip_id": clip["id"], "event": "custom"}).status_code
+        == 422
+    )
     client.put("/api/settings", json={"custom_event": "qualified demo"})
-    response = client.post("/api/analytics/events", json={"clip_id": clip["id"], "event": "custom",
-                                                         "value": 0, "revenue": 12.5})
+    response = client.post(
+        "/api/analytics/events", json={"clip_id": clip["id"], "event": "custom", "value": 0, "revenue": 12.5}
+    )
     assert response.status_code == 201
     assert response.json()["event_name"] == "qualified demo"
     assert "not causal proof" in response.json()["attribution"]
@@ -325,11 +410,22 @@ def test_manual_events_are_separate_unknown_is_not_zero(client):
     assert all(value is None for value in stats["videos"][0]["organic"].values())
     assert all(value is None for value in stats["videos"][0]["paid"].values())
     assert stats["summary"]["observed_clips"] == 0
-    assert client.post("/api/analytics/events", json={"clip_id": clip["id"], "event": "purchase",
-                                                     "occurred_at": "not-a-date"}).status_code == 422
-    assert client.post("/api/analytics/events", json={"clip_id": clip["id"], "event": "purchase",
-                                                     "revenue": "NaN"}).status_code == 422
-    assert client.post("/api/analytics/events", json={"clip_id": "missing", "event": "lead"}).status_code == 404
+    assert (
+        client.post(
+            "/api/analytics/events",
+            json={"clip_id": clip["id"], "event": "purchase", "occurred_at": "not-a-date"},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/api/analytics/events", json={"clip_id": clip["id"], "event": "purchase", "revenue": "NaN"}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post("/api/analytics/events", json={"clip_id": "missing", "event": "lead"}).status_code == 404
+    )
 
 
 def test_native_connection_no_credentials_in_database_or_responses(client, graph):
@@ -365,7 +461,12 @@ def test_publish_gates_revalidates_and_prevents_duplicate(client, graph):
     client.put("/api/clips/testclip", json={"approved": True})
     assert client.post("/api/clips/testclip/publish", json=body).status_code == 409
     enable_publish(client)
-    assert client.post("/api/clips/testclip/publish", json={"public_video_url": "https://127.0.0.1/x"}).status_code == 400
+    assert (
+        client.post(
+            "/api/clips/testclip/publish", json={"public_video_url": "https://127.0.0.1/x"}
+        ).status_code
+        == 400
+    )
     before = len(calls)
     response = client.post("/api/clips/testclip/publish", json=body)
     assert response.status_code == 202, response.text
@@ -397,7 +498,9 @@ def test_failed_publish_keeps_durable_marker_and_no_retry(client, graph, deny, w
     assert stored["status"] == "publish_needs_reconciliation"
     assert stored["instagram_media_id"] is None
     before = len(calls)
-    assert client.post("/api/clips/testclip/publish", json={"public_video_url": PUBLIC_URL}).status_code == 409
+    assert (
+        client.post("/api/clips/testclip/publish", json={"public_video_url": PUBLIC_URL}).status_code == 409
+    )
     assert len(calls) == before and not published
 
 
@@ -471,13 +574,22 @@ def test_queued_sync_account_switch_must_not_misattribute(client, graph):
 
 
 def test_candidate_parser_grounds_ranges_and_objective():
-    output = '<think>private reasoning</think>```json\n' + json.dumps({"candidates": [
-        {"start": 0, "end": 2, "hook": "Actual", "caption": "Review", "objective": "engagement"},
-        {"start": 4, "end": 3}, {"start": 0, "end": 20},
-    ]}) + '\n```'
+    output = (
+        "<think>private reasoning</think>```json\n"
+        + json.dumps(
+            {
+                "candidates": [
+                    {"start": 0, "end": 2, "hook": "Actual", "caption": "Review", "objective": "engagement"},
+                    {"start": 4, "end": 3},
+                    {"start": 0, "end": 20},
+                ]
+            }
+        )
+        + "\n```"
+    )
     candidates = parse_candidates(output, 5, "sales")
     assert len(candidates) == 1 and candidates[0]["objective"] == "sales"
-    for bad in ('{"candidates": []}', '{"candidates":[{"start":NaN,"end":1}]}', 'not json'):
+    for bad in ('{"candidates": []}', '{"candidates":[{"start":NaN,"end":1}]}', "not json"):
         with pytest.raises(WorkError, match="no valid clip ranges"):
             parse_candidates(bad, 5, "discovery")
 
@@ -504,7 +616,9 @@ def test_parallel_model_downloads_do_not_block_runtime_and_keep_model_locks(clie
             jobs.append(response.json())
         assert all(event.wait(2) for event in entered.values())
         assert all(job["lane"] == "download" for job in jobs)
-        assert client.post("/api/models/qwen-small/download", json={"accept_license": True}).status_code == 409
+        assert (
+            client.post("/api/models/qwen-small/download", json={"accept_license": True}).status_code == 409
+        )
         assert client.delete("/api/models/qwen-small").status_code == 409
         runtime = client.post("/api/runtime/setup")
         assert runtime.status_code == 202
@@ -513,3 +627,26 @@ def test_parallel_model_downloads_do_not_block_runtime_and_keep_model_locks(clie
     finally:
         release.set()
     assert all(wait_job(client, job["id"])["status"] == "completed" for job in jobs)
+
+
+def test_health_is_authenticated_and_does_not_probe_models(client, monkeypatch):
+    monkeypatch.setattr(client.app.state.models, "ready", lambda: pytest.fail("Health imported the runtime"))
+    monkeypatch.setattr(client.app.state.models, "item", lambda _: pytest.fail("Health inspected weights"))
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+    assert client.get("/api/health", headers={"X-Clip-Token": ""}).status_code == 401
+    assert client.get("/api/health", headers={"Origin": "https://other.example"}).status_code == 403
+
+
+def test_system_uses_a_single_runtime_snapshot(client, monkeypatch):
+    from unittest.mock import Mock
+
+    ready = Mock(return_value=True)
+    monkeypatch.setattr(client.app.state.models, "ready", ready)
+    monkeypatch.setattr(client.app.state.models, "item", lambda _: {"installed": True})
+    response = client.get("/api/system")
+    assert response.status_code == 200
+    assert response.json()["model_runtime"] is True
+    assert response.json()["whisper"] is True
+    ready.assert_called_once()

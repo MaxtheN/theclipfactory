@@ -38,6 +38,10 @@ def parent(monkeypatch):
 
         @app.get("/api/system")
         def system(request: FastAPIRequest):
+            state["system_calls"] = state.get("system_calls", 0) + 1
+            assert not state.get("forbid_system", False), (
+                "Launcher must not import model runtime for readiness"
+            )
             assert request.headers["x-clip-token"] == token
             return {"desktop": app.state.desktop}
 
@@ -180,3 +184,44 @@ def test_startup_thread_failure():
     thread = types.SimpleNamespace(is_alive=lambda: False)
     with pytest.raises(launcher.LauncherError, match="stopped during startup"):
         launcher.wait_ready(server, thread, "http://127.0.0.1:1", "secret", threading.Event())
+
+
+def test_reopen_uses_lightweight_health_not_model_status(monkeypatch, parent, tmp_path):
+    parent["forbid_system"] = True
+    opened = []
+
+    def open_browser(url):
+        opened.append(url)
+        signal.raise_signal(signal.SIGTERM)
+        return True
+
+    monkeypatch.setattr(launcher.webbrowser, "open", open_browser)
+    for _ in range(2):
+        assert launcher.main(["--browser", "--data-dir", str(tmp_path)]) == 0
+        assert parent["stopped"]
+    assert len(opened) == 2
+    assert parent.get("system_calls", 0) == 0
+
+
+def test_windowed_failure_records_safe_diagnostics_without_stderr(monkeypatch, parent, tmp_path):
+    def fail(*args, **kwargs):
+        raise RuntimeError("secret token and bootstrap URL must never appear in logs")
+
+    monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(create_window=fail))
+    monkeypatch.setattr(launcher.sys, "stderr", None)
+    alerts = []
+    monkeypatch.setattr(launcher, "show_launch_error", alerts.append)
+    assert launcher.main(["--data-dir", str(tmp_path)]) == 1
+    log = (tmp_path / "logs" / "startup.log").read_text()
+    assert "startup-failed" in log and "native window failed" in log
+    assert parent["token"] not in log and "secret token" not in log and "boot=" not in log
+    assert len(alerts) == 1
+    assert (tmp_path / "logs" / "startup.log").stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize(
+    "arguments", [["--native-smoke"], ["--native-smoke", "--browser", "--data-dir", "/tmp/test"]]
+)
+def test_native_smoke_requires_explicit_isolated_data_and_native_mode(arguments):
+    with pytest.raises(SystemExit):
+        launcher.main(arguments)

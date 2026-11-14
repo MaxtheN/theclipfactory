@@ -447,11 +447,17 @@ def test_parallel_download_disk_reservations_prevent_overcommit(models, monkeypa
     mb = 1024**2
     monkeypatch.setattr("clip_factory.models.shutil.disk_usage", lambda _: SimpleNamespace(free=96 * mb))
     with models._download_space("first", models.model_dir, 20 * mb):
-        with pytest.raises(WorkError, match="concurrent"), models._download_space("second", models.model_dir, 20 * mb):
+        with (
+            pytest.raises(WorkError, match="concurrent"),
+            models._download_space("second", models.model_dir, 20 * mb),
+        ):
             pytest.fail("Overcommitted download started")
         assert models._download_reservations == {"first": 20 * mb}
     assert models._download_reservations == {}
-    with pytest.raises(WorkError, match="transfer failed"), models._download_space("second", models.model_dir, 20 * mb):
+    with (
+        pytest.raises(WorkError, match="transfer failed"),
+        models._download_space("second", models.model_dir, 20 * mb),
+    ):
         raise WorkError("transfer failed")
     assert models._download_reservations == {}
 
@@ -506,3 +512,59 @@ def test_incomplete_whisper_safetensors_never_installs_and_retry_resumes(models,
     assert models.download("retry", "whisper-turbo")["installed"]
     assert api.model_info.call_args.kwargs["revision"] == SHA
     assert models.item("whisper-turbo")["installed"]
+
+
+def test_ready_cache_invalidates_on_marker_change_and_expiry(models, monkeypatch):
+    runtime_ready(models, monkeypatch)
+    probe = subprocess.run
+    clock = [100.0]
+    monkeypatch.setattr("clip_factory.models.time.monotonic", lambda: clock[0])
+    assert models.ready() and models.ready()
+    assert probe.call_count == 1
+    clock[0] = 161.0
+    assert models.ready()
+    assert probe.call_count == 2
+    marker = models.runtime / ".ready"
+    marker.write_text(marker.read_text() + "\n")
+    assert models.ready()
+    assert probe.call_count == 3
+    marker.unlink()
+    assert not models.ready()
+    assert probe.call_count == 3
+
+
+def test_simultaneous_ready_checks_share_one_import_process(models, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    runtime_ready(models, monkeypatch)
+    entered, release = threading.Event(), threading.Event()
+    expected = json.dumps(
+        {"system": "Darwin", "machine": "arm64", "python": [3, 12], "packages": RUNTIME_VERSIONS}
+    )
+
+    def slow_probe(*args, **kwargs):
+        entered.set()
+        assert release.wait(3)
+        return SimpleNamespace(stdout=expected)
+
+    probe = Mock(side_effect=slow_probe)
+    monkeypatch.setattr("clip_factory.models.subprocess.run", probe)
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(models.ready) for _ in range(3)]
+        try:
+            assert entered.wait(2)
+        finally:
+            release.set()
+        assert all(future.result(timeout=3) for future in futures)
+    assert probe.call_count == 1
+
+
+def test_failed_ready_probe_is_briefly_cached_without_claiming_ready(models, monkeypatch):
+    runtime_ready(models, monkeypatch)
+    probe = Mock(side_effect=subprocess.TimeoutExpired("probe", 90))
+    monkeypatch.setattr("clip_factory.models.subprocess.run", probe)
+    assert not models.ready() and not models.ready()
+    assert probe.call_count == 1
+    assert not models.ready(force=True)
+    assert probe.call_count == 2
