@@ -99,12 +99,20 @@ describe("Growth Factory interface", () => {
     expect(await screen.findByRole("heading", { name: "New campaign" })).toBeVisible();
     const form = screen.getByRole("region", { name: "New campaign" });
     fireEvent.change(within(form).getByLabelText("Campaign name"), { target: { value: "Episode 210 launch" } });
+    fireEvent.change(within(form).getByLabelText("Key messages"), { target: { value: "Agents need review" } });
+    fireEvent.keyDown(within(form).getByLabelText("Key messages"), { key: "Enter" });
+    fireEvent.change(within(form).getByLabelText("Call to action"), { target: { value: "Listen to the full episode" } });
+    fireEvent.change(within(form).getByLabelText("Must avoid"), { target: { value: "market predictions" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Add to Must avoid" }));
     fireEvent.click(within(form).getByRole("button", { name: /^Create campaign\b/ }));
     const picker = await screen.findByRole("combobox", { name: "Current campaign" });
     const campaigns = await previewRequest<Campaign[]>("/api/campaigns");
     const created = campaigns.find((c) => c.name === "Episode 210 launch")!;
     expect(created.profile_ids).toEqual(["preview-profile-allin"]);
     expect(created.objective).toBe("discovery");
+    // The brief carries only what this campaign adds; workspace boundaries are not copied in.
+    expect(created.brief).toMatchObject({ key_messages: ["Agents need review"], cta: "Listen to the full episode",
+      must_avoid: ["market predictions"], constraints: [], audience: "" });
     // No campaign approval chain: it inherits the workspace's rules.
     expect(created.active_strategy_id).toBeUndefined();
     await waitFor(() => expect(picker).toHaveValue(created.id));
@@ -129,7 +137,9 @@ describe("Growth Factory interface", () => {
     expect(within(advanced).getAllByRole("button").map((button) => button.textContent?.trim())).toEqual(["New workspace", "Advanced tools"]);
     fireEvent.change(screen.getByRole("textbox", { name: "Who are we speaking to?" }), { target: { value: "Channel-specific founders" } });
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    await waitFor(async () => expect((await previewRequest<Campaign>(path)).brief.audience).toBe("Channel-specific founders"));
+    // The workspace audience is saved on the workspace; the campaign brief keeps its own.
+    await waitFor(async () => expect((await previewRequest<{ audience: string }[]>("/api/profiles")).some((p) => p.audience === "Channel-specific founders")).toBe(true));
+    expect((await previewRequest<Campaign>(path)).brief.audience).toBe("Builders and founders");
     await waitFor(() => expect(screen.getByRole("button", { name: "Save settings" })).toBeEnabled());
     expect(screen.getByRole("heading", { name: "Workspace settings" })).toBeVisible();
     expect(screen.queryByRole("heading", { name: "Workspace style rules" })).not.toBeInTheDocument();

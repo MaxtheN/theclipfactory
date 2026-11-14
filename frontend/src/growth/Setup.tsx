@@ -15,6 +15,8 @@ import { Icon } from "./Icon";
 import { CloudAccountRow } from "./CloudSignIn";
 import { objectives, type Campaign, type Profile } from "../types";
 import { campaignGoalBody } from "./learningState";
+import { CampaignBriefEditor } from "./CampaignBrief";
+import { sameBrief } from "./briefModel";
 
 /** Human-readable labels for the existing backend objective enum. */
 export const objectiveLabels: Record<(typeof objectives)[number], string> = {
@@ -73,10 +75,7 @@ function campaignMatches(saved: Campaign | undefined, body: CampaignInput) {
   return (
     !!saved &&
     saved.name === body.name &&
-    saved.brief.audience === body.brief.audience &&
-    saved.brief.measurement_intent === body.brief.measurement_intent &&
-    JSON.stringify(saved.brief.constraints) ===
-      JSON.stringify(body.brief.constraints) &&
+    sameBrief(saved.brief, body.brief) &&
     (saved.objective ?? "discovery") === body.objective &&
     (saved.primary_metric ?? null) === (body.primary_metric ?? null) &&
     (saved.notes ?? "") === (body.notes ?? "") &&
@@ -113,9 +112,7 @@ export function Setup({
       : undefined;
   const [name, setName] = useState(campaign?.name || "");
   const [workspaceName, setWorkspaceName] = useState(profile?.name || "");
-  const [audience, setAudience] = useState(
-    campaign?.brief.audience || profile?.audience || "",
-  );
+  const [audience, setAudience] = useState(profile?.audience || "");
   // The goal belongs to this campaign; each campaign in the workspace has its own.
   const [objective, setObjective] = useState(
     campaign?.objective || "discovery",
@@ -166,18 +163,10 @@ export function Setup({
       brand_context: voice.trim(),
       creative_preferences: creative.trim(),
     };
-    const label = objectiveLabels[objective as keyof typeof objectiveLabels];
     const campaignBody: CampaignInput = {
       name: name.trim(),
-      brief: {
-        audience: audience.trim(),
-        constraints,
-        requested_outputs: latestCampaign.brief.requested_outputs,
-        measurement_intent:
-          objective === "discovery"
-            ? "Discovery"
-            : `${label}: ${goal.primary_metric}`,
-      },
+      // The brief has its own Save brief; this save keeps the latest saved one exactly.
+      brief: latestCampaign.brief,
       ...goal,
       notes: notes.trim(),
       // Membership is a union with the latest saved record, so footage or
@@ -532,6 +521,11 @@ export function Setup({
                 />
               )}
             </Field>
+            <CampaignBriefEditor
+              w={w}
+              campaign={campaign}
+              workspaceAudience={profile.audience}
+            />
             {onNewCampaign && (
               <button
                 type="button"

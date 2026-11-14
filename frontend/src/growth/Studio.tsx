@@ -15,15 +15,19 @@ import { JourneyProgress } from "./JourneyProgress";
 import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
 import { PostToInstagram } from "./PostToInstagram";
+import { briefSummary } from "./briefModel";
+import "./campaign-brief.css";
 import { DIRECTION_MAX, parseProductionClip, type CampaignRenderRequest, type ExportRecord, type ProductionClip } from "./productionContracts";
 import { changedEditFields, clipInScope, editErrors, jobInScope, object, readiness, retryBlocker, reviewBlocker } from "./productionState";
 
 type Mode = "manual" | "agent";
 const message = (e: unknown) => e instanceof Error ? e.message : "The operation was not confirmed. Refresh before retrying.";
-export function Studio({ w, factory, preferredSource, preferredMode, preferredClip, onDirection }: {
+export function Studio({ w, factory, preferredSource, preferredMode, preferredClip, onDirection, onEditBrief }: {
   w: Workspace; factory: FactoryState; /** Kept for callers; Results is one click away in the sidebar. */ next: () => void; preferredSource?: string; preferredMode?: Mode; preferredClip?: string;
   /** Opens the direction screen when production is blocked on approval. */
   onDirection?: () => void;
+  /** Opens Workspace settings, where the campaign brief is edited. */
+  onEditBrief?: () => void;
 }) {
   const sources = factory.data.videos.filter(v => w.campaign?.video_ids.includes(v.id));
   const scope = { campaignId: w.campaign?.id || "", profileId: w.profileId, sourceIds: sources.map(v => v.id) };
@@ -287,6 +291,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     <aside className="gf-card gf-review-inspector">
       <div className="gf-card-header"><div><h2>{!making ? "Review this clip" : revisionParent ? "Request a change" : "Find clips"}</h2></div></div>
       {making ? <div className="gf-form-fields">
+        {!revisionParent && (() => { const summary = briefSummary(w.campaign!.brief, w.campaign!.objective, w.campaign!.primary_metric); return <p className="gf-brief-summary" aria-label="Campaign brief summary"><span title={summary}>{summary}</span>{onEditBrief && <button type="button" className="gf-button ghost compact" onClick={onEditBrief}>Edit brief</button>}</p>; })()}
         {sources.length > 1 && <Field label="Episode">{id => <select id={id} value={sourceId} disabled={!!revisionParent || busy} onChange={e => { setSourceId(e.target.value); setStart("0"); const s = sources.find(v => v.id === e.target.value); setEnd(String(Math.min(direction?.duration_seconds || 30, s?.duration || 30))); }}><option value="" disabled>Choose an episode</option>{sources.map(s => <option value={s.id} key={s.id}>{sourceLabel(s.id, w.campaign!.video_ids)}</option>)}</select>}</Field>}
         {revisionParent && <Field label="What would make it better?">{id => <AutoTextarea id={id} value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="What should change, and why?" rows={3} />}</Field>}
         {/* One reason at a time: the first thing to fix. */}

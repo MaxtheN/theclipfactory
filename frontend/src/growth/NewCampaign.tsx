@@ -4,9 +4,11 @@ import type { FactoryState } from "../useFactory";
 import { objectives } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
 import { workspaceApi } from "./workspaceApi";
-import { Field, PrimaryAction, formatTime } from "./parts";
+import { Field, FieldGroup, PrimaryAction, formatTime } from "./parts";
 import { Icon } from "./Icon";
 import { objectiveLabels } from "./Setup";
+import { BriefFields } from "./CampaignBrief";
+import { briefBody, briefProblem, emptyBrief } from "./briefModel";
 
 /**
  * A goal-scoped push inside the current workspace. It creates one campaign
@@ -30,10 +32,12 @@ export function NewCampaign({
   const [objective, setObjective] = useState("discovery");
   const [metric, setMetric] = useState("");
   const [notes, setNotes] = useState("");
+  const [brief, setBrief] = useState(emptyBrief);
+  const problem = briefProblem(brief);
   const rulesApproved = !!workspace?.active_strategy_id;
   const [footage, setFootage] = useState<string[]>([]);
   const metricNeeded = objective !== "discovery";
-  const valid = !!name.trim() && (!metricNeeded || !!metric.trim());
+  const valid = !!name.trim() && (!metricNeeded || !!metric.trim()) && !problem;
   const blocked = w.busy || w.loading || !workspace;
   // Footage already in this workspace's campaigns: attaching reuses it, nothing is uploaded.
   const own = new Set(
@@ -45,25 +49,14 @@ export function NewCampaign({
 
   async function create() {
     if (blocked || !valid || !workspace) return;
-    const label = objectiveLabels[objective as keyof typeof objectiveLabels];
     let createdId = "";
     const ok = await w.run(
       async () => {
         const saved = await workspaceApi.save({
           name: name.trim(),
-          brief: {
-            audience: workspace.audience,
-            constraints: workspace.brand_context
-              .split("\n")
-              .map((line) => line.trim())
-              .filter(Boolean)
-              .slice(0, 30),
-            requested_outputs: ["Vertical clips"],
-            measurement_intent:
-              objective === "discovery"
-                ? "Discovery"
-                : `${label}: ${metric.trim()}`,
-          },
+          // The workspace's audience, voice and boundaries are read from the workspace;
+          // the brief only says what this campaign adds.
+          brief: briefBody(brief),
           profile_ids: [workspace.id],
           video_ids: footage,
           objective,
@@ -146,6 +139,14 @@ export function NewCampaign({
             />
           )}
         </Field>
+        <FieldGroup title="Campaign brief">
+          <BriefFields
+            value={brief}
+            onChange={setBrief}
+            disabled={w.busy}
+            workspaceAudience={workspace?.audience}
+          />
+        </FieldGroup>
         {videos.length > 0 && (
           <fieldset className="gf-profile-options">
             <legend>Attach episodes</legend>
@@ -178,6 +179,7 @@ export function NewCampaign({
       </div>
       <div className="gf-stage-action">
         <span>
+          {problem ? `${problem} ` : ""}
           For {workspace?.name || "this workspace"}.{" "}
           {rulesApproved
             ? "Uses the workspace style rules."

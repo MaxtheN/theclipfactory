@@ -1,5 +1,6 @@
 import type {
   Campaign,
+  CampaignBrief,
   Clip,
   Direction,
   Job,
@@ -11,6 +12,7 @@ import type {
 } from "../types";
 
 import type { ProductionClip } from "./productionContracts";
+import { normalizeBrief } from "./briefModel";
 
 /** Explicit review-only transport. Never calls fetch or the desktop service. */
 const STORAGE_KEY = "growth-factory-preview-v2";
@@ -497,7 +499,7 @@ function route(
           old.video_ids.some((v) => !video_ids.includes(v)))
       )
         fail("Retain existing membership for production history.");
-      const brief = object(body.brief);
+      const brief = body.brief === undefined && old ? {} : object(body.brief);
       const campaign: Campaign = {
         id: identifier ?? id(s, "campaign"),
         name: text(body.name),
@@ -512,12 +514,17 @@ function route(
             ? (old?.primary_metric ?? null)
             : text(body.primary_metric).trim() || null,
         notes: body.notes === undefined ? (old?.notes ?? "") : text(body.notes),
-        brief: {
-          audience: text(brief.audience),
-          constraints: strings(brief.constraints ?? []),
-          requested_outputs: strings(brief.requested_outputs ?? []),
-          measurement_intent: text(brief.measurement_intent),
-        },
+        // Omitted brief keeps the saved one, as the service does; every field is kept.
+        brief:
+          body.brief === undefined && old
+            ? old.brief
+            : normalizeBrief({
+                ...(brief as Partial<CampaignBrief>),
+                audience: text(brief.audience),
+                constraints: strings(brief.constraints ?? []),
+                requested_outputs: strings(brief.requested_outputs ?? []),
+                measurement_intent: text(brief.measurement_intent),
+              }),
       };
       if (campaign.objective !== "discovery" && !campaign.primary_metric)
         fail("Choose a primary metric.");

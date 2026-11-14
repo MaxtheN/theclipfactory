@@ -123,6 +123,19 @@ describe("Studio production integration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Let agents find clips" }));
     await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("camp", expect.objectContaining({ direction: "the spiciest takes on AI policy, under 40s" })));
   });
+  it("shows a one-line brief summary on Find clips with an Edit brief link", () => {
+    const w = workspace();
+    w.campaign!.objective = "traffic";
+    w.campaign!.primary_metric = "full-episode_visits";
+    w.campaign!.brief = { ...w.campaign!.brief, cta: "Listen to the full episode", must_avoid: ["market predictions"] };
+    const onEditBrief = vi.fn();
+    render(<Studio w={w} factory={factory()} next={() => {}} preferredMode="agent" onEditBrief={onEditBrief} />);
+    expect(screen.getByLabelText("Campaign brief summary")).toHaveTextContent(
+      "Goal: drive full-episode visits · CTA: Listen to the full episode · Avoid: market predictions",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit brief" }));
+    expect(onEditBrief).toHaveBeenCalledTimes(1);
+  });
   it("does not run agents in the illustrative hosted preview", () => {
     mode.preview = true;
     render(<Studio w={workspace()} factory={factory()} next={() => {}} preferredMode="agent" />);

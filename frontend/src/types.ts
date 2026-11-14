@@ -347,11 +347,34 @@ export interface Profile {
     campaign_id: string;
   } | null;
 }
+export interface BriefReference {
+  url: string;
+  note: string;
+}
+export interface BriefDeliverables {
+  clip_count: number | null;
+  max_duration_seconds: number | null;
+  platforms: "instagram_reels"[];
+}
+/** A campaign's brief (clip_factory/brief.py). The service always returns every field; older
+ * records and clients may only carry the first four, so the newer ones are optional here. */
 export interface CampaignBrief {
+  /** This campaign's audience; empty uses the workspace audience. */
   audience: string;
   constraints: string[];
   requested_outputs: string[];
   measurement_intent: string;
+  key_messages?: string[];
+  /** Call to action, shown on the CTA end card of every render. */
+  cta?: string;
+  cta_link?: string | null;
+  must_include?: string[];
+  must_avoid?: string[];
+  tone?: string;
+  /** Display-only; agents see them as untrusted data and never open them. */
+  references?: BriefReference[];
+  deliverables?: BriefDeliverables;
+  context?: string;
 }
 /** A goal-scoped push inside a workspace. It inherits the workspace's Style rules. */
 export interface Campaign {

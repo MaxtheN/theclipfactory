@@ -656,6 +656,7 @@ export function GrowthApp() {
                   preferredClip={preferredClip}
                   next={() => go("results")}
                   onDirection={() => go("research")}
+                  onEditBrief={() => go("setup")}
                 />
               </div>
               <div

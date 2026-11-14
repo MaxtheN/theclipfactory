@@ -190,7 +190,11 @@ describe("unified channel settings", () => {
     expect(screen.queryByLabelText("Production objective")).toBeNull();
     expect(screen.queryByRole("button", { name: /Save profile goal/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Save & find direction/ })).toBeNull();
-    expect(screen.getAllByRole("button", { name: /^Save/ })).toHaveLength(1);
+    // Settings save plus the campaign brief's own save (nothing to save until it changes).
+    expect(
+      screen.getAllByRole("button", { name: /^Save/ }).map((b) => b.textContent),
+    ).toEqual(["Save brief", "Save settings"]);
+    expect(screen.getByRole("button", { name: "Save brief" })).toBeDisabled();
     expect(view.container.querySelector('input[type="file"]')).toBeNull();
     expect(screen.queryByText("Add an episode")).toBeNull();
     // Discovery needs no metric.
@@ -242,12 +246,12 @@ describe("unified channel settings", () => {
     expect(api.save).toHaveBeenCalledWith(
       {
         name: "Campaign A",
+        // The brief is saved by Save brief; this save keeps the latest saved brief exactly.
         brief: {
-          audience: "Founders shipping AI products",
+          audience: "Builders",
           constraints: ["Keep meaning"],
           requested_outputs: ["Vertical clips"],
-          measurement_intent:
-            "Drive visits, such as full episodes (traffic): full_episode_visits",
+          measurement_intent: "Discovery",
         },
         profile_ids: ["profile-a", "profile-b"],
         video_ids: ["source-a", "source-new", "source-b"],
@@ -420,5 +424,67 @@ describe("app routing", () => {
     expect(
       within(main).queryByRole("heading", { name: "Workspace settings" }),
     ).toBeNull();
+  });
+});
+
+describe("campaign brief in workspace settings", () => {
+  const addChip = (label: string, value: string) => {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: `Add to ${label}` }));
+  };
+
+  it("saves only the brief with an exact campaign PUT, keeps membership and reads it back", async () => {
+    const { api, store } = fixture({ latestVideos: ["source-a", "source-new"] });
+    addChip("Key messages", "Agents need human review");
+    addChip("Must avoid", "market predictions");
+    fireEvent.change(screen.getByLabelText("Call to action"), {
+      target: { value: "Listen to the full episode" },
+    });
+    expect(screen.getByRole("list", { name: "Key messages" })).toHaveTextContent(
+      "Agents need human review",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save brief" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Brief saved and confirmed."),
+    );
+    expect(api.updateProfile).not.toHaveBeenCalled();
+    expect(api.save).toHaveBeenCalledTimes(1);
+    const [body, id] = api.save.mock.calls[0];
+    expect(id).toBe("campaign-a");
+    // Every other field comes from the latest saved record, membership included.
+    expect({ ...body, brief: undefined }).toEqual({
+      name: "Campaign A",
+      brief: undefined,
+      profile_ids: ["profile-a", "profile-b"],
+      video_ids: ["source-a", "source-new"],
+      objective: "discovery",
+      primary_metric: null,
+      notes: "",
+    });
+    expect(body.brief).toMatchObject({
+      audience: "Builders",
+      constraints: ["Keep meaning"],
+      key_messages: ["Agents need human review"],
+      must_avoid: ["market predictions"],
+      cta: "Listen to the full episode",
+      cta_link: null,
+    });
+    expect(store.campaigns[0].brief.cta).toBe("Listen to the full episode");
+  });
+
+  it("blocks an invalid brief and reports an unconfirmed save", async () => {
+    const { api } = fixture();
+    addChip("Must include", "crypto");
+    addChip("Must avoid", "Crypto");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "A topic can't be both must-include and must-avoid.",
+    );
+    expect(screen.getByRole("button", { name: "Save brief" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Remove Crypto" }));
+    api.save.mockImplementation(async () => ({}) as Campaign); // written nowhere
+    fireEvent.click(screen.getByRole("button", { name: "Save brief" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("may or may not have been saved"),
+    );
   });
 });
