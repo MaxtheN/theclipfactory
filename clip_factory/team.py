@@ -816,26 +816,38 @@ class TeamEngine:
             seen = {digest(edits)}
             instruction_seen = set()
             stop = None
+            reviewed_edits = reviewed_critique = None
             for iteration in range(run["revision_budget"] + 1):
-                critique = self._agent(
-                    run_id,
-                    job_id,
-                    "critic",
-                    Critique,
-                    {
-                        "assignment": assignments["critic"],
-                        "candidates": edits["candidates"],
-                        "evidence": evidence,
-                        "prior_creatives": [
-                            {"hook": p["hook"], "clip_id": p["clip_id"]}
-                            for p in context["previous_observations"]
-                        ],
-                    },
-                    iteration=iteration,
-                    refs=refs,
-                    images=[f["path"] for f in sampled],
-                    validate=validate_critique,
-                )
+                try:
+                    critique = self._agent(
+                        run_id,
+                        job_id,
+                        "critic",
+                        Critique,
+                        {
+                            "assignment": assignments["critic"],
+                            "candidates": edits["candidates"],
+                            "evidence": evidence,
+                            "prior_creatives": [
+                                {"hook": p["hook"], "clip_id": p["clip_id"]}
+                                for p in context["previous_observations"]
+                            ],
+                        },
+                        iteration=iteration,
+                        refs=refs,
+                        images=[f["path"] for f in sampled],
+                        validate=validate_critique,
+                    )
+                except WorkError as exc:
+                    if reviewed_edits is None:
+                        raise
+                    edits, critique = reviewed_edits, reviewed_critique
+                    stop = (
+                        f"Critic recheck rejected: {exc} Retained the prior reviewed draft; "
+                        "unresolved critique requires human review."
+                    )
+                    break
+                reviewed_edits, reviewed_critique = edits, critique
                 if critique["verdict"] == "pass":
                     stop = "Critique passed; human review is still required."
                     break

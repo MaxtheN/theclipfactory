@@ -630,6 +630,37 @@ def test_invalid_revision_retains_validated_draft_with_unresolved_review(harness
     assert any(t["role"] == "editor" and t["iteration"] == 1 and t["status"] == "failed" for t in run["tasks"])
 
 
+def test_rejected_critic_recheck_retains_prior_edit_with_its_original_review(harness):
+    rejected = critique("revise", "source:invented")
+    harness.models = ScriptedModels(script(verdict="revise") + [
+        revision(), edits(hook="Unreviewed replacement"), rejected
+    ])
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review"
+    assert "Critic recheck rejected" in run["stop_reason"]
+    assert result["review_status"] == "fail"
+    assert len(harness.rendered) == 1
+    assert harness.rendered[0]["hook"] == "See the source"
+    assert harness.rendered[0]["_team"]["team_findings"] == critique("revise")["findings"]
+    assert not harness.store.all("clips")[0]["approved"]
+    assert next(t for t in run["tasks"] if t["role"] == "critic" and t["iteration"] == 1)["status"] == "failed"
+    assert titles(harness.models).count("Critique") == 2
+
+
+def test_cancellation_during_critic_recheck_does_not_render_retained_drafts(harness):
+    harness.models = ScriptedModels(script(verdict="revise") + [
+        revision(), edits(hook="Replacement"), critique("pass")
+    ])
+    harness.engine.models = harness.models
+    harness.models.after_call = lambda calls: setattr(harness.jobs, "cancelled", calls == 8)
+    run = harness.create()
+    with pytest.raises(JobCancelled):
+        harness.engine.execute(run["id"], "job")
+    assert not harness.rendered
+    assert harness.engine.get(run["id"])["status"] == "cancelled"
+
+
 def test_invalid_editor_candidate_does_not_discard_other_validated_drafts(harness):
     outputs = script()
     invalid = copy.deepcopy(outputs[3]["candidates"][0])
