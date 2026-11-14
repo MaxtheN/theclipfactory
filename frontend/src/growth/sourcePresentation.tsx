@@ -6,7 +6,7 @@ export function sourceLabel(id: string, sourceIds: readonly string[]) {
   return index < 0 ? "Unattached source" : `Podcast ${index + 1}`;
 }
 
-export function SourceDetails({ source }: { source: Video }) {
+export function SourceDetails({ source, disabled = false, onRebuild, onDelete }: { source: Video; disabled?: boolean; onRebuild?: () => void; onDelete?: () => void }) {
   return (
     <div className="gf-source-details">
       <Disclosure title="Source details" icon="info">
@@ -18,6 +18,10 @@ export function SourceDetails({ source }: { source: Video }) {
           <dt>Duration</dt>
           <dd>{formatTime(source.duration)}</dd>
         </dl>
+        {(onRebuild || onDelete) && <div className="gf-episode-actions">
+          {onRebuild && <button type="button" className="gf-button secondary compact" disabled={disabled} onClick={onRebuild}>Rebuild storyboard</button>}
+          {onDelete && <button type="button" className="gf-button ghost compact" disabled={disabled} onClick={onDelete}>Delete source</button>}
+        </div>}
       </Disclosure>
     </div>
   );

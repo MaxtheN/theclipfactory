@@ -156,6 +156,10 @@ function fixture({
     busy: false,
     errors: {},
     data: {
+      models: [],
+      system: null,
+      settings: null,
+      factory: null,
       videos: [
         { id: "source-a", name: "Source A", duration: 60 },
         { id: "source-b", name: "Source B", duration: 60 },
@@ -216,7 +220,25 @@ describe("brand profile", () => {
     expect(within(screen.getByRole("dialog")).getByLabelText("Who it's for")).toHaveValue("A draft audience");
     expect(api.updateProfile).not.toHaveBeenCalled();
     expect(api.save).not.toHaveBeenCalled();
-    expect(view.container.querySelectorAll("dialog")).toHaveLength(3);
+    expect(view.container.querySelectorAll("dialog")).toHaveLength(4);
+  });
+
+  it("opens Engine & models from a request and keeps drafts while navigation closes it", () => {
+    const { w, factory } = fixture({ editor: null });
+    cleanup();
+    const props = { w, factory, creating: false, next: vi.fn(), onSaved: vi.fn() };
+    const view = render(<Setup {...props} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    view.rerender(<Setup {...props} engineRequest={1} />);
+    const dialog = screen.getByRole("dialog", { name: "Engine & models" });
+    fireEvent.click(within(dialog).getByText("Local testing & narration"));
+    fireEvent.change(within(dialog).getByLabelText("Prompt"), { target: { value: "A retained local test prompt" } });
+    view.rerender(<Setup {...props} active={false} engineRequest={1} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    view.rerender(<Setup {...props} active engineRequest={1} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    view.rerender(<Setup {...props} active engineRequest={2} />);
+    expect(within(screen.getByRole("dialog", { name: "Engine & models" })).getByLabelText("Prompt")).toHaveValue("A retained local test prompt");
   });
 
   it("opens goals from its card or request, retains its draft, and closes on navigation", () => {
@@ -625,6 +647,23 @@ describe("app routing", () => {
   const originalUrl =
     window.location.pathname + window.location.search + window.location.hash;
   afterEach(() => window.history.replaceState(null, "", originalUrl));
+  it("opens Engine & models from quick actions inside the single app shell", async () => {
+    resetPreview();
+    render(<GrowthApp />);
+    const brand = await screen.findByRole("combobox", { name: "Current brand" });
+    await waitFor(() => expect(brand).toHaveValue("preview-profile-allin"));
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    const search = screen.getByRole("combobox", { name: "Search quick actions" });
+    fireEvent.change(search, { target: { value: "engine" } });
+    fireEvent.keyDown(search, { key: "Enter" });
+    const engine = await screen.findByRole("dialog", { name: "Engine & models" });
+    expect(engine).toHaveClass("gf-panel-dialog-wide");
+    expect(within(engine).getByRole("region", { name: "Local model catalog" })).toBeVisible();
+    expect(document.querySelectorAll(".gf-app")).toHaveLength(1);
+    expect(document.querySelector(".gf-operational")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Advanced tools" })).toBeNull();
+  });
+
   it("still opens Results for #connections", async () => {
     resetPreview();
     localStorage.setItem("growth-view-v2", "setup");

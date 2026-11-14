@@ -44,3 +44,8 @@
 .gf-app .gf-channel-settings-grid > .gf-stage-action.gf-profile-save-status { position: static; z-index: auto; }
 .gf-app .gf-channel-settings-grid > .gf-stage-action.gf-profile-save-status.is-clean { min-height: 0; padding: 4px 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 .gf-app .gf-panel-dialog .gf-profile-save-status.is-clean { min-height: 0; padding: 0; background: transparent; }
+
+.gf-engine-settings-link { display: flex; align-items: center; width: 100%; gap: 12px; margin-bottom: 20px; padding: 14px; text-align: left; border: 1px solid var(--material-divider); }
+.gf-engine-settings-link > span { flex: 1; }
+.gf-engine-settings-link strong { display: block; font-size: 13px; font-weight: 550; }
+.gf-engine-settings-link small { display: block; margin-top: 4px; color: var(--material-secondary); font-size: 11px; }

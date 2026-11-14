@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import { endpoint, put } from "../api";
-import { newestFirst } from "../pages/Home";
+import { endpoint, post, put, remove } from "../api";
+import { newestFirst } from "./clipOrder";
 import { clipMediaUrl } from "./productionApi";
 import type { Clip } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -13,6 +13,7 @@ import { SourceDetails, sourceLabel } from "./sourcePresentation";
 import { ClipPreview, QuickLook } from "./ClipPreview";
 import { undirected } from "./productionState";
 import { SpeechlessChip } from "./SpeechSetup";
+import { sourceHasActiveJob } from "../productionPreflight";
 
 export function Library({
   w,
@@ -239,7 +240,9 @@ export function Library({
                             : ""}
                       </p>
                       <div className="gf-episode-actions">
-                        <SourceDetails source={source} />
+                        <SourceDetails source={source} disabled={reviewPreview || w.busy || w.loading || factory.busy || factory.loading || !!factory.errors.videos || !!factory.errors.jobs || sourceHasActiveJob(factory.data.jobs, source.id)}
+                          onRebuild={() => { void factory.run(() => post(endpoint("videos", source.id, "storyboard"), {}), "The factory is watching this video. The storyboard updates when it finishes."); }}
+                          onDelete={() => { if (window.confirm(`Delete “${source.name}”? This cannot be undone.`)) void factory.run(() => remove(endpoint("videos", source.id)), "Video deleted."); }} />
                         <button
                           type="button"
                           className="gf-button secondary compact"

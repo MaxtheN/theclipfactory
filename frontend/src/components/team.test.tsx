@@ -11,8 +11,6 @@ import { TeamLedger } from "./TeamLedger";
 import { TeamComparisons } from "./TeamComparisons";
 import { StructuredData } from "./StructuredData";
 import { ClipReview } from "./ClipReview";
-import { Studio } from "../pages/Studio";
-import { editableSettings, SettingsPage } from "../pages/Settings";
 import { clip, settings, testState } from "../test-state";
 import type { TeamRun } from "../types";
 const source = { id: "v1", name: "Source", duration: 60 };
@@ -83,97 +81,6 @@ function readyState() {
   return state;
 }
 describe("team production contract", () => {
-  it.each([0, 1, 2])(
-    "posts an explicit team run with bounded budget %s and same-origin authentication",
-    async (budget) => {
-      const fetch = vi.fn(async (path: string) =>
-        json(path === "/api/team/runs" ? [] : { job: { id: "j1" }, run }),
-      );
-      vi.stubGlobal("fetch", fetch);
-      const user = userEvent.setup();
-      render(<Studio state={readyState()} />);
-      expect(screen.getByLabelText("Team revision budget")).toHaveValue("2");
-      await user.selectOptions(
-        screen.getByLabelText("Team revision budget"),
-        String(budget),
-      );
-      await user.click(screen.getByRole("button", { name: "Start team run" }));
-      const call = fetch.mock.calls.find(
-        ([path]) => path === "/api/videos/v1/team",
-      ) as unknown as [string, RequestInit];
-      expect(JSON.parse(call[1].body as string)).toEqual({
-        model_id: "qwen-small",
-        revision_budget: budget,
-      });
-      expect(call[1]).toMatchObject({
-        method: "POST",
-        credentials: "same-origin",
-      });
-      expect(
-        fetch.mock.calls.filter(([path]) =>
-          path.startsWith("/api/team/comparisons"),
-        ),
-      ).toHaveLength(0);
-    },
-  );
-  it("switches source without duplicated editors or retaining a comparison snapshot", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json([])),
-    );
-    const state = readyState();
-    state.data.videos.push({ id: "v2", name: "Other" });
-    render(<Studio state={state} />);
-    await userEvent.selectOptions(screen.getByLabelText("Source video"), "v2");
-    expect(
-      screen.getAllByRole("button", { name: "Start team run" }),
-    ).toHaveLength(1);
-    expect(
-      screen.getAllByRole("button", { name: "Load comparisons" }),
-    ).toHaveLength(1);
-    expect(screen.getByLabelText("Source editor preview")).toHaveAttribute(
-      "src",
-      "/api/videos/v2/media",
-    );
-    expect(screen.getByLabelText("Ledger source filter")).toHaveValue("v2");
-  });
-  it("posts comparative baseline independently of the saved team strategy", async () => {
-    const fetch = vi.fn(async (path: string) =>
-      json(path === "/api/team/runs" ? [] : { id: "j1" }),
-    );
-    vi.stubGlobal("fetch", fetch);
-    render(<Studio state={readyState()} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Run comparative baseline" }),
-    );
-    const call = fetch.mock.calls.find(([path]) =>
-      path.endsWith("/baseline"),
-    ) as unknown as [string, RequestInit];
-    expect(call[0]).toBe("/api/videos/v1/baseline");
-    expect(JSON.parse(call[1].body as string)).toEqual({
-      model_id: "qwen-small",
-    });
-  });
-  it("defaults untyped settings to the swarm and saves a deliberate baseline option", async () => {
-    expect(editableSettings(settings).production_strategy).toBe("swarm");
-    expect(
-      editableSettings({ ...settings, production_strategy: "team" }).production_strategy,
-    ).toBe("team");
-    const fetch = vi.fn(async () => json({}));
-    vi.stubGlobal("fetch", fetch);
-    render(<SettingsPage state={testState()} />);
-    await userEvent.selectOptions(
-      screen.getByLabelText("Production strategy"),
-      "baseline",
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Save studio settings" }),
-    );
-    const call = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(JSON.parse(call[1].body as string).production_strategy).toBe(
-      "baseline",
-    );
-  });
   it.each(["fail", "unknown", undefined] as const)(
     "blocks approval for unresolved team status %s",
     (status) => {

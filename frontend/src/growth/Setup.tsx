@@ -15,6 +15,7 @@ import { Icon } from "./Icon";
 import { CloudAccountRow } from "./CloudSignIn";
 import { AiModelCard } from "./AiModelCard";
 import { PanelDialog } from "./PanelDialog";
+import { EngineSetup } from "./EngineSetup";
 import "./brand-profile.css";
 import { objectives, type BrandKit, type Campaign, type Profile } from "../types";
 import { campaignGoalBody } from "./learningState";
@@ -145,6 +146,7 @@ export function Setup({
   part = "brand",
   active = true,
   goalsRequest = 0,
+  engineRequest = 0,
 }: {
   w: Workspace;
   factory: FactoryState;
@@ -165,6 +167,8 @@ export function Setup({
   active?: boolean;
   /** A new positive value opens Goals & brief, including through quick actions. */
   goalsRequest?: number;
+  /** A new positive value opens local Engine & models maintenance. */
+  engineRequest?: number;
 }) {
   const campaign = creating ? undefined : w.campaign;
   // The brand being edited is fixed for this mount (GrowthApp keys Setup by
@@ -173,15 +177,19 @@ export function Setup({
     campaign && campaign.profile_ids.includes(w.profileId)
       ? w.profiles.find((p) => p.id === w.profileId)
       : undefined;
-  const [editor, setEditor] = useState<"identity" | "kit" | "account" | "goals" | null>(null);
+  const [editor, setEditor] = useState<"identity" | "kit" | "account" | "goals" | "engine" | null>(null);
   const handledGoalsRequest = useRef(0);
+  const handledEngineRequest = useRef(0);
   useEffect(() => {
     if (!active) setEditor(null);
-    else if (goals && goalsRequest > 0 && goalsRequest !== handledGoalsRequest.current) {
+    else if (engineRequest > 0 && engineRequest !== handledEngineRequest.current) {
+      handledEngineRequest.current = engineRequest;
+      setEditor("engine");
+    } else if (goals && goalsRequest > 0 && goalsRequest !== handledGoalsRequest.current) {
       handledGoalsRequest.current = goalsRequest;
       setEditor("goals");
     }
-  }, [active, goalsRequest, goals]);
+  }, [active, goalsRequest, engineRequest, goals]);
   const [name, setName] = useState(campaign?.name || "");
   const [brandName, setBrandName] = useState(profile?.name || "");
   const [audience, setAudience] = useState(profile?.audience || "");
@@ -747,6 +755,9 @@ export function Setup({
           <Icon name="down" size={15} />
         </summary>
         <div className="gf-disclosure-body">
+          <button type="button" className="gf-link-row gf-engine-settings-link" onClick={() => setEditor("engine")}>
+            <Icon name="settings" size={17} /><span><strong>Engine & models</strong><small>Speech, local models, runtime and background jobs.</small></span><Icon name="arrow" size={15} />
+          </button>
           <Field label="Extra creative notes">
             {(id) => (
               <AutoTextarea
@@ -1084,6 +1095,9 @@ export function Setup({
               <section className="gf-profile-account" aria-label="Your account"><h3>Account</h3><CloudAccountRow showLocal /></section>
               <AiModelCard />
             </div>
+          </PanelDialog>
+          <PanelDialog open={active && editor === "engine"} onClose={() => setEditor(null)} title="Engine & models" size="wide" description="Manage this Mac’s runtime, local model library and background work.">
+            <EngineSetup factory={factory} />
           </PanelDialog>
           {goals && <PanelDialog open={active && editor === "goals"} onClose={() => setEditor(null)} title="Goals & brief" size="wide" description="Keep the desired outcome, creative direction and episode context together.">
             <div className="gf-brand-goals-editor">{goals}</div>

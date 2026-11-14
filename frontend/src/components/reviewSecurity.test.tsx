@@ -2,9 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClipReview } from "./ClipReview";
-import { Studio } from "../pages/Studio";
 import { clip, testState } from "../test-state";
-import { hasTranscript, jobContextId } from "../productionPreflight";
+import { hasTranscript, jobContextId, sourceHasTranscript } from "../productionPreflight";
 import type { Job } from "../types";
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status });
@@ -256,130 +255,7 @@ describe("human approval security boundaries", () => {
     }
   });
 });
-function expectProduction(enabled: boolean) {
-  for (const name of [
-    "Produce variants (team)",
-    "Start team run",
-    "Run comparative baseline",
-  ]) {
-    const button = screen.getByRole("button", { name });
-    if (enabled) expect(button).toBeEnabled();
-    else expect(button).toBeDisabled();
-  }
-}
-describe("source-aware production preflight", () => {
-  it.each([undefined, null, {}, [], ""])(
-    "requires installed Whisper for known audio without transcript %j but keeps analysis available",
-    (transcript) => {
-      mockFetch();
-      const state = readyState();
-      state.data.videos[0] = {
-        ...state.data.videos[0],
-        has_audio: true,
-        transcript,
-      };
-      render(<Studio state={state} />);
-      expectProduction(false);
-      expect(screen.getByText(/Install whisper-turbo/)).toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: "Analyze video" }),
-      ).toBeEnabled();
-    },
-  );
-  it.each(["whisper", "transcript", "silent", "unknown"] as const)(
-    "allows production when the audio prerequisite is %s",
-    (condition) => {
-      mockFetch();
-      const state = readyState();
-      state.data.videos[0].has_audio =
-        condition === "unknown" ? undefined : condition !== "silent";
-      if (condition === "whisper")
-        state.data.models.push({
-          id: "whisper-turbo",
-          name: "Whisper",
-          installed: true,
-        });
-      if (condition === "transcript")
-        state.data.videos[0].transcript = {
-          segments: [{ text: "Real transcript" }],
-        };
-      render(<Studio state={state} />);
-      expectProduction(true);
-      if (condition === "unknown")
-        expect(
-          screen.getByText(/Audio prerequisites checked by backend/),
-        ).toBeInTheDocument();
-    },
-  );
-  it.each(["queued", "running"])(
-    "blocks source-bound %s work using context rather than unrelated result fields",
-    (status) => {
-      mockFetch();
-      const state = readyState();
-      state.data.jobs = [
-        { id: "active", kind: "team", status, context: { video_id: "v1" } },
-      ];
-      const view = render(<Studio state={state} />);
-      expectProduction(false);
-      expect(
-        screen.getByRole("button", { name: "Analyze video" }),
-      ).toBeDisabled();
-      for (const job of [
-        { id: "other", kind: "team", status, context: { video_id: "other" } },
-        {
-          id: "download",
-          kind: "download",
-          status,
-          context: { model_id: "whisper-turbo" },
-        },
-        { id: "result", kind: "analyze", status, result: { video_id: "v1" } },
-        {
-          id: "done",
-          kind: "team",
-          status: "completed",
-          context: { video_id: "v1" },
-        },
-      ]) {
-        view.rerender(
-          <Studio
-            state={{ ...state, data: { ...state.data, jobs: [job] } }}
-          />,
-        );
-        expectProduction(true);
-      }
-    },
-  );
-  it.each(["false", "missing", "stale", "model", "queue"])(
-    "disables analysis for %s runtime/model/queue readiness",
-    (condition) => {
-      mockFetch();
-      const state = readyState();
-      if (condition === "false") state.data.system = { model_runtime: false };
-      if (condition === "missing") state.data.system = null;
-      if (condition === "stale") state.errors.system = "Unavailable";
-      if (condition === "model") state.data.models = [];
-      if (condition === "queue") state.errors.jobs = "Unavailable";
-      render(<Studio state={state} />);
-      expect(
-        screen.getByRole("button", { name: "Analyze video" }),
-      ).toBeDisabled();
-      expectProduction(false);
-    },
-  );
-  it("submits analysis only with a ready runtime and installed selected model", async () => {
-    const fetch = mockFetch();
-    render(<Studio state={readyState()} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Analyze video" }),
-    );
-    const call = fetch.mock.calls.find(([path]) =>
-      path.endsWith("/analyze"),
-    ) as unknown as [string, RequestInit];
-    expect(call[0]).toBe("/api/videos/v1/analyze");
-    expect(JSON.parse(call[1].body as string)).toEqual({
-      model_id: "qwen-small",
-    });
-  });
+describe("source preflight data boundaries", () => {
   it("reads unknown job context safely and treats empty transcript artifacts as unavailable", () => {
     for (const context of [
       null,
@@ -396,6 +272,10 @@ describe("source-aware production preflight", () => {
       ).toBeUndefined();
     expect(hasTranscript({})).toBe(false);
     expect(hasTranscript({ segments: [] })).toBe(true);
+    expect(sourceHasTranscript({ has_transcript: true, transcript: null })).toBe(true);
+    expect(sourceHasTranscript({ has_transcript: false, transcript: { text: "old" } })).toBe(false);
+    expect(sourceHasTranscript({ transcript: { language: "en", text: "Hi", segment_count: 1 } })).toBe(true);
+    expect(sourceHasTranscript({ transcript: null })).toBe(false);
   });
 });
 

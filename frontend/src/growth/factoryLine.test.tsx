@@ -9,8 +9,9 @@ import { parseAgentProductionResponse } from "./productionContracts";
 import { FactoryHome } from "./FactoryHome";
 import { Library } from "./Library";
 
+const mode = vi.hoisted(() => ({ preview: false }));
 vi.mock("./workspaceApi", () => ({
-  reviewPreview: false,
+  get reviewPreview() { return mode.preview; },
   workspaceApi: { save: vi.fn(), campaigns: vi.fn(), upload: vi.fn(), teamRuns: vi.fn() },
 }));
 vi.mock("./productionApi", async () => {
@@ -143,6 +144,7 @@ beforeAll(() => {
 afterAll(() => Object.assign(HTMLDialogElement.prototype, dialogApi));
 let requests: { url: string; method: string }[];
 beforeEach(() => {
+  mode.preview = false;
   vi.clearAllMocks();
   requests = [];
   vi.mocked(workspaceApi.teamRuns).mockResolvedValue([]);
@@ -180,7 +182,7 @@ describe("production line on the Factory screen", () => {
     home(workspace(), factory({}, { model: null }));
     expect(screen.getByRole("button", { name: "Find clips" })).toHaveAttribute(
       "title",
-      "Set up a local model: Channel settings → Advanced → Advanced tools.",
+      "Set up a local model: Brand profile → Advanced → Engine & models.",
     );
     expect(productionApi.campaignProduce).not.toHaveBeenCalled();
   });
@@ -265,6 +267,53 @@ describe("production line on the Factory screen", () => {
 });
 
 describe("review wall in the Library", () => {
+  it.each(["preview", "busy", "loading", "videos"])("holds source maintenance for %s state", reason => {
+    const f = factory();
+    if (reason === "preview") mode.preview = true;
+    if (reason === "busy") f.busy = true;
+    if (reason === "loading") f.loading = true;
+    if (reason === "videos") f.errors.videos = "Source unavailable";
+    render(<Library w={workspace()} factory={f} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="footage" />);
+    fireEvent.click(screen.getByText("Source details"));
+    expect(screen.getByRole("button", { name: "Rebuild storyboard" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete source" })).toBeDisabled();
+    expect(f.run).not.toHaveBeenCalled();
+  });
+
+  it("preserves deliberate storyboard rebuild and confirmed source deletion in episode details", async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ id: "job" })));
+    vi.stubGlobal("fetch", fetch);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const f = factory();
+    try {
+      render(<Library w={workspace()} factory={f} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="footage" />);
+      fireEvent.click(screen.getByText("Source details"));
+      fireEvent.click(screen.getByRole("button", { name: "Rebuild storyboard" }));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/videos/v1/storyboard", expect.objectContaining({ method: "POST", body: "{}" })));
+      fetch.mockClear();
+      fireEvent.click(screen.getByRole("button", { name: "Delete source" }));
+      expect(confirm).toHaveBeenCalledWith(`Delete “${video.name}”? This cannot be undone.`);
+      expect(fetch).not.toHaveBeenCalled();
+      confirm.mockReturnValue(true);
+      fireEvent.click(screen.getByRole("button", { name: "Delete source" }));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/videos/v1", expect.objectContaining({ method: "DELETE" })));
+    } finally { confirm.mockRestore(); }
+  });
+
+  it("holds source maintenance while its job is active or source status is stale", () => {
+    const f = factory();
+    f.data.jobs = [{ id: "working", kind: "storyboard", status: "running", context: { video_id: "v1" } }];
+    const view = render(<Library w={workspace()} factory={f} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="footage" />);
+    fireEvent.click(screen.getByText("Source details"));
+    expect(screen.getByRole("button", { name: "Rebuild storyboard" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete source" })).toBeDisabled();
+    const stale = factory();
+    stale.errors.jobs = "Status unavailable";
+    view.rerender(<Library w={workspace()} factory={stale} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="footage" />);
+    expect(screen.getByRole("button", { name: "Rebuild storyboard" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete source" })).toBeDisabled();
+  });
+
   const made = (id: string, changes: Partial<Clip> = {}): Clip =>
     ({
       id,

@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clip, testState } from "../test-state";
 import type { Clip } from "../types";
-import { Clips } from "../pages/Clips";
 import { ClipCard, selfCheck } from "./ClipCard";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -200,58 +199,5 @@ describe("compact clip card", () => {
     expect(
       screen.queryByRole("button", { name: "Run the self-check again", hidden: true }),
     ).not.toBeInTheDocument();
-  });
-});
-
-describe("clips page", () => {
-  const clips: Clip[] = [
-    { ...clip, id: "a", hook: "Waiting one", created_at: "2026-11-14T00:00:01Z" },
-    { ...clip, id: "b", hook: "Approved one", approved: true, created_at: "2026-11-14T00:00:02Z" },
-    { ...clip, id: "c", hook: "Waiting two", video_id: "v2", created_at: "2026-11-14T00:00:03Z" },
-  ];
-  const names = () =>
-    screen.getAllByRole("article", { name: /^Clip: / }).map((tile) => tile.getAttribute("aria-label"));
-  it("opens on clips that need review, newest first, and filters with chips", async () => {
-    const state = testState();
-    state.data.clips = clips;
-    render(<Clips state={state} navigate={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Needs review 2" })).toHaveAttribute("aria-pressed", "true");
-    expect(names()).toEqual(["Clip: Waiting two", "Clip: Waiting one"]);
-    await userEvent.click(screen.getByRole("button", { name: "Approved 1" }));
-    expect(names()).toEqual(["Clip: Approved one"]);
-    await userEvent.click(screen.getByRole("button", { name: "All 3" }));
-    expect(names()).toHaveLength(3);
-  });
-  it("filters by video when clips come from several", async () => {
-    const state = testState();
-    state.data.clips = clips;
-    state.data.videos = [
-      { id: "v1", name: "Match day" },
-      { id: "v2", name: "Interview" },
-      { id: "v3", name: "Unused" },
-    ];
-    render(<Clips state={state} navigate={vi.fn()} />);
-    const select = screen.getByLabelText("Filter by video");
-    expect(within(select).queryByRole("option", { name: "Unused" })).not.toBeInTheDocument();
-    await userEvent.selectOptions(select, "v2");
-    expect(names()).toEqual(["Clip: Waiting two"]);
-    expect(screen.getByRole("button", { name: "Approved 0" })).toBeInTheDocument();
-  });
-  it("says so when nothing is waiting", async () => {
-    const state = testState();
-    state.data.clips = [clips[1]];
-    render(<Clips state={state} navigate={vi.fn()} />);
-    expect(screen.getByText("Nothing is waiting for review.")).toBeInTheDocument();
-  });
-  it("points to the factory when there are no clips, without assuming an empty library on errors", async () => {
-    const navigate = vi.fn();
-    const view = render(<Clips state={testState()} navigate={navigate} />);
-    expect(screen.getByText("No clips yet")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Go to Factory" }));
-    expect(navigate).toHaveBeenCalledWith("Factory");
-    view.unmount();
-    render(<Clips state={testState({ errors: { clips: "Offline" } })} navigate={navigate} />);
-    expect(screen.getByText("Clips are unavailable")).toBeInTheDocument();
-    expect(screen.queryByText("No clips yet")).not.toBeInTheDocument();
   });
 });

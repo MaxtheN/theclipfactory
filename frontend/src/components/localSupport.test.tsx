@@ -2,10 +2,6 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clip, settings, testState } from "../test-state";
-import { Studio } from "./Studio";
-import { Models } from "./Models";
-import { Instagram, publishingGate } from "./Instagram";
-import { Results } from "./Results";
 import { ClipReview } from "../components/ClipReview";
 import { Narration, narrationDownloadUrl } from "../components/Narration";
 import {
@@ -79,81 +75,6 @@ function fetchMock() {
 }
 afterEach(() => vi.unstubAllGlobals());
 describe("full local production", () => {
-  it("produces variants for the selected source with exact model payload", async () => {
-    const fetch = fetchMock();
-    const user = userEvent.setup();
-    render(<Studio state={readyState()} />);
-    await user.selectOptions(screen.getByLabelText("Source video"), "v2");
-    await user.click(
-      screen.getByRole("button", { name: "Produce variants (team)" }),
-    );
-    const productionCall = fetch.mock.calls.find(
-      ([path]) => path === "/api/videos/v2/produce",
-    )!;
-    expect(productionCall[0]).toBe("/api/videos/v2/produce");
-    expect(
-      JSON.parse(
-        (productionCall as unknown as [string, RequestInit])[1].body as string,
-      ),
-    ).toEqual({ model_id: "qwen-small" });
-    expect(
-      screen.getByText(/transcribe when audio is present/),
-    ).toBeInTheDocument();
-  });
-  it.each([false, undefined, "mlx"])(
-    "does not assume runtime readiness from %s",
-    (runtime) => {
-      const state = readyState();
-      state.data.system = { model_runtime: runtime };
-      render(<Studio state={state} />);
-      expect(
-        screen.getByRole("button", { name: "Produce variants (team)" }),
-      ).toBeDisabled();
-    },
-  );
-  it("requires an installed model and fresh capability data", () => {
-    const state = readyState();
-    state.errors.models = "Unavailable";
-    render(<Studio state={state} />);
-    expect(
-      screen.getByRole("button", { name: "Produce variants (team)" }),
-    ).toBeDisabled();
-  });
-  it("submits Kokoro text and shows completed same-origin audio/download", async () => {
-    const fetch = fetchMock();
-    const user = userEvent.setup();
-    const state = readyState();
-    state.data.jobs = [
-      {
-        id: "n1",
-        kind: "narration",
-        status: "completed",
-        result: { download_url: "/api/narrations/n1/download" },
-      },
-    ];
-    render(<Models state={state} />);
-    await user.type(
-      screen.getByLabelText("Narration text"),
-      "A real voiceover.",
-    );
-    await user.click(
-      screen.getByRole("button", { name: "Generate narration" }),
-    );
-    expect(fetch.mock.calls[0][0]).toBe("/api/narrations");
-    expect(
-      JSON.parse(
-        (fetch.mock.calls[0] as unknown as [string, RequestInit])[1]
-          .body as string,
-      ),
-    ).toEqual({ text: "A real voiceover." });
-    expect(screen.getByLabelText("Narration playback")).toHaveAttribute(
-      "src",
-      "/api/narrations/n1/download",
-    );
-    expect(
-      screen.getByRole("link", { name: "Download narration" }),
-    ).toHaveAttribute("href", "/api/narrations/n1/download");
-  });
   it.each([
     "https://evil.example/api/narrations/n1/download",
     "//evil.example/x",
@@ -217,60 +138,6 @@ describe("render fidelity and publish reconciliation", () => {
     expect(
       screen.getByText("Subtitles burned in: Unknown"),
     ).toBeInTheDocument();
-  });
-  it.each([
-    { publish_attempt: "failed-job" },
-    { instagram_media_id: "reel1" },
-    { status: "published" },
-    { status: "publish_needs_reconciliation" },
-    { status: "publishing" },
-  ])("blocks duplicate publication for %j", (marker) => {
-    expect(
-      publishingGate(
-        { ...clip, approved: true, ...marker },
-        { ...settings, publishing_enabled: true },
-        instagram,
-      ),
-    ).toEqual([expect.stringContaining("duplicate publishing is blocked")]);
-  });
-  it("keeps publish disabled despite other valid gates when reconciliation is required", async () => {
-    const user = userEvent.setup();
-    const state = paidState();
-    state.data.settings = { ...state.data.settings!, publishing_enabled: true };
-    state.data.clips = [
-      {
-        ...clip,
-        approved: true,
-        publish_attempt: "attempt1",
-        status: "publish_needs_reconciliation",
-      },
-    ];
-    render(<Instagram state={state} />);
-    await user.selectOptions(screen.getByLabelText("Clip to publish"), "c1");
-    await user.type(
-      screen.getByLabelText("Public HTTPS video URL"),
-      "https://media.example/clip.mp4",
-    );
-    expect(
-      screen.getByRole("button", { name: "Queue Instagram publish" }),
-    ).toBeDisabled();
-    expect(
-      screen.getByText(/Reconcile with Meta before any retry/),
-    ).toBeInTheDocument();
-  });
-  it("labels Meta metrics as media insights without claiming boost exclusion", () => {
-    const state = testState();
-    state.data.analytics = {
-      videos: [{ clip_id: "c1", organic: { views: 5 }, paid: { views: null } }],
-    };
-    render(<Results state={state} />);
-    expect(
-      screen.getByRole("heading", { name: "Media insights" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "Organic" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Paid" })).toBeInTheDocument();
   });
 });
 describe("deliberate paid reads and no-spend preflight", () => {
@@ -449,40 +316,5 @@ describe("deliberate paid reads and no-spend preflight", () => {
     expect(
       screen.queryByRole("button", { name: /Activate campaign|Create ad$/i }),
     ).not.toBeInTheDocument();
-  });
-  it("clears account and paid data when the verified Instagram account changes", async () => {
-    fetchMock();
-    const user = userEvent.setup();
-    const state = paidState();
-    const view = render(<PaidSetup state={state} />);
-    await user.click(
-      screen.getByRole("button", { name: "Fetch accessible ad accounts" }),
-    );
-    await user.selectOptions(
-      screen.getByLabelText("Accessible ad account"),
-      "act_1",
-    );
-    await user.click(
-      screen.getByRole("button", { name: "Refresh stored paid insights" }),
-    );
-    expect(screen.getByRole("table")).toBeInTheDocument();
-    view.rerender(
-      <PaidSetup
-        state={{
-          ...state,
-          data: {
-            ...state.data,
-            instagram: { ...instagram, account: { id: "ig2" } },
-          },
-        }}
-      />,
-    );
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(
-      screen.queryByLabelText("Accessible ad account"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Validate ads preflight (no spend)" }),
-    ).toBeDisabled();
   });
 });

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { PanelLeft, Settings } from "lucide-react";
-import { App } from "../App";
 import { useFactory } from "../useFactory";
 import { useCampaignWorkspace } from "./useCampaignWorkspace";
 import { reviewPreview } from "./workspaceApi";
@@ -97,8 +96,8 @@ export function GrowthApp() {
   const factory = useFactory();
   const w = useCampaignWorkspace(factory.refresh);
   const [stage, setStage] = useState<Stage>(storedView);
-  const [tools, setTools] = useState(false);
   const [goalsRequest, setGoalsRequest] = useState({ context: "", sequence: 0 });
+  const [engineRequest, setEngineRequest] = useState({ context: "", sequence: 0 });
   // Account creation is the last onboarding step, asked only when the cloud
   // is configured, nobody is signed in and the creator hasn't chosen offline.
   const [askAccount, setAskAccount] = useState(false);
@@ -114,9 +113,7 @@ export function GrowthApp() {
   const [quickOpen, setQuickOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
-  const toolsReturn = useRef<HTMLButtonElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
-  const previousTools = useRef(false);
   const usable =
     !!w.campaign &&
     w.campaign.profile_ids.includes(w.profileId) &&
@@ -135,6 +132,7 @@ export function GrowthApp() {
   const contextKey = `${w.campaign?.id || "empty"}-${w.profileId}`;
   useEffect(() => {
     setGoalsRequest({ context: contextKey, sequence: 0 });
+    setEngineRequest({ context: contextKey, sequence: 0 });
   }, [contextKey]);
   const current = views[stage];
   // Sub-pages: a quiet "← Back" sits top-left above the title.
@@ -208,22 +206,13 @@ export function GrowthApp() {
     }
     if (onboarding) {
       setQuickOpen(false);
-      setTools(false);
-    } else if (!tools) heading.current?.focus();
+    } else heading.current?.focus();
   }, [stage, onboarding]);
-  useEffect(() => {
-    if (tools) toolsReturn.current?.focus();
-    else if (previousTools.current && !onboarding) heading.current?.focus();
-    previousTools.current = tools;
-  }, [tools, onboarding]);
-
   function go(next: Stage) {
-    setTools(false);
     setStage(next);
   }
   function newWorkspace() {
     if (blocked) return;
-    setTools(false);
     setOnboardingSession((n) => n + 1);
     setCreating(true);
     setStage("factory");
@@ -302,14 +291,17 @@ export function GrowthApp() {
       run: newWorkspace,
     },
     {
-      id: "tools",
-      label: "Advanced tools",
+      id: "engine",
+      label: "Engine & models",
       icon: "settings",
       group: "Brand",
-      disabled: blocked,
-      keywords: "models runtime integrations settings",
-      hint: "Models and local tools",
-      run: () => setTools(true),
+      disabled: blocked || onboarding || !usable,
+      keywords: "models runtime speech whisper install hardware advanced",
+      hint: "Brand profile · Advanced",
+      run: () => {
+        go("setup");
+        setEngineRequest((request) => ({ context: contextKey, sequence: request.sequence + 1 }));
+      },
     },
     {
       id: "refresh",
@@ -350,27 +342,8 @@ export function GrowthApp() {
 
   return (
     <>
-      {tools && (
-        <div
-          className={`gf-operational${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
-        >
-          <div className="gf-tools-return">
-            <button ref={toolsReturn} onClick={() => setTools(false)}>
-              <Icon name="back" size={16} />
-              Back to Factory
-            </button>
-            <span>Advanced tools · local capabilities</span>
-            {commandTrigger}
-          </div>
-          <App
-            sidebarToggle={sidebarToggle}
-            sidebarCollapsed={sidebarCollapsed}
-          />
-        </div>
-      )}
       <div
         className={`gf-app gf-flow-app${onboarding ? " is-onboarding" : ""}${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
-        hidden={tools}
       >
         <a className="gf-skip" href="#growth-main">
           Skip to content
@@ -435,16 +408,6 @@ export function GrowthApp() {
               >
                 <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
                 <span>Brand profile</span>
-              </button>
-              <button
-                type="button"
-                className="gf-channel-settings"
-                title="Advanced tools"
-                disabled={blocked || !usable || onboarding}
-                onClick={() => setTools(true)}
-              >
-                <Icon name="settings" size={17} />
-                <span>Advanced tools</span>
               </button>
               {accountEmail && (
                 <p className="gf-sidebar-account" title={`Signed in as ${accountEmail}`}>
@@ -610,7 +573,7 @@ export function GrowthApp() {
                 <Onboarding
                   key={onboardingSession}
                   w={w}
-                  active={onboarding && !tools}
+                  active={onboarding}
                   askAccount={askAccount}
                   intro={
                     (!w.loading && w.profiles.length === 0) ||
@@ -634,13 +597,13 @@ export function GrowthApp() {
                 <FactoryTabs
                   w={w}
                   factory={factory}
-                  active={!tools && !onboarding && stage === "factory"}
+                  active={!onboarding && stage === "factory"}
                 >
                   <FactoryHome
                     key={contextKey}
                     w={w}
                     factory={factory}
-                    active={!tools && !onboarding && stage === "factory"}
+                    active={!onboarding && stage === "factory"}
                     onProduce={openProduction}
                     onReview={reviewClip}
                     onLibrary={(view) => {
@@ -672,8 +635,9 @@ export function GrowthApp() {
               >
                 <Setup
                   key={contextKey}
-                  active={!tools && !onboarding && stage === "setup"}
+                  active={!onboarding && stage === "setup"}
                   goalsRequest={goalsRequest.context === contextKey ? goalsRequest.sequence : 0}
+                  engineRequest={engineRequest.context === contextKey ? engineRequest.sequence : 0}
                   creating={false}
                   onSaved={() => {}}
                   w={w}
@@ -748,7 +712,7 @@ export function GrowthApp() {
                   preferredSource={preferredSource}
                   preferredMode={preferredMode}
                   preferredClip={preferredClip}
-                  activeSurface={!tools && !onboarding && stage === "studio"}
+                  activeSurface={!onboarding && stage === "studio"}
                   next={() => go("results")}
                   onDirection={() => go("research")}
                   onEditBrief={openGoals}

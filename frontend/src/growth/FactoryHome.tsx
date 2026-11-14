@@ -5,7 +5,7 @@ import { ClipStyleSheet } from "./ClipStyle";
 import type { Clip, Job, TeamRun, Video } from "../types";
 import { ApiError, endpoint, post } from "../api";
 import { Storyboard } from "../components/Storyboard";
-import { Stages } from "../pages/Home";
+import { Stages } from "./SourceStages";
 import type { FactoryState } from "../useFactory";
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, reviewPreview } from "./workspaceApi";
@@ -987,7 +987,7 @@ export function FactoryHome({
                       !direction
                         ? "Pick your clip style first."
                         : !modelId
-                          ? "Set up a local model: Channel settings → Advanced → Advanced tools."
+                          ? "Set up a local model: Brand profile → Advanced → Engine & models."
                           : status.blocked_reason || undefined
                     }
                     onClick={() => void makeClips(source)}
