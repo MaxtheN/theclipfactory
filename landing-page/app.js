@@ -2,56 +2,39 @@ document.documentElement.classList.add("js");
 
 const demoSteps = [
   {
-    eyebrow: "01 / A PLACE TO BEGIN",
-    heading: "A weekend away.<br />A story to tell.",
-    description:
-      "The footage, the audience, the feeling.<br />Give your next good idea a place to start.",
-    label: "YOUR CAMPAIGN BRIEF",
-    direction:
-      "A short story for people who need a little more outside in their everyday.",
-    tag: "Your footage. Your audience. Your intention.",
-    role: "Everything starts with your idea.",
-    note: "Set the direction. Keep the creative control.",
+    eyebrow: "01 / SET THE BRIEF",
+    heading: "Your footage.<br />A clear intention.",
+    description: "Define the audience, goal, and boundaries. Give your agents a useful place to start.",
+    label: "SAMPLE CAMPAIGN BRIEF",
+    direction: "Turn a weekend hiking film into short stories for people who want more time outside.",
+    tag: "Source footage · Audience · Creative boundaries",
+    role: "You → the creative brief",
+    note: "Set the context once. Refine it as you go.",
   },
   {
-    eyebrow: "02 / FIND THE FEELING",
-    heading: "A fresh angle.<br />A familiar feeling.",
-    description:
-      "Explore a new opening. Set the rhythm.<br />Choose the direction that feels like you.",
-    label: "A CREATIVE HYPOTHESIS",
-    direction:
-      "What if we start with the quiet moment, before revealing the bigger landscape?",
-    tag: "One idea. A new way into the story.",
-    role: "Your strategist has a suggestion.",
-    note: "You choose the idea before production begins.",
+    eyebrow: "02 / CHOOSE THE DIRECTION",
+    heading: "One source.<br />A new way in.",
+    description: "Agents suggest moments and opening treatments. You choose the idea before production.",
+    label: "SAMPLE OPENING TREATMENT",
+    direction: "Start with the quiet moment on the ridge, then reveal the wider landscape.",
+    tag: "Opening · Pacing · Source moments",
+    role: "Strategist → your approval",
+    note: "A suggestion, not an automatic decision.",
   },
   {
-    eyebrow: "03 / THE STUDIO",
-    heading: "A little further<br />from ordinary.",
-    description:
-      "The big feeling. The small details.<br />A first cut that’s ready for your perspective.",
+    eyebrow: "03 / REVIEW THE CUT",
+    heading: "A first cut.<br />Your final say.",
+    description: "Review the opening, pacing, and captions. Ask for a revision before you approve.",
     label: "YOUR CREATIVE DIRECTION",
-    direction:
-      "Open with the feeling of getting away. Let the landscape do the talking.",
+    direction: "Open with the feeling of getting away. Let the landscape do the talking.",
     tag: "Warm. Unhurried. A little unexpected.",
-    role: "Your editor has a first cut.",
-    note: "You bring the finishing touch.",
+    role: "Editor → your review",
+    note: "Illustrative workflow. Not a rendered video.",
   },
 ];
 
 const previewPanel = document.querySelector("#preview-panel");
 const tabs = [...document.querySelectorAll("[data-step]")];
-const narrowScreen = matchMedia("(max-width: 640px)");
-function setTabOrientation() {
-  document
-    .querySelector(".preview-tabs")
-    .setAttribute(
-      "aria-orientation",
-      narrowScreen.matches ? "horizontal" : "vertical",
-    );
-}
-setTabOrientation();
-narrowScreen.addEventListener("change", setTabOrientation);
 let panelAnimation;
 
 function selectStep(index, moveFocus = false) {
@@ -82,9 +65,9 @@ tabs.forEach((tab, index) => {
   tab.addEventListener("click", () => selectStep(index));
   tab.addEventListener("keydown", (event) => {
     const keys = {
-      [narrowScreen.matches ? "ArrowRight" : "ArrowDown"]:
+      ArrowRight:
         (index + 1) % tabs.length,
-      [narrowScreen.matches ? "ArrowLeft" : "ArrowUp"]:
+      ArrowLeft:
         (index + tabs.length - 1) % tabs.length,
       Home: 0,
       End: tabs.length - 1,
@@ -137,21 +120,21 @@ const tourNext = document.querySelector("#tour-next");
 const tourExplore = document.querySelector("#tour-explore");
 const tourSteps = [
   {
-    kicker: "BRING YOUR IDEA",
-    title: "Every story starts somewhere.",
+    kicker: "01 / BRING FOOTAGE & A BRIEF",
+    title: "Your source. Your intention.",
     description:
       "Add your footage and define the audience, the feeling, and the point of the campaign. Give your creative team something to work toward.",
-    next: "Find your angle",
+    next: "Choose the direction",
   },
   {
-    kicker: "FIND YOUR ANGLE",
+    kicker: "02 / CHOOSE THE DIRECTION",
     title: "A new way into the story.",
     description:
       "Explore a creative direction: the opening, the pace, the moments that matter. Review the suggestion and approve the idea before production begins.",
-    next: "Make it yours",
+    next: "Review the cut",
   },
   {
-    kicker: "MAKE IT YOURS",
+    kicker: "03 / REVIEW, REFINE, REPEAT",
     title: "Your taste. The finishing touch.",
     description:
       "Review the first cut, ask for a thoughtful revision, and approve the exact version you want. Bring real observations back into the next creative loop.",
