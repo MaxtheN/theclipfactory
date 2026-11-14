@@ -2537,7 +2537,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     from .learning_api import install as install_learning_api
 
     runtime = AutonomyRuntime(app, campaign_render)
-    engine = LearningEngine(store, runtime.collect, runtime.analyze, runtime.produce)
+    engine = LearningEngine(
+        store, runtime.collect, runtime.analyze, runtime.produce, propose=campaigns.propose_from_experiment
+    )
     app.state.autonomy_runtime = runtime
     app.state.learning = engine
     install_learning_api(app, runtime, engine)

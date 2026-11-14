@@ -86,6 +86,135 @@ export function parseAutomationState(value: unknown): State {
   return result;
 }
 const text = (value: unknown) => (typeof value === "string" ? value : "");
+const finite = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+const record = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+
+type MemoryExperiment = {
+  id: string;
+  variable: string;
+  before: string;
+  after: string;
+  status: string;
+  demoHours: number | null;
+  demo: boolean;
+  measured: boolean;
+  proposedVersionId: string;
+};
+type MemoryComparison = {
+  experimentId: string;
+  variable: string;
+  caveat: string;
+  metrics: {
+    name: string;
+    parent: number | null;
+    variant: number | null;
+    difference: number | null;
+  }[];
+};
+export type LearningMemory = {
+  posts: number;
+  baseline: { name: string; median: number | null; known: number }[];
+  experiments: MemoryExperiment[];
+  comparisons: MemoryComparison[];
+  pending: { id: string; version: number | null; experimentId: string }[];
+  truncated: boolean;
+};
+const shown = (value: unknown) =>
+  typeof value === "number"
+    ? `${value.toLocaleString()}s`
+    : `“${text(value).slice(0, 120)}”`;
+/** Accepts only the bounded digest shape; anything else means "unavailable". */
+export function parseLearningMemory(value: unknown): LearningMemory | null {
+  const digest = record(value);
+  const baseline = record(digest?.baseline);
+  const metrics = record(baseline?.metrics);
+  if (
+    !digest ||
+    !baseline ||
+    !metrics ||
+    !Array.isArray(digest.experiments) ||
+    !Array.isArray(digest.comparisons)
+  )
+    return null;
+  return {
+    posts: finite(baseline.posts) ?? 0,
+    baseline: Object.entries(metrics)
+      .slice(0, 12)
+      .map(([name, raw]) => {
+        const row = record(raw);
+        return {
+          name,
+          median: finite(row?.median),
+          known: finite(row?.known_posts) ?? 0,
+        };
+      }),
+    experiments: digest.experiments
+      .map(record)
+      .filter((row): row is Record<string, unknown> => !!row && !!text(row.id))
+      .slice(0, 6)
+      .map((row) => ({
+        id: text(row.id),
+        variable: text(row.variable),
+        before: shown(row.before),
+        after: shown(row.after),
+        status: text(row.status).replaceAll("_", " "),
+        demo: row.trigger === "demo_override",
+        demoHours: finite(row.real_elapsed_hours),
+        measured: !!record(row.outcome),
+        proposedVersionId: text(row.proposed_strategy_version_id),
+      })),
+    comparisons: digest.comparisons
+      .map(record)
+      .filter((row): row is Record<string, unknown> => !!row)
+      .slice(0, 6)
+      .map((row) => ({
+        experimentId: text(row.experiment_id),
+        variable: text(row.variable),
+        caveat: text(row.caveat),
+        metrics: Object.entries(record(row.metrics) ?? {})
+          .slice(0, 12)
+          .map(([name, raw]) => {
+            const m = record(raw);
+            return {
+              name,
+              parent: finite(m?.parent),
+              variant: finite(m?.variant),
+              difference: finite(m?.difference),
+            };
+          }),
+      })),
+    pending: (Array.isArray(digest.pending_rule_proposals)
+      ? digest.pending_rule_proposals
+      : []
+    )
+      .map(record)
+      .filter((row): row is Record<string, unknown> => !!row && !!text(row.id))
+      .slice(0, 5)
+      .map((row) => ({
+        id: text(row.id),
+        version: finite(row.version),
+        experimentId: text(row.experiment_id),
+      })),
+    truncated: digest.truncated === true,
+  };
+}
+const number = (value: number | null) =>
+  value === null ? "Unknown" : value.toLocaleString();
+function DemoBadge({ row }: { row: Row }) {
+  if (row.trigger !== "demo_override") return null;
+  const hours = finite(row.real_elapsed_hours);
+  return (
+    <span className="gf-automation-badge">
+      Demo override · measured{" "}
+      {hours === null ? "before its window" : `${hours.toLocaleString()} h`}{" "}
+      after posting, not {String(row.cadence_days ?? "3–6")} days
+    </span>
+  );
+}
 
 export function parseInstagramPosts(value: unknown, accountId: string): Post[] {
   if (!value || typeof value !== "object")
@@ -142,11 +271,13 @@ export function AutomationPanel({
   factory,
   visible,
   onReview,
+  onEditingRules,
 }: {
   w: Workspace;
   factory: FactoryState;
   visible: boolean;
   onReview?: (clip: Clip) => void;
+  onEditingRules?: () => void;
 }) {
   const [state, setState] = useState<State>(empty),
     [accounts, setAccounts] = useState<Row[]>([]);
@@ -154,6 +285,7 @@ export function AutomationPanel({
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false);
   const [fresh, setFresh] = useState(false);
+  const [memory, setMemory] = useState<LearningMemory | null>(null);
   const blocked = busy || !fresh;
   const [accountId, setAccountId] = useState(""),
     [cadence, setCadence] = useState<3 | 6>(3);
@@ -229,6 +361,15 @@ export function AutomationPanel({
       setConfigured(settings.configured === true);
       setAuthConfig((previous) => previous || text(settings.auth_config_id));
     }
+    // Learning memory is supplementary: a failed read never blocks controls.
+    if (!w.profileId) return;
+    const query = new URLSearchParams({ profile_id: w.profileId });
+    if (w.campaign?.id) query.set("campaign_id", w.campaign.id);
+    const digest = await api<unknown>(
+      `/api/automation/memory?${query.toString()}`,
+    ).catch(() => null);
+    if (alive.current && generation === refreshGeneration.current)
+      setMemory(parseLearningMemory(digest));
   }
   useEffect(() => {
     alive.current = true;
@@ -713,14 +854,56 @@ export function AutomationPanel({
           {!publications.length && (
             <p>No published posts tracked for this workspace yet.</p>
           )}
-          {publications.slice(0, 6).map((row) => (
-            <article key={row.id}>
-              <strong>Post {text(row.media_id)}</strong>
-              <span>
-                Next check: {new Date(text(row.next_due_at)).toLocaleString()}
-              </span>
-            </article>
-          ))}
+          {publications.slice(0, 6).map((row) => {
+            const due = Date.parse(text(row.next_due_at));
+            const owner = policies.find((p) => p.id === row.policy_id);
+            const override = record(row.demo_override);
+            const busyHere = work.some(
+              (item) =>
+                item.publication_id === row.id &&
+                ["running", "retry", "queued", "needs_reconciliation"].includes(
+                  text(item.status),
+                ),
+            );
+            return (
+              <article key={row.id}>
+                <strong>Post {text(row.media_id)}</strong>
+                <span>
+                  Next check: {new Date(text(row.next_due_at)).toLocaleString()}
+                </span>
+                {override && text(override.due_at) === text(row.next_due_at) && (
+                  <span className="gf-automation-badge">
+                    Demo measurement requested ·{" "}
+                    {String(override.real_elapsed_hours)} h after posting
+                  </span>
+                )}
+                {Number.isFinite(due) &&
+                  due > Date.now() &&
+                  owner?.enabled === true &&
+                  !busyHere &&
+                  !!text(row.mapping_source) && (
+                    <button
+                      disabled={blocked}
+                      onClick={() =>
+                        void act(async () => {
+                          const result = await post<Record<string, unknown>>(
+                            `/api/automation/publications/${encodeURIComponent(row.id)}/measure-now`,
+                          );
+                          const hours = finite(result.real_elapsed_hours);
+                          setNotice(
+                            result.status === "requested"
+                              ? `Demo override: measuring ${hours ?? "?"} hours after posting instead of waiting for the ${String(owner.cadence_days)}-day window. Metrics are real provider reads and every result is labelled.`
+                              : "This check was already due; it runs on its normal schedule.",
+                          );
+                        })
+                      }
+                    >
+                      Measure now (demo — window not elapsed)
+                    </button>
+                  )}
+              </article>
+            );
+          })}
           {work.slice(0, 6).map((row) => (
             <article key={row.id}>
               <strong>{text(row.status).replaceAll("_", " ")}</strong>
@@ -730,6 +913,7 @@ export function AutomationPanel({
                   : text(row.message) || "Saved measurement work"}
               </span>
               <small>{text(row.detail) || text(row.error)}</small>
+              <DemoBadge row={{ ...row, cadence_days: policies.find((p) => p.id === row.policy_id)?.cadence_days }} />
             </article>
           ))}
         </div>
@@ -747,8 +931,14 @@ export function AutomationPanel({
                 {text(row.variable) || "Creative experiment"} ·{" "}
                 {text(row.status).replaceAll("_", " ")}
               </strong>
+              <DemoBadge row={{ ...row, cadence_days: policies.find((p) => p.id === row.policy_id)?.cadence_days }} />
               <p>{text(row.rationale)}</p>
               <small>{text(row.limitations)}</small>
+              {record(row.strategy_proposal)?.status === "proposed" && (
+                <span className="gf-automation-badge">
+                  Editing rule proposed · waiting for your approval
+                </span>
+              )}
               <details>
                 <summary>Evidence & execution receipt</summary>
                 <pre>{JSON.stringify(row, null, 2)}</pre>
@@ -757,6 +947,90 @@ export function AutomationPanel({
           ))}
         </div>
       </div>
+      <section
+        className="gf-automation-learned"
+        aria-labelledby="automation-learned-title"
+      >
+        <h3 id="automation-learned-title">What we've learned</h3>
+        {!memory && <p>Learning memory is unavailable right now.</p>}
+        {memory &&
+          !memory.posts &&
+          !memory.experiments.length &&
+          !memory.pending.length && (
+            <p>
+              Nothing measured yet. Track a published clip; its first real
+              check builds the baseline.
+            </p>
+          )}
+        {memory && memory.posts > 0 && (
+          <div>
+            <strong>
+              Account baseline · median of {memory.posts} tracked post
+              {memory.posts === 1 ? "" : "s"} (latest read each)
+            </strong>
+            <dl className="gf-automation-metrics">
+              {memory.baseline.map((m) => (
+                <div key={m.name}>
+                  <dt>{m.name.replaceAll("_", " ")}</dt>
+                  <dd>{number(m.median)}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
+        {memory?.experiments.map((e) => (
+          <article key={e.id}>
+            <strong>
+              {e.variable} · {e.status}
+            </strong>
+            <span>
+              {e.before} → {e.after}
+            </span>
+            {e.demo && (
+              <span className="gf-automation-badge">
+                Demo override ·{" "}
+                {e.demoHours === null ? "early" : `${e.demoHours} h`} after
+                posting
+              </span>
+            )}
+            <small>
+              {e.measured
+                ? "Its draft was published and measured."
+                : "Its draft has not been measured as a post yet."}
+            </small>
+          </article>
+        ))}
+        {memory?.comparisons.map((c) => (
+          <article key={`comparison-${c.experimentId}`}>
+            <strong>Observational comparison · {c.variable}</strong>
+            <dl className="gf-automation-metrics">
+              {c.metrics.map((m) => (
+                <div key={m.name}>
+                  <dt>{m.name.replaceAll("_", " ")}</dt>
+                  <dd>
+                    {number(m.parent)} → {number(m.variant)}
+                    {m.difference !== null &&
+                      ` (${m.difference > 0 ? "+" : ""}${m.difference.toLocaleString()})`}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <small>{c.caveat}</small>
+          </article>
+        ))}
+        {memory?.pending.map((p) => (
+          <p key={p.id} className="gf-automation-help">
+            Proposed editing rule{p.version !== null ? ` v${p.version}` : ""} is
+            waiting for your approval. Nothing changes until you approve it.{" "}
+            {onEditingRules && (
+              <button onClick={onEditingRules}>Review in Editing rules</button>
+            )}
+          </p>
+        ))}
+        {memory?.truncated && (
+          <small>Older learning is summarized; the full record is saved.</small>
+        )}
+      </section>
       {!!snapshots.length && (
         <details>
           <summary>
@@ -765,6 +1039,7 @@ export function AutomationPanel({
           {snapshots.slice(0, 6).map((row) => (
             <article key={row.id}>
               <strong>{text(row.source)}</strong>
+              <DemoBadge row={{ ...row, cadence_days: policies.find((p) => p.id === row.policy_id)?.cadence_days }} />
               <p>
                 Collected {new Date(text(row.collected_at)).toLocaleString()} ·
                 cumulative counts, never summed

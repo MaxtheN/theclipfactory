@@ -5,11 +5,13 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { api, post, put } from "../api";
 import {
   AutomationPanel,
   parseAutomationState,
+  parseLearningMemory,
   parseInstagramPosts,
 } from "./AutomationPanel";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -498,4 +500,194 @@ describe("recent Instagram post chooser", () => {
       expect(put).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("closed learning loop", () => {
+  const policy = {
+    id: "policy",
+    campaign_id: "campaign",
+    profile_id: "profile",
+    account_id: "mine",
+    cadence_days: 3,
+    enabled: true,
+    auto_drafts: true,
+  };
+  const future = new Date(Date.now() + 86_400_000).toISOString();
+  const digest = {
+    profile_id: "profile",
+    baseline: {
+      posts: 2,
+      snapshot_ids: ["s1", "s2"],
+      metrics: {
+        views: { median: 150, known_posts: 2 },
+        likes: { median: null, known_posts: 0 },
+      },
+    },
+    experiments: [
+      {
+        id: "exp",
+        variable: "hook",
+        before: "Original",
+        after: "Clearer point",
+        status: "completed",
+        trigger: "demo_override",
+        real_elapsed_hours: 2.5,
+        outcome: { publication_id: "pv", snapshot_id: "sv" },
+        proposed_strategy_version_id: "v2",
+      },
+    ],
+    comparisons: [
+      {
+        experiment_id: "exp",
+        variable: "hook",
+        caveat: "Observational: not causal proof of lift.",
+        metrics: { views: { parent: 100, variant: 140, difference: 40 } },
+      },
+    ],
+    pending_rule_proposals: [
+      { id: "v2", campaign_id: "campaign", version: 2, experiment_id: "exp" },
+    ],
+    truncated: false,
+  };
+  function mockLoop(memory: unknown = digest) {
+    vi.mocked(api).mockImplementation(async (path) => {
+      if (path === "/api/automation/state")
+        return {
+          ...blank,
+          policies: [policy],
+          publications: [
+            {
+              id: "pub",
+              policy_id: "policy",
+              media_id: "123",
+              next_due_at: future,
+              mapping_source: "User confirms exact clip",
+            },
+          ],
+          snapshots: [
+            {
+              id: "snap",
+              policy_id: "policy",
+              source: "Composio Instagram media insights",
+              collected_at: future,
+              metrics: { views: 120 },
+              trigger: "demo_override",
+              real_elapsed_hours: 2.5,
+            },
+          ],
+          experiments: [
+            {
+              id: "exp",
+              policy_id: "policy",
+              campaign_id: "campaign",
+              profile_id: "profile",
+              variable: "hook",
+              status: "completed",
+              trigger: "demo_override",
+              real_elapsed_hours: 2.5,
+              strategy_proposal: { status: "proposed" },
+            },
+          ],
+        };
+      if (path === "/api/automation/accounts") return [];
+      if (path === "/api/automation/settings") return { configured: true };
+      if (path.startsWith("/api/automation/memory?")) return memory;
+      throw new Error(`Unexpected call: ${path}`);
+    });
+  }
+
+  it("parses only the bounded digest and keeps unknown medians unknown", () => {
+    expect(parseLearningMemory(blank)).toBeNull();
+    expect(parseLearningMemory(null)).toBeNull();
+    const parsed = parseLearningMemory(digest)!;
+    expect(parsed.baseline).toEqual([
+      { name: "views", median: 150, known: 2 },
+      { name: "likes", median: null, known: 0 },
+    ]);
+    expect(parsed.experiments[0]).toMatchObject({
+      before: "“Original”",
+      after: "“Clearer point”",
+      demo: true,
+      demoHours: 2.5,
+      measured: true,
+    });
+    expect(parsed.pending).toEqual([
+      { id: "v2", version: 2, experimentId: "exp" },
+    ]);
+  });
+
+  it("offers an explicit demo measurement and labels its results", async () => {
+    mockLoop();
+    vi.mocked(post).mockResolvedValue({
+      status: "requested",
+      trigger: "demo_override",
+      real_elapsed_hours: 2.5,
+    });
+    render(<AutomationPanel w={workspace} factory={factory} visible />);
+    const button = await screen.findByRole("button", {
+      name: "Measure now (demo — window not elapsed)",
+    });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(
+      screen.getAllByText(/Demo override · measured 2.5 h after posting, not 3 days/),
+    ).toHaveLength(2);
+    expect(
+      screen.getByText("Editing rule proposed · waiting for your approval"),
+    ).toBeInTheDocument();
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith(
+        "/api/automation/publications/pub/measure-now",
+      ),
+    );
+    expect(
+      await screen.findByText(/Metrics are real provider reads/),
+    ).toBeInTheDocument();
+    expect(
+      vi.mocked(api).mock.calls.some(([path]) =>
+        path.includes("memory?profile_id=profile&campaign_id=campaign"),
+      ),
+    ).toBe(true);
+  });
+
+  it("shows what was learned and links a waiting rule to Editing rules", async () => {
+    mockLoop();
+    const onEditingRules = vi.fn();
+    render(
+      <AutomationPanel
+        w={workspace}
+        factory={factory}
+        visible
+        onEditingRules={onEditingRules}
+      />,
+    );
+    const panel = await screen.findByRole("region", {
+      name: "What we've learned",
+    });
+    await within(panel).findByText(/median of 2 tracked posts/);
+    expect(within(panel).getByText("Unknown")).toBeInTheDocument();
+    expect(
+      within(panel).getByText("Observational comparison · hook"),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText("100 → 140 (+40)")).toBeInTheDocument();
+    expect(
+      within(panel).getByText("Observational: not causal proof of lift."),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByText("Demo override · 2.5 h after posting"),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "Review in Editing rules" }),
+    );
+    expect(onEditingRules).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps controls usable when learning memory cannot be read", async () => {
+    mockLoop("not a digest");
+    render(<AutomationPanel w={workspace} factory={factory} visible />);
+    expect(
+      await screen.findByText("Learning memory is unavailable right now."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });

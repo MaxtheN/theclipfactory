@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from .autonomy_runtime import ConnectionSettings
-from .learning import Policy, Publication
+from .learning import Policy, Publication, memory_digest
 
 
 class ConnectProfile(BaseModel):
@@ -114,6 +114,25 @@ def install(app, runtime, engine):
             "experiments": engine.list_experiments(),
             "health": runtime.store.get("automation_health", "local"),
             "publishing_policy": "human_approval", "paid_spending_enabled": False}
+
+    @app.post("/api/automation/publications/{identifier}/measure-now", status_code=202)
+    def measure_now(identifier: str):
+        # Demo control: only an explicit creator request moves ONE post's due time.
+        # Provider metrics stay real; the receipt records the override and real age.
+        publication = runtime.store.get("learning_publications", identifier)
+        if not publication or not publication.get("mapping_source"):
+            raise HTTPException(404, "Track this post with a confirmed clip mapping before measuring it.")
+        result = engine.measure_now(identifier)
+        worker = getattr(runtime, "thread", None)
+        if worker and worker.is_alive():
+            runtime.wake.set()
+        return result
+
+    @app.get("/api/automation/memory")
+    def memory(profile_id: str, account_id: str | None = None, campaign_id: str | None = None):
+        if not runtime.store.get("profiles", profile_id):
+            raise HTTPException(404, "Profile not found.")
+        return memory_digest(runtime.store, profile_id, account_id, campaign_id=campaign_id, limit=6, max_chars=6000)
 
     @app.post("/api/automation/check", status_code=202)
     def check_due():

@@ -17,3 +17,5 @@
 .gf-app .gf-automation .gf-automation-help{font-size:13px;color:#355265;background:#e2edf3;padding:12px 15px;border-radius:10px}
 .gf-app .gf-automation .gf-automation-error{color:#87302f;background:#f8e6e5}
 .gf-automation-post{padding:16px;margin-top:12px;border:1px solid #bac6ce;border-radius:14px}.gf-automation-post p{margin:7px 0 12px}.gf-automation-post a{margin-right:12px}
+.gf-automation .gf-automation-badge{display:inline-block;margin:6px 0;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;background:#f6e7c8;color:#5d4510;border:1px solid #e1c98f}
+.gf-automation-learned{border-top:1px solid rgba(50,65,78,.14);margin-top:20px;padding-top:18px}.gf-automation-learned article{padding:14px;margin:10px 0;border:1px solid rgba(50,65,78,.13);border-radius:14px}

@@ -22,6 +22,15 @@ Identifier = Annotated[str, Field(min_length=1, max_length=128)]
 Variable = Literal["hook", "duration"]
 Metric = Annotated[float, Field(ge=0, strict=True)] | None
 TERMINAL = {"completed", "insufficient_evidence", "duplicate", "proposed", "blocked", "failed"}
+# The analyst waits at most this long for its local model job. A claim lease
+# must outlive collection plus that wait, so another tick never re-claims work
+# whose analysis is still legitimately running.
+ANALYST_TIMEOUT_SECONDS = 600
+LEASE_MARGIN = timedelta(minutes=10)
+OBSERVATIONAL = (
+    "Observational: different posts at different times and audiences. A difference is not causal proof of lift "
+    "and does not name a winner."
+)
 
 
 class Body(BaseModel):
@@ -143,6 +152,8 @@ class WorkReceipt(Body):
     experiment_id: str | None = None
     analysis: dict[str, Any] | None = None
     detail: str = ""
+    trigger: Literal["schedule", "demo_override"] = "schedule"
+    real_elapsed_hours: float | None = None
     created_at: str
     updated_at: str
 
@@ -171,6 +182,8 @@ class ExperimentReceipt(Body):
     normalization_notes: list[str] = Field(default_factory=list)
     render_request: dict[str, Any]
     status: Literal["proposed", "submitting", "queued", "needs_reconciliation", "completed", "failed"] = "proposed"
+    trigger: Literal["schedule", "demo_override"] = "schedule"
+    real_elapsed_hours: float | None = None
     job_id: str | None = None
     clip_id: str | None = None
     detail: str = ""
@@ -186,12 +199,15 @@ class LearningEngine:
     job context with experiment_id before returning a receipt. Unknown effects
     stay held until reconcile() can verify a real job and unapproved clip.
     """
-    LEASE = timedelta(minutes=10)
+    LEASE = timedelta(seconds=ANALYST_TIMEOUT_SECONDS) + LEASE_MARGIN
     MAX_ATTEMPTS = 3
 
-    def __init__(self, store: Store, collect: Callable, analyze: Callable, produce: Callable, clock: Callable | None = None):
+    def __init__(self, store: Store, collect: Callable, analyze: Callable, produce: Callable, clock: Callable | None = None, propose: Callable | None = None):
         self.store, self.collect, self.analyze, self.produce = store, collect, analyze, produce
         self.clock = clock or (lambda: datetime.now(UTC))
+        # propose(experiment) -> saved PROPOSED strategy version. It never approves;
+        # the creator's existing review/approve path and its guards decide.
+        self.propose = propose
 
     def _now(self):
         return utc(self.clock())
@@ -306,6 +322,11 @@ class LearningEngine:
                 return None
         else:
             work = WorkReceipt(id=key, policy_id=policy["id"], publication_id=publication["id"], due_at=publication["next_due_at"], status="running", created_at=stamp(now), updated_at=stamp(now)).model_dump()
+            override = publication.get("demo_override") or {}
+            if override.get("due_at") == publication["next_due_at"]:
+                # An explicit creator request moved only this publication's due
+                # time. Record it permanently; the metrics stay real provider reads.
+                work.update(trigger="demo_override", real_elapsed_hours=elapsed_hours(publication, now))
         work.update(status="running", attempts=work["attempts"] + 1, claim_id=new_id(), lease_until=stamp(now + self.LEASE), retry_at=None, updated_at=stamp(now))
         self.store.put("learning_work", work)
         return work
@@ -394,7 +415,7 @@ class LearningEngine:
         if before == after:
             raise ValueError("The proposal changes no actual rendered variable.")
         key = identity("experiment", [context["publication"]["id"], snapshot["id"], strategy["id"]])
-        return ExperimentReceipt(id=key, work_id=work["id"], policy_id=context["policy"]["id"], publication_id=context["publication"]["id"], campaign_id=context["policy"]["campaign_id"], profile_id=context["policy"]["profile_id"], account_id=context["policy"]["account_id"], media_id=context["publication"]["media_id"], parent_clip_id=clip["id"], source_id=source["id"], base_strategy_version_id=strategy["id"], snapshot_id=snapshot["id"], variable=result.variable, before=before, after=after, evidence_ids=result.evidence_ids, rationale=result.rationale, limitations=result.limitations, parent_edit_plan=plan, raw_parent_edit_plan=raw_plan, normalization_notes=normalization_notes, render_request=request, created_at=stamp(self._now()), updated_at=stamp(self._now())).model_dump()
+        return ExperimentReceipt(id=key, work_id=work["id"], policy_id=context["policy"]["id"], publication_id=context["publication"]["id"], campaign_id=context["policy"]["campaign_id"], profile_id=context["policy"]["profile_id"], account_id=context["policy"]["account_id"], media_id=context["publication"]["media_id"], parent_clip_id=clip["id"], source_id=source["id"], base_strategy_version_id=strategy["id"], snapshot_id=snapshot["id"], variable=result.variable, before=before, after=after, evidence_ids=result.evidence_ids, rationale=result.rationale, limitations=result.limitations, parent_edit_plan=plan, raw_parent_edit_plan=raw_plan, normalization_notes=normalization_notes, render_request=request, trigger=work.get("trigger", "schedule"), real_elapsed_hours=work.get("real_elapsed_hours"), created_at=stamp(self._now()), updated_at=stamp(self._now())).model_dump()
 
     def _process(self, work):
         try:
@@ -410,6 +431,8 @@ class LearningEngine:
                     if not self._owns(work):
                         return self.read_work(work["id"])
                     snapshot = self._snapshot(raw, context)
+                    if work.get("trigger") == "demo_override" and self.store.get("learning_snapshots", snapshot["id"]) is None:
+                        snapshot.update(trigger="demo_override", real_elapsed_hours=work.get("real_elapsed_hours"))
                     work.update(snapshot_id=snapshot["id"], phase="analyze")
                     self.store.put_many([("learning_snapshots", snapshot), ("learning_work", work)])
             else:
@@ -419,7 +442,8 @@ class LearningEngine:
                     return self._finish(work, "duplicate", "Unchanged cumulative evidence was already evaluated; counts are not summed.")
                 if all(value is None for value in snapshot["metrics"].values()):
                     return self._finish(work, "insufficient_evidence", "All measured values are unknown.")
-            result = AnalysisResult.model_validate(self.analyze({**deepcopy(context), "snapshot": deepcopy(snapshot)}))
+                memory = memory_digest(self.store, policy["profile_id"], account_id=policy["account_id"])
+            result = AnalysisResult.model_validate(self.analyze({**deepcopy(context), "snapshot": deepcopy(snapshot), "memory": memory}))
             with self.store.lock:
                 if not self._owns(work):
                     return self.read_work(work["id"])
@@ -533,7 +557,52 @@ class LearningEngine:
             if any(plan.get(key) != experiment["parent_edit_plan"].get(key) for key in ("framing", "caption_style")) or clip.get("caption", "") != request["caption"]:
                 raise HTTPException(422, "The draft changed a second, unapproved experiment variable.")
             experiment.update(status="completed", clip_id=clip_id)
-            return self._finish(work, "completed", receipt.detail, experiment=experiment)
+            finished = self._finish(work, "completed", receipt.detail, experiment=experiment)
+            self._propose_rule(experiment["id"])
+            return finished
+
+    def _propose_rule(self, experiment_id):
+        """Offer the produced change as a PROPOSED editing-rule revision; never approve it."""
+        if self.propose is None:
+            return None
+        with self.store.lock:
+            experiment = self.read_experiment(experiment_id)
+            if (experiment.get("strategy_proposal") or {}).get("status") == "proposed":
+                return experiment["strategy_proposal"]
+            try:
+                version = self.propose(deepcopy(experiment))
+                record = {"status": "proposed", "strategy_version_id": version["id"], "version": version.get("version"), "approved": False}
+            except HTTPException as exc:
+                record = {"status": "not_proposed", "detail": str(exc.detail)[:500]}
+            except Exception as exc:  # noqa: BLE001 -- a proposal is advisory; never undo a verified draft.
+                record = {"status": "not_proposed", "detail": f"{type(exc).__name__}: proposal could not be saved."}
+            experiment["strategy_proposal"] = {**record, "at": stamp(self._now())}
+            self.store.put("learning_experiments", experiment)
+            return experiment["strategy_proposal"]
+
+    def measure_now(self, publication_id: str) -> dict:
+        """Explicit demo request: make ONE publication due now, without faking time.
+
+        The collector still reads real cumulative provider metrics as of now. The
+        work, snapshot and experiment carry trigger=demo_override and the real
+        hours elapsed since publication. The regular cadence resumes afterwards.
+        """
+        with self.store.lock:
+            publication = self._require("learning_publications", publication_id)
+            policy = self._require("learning_policies", publication["policy_id"])
+            self._context(publication, policy)  # archived, stale-base and mapping guards
+            if not policy["enabled"]:
+                raise HTTPException(409, "Start or resume learning for this account before measuring.")
+            if any(w["publication_id"] == publication_id and w["status"] not in TERMINAL for w in self.list_work(policy["id"])):
+                raise HTTPException(409, "This post already has measurement work in progress.")
+            now = self._now()
+            hours = elapsed_hours(publication, now)
+            if utc(publication["next_due_at"]) <= now:
+                return {"status": "already_due", "trigger": "schedule", "real_elapsed_hours": hours, "publication": deepcopy(publication)}
+            override = {"trigger": "demo_override", "requested_at": stamp(now), "scheduled_due_at": publication["next_due_at"], "due_at": stamp(now), "real_elapsed_hours": hours, "cadence_days": policy["cadence_days"]}
+            publication.update(next_due_at=override["due_at"], demo_override=override)
+            self.store.put("learning_publications", publication)
+            return {"status": "requested", **override, "publication": deepcopy(publication)}
 
     @staticmethod
     def _job_matches(experiment, job):
@@ -631,3 +700,133 @@ class LearningEngine:
 
     def state(self, policy_id=None):
         return {"policies": [self.read_policy(policy_id)] if policy_id else self.list_policies(), "publications": self.list_publications(policy_id), "snapshots": self.list_snapshots(policy_id), "work": self.list_work(policy_id), "experiments": self.list_experiments(policy_id)}
+
+
+def elapsed_hours(publication: dict, at: datetime) -> float:
+    return round((utc(at) - utc(publication["published_at"])).total_seconds() / 3600, 2)
+
+
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    return float(ordered[middle]) if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
+
+
+def _known(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _short(value, limit=120):
+    # Hook text is creative data shown for comparison, never an instruction.
+    return value[:limit] if isinstance(value, str) else value
+
+
+MAX_DIGEST_METRICS = 12
+
+
+def memory_digest(store: Store, profile_id: str, account_id: str | None = None, *, campaign_id: str | None = None,
+                  limit: int = 5, max_chars: int = 3000) -> dict:
+    """Bounded, deterministic, citation-carrying memory of earlier learning.
+
+    Pure read of saved records. Baselines are per-metric medians across tracked
+    posts' LATEST cumulative snapshots; unknown values are null, never zero.
+    Variant-vs-parent comparisons exist only when the experiment's own draft was
+    later published, tracked and measured, and are labelled observational.
+    Captions, rationales and other free text are omitted; hooks are truncated data.
+    """
+    policies = sorted(
+        (p for p in store.all("learning_policies") if p.get("profile_id") == profile_id
+         and (account_id is None or p.get("account_id") == account_id)
+         and (campaign_id is None or p.get("campaign_id") == campaign_id)),
+        key=lambda p: p["id"])
+    policy_ids = {p["id"] for p in policies}
+    publications = sorted((p for p in store.all("learning_publications") if p.get("policy_id") in policy_ids), key=lambda p: p["id"])
+    latest: dict[str, dict] = {}
+    for snapshot in store.all("learning_snapshots"):
+        publication_id = snapshot.get("publication_id")
+        if snapshot.get("policy_id") not in policy_ids or not isinstance(snapshot.get("metrics"), dict):
+            continue
+        current = latest.get(publication_id)
+        if current is None or (snapshot.get("collected_at", ""), snapshot["id"]) > (current.get("collected_at", ""), current["id"]):
+            latest[publication_id] = snapshot
+    names = sorted({name for snapshot in latest.values() for name in snapshot["metrics"]})[:MAX_DIGEST_METRICS]
+    baseline = {}
+    for name in names:
+        values = [s["metrics"][name] for s in latest.values() if _known(s["metrics"].get(name))]
+        baseline[name] = {"median": _median(values), "known_posts": len(values)}
+    by_clip = {p["clip_id"]: p for p in publications}
+    experiments, comparisons = [], []
+    rows = sorted((e for e in store.all("learning_experiments") if e.get("policy_id") in policy_ids),
+                  key=lambda e: (e.get("created_at", ""), e["id"]), reverse=True)
+    for experiment in rows[:max(0, limit)]:
+        entry = {
+            "id": experiment["id"], "variable": experiment["variable"],
+            "before": _short(experiment["before"]), "after": _short(experiment["after"]),
+            "status": experiment["status"], "evidence_snapshot_id": experiment["snapshot_id"],
+            "parent_clip_id": experiment["parent_clip_id"], "variant_clip_id": experiment.get("clip_id"),
+            "base_strategy_version_id": experiment["base_strategy_version_id"],
+            "trigger": experiment.get("trigger", "schedule"), "outcome": None,
+        }
+        if experiment.get("trigger") == "demo_override":
+            entry["real_elapsed_hours"] = experiment.get("real_elapsed_hours")
+        proposal = experiment.get("strategy_proposal") or {}
+        if proposal.get("status") == "proposed":
+            entry["proposed_strategy_version_id"] = proposal.get("strategy_version_id")
+        variant_publication = by_clip.get(experiment.get("clip_id")) if experiment.get("clip_id") else None
+        variant = latest.get(variant_publication["id"]) if variant_publication else None
+        if variant:
+            parent = latest.get(experiment["publication_id"]) or store.get("learning_snapshots", experiment["snapshot_id"]) or {"id": experiment["snapshot_id"], "metrics": {}}
+            entry["outcome"] = {"publication_id": variant_publication["id"], "snapshot_id": variant["id"]}
+            metrics = {}
+            for name in sorted(set(parent["metrics"]) | set(variant["metrics"]))[:MAX_DIGEST_METRICS]:
+                a, b = parent["metrics"].get(name), variant["metrics"].get(name)
+                a, b = (a if _known(a) else None), (b if _known(b) else None)
+                metrics[name] = {"parent": a, "variant": b, "difference": None if a is None or b is None else b - a}
+            comparisons.append({"experiment_id": experiment["id"], "variable": experiment["variable"],
+                "parent_snapshot_id": parent["id"], "variant_snapshot_id": variant["id"],
+                "metrics": metrics, "label": "observational", "caveat": OBSERVATIONAL})
+        experiments.append(entry)
+    pending = sorted(
+        ({"id": v["id"], "campaign_id": v.get("campaign_id"), "version": v.get("version"),
+          "experiment_id": (v.get("learning") or {}).get("experiment_id")}
+         for v in store.all("strategy_versions")
+         if v.get("source") == "learning_experiment" and v.get("status") == "proposed"
+         and (v.get("learning") or {}).get("profile_id") == profile_id
+         and (campaign_id is None or v.get("campaign_id") == campaign_id)),
+        key=lambda v: (v["campaign_id"] or "", v["version"] or 0, v["id"]))[:5]
+    digest = {
+        "profile_id": profile_id, "account_id": account_id, "campaign_id": campaign_id,
+        "baseline": {"statistic": "median of each tracked post's latest cumulative snapshot", "posts": len(latest),
+                     "snapshot_ids": sorted(s["id"] for s in latest.values())[:20], "metrics": baseline},
+        "experiments": experiments, "comparisons": comparisons, "pending_rule_proposals": pending,
+        "limitations": OBSERVATIONAL + " Null means unknown, not zero.", "truncated": False,
+    }
+    return bound_digest(digest, max_chars)
+
+
+def _size(value) -> int:
+    return len(json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False))
+
+
+def bound_digest(digest: dict, max_chars: int) -> dict:
+    """Deterministically drop the oldest detail first until the digest fits."""
+    if _size(digest) <= max_chars:
+        return digest
+    if not isinstance(digest.get("experiments"), list):
+        return {"profile_id": digest.get("profile_id"), "omitted": "Learning memory exceeds this prompt budget.", "truncated": True}
+    digest["truncated"] = True
+    while _size(digest) > max_chars and digest["experiments"]:
+        dropped = digest["experiments"].pop()
+        digest["comparisons"] = [c for c in digest["comparisons"] if c["experiment_id"] != dropped["id"]]
+    metrics = digest["baseline"]["metrics"]
+    while _size(digest) > max_chars and metrics:
+        metrics.pop(max(metrics))
+    while _size(digest) > max_chars and digest["baseline"]["snapshot_ids"]:
+        digest["baseline"]["snapshot_ids"].pop()
+    while _size(digest) > max_chars and digest["pending_rule_proposals"]:
+        digest["pending_rule_proposals"].pop()
+    if _size(digest) > max_chars:
+        return {"profile_id": digest["profile_id"], "omitted": "Learning memory exceeds this prompt budget.", "truncated": True}
+    return digest

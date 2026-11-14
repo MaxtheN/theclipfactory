@@ -341,7 +341,7 @@ def test_restart_after_analyzer_crash_reuses_snapshot_after_lease(domain):
     with pytest.raises(Crash):
         d.engine(analyze=crash).tick()
     assert d.engine().tick() == []
-    d.clock.advance(minutes=11)
+    d.clock.advance(seconds=LearningEngine.LEASE.total_seconds() + 60)
     assert d.engine().tick()[0]["status"] == "queued"
     assert d.calls["collect"] == 1
 
@@ -372,7 +372,7 @@ def test_producer_crash_claim_recovers_the_existing_job_after_lease_without_resu
         raise Crash()
     with pytest.raises(Crash):
         d.engine(produce=crash).tick()
-    d.clock.advance(minutes=11)
+    d.clock.advance(seconds=LearningEngine.LEASE.total_seconds() + 60)
     assert d.engine().tick()[0]["status"] == "queued"
     assert d.service.list_work()[0]["status"] == "queued"
     assert d.calls["produce"] == 1

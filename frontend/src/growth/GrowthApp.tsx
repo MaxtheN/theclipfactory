@@ -674,6 +674,7 @@ export function GrowthApp() {
                   factory={factory}
                   visible={!onboarding && stage === "results"}
                   onReview={reviewClip}
+                  onEditingRules={() => go("research")}
                 />
               </div>
               {reviewPreview && stage === "factory" && !onboarding && (

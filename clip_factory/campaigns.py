@@ -18,6 +18,12 @@ from .store import Store, new_id, now
 from .team import Objective
 
 Text = Annotated[str, Field(max_length=1200)]
+# Who created a proposed strategy revision. Proposals never approve themselves.
+StrategySource = Literal["manual", "learning_experiment"]
+LEARNING_CAVEAT = (
+    "Proposed from one learning experiment on observational post metrics. It is a hypothesis to test, "
+    "not proof of causal lift or a winner."
+)
 Identifier = Annotated[str, Field(min_length=1, max_length=128)]
 
 
@@ -400,7 +406,10 @@ class Campaigns:
             if known and observation["value"] is None:
                 raise HTTPException(422, "Unavailable metrics cannot establish a measured learning change.")
 
-    def propose(self, campaign_id, body: Proposal, *, hypothesis="", restored_from=None):
+    def propose(self, campaign_id, body: Proposal, *, hypothesis="", restored_from=None,
+                source: StrategySource = "manual", learning: dict | None = None):
+        if source not in ("manual", "learning_experiment") or (source == "learning_experiment") != (learning is not None):
+            raise HTTPException(422, "Unsupported strategy proposal source.")
         with self.store.lock:
             campaign = self.active_campaign(campaign_id)
             if body.base_version_id != campaign["active_strategy_id"]:
@@ -430,10 +439,63 @@ class Campaigns:
                     "reason": body.reason,
                     "hypothesis": hypothesis,
                     "restored_from": restored_from,
+                    "source": source,
+                    **({"learning": deepcopy(learning)} if learning is not None else {}),
                     "created_at": now(),
                     "approved_at": None,
-                    "limitations": "Observational evidence informs a hypothesis, not proof of causal lift.",
+                    "limitations": LEARNING_CAVEAT if learning is not None
+                    else "Observational evidence informs a hypothesis, not proof of causal lift.",
                 },
+            )
+
+    def propose_from_experiment(self, experiment: dict):
+        """Turn one produced learning experiment into a PROPOSED editing-rule revision.
+
+        It rebases on the experiment's own approved base, so the existing stale-parent
+        and profile-coverage guards apply both here and again at approval. Idempotent
+        per experiment. Nothing is approved and no evidence is invented.
+        """
+        with self.store.lock:
+            for version in self.store.all("strategy_versions"):
+                if (version.get("learning") or {}).get("experiment_id") == experiment["id"]:
+                    return version
+            campaign = self.active_campaign(experiment["campaign_id"])
+            base = self.require("strategy_versions", experiment["base_strategy_version_id"])
+            profile_id = experiment["profile_id"]
+            if base.get("campaign_id") != campaign["id"] or profile_id not in base.get("directions", {}):
+                raise HTTPException(422, "Experiment base is outside this campaign's saved direction.")
+            direction = deepcopy(base["directions"][profile_id])
+            variable, before, after = experiment["variable"], experiment["before"], experiment["after"]
+            if variable == "hook":
+                hooks = [after] + [h for h in direction.get("hooks", []) if h != after]
+                direction["hooks"] = hooks[:20]
+            elif variable == "duration":
+                direction["duration_seconds"] = float(after)
+            else:
+                raise HTTPException(422, "Only hook or duration experiments can propose an editing rule.")
+            direction["limitations"] = LEARNING_CAVEAT
+            direction["confidence"] = "low"
+            evidence = list(dict.fromkeys([experiment["snapshot_id"], *experiment.get("evidence_ids", [])]))[:20]
+            learning = {
+                "experiment_id": experiment["id"], "profile_id": profile_id,
+                "account_id": experiment.get("account_id"), "publication_id": experiment.get("publication_id"),
+                "variable": variable, "before": before, "after": after,
+                "snapshot_ids": evidence, "parent_clip_id": experiment.get("parent_clip_id"),
+                "draft_clip_id": experiment.get("clip_id"), "trigger": experiment.get("trigger", "schedule"),
+                "real_elapsed_hours": experiment.get("real_elapsed_hours"), "caveat": LEARNING_CAVEAT,
+            }
+            shown = (lambda v: f"{v:g}s" if isinstance(v, (int, float)) else repr(str(v)[:120]))
+            reason = (
+                f"Learning experiment {experiment['id']} changed the {variable} from {shown(before)} to "
+                f"{shown(after)}; cited snapshot {experiment['snapshot_id']}. Observational, not causal."
+            )[:4000]
+            return self.propose(
+                campaign["id"],
+                Proposal(directions={profile_id: Direction.model_validate(direction)}, reason=reason,
+                         base_version_id=base["id"]),
+                hypothesis=f"Changing the {variable} may improve the profile's measured outcome."[:4000],
+                source="learning_experiment",
+                learning=learning,
             )
 
     def decision(self, campaign_id, version_id, *, approve, reason=""):

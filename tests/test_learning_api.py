@@ -452,3 +452,92 @@ def test_recent_posts_provider_failure_is_visible_once_without_persisting_fake_r
     assert store.get("connected_accounts", "ca_posts") == account
     assert store.all("learning_publications") == []
     assert store.all("learning_snapshots") == []
+
+
+def _measure_fixture(session):
+    store = session.app.state.store
+    store.put("profiles", {"id": "profile"})
+    store.put("connected_accounts", {"id": "account", "profile_id": "profile", "provider": "composio",
+        "toolkit": "instagram", "status": "active", "user_id": "u"})
+    store.put("videos", {"id": "source", "duration": 120, "has_audio": False})
+    store.put("campaigns", {"id": "campaign", "profile_ids": ["profile"], "video_ids": ["source"], "active_strategy_id": "base"})
+    store.put("strategy_versions", {"id": "base", "campaign_id": "campaign", "status": "approved",
+        "directions": {"profile": {"framing": "fit", "caption_style": "standard"}}})
+    store.put("clips", {"id": "parent", "campaign_id": "campaign", "profile_id": "profile", "video_id": "source",
+        "strategy_version_id": "base", "approved": True, "sha256": "a" * 64})
+    store.put("learning_policies", {"id": "policy", "campaign_id": "campaign", "profile_id": "profile",
+        "account_id": "account", "cadence_days": 3, "enabled": True, "auto_drafts": True, "allowed_changes": ["hook"]})
+    from datetime import UTC, datetime, timedelta
+    published = datetime.now(UTC) - timedelta(hours=2)
+    store.put("learning_publications", {"id": "publication", "policy_id": "policy", "clip_id": "parent",
+        "account_id": "account", "media_id": "1", "sha256": "a" * 64, "published_at": published.isoformat(),
+        "next_due_at": (published + timedelta(days=3)).isoformat(),
+        "mapping_source": "User confirms exact clip; provider verifies account, media identity and timestamp."})
+    return store
+
+
+def test_measure_now_is_authenticated_explicit_and_recorded(client):
+    session, _ = client
+    store = _measure_fixture(session)
+    scheduled = store.get("learning_publications", "publication")["next_due_at"]
+    assert session.post("/api/automation/publications/publication/measure-now",
+        headers={"X-Clip-Token": "wrong"}).status_code == 401
+    assert store.get("learning_publications", "publication")["next_due_at"] == scheduled
+    response = session.post("/api/automation/publications/publication/measure-now")
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "requested" and body["trigger"] == "demo_override"
+    assert 1.9 <= body["real_elapsed_hours"] <= 2.1 and body["scheduled_due_at"] == scheduled
+    saved = store.get("learning_publications", "publication")
+    assert saved["demo_override"]["trigger"] == "demo_override" and saved["next_due_at"] == body["due_at"]
+
+
+def test_measure_now_rejects_unmapped_and_archived(client):
+    session, _ = client
+    store = _measure_fixture(session)
+    assert session.post("/api/automation/publications/missing/measure-now").status_code == 404
+    store.patch("learning_publications", "publication", mapping_source=None)
+    assert session.post("/api/automation/publications/publication/measure-now").status_code == 404
+    store.patch("learning_publications", "publication", mapping_source="confirmed")
+    store.patch("campaigns", "campaign", archived_at="2026-01-01T00:00:00+00:00")
+    archived = session.post("/api/automation/publications/publication/measure-now")
+    assert archived.status_code == 409 and "archived" in archived.json()["detail"]
+    assert "demo_override" not in store.get("learning_publications", "publication")
+
+
+def test_memory_endpoint_returns_bounded_digest(client):
+    session, _ = client
+    _measure_fixture(session)
+    assert session.get("/api/automation/memory?profile_id=profile", headers={"X-Clip-Token": "wrong"}).status_code == 401
+    assert session.get("/api/automation/memory?profile_id=nobody").status_code == 404
+    digest = session.get("/api/automation/memory?profile_id=profile&campaign_id=campaign").json()
+    assert digest["profile_id"] == "profile" and digest["baseline"]["posts"] == 0
+    assert digest["experiments"] == [] and "not causal" in digest["limitations"]
+
+
+def test_runtime_analyst_prompt_carries_memory_within_budget(client):
+    session, _ = client
+    runtime, app = session.app.state.autonomy_runtime, session.app
+    prompts = []
+
+    def infer(job, model, action, **payload):
+        prompts.append(payload["prompt"])
+        assert len(payload["prompt"].encode()) + 1500 + 256 <= payload["context_tokens"]
+        return {"output": json.dumps({"status": "insufficient_evidence", "rationale": "No comparison.", "limitations": "None."})}
+    app.state.models.run = infer
+    experiments = [{"id": f"exp-{n}", "variable": "hook", "before": "b" * 120, "after": "a" * 120, "status": "completed",
+        "evidence_snapshot_id": f"s-{n}", "outcome": None} for n in range(40)]
+    memory = {"profile_id": "p", "baseline": {"posts": 2, "snapshot_ids": ["s-0"], "metrics": {"views": {"median": 150.0, "known_posts": 2}}},
+        "experiments": experiments, "comparisons": [], "pending_rule_proposals": [], "limitations": "Observational.", "truncated": False}
+    context = {"snapshot": {"id": "snapshot", "metrics": {"views": 3}}, "policy": {"profile_id": "p"},
+        "profile": {"id": "p", "objective": "discovery"}, "publication": {"id": "post"},
+        "clip": {"id": "clip", "start": 0, "end": 5},
+        "source": {"id": "source", "duration": 10, "transcript": {"segments": [{"start": 0, "end": 5, "text": "Point."}]}},
+        "strategy": {"directions": {"p": {"framing": "fit"}}}, "memory": memory}
+    runtime.analyze(context)
+    evidence = json.loads(prompts[0].split("Evidence:\n", 1)[1])
+    included = evidence["learning_memory"]
+    assert included["truncated"] is True and included["baseline"]["metrics"]["views"]["median"] == 150.0
+    assert 0 < len(included["experiments"]) < 40 and included["experiments"][0]["id"] == "exp-0"
+    assert evidence["snapshot"]["id"] == "snapshot"
+    assert "learning_memory" in prompts[0] and "cite only the current snapshot" in prompts[0]
