@@ -49,7 +49,7 @@ def test_generation_result_uses_text_not_object_repr(model, monkeypatch):
         "output": "actual model output"
     }
     load.assert_called_once_with(model, trust_remote_code=False)
-    template.assert_called_once_with("processor", {}, "intent", num_images=0)
+    template.assert_called_once_with("processor", {}, "intent", num_images=0, enable_thinking=False)
     generate.assert_called_once_with(
         "model", "processor", "formatted", image=None, max_tokens=1500, temperature=0.3, verbose=False
     )

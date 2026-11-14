@@ -86,7 +86,11 @@ def infer(request):
         model, processor = load(model_path, trust_remote_code=False)
         images = request.get("images", [])
         formatted = apply_chat_template(
-            processor, load_config(model_path), request["prompt"], num_images=len(images)
+            processor,
+            load_config(model_path),
+            request["prompt"],
+            num_images=len(images),
+            enable_thinking=False,
         )
         output = generate(
             model,
