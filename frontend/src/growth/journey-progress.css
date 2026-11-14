@@ -1,0 +1,635 @@
+/* One material language from the first import receipt to an exact edit review. */
+.gf-flow-app .gf-production-journey {
+  min-width: 0;
+  margin: 0 0 24px;
+  padding: 22px 24px 24px;
+  border: 1px solid var(--material-line);
+  border-radius: 12px;
+  background: var(--material-pane);
+  color: var(--material-ink);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  animation: gf-production-journey-enter 220ms cubic-bezier(0.2, 0.7, 0.2, 1)
+    both;
+}
+.gf-production-journey-steps {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(520px, 100%);
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+.gf-production-journey-steps::before {
+  position: absolute;
+  top: 10px;
+  right: 16.6667%;
+  left: 16.6667%;
+  height: 1px;
+  background: var(--material-field-line);
+  content: "";
+}
+.gf-production-journey-steps > li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 0 4px;
+  color: var(--material-secondary);
+  text-align: center;
+}
+.gf-production-journey-marker {
+  display: grid;
+  place-items: center;
+  flex: 0 0 21px;
+  width: 21px;
+  height: 21px;
+  border: 1px solid var(--material-field-line);
+  border-radius: 50%;
+  background: var(--material-canvas-top);
+  color: var(--material-secondary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.gf-production-journey-step-label {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.gf-production-journey-steps > .is-current {
+  color: var(--material-ink);
+}
+.gf-production-journey-steps .is-current .gf-production-journey-marker {
+  border-color: var(--material-button);
+  background: var(--material-button);
+  color: var(--material-button-ink);
+}
+.gf-production-journey-steps .is-complete .gf-production-journey-marker {
+  border-color: var(--material-focus);
+  color: var(--material-focus);
+}
+.gf-production-journey-status {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  margin-top: 25px;
+}
+.gf-production-journey-symbol {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--material-field-line);
+  border-radius: 10px;
+  background: var(--material-field);
+  color: var(--material-focus);
+}
+.gf-production-journey-symbol > svg {
+  width: 21px;
+  height: 21px;
+}
+.gf-production-journey-copy {
+  min-width: 0;
+}
+.gf-production-journey-source {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--material-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.gf-flow-app .gf-production-journey-heading {
+  margin: 0;
+  color: var(--material-ink);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: -0.2px;
+  overflow-wrap: anywhere;
+}
+.gf-flow-app .gf-production-journey-copy > p {
+  max-width: 760px;
+  margin: 5px 0 0;
+  color: var(--material-secondary);
+  font-size: 12px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.gf-production-journey-progress {
+  display: block;
+  width: calc(100% - 52px);
+  height: 3px;
+  margin: 16px 0 0 52px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 3px;
+  background: rgba(243, 239, 230, 0.12);
+  color: var(--material-focus);
+  accent-color: var(--material-focus);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.gf-production-journey-progress::-webkit-progress-bar {
+  border-radius: inherit;
+  background: rgba(243, 239, 230, 0.12);
+}
+.gf-production-journey-progress::-webkit-progress-value {
+  border-radius: inherit;
+  background: var(--material-focus);
+  transition: width 220ms ease;
+}
+.gf-production-journey-progress::-moz-progress-bar {
+  border-radius: inherit;
+  background: var(--material-focus);
+}
+/* An activity cue exists only while a real operation is pending; it is not a percentage. */
+.gf-production-journey-progress:not([value]) {
+  background-image: linear-gradient(
+    90deg,
+    transparent 25%,
+    rgba(226, 196, 157, 0.65) 50%,
+    transparent 75%
+  );
+  background-size: 200% 100%;
+  animation: gf-production-journey-wait 1800ms ease-in-out infinite;
+}
+.gf-production-journey-progress:not([value])::-webkit-progress-bar {
+  background: transparent;
+}
+.gf-production-journey-receipts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 15px 0 0 52px;
+  padding: 0;
+  list-style: none;
+}
+.gf-production-journey-receipts > li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  color: var(--material-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.gf-production-journey-receipts svg {
+  flex: 0 0 12px;
+  align-self: flex-start;
+  margin-top: 3px;
+  color: var(--material-focus);
+}
+.gf-production-journey-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 17px;
+  border-top: 1px solid var(--material-divider);
+}
+.gf-production-journey > .gf-source-details,
+.gf-production-journey > .gf-pill {
+  margin: 12px 0 0 52px;
+}
+.gf-production-journey-actions .gf-button > svg:last-child {
+  transition: transform 150ms ease;
+}
+.gf-production-journey-actions
+  .gf-button:is(:hover, :focus-visible):not(:disabled)
+  > svg:last-child {
+  transform: translateX(2px);
+}
+.gf-production-journey[data-state="ready"] .gf-production-journey-symbol,
+.gf-production-journey[data-state="review"] .gf-production-journey-symbol {
+  border-color: rgba(226, 196, 157, 0.55);
+  background: rgba(226, 196, 157, 0.08);
+}
+.gf-production-journey[data-state="ready"] .gf-production-journey-symbol > svg {
+  animation: gf-source-confirm 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.gf-production-journey:is([data-state="error"], [data-state="uncertain"])
+  .gf-production-journey-symbol {
+  color: var(--material-warning);
+}
+.gf-production-journey[data-state="error"] {
+  border-color: rgba(226, 196, 157, 0.4);
+}
+
+/* Inside Studio the status is part of the workbench, without another enclosing card. */
+.gf-flow-app .gf-edit-surface > .gf-production-journey {
+  margin: 0;
+  padding: 18px 22px 22px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.gf-edit-surface > .gf-production-journey .gf-production-journey-status {
+  margin-top: 20px;
+}
+
+/* Friendly aliases remain connected to the original local file. */
+.gf-flow-app .gf-source-details {
+  min-width: 0;
+  margin: 10px 0 0;
+}
+.gf-flow-app .gf-source-details .gf-disclosure {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.gf-flow-app .gf-source-details .gf-disclosure > summary {
+  min-height: 32px;
+  padding: 5px 0;
+  color: var(--material-secondary);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.gf-flow-app .gf-source-details .gf-disclosure > summary > svg:first-child {
+  width: 13px;
+  height: 13px;
+}
+.gf-flow-app .gf-source-details .gf-disclosure-body {
+  padding: 8px 0 2px;
+}
+.gf-flow-app .gf-source-details dl {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 9px 14px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.gf-flow-app .gf-source-details dt {
+  color: var(--material-secondary);
+}
+.gf-flow-app .gf-source-details dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--material-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.gf-library-source,
+.gf-source-entry {
+  min-width: 0;
+  border-bottom: 1px solid var(--material-divider);
+}
+.gf-library-source > .gf-footage-row,
+.gf-source-entry > .gf-footage-row {
+  padding-bottom: 6px;
+  border-bottom: 0;
+}
+.gf-library-source > .gf-source-details,
+.gf-source-entry > .gf-source-details {
+  margin: 0 0 12px 60px;
+}
+.gf-import-candidates {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.gf-flow-app .gf-import-candidates > p {
+  margin: 0;
+  color: var(--material-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.gf-import-candidate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  min-width: 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--material-divider);
+}
+.gf-import-candidate > .gf-source-details,
+.gf-import-candidate > div:not(.gf-source-details) {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin-top: 0;
+}
+.gf-import-candidate > .gf-button {
+  flex: 0 0 auto;
+}
+
+/* The review decision leads; exact-version evidence stays available below it. */
+.gf-flow-app .gf-review-action-panel {
+  min-width: 0;
+  padding: 0 22px 20px;
+  border-bottom: 1px solid var(--material-divider);
+}
+.gf-flow-app .gf-review-action-panel .gf-inspector-footer {
+  margin: 0;
+  gap: 8px;
+}
+.gf-flow-app .gf-review-action-panel > .gf-help {
+  margin: 0 0 12px;
+  color: var(--material-warning);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.gf-flow-app .gf-review-action-panel > .gf-button {
+  margin-top: 10px;
+  padding-block: 8px;
+  font-size: 11px;
+}
+.gf-flow-app .gf-clip-evidence {
+  min-width: 0;
+  padding: 17px 22px 0;
+}
+.gf-flow-app .gf-clip-evidence > .gf-pill {
+  margin-bottom: 10px;
+}
+.gf-flow-app .gf-evidence-facts {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+.gf-flow-app .gf-evidence-fact {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--material-divider);
+}
+.gf-flow-app .gf-evidence-fact:last-child {
+  border-bottom: 0;
+}
+.gf-flow-app .gf-evidence-fact dt,
+.gf-flow-app .gf-evidence-fact dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.gf-flow-app .gf-evidence-fact dt {
+  color: var(--material-secondary);
+}
+.gf-flow-app .gf-evidence-fact dd {
+  color: var(--material-ink);
+  font-weight: 450;
+}
+.gf-flow-app .gf-evidence-summary .gf-evidence-fact {
+  padding: 7px 0;
+  border-bottom: 0;
+}
+.gf-flow-app .gf-evidence-summary .gf-evidence-fact:first-child {
+  padding-top: 0;
+}
+.gf-flow-app .gf-evidence-summary dd {
+  font-size: 12px;
+  text-align: right;
+}
+.gf-flow-app .gf-clip-evidence .gf-evidence-note {
+  margin: 10px 0 16px;
+  color: var(--material-secondary);
+  font-size: 10px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.gf-flow-app .gf-clip-evidence > .gf-disclosure,
+.gf-flow-app .gf-review-details > .gf-disclosure {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--material-divider);
+  border-radius: 0;
+  background: transparent;
+}
+.gf-flow-app .gf-clip-evidence > .gf-disclosure > summary,
+.gf-flow-app .gf-review-details > .gf-disclosure > summary {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 14px;
+  gap: 9px;
+  min-width: 0;
+  padding: 14px 0;
+  color: var(--material-ink);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+.gf-flow-app .gf-clip-evidence > .gf-disclosure > summary > svg,
+.gf-flow-app .gf-review-details > .gf-disclosure > summary > svg {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  align-self: center;
+  color: var(--material-secondary);
+}
+.gf-flow-app .gf-clip-evidence > .gf-disclosure > .gf-disclosure-body,
+.gf-flow-app .gf-review-details > .gf-disclosure > .gf-disclosure-body {
+  min-width: 0;
+  padding: 0 0 16px;
+}
+.gf-flow-app .gf-clip-evidence .gf-disclosure-body p,
+.gf-flow-app .gf-review-details .gf-disclosure-body p {
+  margin: 8px 0 0;
+  color: var(--material-secondary);
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.gf-flow-app .gf-evidence-check-group {
+  min-width: 0;
+  margin-bottom: 14px;
+}
+.gf-flow-app .gf-evidence-check-group > h3 {
+  margin: 0 0 3px;
+  color: var(--material-ink);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.6;
+}
+.gf-flow-app .gf-evidence-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--material-divider);
+}
+.gf-flow-app .gf-evidence-check-copy {
+  min-width: 0;
+}
+.gf-flow-app .gf-evidence-check-copy strong {
+  display: block;
+  color: var(--material-ink);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.gf-flow-app .gf-evidence-check-copy small {
+  display: block;
+  margin-top: 3px;
+  color: var(--material-secondary);
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.gf-flow-app .gf-evidence-check > .gf-pill {
+  max-width: 90px;
+  margin-top: 1px;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: normal;
+  text-align: center;
+}
+.gf-flow-app .gf-evidence-changes > p {
+  padding: 8px 0;
+  border-top: 1px solid var(--material-divider);
+}
+.gf-flow-app .gf-review-details {
+  min-width: 0;
+  padding: 0 22px;
+}
+.gf-flow-app .gf-review-details .gf-disclosure-body > div {
+  min-width: 0;
+  padding: 10px 0;
+  overflow-wrap: anywhere;
+}
+.gf-flow-app .gf-review-details .gf-disclosure-body strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+.gf-flow-app .gf-review-details .gf-button {
+  max-width: 100%;
+  margin-top: 10px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+@keyframes gf-production-journey-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes gf-source-confirm {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes gf-production-journey-wait {
+  0%,
+  100% {
+    background-position: 100% 0;
+  }
+  50% {
+    background-position: 0 0;
+  }
+}
+@media (max-width: 520px) {
+  .gf-flow-app .gf-production-journey {
+    padding: 19px 16px 20px;
+  }
+  .gf-production-journey-step-label {
+    font-size: 10px;
+  }
+  .gf-production-journey-status {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 11px;
+    margin-top: 23px;
+  }
+  .gf-production-journey-symbol {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+  }
+  .gf-production-journey-symbol > svg {
+    width: 18px;
+    height: 18px;
+  }
+  .gf-flow-app .gf-production-journey-heading {
+    font-size: 16px;
+  }
+  .gf-production-journey-progress {
+    width: 100%;
+    margin-left: 0;
+  }
+  .gf-production-journey-receipts {
+    margin-left: 0;
+  }
+  .gf-production-journey > .gf-source-details,
+  .gf-production-journey > .gf-pill {
+    margin-left: 0;
+  }
+  .gf-production-journey-actions {
+    align-items: stretch;
+    gap: 8px;
+  }
+  .gf-production-journey-actions > .gf-button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .gf-flow-app .gf-source-details dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+  .gf-flow-app .gf-source-details dd:not(:last-child) {
+    margin-bottom: 7px;
+  }
+  .gf-library-source > .gf-source-details,
+  .gf-source-entry > .gf-source-details {
+    margin-left: 0;
+  }
+}
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .gf-flow-app .gf-production-journey {
+    background: var(--material-pane-solid);
+  }
+  .gf-flow-app .gf-edit-surface > .gf-production-journey {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-production-journey,
+  .gf-production-journey *,
+  .gf-production-journey *::before,
+  .gf-production-journey *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .gf-production-journey,
+  .gf-production-journey[data-state="ready"]
+    .gf-production-journey-symbol
+    > svg {
+    opacity: 1;
+    transform: none;
+  }
+  .gf-production-journey-progress:not([value]) {
+    background-position: 50% 0;
+  }
+  .gf-production-journey-progress::-webkit-progress-value {
+    transition: none;
+  }
+}

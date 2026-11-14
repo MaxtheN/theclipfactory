@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import type { Clip, TeamRun, Video } from "../types";
+import type { Clip, Job, TeamRun, Video } from "../types";
+import { ApiError, endpoint, post } from "../api";
+import { Storyboard } from "../components/Storyboard";
+import { Stages } from "../pages/Home";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, reviewPreview } from "./workspaceApi";
 import { productionApi } from "./productionApi";
-import { jobInScope } from "./productionState";
-import { endpoint, post } from "../api";
-import { Storyboard } from "../components/Storyboard";
-import { Stages } from "../pages/Home";
+import { jobInScope, object } from "./productionState";
 import { activeJob } from "../productionPreflight";
 import { Icon } from "./Icon";
 import { FactoryWorkflow } from "./FactoryWorkflow";
 import { Disclosure, Pill, formatTime } from "./parts";
+import { JourneyProgress } from "./JourneyProgress";
+import { sourceLabel, SourceDetails } from "./sourcePresentation";
 
 export type OpenProduction = (
   sourceId?: string,
@@ -21,7 +23,11 @@ export type OpenProduction = (
 
 // Metadata only, never File objects or footage bytes. A profile/route remount
 // must not lose a confirmed import whose campaign attachment still needs retry.
-const pendingImports = new Map<string, Video>();
+type ImportReceipt = { video: Video; attached: boolean };
+type UnknownImport = { name: string; priorIds: string[] };
+const pendingImports = new Map<string, ImportReceipt>();
+const unknownImports = new Map<string, UnknownImport>();
+type ImportPhase = "uploading" | "attaching" | "refreshing" | "ready" | null;
 
 export function FactoryHome({
   w,
@@ -43,11 +49,19 @@ export function FactoryHome({
   const picker = useRef<HTMLInputElement>(null);
   const lock = useRef(false);
   const imported = useRef<Video | undefined>(
-    pendingImports.get(w.campaign?.id || ""),
+    pendingImports.get(w.campaign?.id || "")?.video,
   );
-  const [pending, setPending] = useState<Video | undefined>(() =>
-    pendingImports.get(w.campaign?.id || ""),
+  const [pending, setPending] = useState<Video | undefined>(
+    () => pendingImports.get(w.campaign?.id || "")?.video,
   );
+  const [phase, setPhase] = useState<ImportPhase>(null);
+  const [lastAdded, setLastAdded] = useState<Video>();
+  const [refreshReturned, setRefreshReturned] = useState(false);
+  const [unknown, setUnknown] = useState<UnknownImport | undefined>(() =>
+    unknownImports.get(w.campaign?.id || ""),
+  );
+  const [checkingImport, setCheckingImport] = useState(false);
+  const [checkedImport, setCheckedImport] = useState(false);
   const [runs, setRuns] = useState<TeamRun[]>([]);
   const [runError, setRunError] = useState("");
   const [runLoading, setRunLoading] = useState(false);
@@ -57,13 +71,51 @@ export function FactoryHome({
   const [success, setSuccess] = useState("");
   const campaign = w.campaign;
   useEffect(() => {
-    const receipt = campaign && pendingImports.get(campaign.id);
-    if (receipt && campaign?.video_ids.includes(receipt.id)) {
+    if (
+      phase !== "refreshing" ||
+      !refreshReturned ||
+      w.loading ||
+      factory.loading ||
+      !campaign
+    )
+      return;
+    setRefreshReturned(false);
+    const receipt = pendingImports.get(campaign.id);
+    const confirmed =
+      receipt &&
+      !w.error &&
+      !factory.errors.videos &&
+      campaign.video_ids.includes(receipt.video.id) &&
+      factory.data.videos.some((v) => v.id === receipt.video.id);
+    if (confirmed) {
       pendingImports.delete(campaign.id);
       imported.current = undefined;
       setPending(undefined);
+      setLastAdded(receipt.video);
+      setPhase("ready");
+      // Keep the autopilot message if production already started for this source.
+      setSuccess((current) =>
+        autoStarted.current.has(receipt.video.id) && current
+          ? current
+          : "Source saved and attached to this workspace.",
+      );
+      w.clearNotice?.();
+    } else {
+      setPhase(null);
+      setError(
+        "Your saved source is retained. Refresh to confirm its attachment and local footage record.",
+      );
     }
-  }, [campaign?.id, campaign?.video_ids.join("|")]);
+  }, [
+    phase,
+    refreshReturned,
+    campaign,
+    factory.data.videos,
+    factory.errors.videos,
+    factory.loading,
+    w.error,
+    w.loading,
+  ]);
   useEffect(() => {
     if (!active || !campaign || !w.profileId) return;
     let alive = true,
@@ -119,15 +171,63 @@ export function FactoryHome({
     profileId: w.profileId,
     sourceIds: campaign?.video_ids || [],
   };
-  const jobs = factory.data.jobs.filter(
-    (j) => jobInScope(j, scope, runs) && activeJob(j),
+  const scopedJobs = factory.data.jobs.filter((j) =>
+    jobInScope(j, scope, runs),
   );
+  const jobs = scopedJobs.filter(activeJob);
+  const latestJob = [...scopedJobs].sort((a, b) => {
+    const time = (j: Job) =>
+      Date.parse(j.updated_at || j.created_at || "") || 0;
+    return time(b) - time(a);
+  })[0];
+  const failedJob =
+    latestJob && ["failed", "cancelled"].includes(latestJob.status)
+      ? latestJob
+      : undefined;
+  const result = object(latestJob?.result);
+  const outputIds = [
+    result?.clip_id,
+    ...(Array.isArray(result?.clip_ids) ? result.clip_ids : []),
+  ].filter((id): id is string => typeof id === "string");
+  const waitingForOutputs =
+    latestJob?.status === "completed" &&
+    ["render", "production", "team"].includes(latestJob.kind) &&
+    !clips.some((c) => outputIds.includes(c.id));
+  function sourceForJob(job: Job) {
+    const context = object(job.context);
+    const id =
+      typeof context?.video_id === "string"
+        ? context.video_id
+        : runs.find((r) => r.id === context?.team_run_id || r.job_id === job.id)
+            ?.video_id;
+    return typeof id === "string" && scope.sourceIds.includes(id)
+      ? id
+      : undefined;
+  }
+  const importing =
+    phase === "uploading" || phase === "attaching" || phase === "refreshing";
+  const recoveryBlocked =
+    w.busy || w.loading || factory.loading || !campaign || importing;
+  const candidates =
+    checkedImport && unknown
+      ? factory.data.videos.filter(
+          (v) => !unknown.priorIds.includes(v.id) && v.name === unknown.name,
+        )
+      : [];
+  const blocked =
+    w.busy ||
+    w.loading ||
+    factory.loading ||
+    !!w.error ||
+    !!factory.errors.videos ||
+    !campaign;
   // The production line as the local service reports it: one entry per source, with the stage
   // it is at and the model production will use.
   const line = factory.data.factory;
   const modelId = line?.model_id ?? "";
   const autopilot = factory.data.settings?.autonomy === "auto";
   const [seen, setSeen] = useState<Record<string, boolean>>({});
+  const autoStarted = useRef(new Set<string>());
   const swarmRequest = (videoId: string, strategyId: string) => ({
     expected_strategy_version_id: strategyId,
     video_id: videoId,
@@ -143,10 +243,15 @@ export function FactoryHome({
     setSuccess("");
     await w.run(
       async () => {
-        await productionApi.campaignProduce(campaign.id, swarmRequest(source.id, strategyId));
+        await productionApi.campaignProduce(
+          campaign.id,
+          swarmRequest(source.id, strategyId),
+        );
         reloadRuns.current();
         void factory.refresh();
-        setSuccess(`Making clips from ${source.name}. They arrive below as they finish.`);
+        setSuccess(
+          `Making clips from ${source.name}. They arrive below as they finish.`,
+        );
       },
       "Production started.",
       campaign.id,
@@ -158,19 +263,51 @@ export function FactoryHome({
       await post(endpoint("jobs", jobId, "cancel"));
       void factory.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The job could not be cancelled.");
+      setError(
+        e instanceof Error ? e.message : "The job could not be cancelled.",
+      );
     }
   }
-  const blocked =
-    w.busy ||
-    w.loading ||
-    factory.loading ||
-    !!w.error ||
-    !!factory.errors.videos ||
-    !campaign;
+  /** Autopilot: with a direction approved, confirmed new footage goes straight into production. */
+  async function autoProduce(video: Video) {
+    const strategyId = campaign?.active_strategy_id;
+    if (
+      !campaign ||
+      !autopilot ||
+      !direction ||
+      !strategyId ||
+      !modelId ||
+      reviewPreview
+    )
+      return;
+    if (autoStarted.current.has(video.id)) return;
+    autoStarted.current.add(video.id);
+    try {
+      await productionApi.campaignProduce(
+        campaign.id,
+        swarmRequest(video.id, strategyId),
+      );
+      reloadRuns.current();
+      void factory.refresh();
+      setSuccess(
+        `${video.name} added. The factory is making clips from it now.`,
+      );
+    } catch (e) {
+      setSuccess(
+        `${video.name} added. Production did not start by itself: ${
+          e instanceof Error ? e.message : "try Make clips."
+        }`,
+      );
+    }
+  }
 
   async function attach(file?: File) {
-    if (lock.current || blocked || (!file && !imported.current) || !campaign)
+    if (
+      lock.current ||
+      (file ? blocked || importing || !!unknown : recoveryBlocked) ||
+      (!file && !imported.current) ||
+      !campaign
+    )
       return;
     if (file && imported.current) {
       setError("Attach the imported footage before adding another video.");
@@ -193,82 +330,162 @@ export function FactoryHome({
     lock.current = true;
     setError("");
     setSuccess("");
+    setLastAdded(undefined);
+    setRefreshReturned(false);
+    setPhase(imported.current ? "attaching" : "uploading");
+    let added: Video | undefined;
+    let failure = "";
     try {
-      await w.run(
+      const ok = await w.run(
         async () => {
-          // Keep the confirmed import receipt if attachment fails. Retrying then
-          // attaches this exact video instead of uploading the file a second time.
-          let video = imported.current;
-          if (!video && file) {
-            const uploaded = await workspaceApi.upload(file);
-            if (!uploaded?.id || uploaded.id.length > 128)
-              throw new Error(
-                "The import could not be confirmed. Refresh local footage before uploading again.",
-              );
-            video = {
-              id: uploaded.id,
-              name: uploaded.name,
-              duration: uploaded.duration,
-              width: uploaded.width,
-              height: uploaded.height,
-              has_audio: uploaded.has_audio,
-            };
-            imported.current = video;
-            pendingImports.set(campaign.id, video);
-            setPending(video);
-          }
-          if (!video) throw new Error("Choose footage first.");
-          const latest = (await workspaceApi.campaigns()).find(
-            (c) => c.id === campaign.id,
-          );
-          if (!latest || !latest.profile_ids.includes(w.profileId))
-            throw new Error(
-              "The workspace changed. Refresh before attaching this footage.",
-            );
-          const sourceIds = [...new Set([...latest.video_ids, video.id])];
-          if (sourceIds.length > 100)
-            throw new Error(
-              "This workspace reached its 100-source limit. The imported file is retained; refresh workspace settings before attaching it.",
-            );
-          await workspaceApi.save(
-            {
-              name: latest.name,
-              brief: latest.brief,
-              profile_ids: [...latest.profile_ids],
-              video_ids: sourceIds,
-            },
-            latest.id,
-          );
-          imported.current = undefined;
-          if (pendingImports.get(campaign.id)?.id === video.id)
-            pendingImports.delete(campaign.id);
-          setPending(undefined);
-          // Autopilot: with a direction already approved, new footage goes straight into production.
-          const strategyId = latest.active_strategy_id;
-          if (autopilot && direction && strategyId && modelId && !reviewPreview) {
-            try {
-              await productionApi.campaignProduce(latest.id, swarmRequest(video.id, strategyId));
-              reloadRuns.current();
-              setSuccess(`${video.name} added. The factory is making clips from it now.`);
-              return;
-            } catch (e) {
-              setSuccess(
-                `${video.name} added. Production did not start by itself: ${
-                  e instanceof Error ? e.message : "try Make clips."
-                }`,
-              );
-              return;
+          try {
+            let video = imported.current;
+            if (!video && file) {
+              const attempt = {
+                name: file.name.slice(0, 240),
+                priorIds: factory.data.videos.map((v) => v.id),
+              };
+              try {
+                const uploaded = await workspaceApi.upload(file);
+                if (
+                  !uploaded ||
+                  typeof uploaded.id !== "string" ||
+                  !uploaded.id ||
+                  uploaded.id.length > 128 ||
+                  typeof uploaded.name !== "string" ||
+                  !uploaded.name
+                )
+                  throw new Error("The saved source could not be confirmed.");
+                video = {
+                  id: uploaded.id,
+                  name: uploaded.name,
+                  duration: uploaded.duration,
+                  width: uploaded.width,
+                  height: uploaded.height,
+                  has_audio: uploaded.has_audio,
+                };
+              } catch (e) {
+                const rejected =
+                  e instanceof ApiError &&
+                  [400, 401, 403, 413, 415, 422, 429, 507].includes(e.status);
+                if (!rejected) {
+                  unknownImports.set(campaign.id, attempt);
+                  setUnknown(attempt);
+                  setCheckedImport(false);
+                  throw new Error(
+                    "The upload response was not confirmed. Check local footage before uploading again.",
+                  );
+                }
+                throw e;
+              }
+              imported.current = video;
+              pendingImports.set(campaign.id, { video, attached: false });
+              setPending(video);
             }
+            if (!video) throw new Error("Choose footage first.");
+            setPhase("attaching");
+            const latest = (await workspaceApi.campaigns()).find(
+              (c) => c.id === campaign.id,
+            );
+            if (
+              !latest ||
+              !Array.isArray(latest.profile_ids) ||
+              !latest.profile_ids.includes(w.profileId) ||
+              !Array.isArray(latest.video_ids)
+            )
+              throw new Error(
+                "The workspace changed. Refresh before attaching this footage.",
+              );
+            const sourceIds = [...new Set([...latest.video_ids, video.id])];
+            if (sourceIds.length > 100)
+              throw new Error(
+                "This workspace reached its 100-source limit. Your saved source is retained; review workspace settings before attaching it.",
+              );
+            if (!latest.video_ids.includes(video.id)) {
+              if (pendingImports.get(campaign.id)?.attached) {
+                pendingImports.set(campaign.id, { video, attached: false });
+                setPending({ ...video });
+                throw new Error(
+                  "This source is no longer attached to the workspace. Choose Attach imported footage to add it again deliberately.",
+                );
+              }
+              const saved = await workspaceApi.save(
+                {
+                  name: latest.name,
+                  brief: latest.brief,
+                  profile_ids: [...latest.profile_ids],
+                  video_ids: sourceIds,
+                },
+                latest.id,
+              );
+              if (
+                !saved ||
+                saved.id !== latest.id ||
+                !Array.isArray(saved.video_ids) ||
+                !saved.video_ids.includes(video.id) ||
+                !Array.isArray(saved.profile_ids) ||
+                !saved.profile_ids.includes(w.profileId)
+              )
+                throw new Error(
+                  "Campaign attachment was not confirmed. Your saved source is retained; check the workspace before retrying.",
+                );
+            }
+            pendingImports.set(campaign.id, { video, attached: true });
+            added = video;
+            setPhase("refreshing");
+          } catch (e) {
+            failure =
+              e instanceof Error
+                ? e.message
+                : "The import could not be confirmed.";
+            setError(failure);
+            throw e;
           }
-          setSuccess(`${video.name} added. Open production when you’re ready.`);
         },
         "Footage added to this workspace.",
         campaign.id,
       );
+      if (ok && added) {
+        setRefreshReturned(true);
+        void autoProduce(added);
+      } else {
+        setPhase(null);
+        setError(
+          failure ||
+            (imported.current
+              ? "Your source is retained. Refresh the workspace to confirm its attachment."
+              : "No import was confirmed. Refresh the workspace before trying again."),
+        );
+      }
     } finally {
       lock.current = false;
       if (picker.current) picker.current.value = "";
     }
+  }
+
+  async function checkImport() {
+    if (checkingImport || importing || !campaign) return;
+    setCheckingImport(true);
+    try {
+      await Promise.all([factory.refresh(["videos"]), w.load(campaign.id)]);
+      setCheckedImport(true);
+    } catch {
+      setError(
+        "Local footage could not be refreshed. Keep this upload pending and check again.",
+      );
+    } finally {
+      setCheckingImport(false);
+    }
+  }
+  function useSavedImport(video: Video) {
+    if (!campaign || recoveryBlocked || checkingImport) return;
+    pendingImports.set(campaign.id, { video, attached: false });
+    unknownImports.delete(campaign.id);
+    imported.current = video;
+    setPending(video);
+    setUnknown(undefined);
+    setCheckedImport(false);
+    setError("");
   }
 
   function drop(event: DragEvent<HTMLDivElement>) {
@@ -287,9 +504,10 @@ export function FactoryHome({
       <FactoryWorkflow />
       <div
         className={`gf-upload-stage gf-card${dragging ? " is-dragging" : ""}`}
+        hidden={importing || !!pending || !!unknown || phase === "ready"}
         onDragOver={(e) => {
           e.preventDefault();
-          if (!blocked && !pending) setDragging(true);
+          if (!blocked && !pending && !unknown && !importing) setDragging(true);
         }}
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null))
@@ -301,17 +519,16 @@ export function FactoryHome({
           <Icon name="upload" size={30} />
         </span>
         <div>
-          <span className="gf-eyebrow">START WITH THE SOURCE</span>
-          <h2>One video. More possibilities.</h2>
-          <p>Drop an interview, podcast, or conversation here. Then choose the moments and edits to produce.</p>
+          <h2>Drop your footage here</h2>
+          <p>A conversation, an interview, a story worth sharing.</p>
         </div>
         <button
           type="button"
           className="gf-button"
-          disabled={blocked || !!pending}
+          disabled={blocked || !!pending || !!unknown || importing}
           onClick={() => picker.current?.click()}
         >
-          <Icon name="upload" size={16} />
+          <Icon name="plus" size={16} />
           Choose video
         </button>
         <input
@@ -322,7 +539,7 @@ export function FactoryHome({
           type="file"
           aria-label="Upload footage"
           accept="video/*,.mp4,.mov,.mkv,.webm,.m4v,.avi"
-          disabled={blocked || !!pending}
+          disabled={blocked || !!pending || !!unknown || importing}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void attach(file);
@@ -331,7 +548,7 @@ export function FactoryHome({
         <p className="gf-upload-stage-note">
           {reviewPreview
             ? "Preview adds an illustrative placeholder; file contents stay unread."
-            : "MP4, MOV, WebM & more · Stored locally · Uploading does not start production."}
+            : "Saved on this Mac. Your engine’s automation settings still apply."}
         </p>
       </div>
       {error && (
@@ -339,30 +556,177 @@ export function FactoryHome({
           {error}
         </p>
       )}
-      {success && (
-        <p className="gf-flow-receipt" role="status">
-          <Icon name="check" size={15} />
+      {success && phase !== "ready" && (
+        <p className="gf-message success" role="status">
           {success}
         </p>
       )}
-      {pending && (
-        <div className="gf-flow-recovery" role="status">
-          <div>
-            <strong>{pending.name} is imported</strong>
-            <p>
-              It still needs to be attached to this workspace. Your next attempt
-              reuses the imported file.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="gf-button secondary compact"
-            disabled={blocked}
-            onClick={() => void attach()}
-          >
-            Attach imported footage
-          </button>
-        </div>
+      {importing && (
+        <JourneyProgress
+          label="Import"
+          state={
+            phase === "uploading"
+              ? "uploading"
+              : phase === "attaching"
+                ? "attaching"
+                : "refreshing"
+          }
+          step={0}
+          title={
+            phase === "uploading"
+              ? "Saving your footage"
+              : phase === "attaching"
+                ? "Attaching saved footage"
+                : "Confirming your workspace"
+          }
+          message={
+            phase === "uploading"
+              ? "Transferring the file and preparing its metadata. Waiting for local confirmation."
+              : phase === "attaching"
+                ? "Your source is saved. Adding it to this workspace."
+                : "Confirming the saved source and campaign attachment."
+          }
+          receipts={
+            phase === "refreshing"
+              ? ["Source saved", "Campaign attachment confirmed"]
+              : pending
+                ? ["Source saved"]
+                : []
+          }
+        />
+      )}
+      {phase === "ready" && lastAdded && (
+        <JourneyProgress
+          label="Import"
+          state="ready"
+          step={1}
+          title="Footage is in"
+          message={success}
+          source={
+            campaign?.video_ids.includes(lastAdded.id)
+              ? sourceLabel(lastAdded.id, campaign.video_ids)
+              : "New source"
+          }
+          receipts={["Source saved", "Campaign attachment confirmed"]}
+          actions={
+            <>
+              <button
+                className="gf-button"
+                disabled={w.busy || w.loading}
+                onClick={() => onProduce(lastAdded.id, "agent")}
+              >
+                Find clips
+                <Icon name="arrow" size={15} />
+              </button>
+              <button
+                className="gf-button ghost"
+                disabled={w.busy || w.loading}
+                onClick={() => onProduce(lastAdded.id, "manual")}
+              >
+                Choose a moment
+              </button>
+              <button
+                className="gf-button ghost"
+                disabled={blocked}
+                onClick={() => {
+                  setPhase(null);
+                  picker.current?.click();
+                }}
+              >
+                Add another video
+              </button>
+            </>
+          }
+        >
+          <SourceDetails source={lastAdded} />
+        </JourneyProgress>
+      )}
+      {pending && !importing && (
+        <JourneyProgress
+          label="Import recovery"
+          state="error"
+          step={0}
+          title={
+            pendingImports.get(campaign?.id || "")?.attached
+              ? "Saved source needs a refresh"
+              : "Your source is saved"
+          }
+          message={
+            pendingImports.get(campaign?.id || "")?.attached
+              ? "Attachment was confirmed. Refresh to reopen the saved source; the file will not be uploaded again."
+              : "Campaign attachment still needs confirmation. Your next attempt reuses the saved source."
+          }
+          receipts={["Source saved"]}
+          actions={
+            <button
+              type="button"
+              className="gf-button secondary compact"
+              disabled={recoveryBlocked}
+              onClick={() => void attach()}
+            >
+              {pendingImports.get(campaign?.id || "")?.attached
+                ? "Refresh saved source"
+                : "Attach imported footage"}
+            </button>
+          }
+        >
+          <SourceDetails source={pending} />
+        </JourneyProgress>
+      )}
+      {unknown && (
+        <JourneyProgress
+          label="Import recovery"
+          state="uncertain"
+          step={0}
+          title="Let’s confirm your upload"
+          message="The service did not confirm a source ID. Check local footage and choose the saved source before attaching it. Uploading again stays locked."
+          actions={
+            <button
+              className="gf-button secondary"
+              disabled={checkingImport || importing || w.busy || w.loading}
+              onClick={() => void checkImport()}
+            >
+              {checkingImport
+                ? "Checking local footage…"
+                : "Check local footage"}
+            </button>
+          }
+        >
+          {checkedImport && (
+            <div className="gf-import-candidates">
+              {factory.errors.videos ? (
+                <p role="alert">
+                  Local footage is unavailable. Check again before assuming the
+                  upload failed.
+                </p>
+              ) : candidates.length ? (
+                <>
+                  <p>
+                    Confirm the original filename and source ID before choosing
+                    a saved source.
+                  </p>
+                  {candidates.map((candidate) => (
+                    <div className="gf-import-candidate" key={candidate.id}>
+                      <SourceDetails source={candidate} />
+                      <button
+                        className="gf-button secondary compact"
+                        disabled={recoveryBlocked || checkingImport}
+                        onClick={() => useSavedImport(candidate)}
+                      >
+                        Use saved source {candidate.id.slice(0, 8)}
+                      </button>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <p>
+                  No matching saved source is confirmed yet. Check again; the
+                  original request may still be finishing.
+                </p>
+              )}
+            </div>
+          )}
+        </JourneyProgress>
       )}
 
       {runError && (
@@ -386,33 +750,85 @@ export function FactoryHome({
       {jobs.length > 0 && (
         <section className="gf-live-work" aria-label="Current production">
           {jobs.map((job) => (
-            <div className="gf-live-job" key={job.id}>
-              <span className="gf-spinner" aria-hidden="true" />
-              <div>
-                <strong>
-                  {job.kind === "render"
-                    ? "Rendering an edit"
-                    : "Working on your footage"}
-                </strong>
-                <p>
-                  {job.message ||
-                    (job.status === "queued"
-                      ? "Queued on this Mac"
-                      : "Local production is running")}
-                </p>
-              </div>
+            <JourneyProgress
+              key={job.id}
+              label="Production"
+              state="working"
+              step={1}
+              title={
+                job.status === "queued"
+                  ? "Your edits are queued"
+                  : job.kind === "render"
+                    ? "Shaping your edit"
+                    : "Working through your footage"
+              }
+              message={
+                job.message ||
+                (job.status === "queued"
+                  ? "Waiting for the local worker."
+                  : "The local worker has not reported a detailed stage yet.")
+              }
+              progress={job.progress}
+              source={
+                sourceForJob(job)
+                  ? sourceLabel(sourceForJob(job)!, scope.sourceIds)
+                  : undefined
+              }
+              actions={
+                <button
+                  className="gf-button secondary compact"
+                  disabled={w.busy || w.loading}
+                  onClick={() => onProduce(sourceForJob(job), "agent")}
+                >
+                  View production
+                  <Icon name="arrow" size={15} />
+                </button>
+              }
+            >
               <Pill>{job.status}</Pill>
-              {typeof job.progress === "number" &&
-                Number.isFinite(job.progress) && (
-                  <progress
-                    aria-label="Production progress"
-                    max={100}
-                    value={Math.max(0, Math.min(100, job.progress))}
-                  />
-                )}
-            </div>
+            </JourneyProgress>
           ))}
         </section>
+      )}
+      {!jobs.length && failedJob && (
+        <JourneyProgress
+          label="Production"
+          state="error"
+          step={1}
+          title="Production needs attention"
+          message={
+            failedJob.error ||
+            failedJob.message ||
+            `The worker reported ${failedJob.status}. Review its saved status before retrying.`
+          }
+          actions={
+            <button
+              className="gf-button secondary"
+              onClick={() => onProduce(sourceForJob(failedJob), "agent")}
+            >
+              Review production status
+              <Icon name="arrow" size={15} />
+            </button>
+          }
+        />
+      )}
+      {!jobs.length && !failedJob && waitingForOutputs && (
+        <JourneyProgress
+          label="Production"
+          state="refreshing"
+          step={1}
+          title="Waiting for the saved edits"
+          message="The worker reported completion, but no matching clip records are available in this workspace yet."
+          actions={
+            <button
+              className="gf-button secondary"
+              disabled={factory.loading}
+              onClick={() => void factory.refresh(["jobs", "clips"])}
+            >
+              Refresh outputs
+            </button>
+          }
+        />
       )}
 
       {review.length > 0 && (
@@ -431,9 +847,9 @@ export function FactoryHome({
             <button
               type="button"
               className="gf-button ghost compact"
-              onClick={onLibrary}
+              onClick={() => onReview(review[0])}
             >
-              All edits
+              Review clips
               <Icon name="arrow" size={15} />
             </button>
           </header>
@@ -448,14 +864,16 @@ export function FactoryHome({
                 <span
                   className="gf-cut-art"
                   style={
-                    reviewPreview
+                    reviewPreview || clip.provenance_mode === "preview_fixture"
                       ? undefined
-                      : { backgroundImage: `url(${endpoint("clips", clip.id, "cover")})` }
+                      : {
+                          backgroundImage: `url(${endpoint("clips", clip.id, "cover")})`,
+                        }
                   }
                 >
                   <Icon name="play" size={28} />
                   <span>
-                    {reviewPreview
+                    {reviewPreview || clip.provenance_mode === "preview_fixture"
                       ? "Illustrative edit"
                       : formatTime(clip.end - clip.start)}
                   </span>
@@ -508,15 +926,25 @@ export function FactoryHome({
         ) : (
           <div className="gf-footage-list">
             {sources.map((source) => {
-              const status = line?.sources.find((item) => item.video_id === source.id);
-              const working = status?.state === "queued" || status?.state === "working";
+              const status = line?.sources.find(
+                (item) => item.video_id === source.id,
+              );
+              const working =
+                status?.state === "queued" || status?.state === "working";
               const ready =
-                !!direction && !!modelId && !!status?.can_produce && !w.busy && !w.loading;
+                !!direction &&
+                !!modelId &&
+                !!status?.can_produce &&
+                !w.busy &&
+                !w.loading;
               // Counts are for this workspace: clips made elsewhere from the same file do not belong here.
               const own = clips.filter((c) => c.video_id === source.id);
               const waiting = own.filter((c) => !c.approved).length;
               const headline =
-                !status || working || status.state === "failed" || status.state === "cancelled"
+                !status ||
+                working ||
+                status.state === "failed" ||
+                status.state === "cancelled"
                   ? status?.error || status?.headline
                   : waiting
                     ? `${waiting} clip${waiting === 1 ? "" : "s"} ready for review`
@@ -524,13 +952,18 @@ export function FactoryHome({
                       ? `${own.length} clip${own.length === 1 ? "" : "s"} approved`
                       : "Ready to make clips";
               return (
-                <div className="gf-footage-item" key={source.id}>
+                <div
+                  className="gf-source-entry gf-footage-item"
+                  key={source.id}
+                >
                   <div className="gf-footage-row">
                     <span className="gf-footage-icon">
                       <Icon name="studio" size={22} />
                     </span>
                     <div className="gf-footage-copy">
-                      <strong>{source.name}</strong>
+                      <strong>
+                        {sourceLabel(source.id, campaign?.video_ids || [])}
+                      </strong>
                       <span>
                         {reviewPreview
                           ? "Illustrative source"
@@ -576,6 +1009,7 @@ export function FactoryHome({
                       <Icon name="arrow" size={15} />
                     </button>
                   </div>
+                  <SourceDetails source={source} />
                   {status && (
                     <div className="gf-footage-line">
                       <div className="source-card-body">
@@ -597,13 +1031,18 @@ export function FactoryHome({
                           onToggle={(event) => {
                             const open = event.currentTarget.open;
                             setSeen((current) =>
-                              current[source.id] === open ? current : { ...current, [source.id]: open },
+                              current[source.id] === open
+                                ? current
+                                : { ...current, [source.id]: open },
                             );
                           }}
                         >
                           <summary>
                             <Icon name="play" />
-                            What the factory saw · {status.storyboard.scenes} scenes
+                            What the factory saw · {
+                              status.storyboard.scenes
+                            }{" "}
+                            scenes
                             <Icon name="down" size={15} />
                           </summary>
                           {seen[source.id] && (

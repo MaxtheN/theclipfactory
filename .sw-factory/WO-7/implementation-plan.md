@@ -15,3 +15,6 @@ ComposioClient accepts credential plus injectable httpx transport. Initiate auth
 
 # Testing
 Run tests/test_composio.py with mocked httpx transport; assert exact account/user/tool identifiers, no implicit account, credential-safe errors, pagination/bounds and unknown metric handling. No external post or OAuth grant on behalf of user. Live read-only verification requires configured credential and authenticated user identity. Test configurations remain clearly separate from provider evidence.
+
+# Recent-post chooser follow-up
+Expose one bounded page of six posts for the exact active profile/account. The catalog is display-only: selecting a post fills its ID and clears mapping confirmation, never registers a publication, changes a policy or runs analysis. Verify fresh account identity before listing; retain separately typed profile IDs when the provider distinguishes app-scoped and professional identifiers. Reuse the four-tool allowlist, pinned schema, safe errors and existing confirmation gate. Guard incomplete legacy bindings before provider IO. Test invalid/mismatched scope, malformed catalog, unsafe links, account changes and stale refreshes. Root owns AutomationPanel/route; adapter and focused API/UI tests are delegated with independent review.

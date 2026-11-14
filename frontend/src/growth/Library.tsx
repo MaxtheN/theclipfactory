@@ -7,6 +7,7 @@ import { reviewPreview } from "./workspaceApi";
 import { Icon } from "./Icon";
 import { Pill, formatTime } from "./parts";
 import type { OpenProduction } from "./FactoryHome";
+import { SourceDetails, sourceLabel } from "./sourcePresentation";
 
 export function Library({
   w,
@@ -33,10 +34,14 @@ export function Library({
   );
   const normalized = query.trim().toLocaleLowerCase();
   const edits = clips.filter((c) =>
-    `${c.name} ${c.hook}`.toLocaleLowerCase().includes(normalized),
+    `${c.name} ${c.hook} ${sourceLabel(c.video_id, ids)} ${sources.find((s) => s.id === c.video_id)?.name || ""}`
+      .toLocaleLowerCase()
+      .includes(normalized),
   );
   const footage = sources.filter((v) =>
-    v.name.toLocaleLowerCase().includes(normalized),
+    `${sourceLabel(v.id, ids)} ${v.name}`
+      .toLocaleLowerCase()
+      .includes(normalized),
   );
   return (
     <section className="gf-library" aria-label="Workspace library">
@@ -109,7 +114,8 @@ export function Library({
                   <span className="gf-library-edit-art">
                     <Icon name="play" size={24} />
                     <small>
-                      {reviewPreview
+                      {reviewPreview ||
+                      clip.provenance_mode === "preview_fixture"
                         ? "Illustrative edit"
                         : formatTime(clip.end - clip.start)}
                     </small>
@@ -119,7 +125,7 @@ export function Library({
                     <span>{clip.hook || "Source-grounded edit"}</span>
                     <small>
                       {formatTime(clip.start)}–{formatTime(clip.end)} ·{" "}
-                      {sources.find((s) => s.id === clip.video_id)?.name}
+                      {sourceLabel(clip.video_id, ids)}
                     </small>
                   </span>
                   <Pill tone={clip.approved ? "approved" : ""}>
@@ -158,30 +164,33 @@ export function Library({
           {footage.length ? (
             <div className="gf-footage-list">
               {footage.map((source) => (
-                <div className="gf-footage-row" key={source.id}>
-                  <span className="gf-footage-icon">
-                    <Icon name="studio" size={22} />
-                  </span>
-                  <div className="gf-footage-copy">
-                    <strong>{source.name}</strong>
-                    <span>
-                      {reviewPreview
-                        ? "Illustrative source"
-                        : formatTime(source.duration)}
-                      {source.has_audio === true && source.transcript == null
-                        ? " · Transcript not available"
-                        : ""}
+                <div className="gf-library-source" key={source.id}>
+                  <div className="gf-footage-row">
+                    <span className="gf-footage-icon">
+                      <Icon name="studio" size={22} />
                     </span>
+                    <div className="gf-footage-copy">
+                      <strong>{sourceLabel(source.id, ids)}</strong>
+                      <span>
+                        {reviewPreview
+                          ? "Illustrative source"
+                          : formatTime(source.duration)}
+                        {source.has_audio === true && source.transcript == null
+                          ? " · Transcript not available"
+                          : ""}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="gf-button secondary compact"
+                      disabled={w.busy || w.loading}
+                      onClick={() => onProduce(source.id, "agent")}
+                    >
+                      Find clips
+                      <Icon name="arrow" size={15} />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="gf-button secondary compact"
-                    disabled={w.busy || w.loading}
-                    onClick={() => onProduce(source.id, "agent")}
-                  >
-                    Find clips
-                    <Icon name="arrow" size={15} />
-                  </button>
+                  <SourceDetails source={source} />
                 </div>
               ))}
             </div>

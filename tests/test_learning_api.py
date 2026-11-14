@@ -358,3 +358,97 @@ def test_auto_import_does_not_replace_an_existing_different_workspace_binding(cl
     assert response.status_code == 409
     assert store.get("connected_accounts", "ca_selected") == original
     assert len(calls) == 1  # Owner may be verified; no profile/tool call or overwrite follows.
+
+
+def _recent_posts_account(session, **changes):
+    store = session.app.state.store
+    store.put("profiles", {"id": "profile"})
+    account = {"id": "ca_posts", "profile_id": "profile", "user_id": "verified-owner",
+        "instagram_user_id": "321", "status": "active", "provider": "composio", "toolkit": "instagram", **changes}
+    store.put("connected_accounts", account)
+    return store, account
+
+
+def test_recent_posts_passes_exact_binding_and_preserves_bounded_provider_result(client):
+    session, _ = client
+    store, account = _recent_posts_account(session)
+    calls = []
+    payload = {"connected_account_id": "ca_posts", "user_id": "verified-owner", "instagram_user_id": "321",
+        "items": [{"media_id": "999", "published_at": "2026-01-01T12:00:00+00:00", "media_type": "VIDEO",
+            "caption_excerpt": "A display excerpt only", "permalink": "https://www.instagram.com/reel/example/"}],
+        "has_more": None, "skipped_count": 2, "tool_slug": "INSTAGRAM_GET_IG_USER_MEDIA", "tool_version": "20261112_00",
+        "limitations": ["One bounded provider page only.", "Unmapped posts are not learning evidence."]}
+
+    def list_media(account_id, user_id, *, instagram_user_id, limit):
+        calls.append((account_id, user_id, instagram_user_id, limit))
+        return payload
+
+    session.app.state.autonomy_runtime.client = lambda: SimpleNamespace(list_media=list_media)
+    response = session.get("/api/automation/accounts/ca_posts/posts", params={"profile_id": "profile"})
+    assert response.status_code == 200, response.text
+    assert response.json() == payload  # Preserve unknown pagination, skipped rows and limitations.
+    assert calls == [("ca_posts", "verified-owner", "321", 6)]
+    assert store.get("connected_accounts", "ca_posts") == account
+    for kind in ("learning_publications", "learning_snapshots", "learning_experiments", "learning_work"):
+        assert store.all(kind) == []  # Displaying a post creates no mapping, observation or learning grant.
+
+
+@pytest.mark.parametrize("request_case,status", [
+    ("missing_account", 404),
+    ("foreign_profile", 422),
+    ("missing_profile", 422),
+    ("unauthenticated", 401),
+])
+def test_recent_posts_scope_and_authentication_fail_before_provider_io(client, request_case, status):
+    session, _ = client
+    _recent_posts_account(session)
+    session.app.state.autonomy_runtime.client = lambda: pytest.fail("Invalid post scope must not create a provider client")
+    identifier = "missing" if request_case == "missing_account" else "ca_posts"
+    params = {} if request_case == "missing_profile" else {"profile_id": "foreign" if request_case == "foreign_profile" else "profile"}
+    kwargs = {"headers": {"X-Clip-Token": "wrong"}} if request_case == "unauthenticated" else {}
+    response = session.get(f"/api/automation/accounts/{identifier}/posts", params=params, **kwargs)
+    assert response.status_code == status
+
+
+@pytest.mark.parametrize("changes,remove", [
+    ({"status": "disconnected"}, None),
+    ({"provider": "another-provider"}, None),
+    ({"toolkit": "gmail"}, None),
+    ({"user_id": None}, None),
+    ({"user_id": " "}, None),
+    ({}, "user_id"),
+    ({"instagram_user_id": None}, None),
+    ({"instagram_user_id": "not-numeric"}, None),
+    ({}, "instagram_user_id"),
+])
+def test_recent_posts_requires_complete_verified_instagram_binding(client, changes, remove):
+    session, _ = client
+    store, account = _recent_posts_account(session, **changes)
+    if remove:
+        account.pop(remove)
+        store.put("connected_accounts", account)
+    session.app.state.autonomy_runtime.client = lambda: pytest.fail("Incomplete binding must be rejected before provider IO")
+    response = session.get("/api/automation/accounts/ca_posts/posts", params={"profile_id": "profile"})
+    assert response.status_code == 422, response.text
+    assert store.get("connected_accounts", "ca_posts") == account
+
+
+def test_recent_posts_provider_failure_is_visible_once_without_persisting_fake_results(client):
+    from clip_factory.composio import ComposioError
+
+    session, _ = client
+    store, account = _recent_posts_account(session)
+    calls = []
+
+    def unavailable(account_id, user_id, *, instagram_user_id, limit):
+        calls.append((account_id, user_id, instagram_user_id, limit))
+        raise ComposioError("Instagram connection expired. Reconnect before listing posts.", code="provider_error")
+
+    session.app.state.autonomy_runtime.client = lambda: SimpleNamespace(list_media=unavailable)
+    response = session.get("/api/automation/accounts/ca_posts/posts", params={"profile_id": "profile"})
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Instagram connection expired. Reconnect before listing posts."}
+    assert calls == [("ca_posts", "verified-owner", "321", 6)]
+    assert store.get("connected_accounts", "ca_posts") == account
+    assert store.all("learning_publications") == []
+    assert store.all("learning_snapshots") == []

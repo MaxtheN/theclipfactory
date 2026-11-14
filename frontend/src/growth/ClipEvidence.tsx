@@ -28,24 +28,24 @@ function title(value: string) {
 }
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div>
-      <span>{label}</span>
-      <strong style={{ overflowWrap: "anywhere" }}>{children}</strong>
+    <div className="gf-evidence-fact">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
     </div>
   );
 }
 function Checks({ title, rows }: { title: string; rows?: TechnicalCheck[] }) {
   return (
-    <section aria-label={title}>
+    <section className="gf-evidence-check-group" aria-label={title}>
       <h3>{title}</h3>
       {rows?.length ? (
-        <div className="gf-review-checks">
+        <div className="gf-evidence-checks">
           {rows.map((check, index) => (
-            <div key={`${check.id}-${index}`}>
-              <span>
+            <div className="gf-evidence-check" key={`${check.id}-${index}`}>
+              <div className="gf-evidence-check-copy">
                 <strong>{check.label}</strong>
-                {check.detail}
-              </span>
+                <small>{check.detail}</small>
+              </div>
               <Pill
                 tone={
                   check.status === "pass"
@@ -112,7 +112,10 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
       {clip.provenance_mode === "preview_fixture" && (
         <Pill tone="sand">Illustrative record</Pill>
       )}
-      <div className="gf-review-checks" aria-label="Review status summary">
+      <dl
+        className="gf-evidence-facts gf-evidence-summary"
+        aria-label="Review status summary"
+      >
         <Fact label="Playback & format">
           {checks?.playback_format_passed === true
             ? "Checks passed"
@@ -129,8 +132,8 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
               ? "Awaiting human review"
               : unknown}
         </Fact>
-      </div>
-      <p className="gf-small-note">
+      </dl>
+      <p className="gf-evidence-note">
         Technical checks and model critique do not replace human review of this
         exact version.
       </p>
@@ -146,7 +149,7 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
         )}
       </Disclosure>
       <Disclosure title="Version history & changes" icon="refresh">
-        <div className="gf-review-checks">
+        <dl className="gf-evidence-facts">
           <Fact label="Version">
             {number(clip.revision_number)
               ? `Revision ${clip.revision_number}`
@@ -165,14 +168,14 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
           <Fact label="Human approval time">
             {clip.approved_at || "Not recorded"}
           </Fact>
-        </div>
+        </dl>
         {clip.plan_changes?.length ? (
-          <div aria-label="Recorded edit changes">
+          <div
+            className="gf-evidence-changes"
+            aria-label="Recorded edit changes"
+          >
             {clip.plan_changes.map((change, index) => (
-              <p
-                key={`${change.field}-${index}`}
-                style={{ overflowWrap: "anywhere" }}
-              >
+              <p key={`${change.field}-${index}`}>
                 <strong>{title(change.field)}:</strong>{" "}
                 {readable(change.before)} → {readable(change.after)}
               </p>
@@ -183,7 +186,7 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
         )}
       </Disclosure>
       <Disclosure title="Processing receipt" icon="clock">
-        <div className="gf-review-checks">
+        <dl className="gf-evidence-facts">
           <Fact label="Processing time">
             {number(receipt?.elapsed_seconds)
               ? `${receipt.elapsed_seconds.toFixed(1)} s`
@@ -201,12 +204,12 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
               ? `${cost.amount!.toFixed(2)} ${cost.currency}`
               : unknown}
           </Fact>
-        </div>
+        </dl>
         <p>{cost?.basis || "No processing-cost basis recorded."}</p>
         {!!cost?.excluded?.length && (
           <p>Excluded: {cost.excluded.map(title).join(", ")}.</p>
         )}
-        <p className="gf-small-note">
+        <p className="gf-evidence-note">
           Processing time excludes queue wait and human work. Direct render cost
           is not the fully loaded cost per usable asset.
         </p>
@@ -222,7 +225,7 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
         </p>
       </Disclosure>
       <Disclosure title="Source, crop & saved context" icon="studio">
-        <div className="gf-review-checks">
+        <dl className="gf-evidence-facts">
           <Fact label="Clip identity">{clip.id}</Fact>
           <Fact label="Source identity">{clip.video_id}</Fact>
           <Fact label="Main source range">
@@ -273,7 +276,7 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
             {clip.strategy_version_id || unknown}
           </Fact>
           <Fact label="Output SHA-256">{clip.sha256 || unknown}</Fact>
-        </div>
+        </dl>
         {clip.source_segments?.length ? (
           <div aria-label="Rendered source segments">
             {clip.source_segments.map((segment, index) => (

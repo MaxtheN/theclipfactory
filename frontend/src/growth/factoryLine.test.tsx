@@ -208,7 +208,8 @@ describe("production line on the Factory screen", () => {
   it("starts the swarm by itself after an upload when autopilot is on", async () => {
     vi.mocked(workspaceApi.upload).mockResolvedValue({ id: "v2", name: "New talk.mp4", duration: 1800 } as Video);
     vi.mocked(workspaceApi.campaigns).mockResolvedValue([campaign()]);
-    vi.mocked(workspaceApi.save).mockResolvedValue(campaign());
+    // The attach is only trusted once the saved workspace actually lists the new source.
+    vi.mocked(workspaceApi.save).mockResolvedValue({ ...campaign(), video_ids: ["v1", "v2"] });
     const { container } = home(workspace(), factory({}, { autonomy: "auto" }));
     const file = new File(["video"], "New talk.mp4", { type: "video/mp4" });
     fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
@@ -221,12 +222,17 @@ describe("production line on the Factory screen", () => {
 
   it("leaves production to you after an upload when autopilot is off", async () => {
     vi.mocked(workspaceApi.upload).mockResolvedValue({ id: "v2", name: "New talk.mp4", duration: 1800 } as Video);
-    vi.mocked(workspaceApi.campaigns).mockResolvedValue([campaign()]);
-    vi.mocked(workspaceApi.save).mockResolvedValue(campaign());
-    const { container } = home(workspace(), factory());
+    // Its own workspace: an unconfirmed import from another test is deliberately remembered per workspace.
+    const own = { ...campaign(), id: "c2" };
+    const w = workspace();
+    w.campaign = own;
+    vi.mocked(workspaceApi.campaigns).mockResolvedValue([own]);
+    vi.mocked(workspaceApi.save).mockResolvedValue({ ...own, video_ids: ["v1", "v2"] });
+    const { container } = home(w, factory());
     const file = new File(["video"], "New talk.mp4", { type: "video/mp4" });
     fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
-    expect(await screen.findByText(/Open production when you’re ready/)).toBeInTheDocument();
+    await waitFor(() => expect(workspaceApi.save).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText(/Adding it to this workspace/)).not.toBeInTheDocument());
     expect(productionApi.campaignProduce).not.toHaveBeenCalled();
   });
 });

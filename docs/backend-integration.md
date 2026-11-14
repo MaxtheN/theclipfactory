@@ -1,6 +1,6 @@
 # Growth Factory — merged engine to UI map
 
-Current delivery: integrated master4966544, UI/model workflow verified, draftPR5 on `kartik/backend-integration`. Both a fixture live-design Mac window and an authenticated real-engine Mac window are running. Local models and a substantive captioned draft passed; see running-the-mac-app.md for review and launch instructions. The following source/control inventory retains its original700c907 audit provenance.
+Current delivery: baseline57421d7 plus upstream master through dab3066, draftPR8 on `kartik/backend-integration`. Baseline and merge CI passed. Both a fixture live-design Mac window and an authenticated real-engine Mac window are running. Local models and a substantive captioned draft passed; see running-the-mac-app.md for review and launch instructions. The following source/control inventory retains its original700c907 audit provenance.
 
 Source snapshot: team default branch `master`, commit `700c907` (merged PR #4), fetched November 14, 2026. Mainline is the implementation authority; no unmerged teammate feature branch was used. Code inspection occurs in `/Users/kartikbihani/WIN/growth-factory-integration`, branch `kartik/backend-integration`. The design agent's dirty checkout and native preview in `/Users/kartikbihani/WIN/theclipfactory` are untouched.
 
