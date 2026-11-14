@@ -134,7 +134,9 @@
   .gf-factory-workflow li + li { border-left: 0; border-top: 1px solid var(--material-divider); }
   .gf-factory-workflow.is-compact li + li { border: 0; }
   .gf-flow-app .gf-onboarding-intro, .gf-flow-app .gf-onboarding-form { padding: 26px; }
-  .gf-factory-workflow.is-compact { gap: 18px; margin: 24px 0; }
+  /* Keep the setup fields within reach on small screens; the intro still explains the loop. */
+  .gf-factory-workflow.is-compact { display: none; }
+  .gf-onboarding-trust { margin-top: 20px; }
 }
 @media (max-width: 520px) {
   .gf-flow-app .gf-upload-stage { grid-template-columns: 1fr; padding: 28px 22px; }
