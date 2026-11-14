@@ -39,6 +39,13 @@ and a single tab stop, followed by the panel. All panels are readable without JS
 The motion switch is available in the header, uses optional localStorage, and
 always respects the OS reduced-motion setting. FAQ uses native `details`.
 
+## Portable review artifact
+
+`npm run export:preview` creates `dist/growth-factory-landing.html`, a single
+self-contained HTML file with inline CSS, JS, font, and image data. It is for
+Knowledge Base review/offline use; the deployed site still serves small, cacheable
+local assets. Update source files and rerun the export, never hand-edit the bundle.
+
 ## Deploy
 
 Deploy this folder as a static Vercel project with no framework, install command,

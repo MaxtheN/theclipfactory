@@ -3,7 +3,7 @@
 - The alpine photograph was generated with the built-in image-generation tool for this landing page. It is illustrative and does not represent customer footage, real campaign output, or an endorsement. The original is retained as `assets/alpine-story-original.png` (excluded from deployment); `assets/alpine-story.webp` is the optimized full frame.
 - `assets/peaks.webp`, `valley.webp`, `hiker.webp`, `hiker-close.webp`, `towers.webp` and `summit.webp` are crops of that same photograph, used as sample 9:16 clips and scene thumbnails.
 - `assets/icon.svg`, `mark.svg`, `mark-white.svg` and `favicon.svg` are the Growth Factory mark: a play triangle cut into three clips. Project-native SVG.
-- `assets/social-card.jpg` is a capture of this site's opening screen, used for link previews.
+- `assets/social-card.jpg` is a 1200 × 630 capture of this site’s opening screen, used for link previews. Only hero spacing is compacted and the motion control hidden for the social-card composition.
 - Type is Bricolage Grotesque throughout, self-hosted as `assets/bricolage-grotesque.woff2` under the SIL Open Font License (`assets/BricolageGrotesque-OFL.txt`). The variable font is from the Google Fonts `ofl/bricolagegrotesque` directory, subset to Latin and the punctuation/arrows used here with fontTools. No font request is made to Google.
 
 ## Image prompt

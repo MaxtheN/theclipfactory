@@ -1,0 +1,38 @@
+name: Landing page quality
+on:
+  push:
+    paths: ['landing-page/**', '.github/workflows/landing-page.yml']
+  pull_request:
+    paths: ['landing-page/**', '.github/workflows/landing-page.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  landing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: landing-page
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: landing-page/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm run check && npm test
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: landing-page-browser-report
+          path: |
+            landing-page/playwright-report
+            landing-page/test-results
+          retention-days: 7
