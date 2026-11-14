@@ -1,21 +1,31 @@
-# Growth Factory landing page
+# Growth Factory website
 
-Standalone public marketing site, separate from the desktop workspace and backend. Plain HTML, CSS, and JavaScript, with no build step or npm dependencies.
+Static product website, separate from the Mac backend. Plain HTML, CSS and JavaScript; no runtime npm dependency or build step.
 
-Live: https://growth-factory-landing.vercel.app
+## Pages
 
-Vercel project: `growth-factory-landing`, team `nurislombeks-projects`.
+- `/` — the growth-department overview, production team and illustrative app tour.
+- `/product.html` — how Factory, Library, Results and Brand profile connect the daily work.
+- `/learning.html` — quality evidence, observations, creative experiments, Style rules and factory-builder upgrades.
+- `/download.html` — honest Mac availability, prerequisites and source setup. No public release file is currently linked.
 
-## Preview
+The logo, orange/white palette, Manrope headings and shared navigation are consistent across pages. The Mac app uses the same color family while retaining its native system typography. Illustrative photos and sample metrics are labeled; no website animation is presented as a live agent run or measured audience growth. Loop rehearsal happens inside the app, not a separate promoted web demo.
 
-From this folder, run `npm run dev`, then open `http://127.0.0.1:4174`.
+## Preview and checks
 
-`npm run check` checks JavaScript syntax. `npm test` runs dependency-free checks for asset paths, internal links, tab associations, demo links, and availability disclosures. Browser QA covers the responsive layout, keyboard-operated workflow tabs, walkthrough dialog, FAQ disclosures, and mobile navigation.
+```sh
+npm run dev
+# http://127.0.0.1:4174/
+npm run check
+npm test
+```
 
-The primary call to action opens the existing illustrative workspace at https://theclipfactory-frontend-two.vercel.app. The marketing page makes no public-release, measured-performance, pricing, or customer claims. The native Mac app is identified as in development.
+Checks cover local route/asset/anchor resolution, tabs, navigation and release-link honesty. Browser checks cover actual page navigation, mobile menu/Escape, scroll header, overflow and console errors. The download CTA is a direct link to the Mac availability/setup page, rather than an invented download or an empty button.
 
-## Deploy
+## Publication
 
-Deploy this folder as a static Vercel project with no framework, no install command, and no build command. The deployment includes `index.html`, `styles.css`, `app.js`, `vercel.json`, and `assets/`. Keep this project's identity separate from `theclipfactory-frontend`.
+Current public site: https://growth-factory-landing.vercel.app/ . Local changes are preview-only until explicitly published. Keep the existing Vercel project/team configuration; do not create or transfer a deployment from this task. Static deployment includes all four HTML pages, shared CSS/JS, metadata and assets. `vercel.json` supports clean URLs on the hosted site; explicit `.html` links also work in the simple local server.
 
-Asset provenance and font licenses are described in `ASSETS.md` and `assets/*OFL.txt`.
+No Developer ID/notarized release, clean-Mac certification or downloadable artifact is established by this website. A local ad-hoc app build is separate from a public release. Do not add a release URL until the exact reviewed artifact exists and publication is authorized.
+
+Asset provenance and font licenses: [ASSETS.md](ASSETS.md).

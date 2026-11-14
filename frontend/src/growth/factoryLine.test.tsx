@@ -212,13 +212,14 @@ describe("production line on the Factory screen", () => {
       objective: "discovery", approved: false,
       rank: { score, position, below_bar: position === null, why: "Hook" },
     });
-    const clips = [made("low", 30, null), made("second", 70, 2), made("best", 90, 1)];
+    const clips = [made("low", 30, null), made("second", 70, 2), made("best", 90, 1),
+      { ...made("older-speechless", 99, 1), made_without_speech: true }];
     const onReview = vi.fn();
     render(
       <FactoryHome w={workspace()} factory={factory({ state: "needs_review" }, { clips })} onProduce={vi.fn()} onReview={onReview} onLibrary={vi.fn()} onDirection={vi.fn()} />,
     );
-    expect(screen.getByText("2 clips ready for review · 1 below the bar")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Review 2 clips/ }));
+    expect(screen.getByText("2 clips ready · 1 below the bar")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Open 2 clips/ }));
     expect(onReview).toHaveBeenCalledWith(clips[2]);
   });
 
@@ -379,27 +380,16 @@ describe("review wall in the Library", () => {
       ...changes,
     }) as Clip;
 
-  it("shows this workspace's clips side by side and approves them in bulk", async () => {
-    const clips = [
-      made("a"),
-      made("b", { hypothesis: "story" }),
-      made("elsewhere", { campaign_id: "another" }),
-    ];
-    const f = factory({}, { clips });
-    render(<Library w={workspace()} factory={f} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Review wall/ }));
+  it("shows generated clips together without approval actions", () => {
+    const clips = [made("a"), made("b", { approved: true, hypothesis: "story" }), made("elsewhere", { campaign_id: "another" })];
+    render(<Library w={workspace()} factory={factory({}, { clips })} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="wall" />);
     const wall = document.querySelector(".gf-review-wall") as HTMLElement;
     expect(within(wall).getByText("Hook a")).toBeInTheDocument();
     expect(within(wall).getByText("Hook b")).toBeInTheDocument();
     expect(within(wall).queryByText("Hook elsewhere")).not.toBeInTheDocument();
-    expect(within(wall).getByRole("combobox", { name: "Filter by hypothesis" })).toBeInTheDocument();
-    fireEvent.click(within(wall).getByRole("button", { name: "Approve all 2 shown" }));
-    await waitFor(() =>
-      expect(requests.filter((r) => r.method === "PUT").map((r) => r.url).sort()).toEqual([
-        "/api/clips/a",
-        "/api/clips/b",
-      ]),
-    );
+    expect(within(wall).queryByRole("button", { name: /Approve|Needs review/ })).not.toBeInTheDocument();
+    expect(within(wall).getByRole("button", { name: /Quality holds/ })).toBeInTheDocument();
+    expect(requests.filter(request => request.method === "PUT")).toEqual([]);
   });
 
   describe("freeing space", () => {
@@ -426,28 +416,11 @@ describe("review wall in the Library", () => {
     });
     afterEach(() => confirm.mockRestore());
 
-    it("discards the clips nobody approved, revisions before the versions they build on", async () => {
-      const clips = [
-        made("a"),
-        made("b", { parent_clip_id: "a" } as Partial<Clip>),
-        made("kept", { approved: true }),
-      ];
-      const w = workspace();
-      const f = factory({}, { clips });
-      library(w, f);
-      fireEvent.click(screen.getByRole("button", { name: /Review wall/ }));
-      fireEvent.click(screen.getByRole("button", { name: "Discard 2 shown" }));
-      expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/Discard 2 clips that were not approved\?/));
-      expect(await screen.findByText("2 clips discarded.")).toBeInTheDocument();
-      expect(deleted()).toEqual(["/api/clips/b", "/api/clips/a"]);
-      expect(f.refresh).toHaveBeenCalled();
-    });
-
     it("deletes nothing when the question is declined", async () => {
       confirm.mockReturnValue(false);
       library(workspace(), factory({}, { clips: [made("a"), made("b")] }));
-      fireEvent.click(screen.getByRole("button", { name: /Review wall/ }));
-      fireEvent.click(screen.getByRole("button", { name: "Discard 2 shown" }));
+      fireEvent.click(screen.getByRole("button", { name: "Play Hook b" }));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
       fireEvent.click(screen.getByRole("button", { name: /Episodes/ }));
       fireEvent.click(screen.getByRole("button", { name: "Delete Podcast 1" }));
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -457,16 +430,16 @@ describe("review wall in the Library", () => {
     it("says which clips the local service kept, and why", async () => {
       refuse(["b"], "This exact version was exported. It is kept so the export can be verified against it.");
       library(workspace(), factory({}, { clips: [made("a"), made("b")] }));
-      fireEvent.click(screen.getByRole("button", { name: /Review wall/ }));
-      fireEvent.click(screen.getByRole("button", { name: "Discard 2 shown" }));
+      fireEvent.click(screen.getByRole("button", { name: "Play Hook b" }));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
       const outcome = await screen.findByRole("alert");
-      expect(outcome).toHaveTextContent("1 clip discarded. 1 kept: This exact version was exported.");
+      expect(outcome).toHaveTextContent("0 clips discarded. 1 kept: This exact version was exported.");
     });
 
     it("discards one clip from its quick look", async () => {
       library(workspace(), factory({}, { clips: [made("a"), made("b")] }));
       fireEvent.click(screen.getByRole("button", { name: "Play Hook a" }));
-      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Discard" }));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
       expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Discard “Hook a”?"));
       expect(await screen.findByText("1 clip discarded.")).toBeInTheDocument();
       expect(deleted()).toEqual(["/api/clips/a"]);
@@ -555,10 +528,10 @@ describe("clips in the front door", () => {
         onDirection={vi.fn()}
       />,
     );
-    expect(screen.getByText("2 clips ready for review")).toBeInTheDocument(); // on the episode row
+    expect(screen.getByText("2 clips ready")).toBeInTheDocument(); // on the episode row
     expect(screen.queryByText("Hook elsewhere")).not.toBeInTheDocument();
     // They have no direction to be reviewed against, so review happens on the wall.
-    fireEvent.click(screen.getByRole("button", { name: /Review 2 clips/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Open 2 clips/ }));
     expect(onLibrary).toHaveBeenCalledWith("wall");
     expect(onReview).not.toHaveBeenCalled();
   });
@@ -577,50 +550,33 @@ describe("clips in the front door", () => {
         onDirection={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Review 1 clip/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Open 1 clip/ }));
     expect(onReview).toHaveBeenCalledWith(clip);
     expect(onLibrary).not.toHaveBeenCalled();
   });
 
-  it("puts undirected clips on the Library's review wall and points to it from Edits", async () => {
-    const onView = vi.fn();
+  it("inspects undirected clips locally without borrowing a Studio direction", () => {
     const onReview = vi.fn();
-    const f = factory({}, { clips: [engineMade("x"), engineMade("y"), engineMade("elsewhere", { video_id: "v9" })] });
-    const library = (view: "edits" | "wall") => (
-      <Library
-        w={workspace(false)}
-        factory={f}
-        onReview={onReview}
-        onProduce={vi.fn()}
-        onFactory={vi.fn()}
-        view={view}
-        onView={onView}
-      />
-    );
-    const { rerender } = render(library("edits"));
-    expect(screen.getByRole("button", { name: /Review wall\s*2/ })).toBeInTheDocument();
-    expect(
-      screen.getByText(/2 clips were made from this footage before a direction was approved/),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Open the review wall/ }));
-    expect(onView).toHaveBeenCalledWith("wall");
-    rerender(library("wall"));
-    const wall = document.querySelector(".gf-review-wall") as HTMLElement;
-    expect(within(wall).getByText("Hook x")).toBeInTheDocument();
-    expect(within(wall).getByText("Hook y")).toBeInTheDocument();
-    expect(within(wall).queryByText("Hook elsewhere")).not.toBeInTheDocument();
-    // The Studio cannot open them, so the card plays the clip in place and approves it there.
-    fireEvent.click(within(wall).getByRole("button", { name: "Play Hook x" }));
-    const player = screen.getByLabelText("Playing Hook x");
-    expect(player.tagName).toBe("VIDEO");
-    expect(player).toHaveAttribute("src", "/api/clips/x/media");
-    expect(player.closest("dialog")).toHaveAttribute("open");
-    fireEvent.click(within(player.closest("dialog")!).getByRole("button", { name: "Approve" }));
-    expect(screen.queryByLabelText("Playing Hook x")).not.toBeInTheDocument();
+    render(<Library w={workspace(false)} factory={factory({}, { clips: [engineMade("x"), engineMade("elsewhere", { video_id: "v9" })] })} onReview={onReview} onProduce={vi.fn()} onFactory={vi.fn()} />);
+    expect(screen.queryByText("Hook elsewhere")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Inspect Cut x" }));
+    expect(screen.getByLabelText("Playing Hook x")).toHaveAttribute("src", "/api/clips/x/media");
+    expect(within(screen.getByRole("dialog")).queryByRole("button", { name: /Approve|Edit/ })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" })).toBeInTheDocument();
     expect(onReview).not.toHaveBeenCalled();
-    await waitFor(() =>
-      expect(requests.filter((r) => r.method === "PUT").map((r) => r.url)).toEqual(["/api/clips/x"]),
-    );
+    expect(requests.filter(request => request.method === "PUT")).toEqual([]);
+  });
+
+  it("keeps speechless test drafts out of the default list and warns on inspection", () => {
+    const old = { ...cut("old"), made_without_speech: true };
+    render(<Library w={workspace()} factory={factory({}, { clips: [cut("fresh"), old] })} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} />);
+    expect(screen.getByText("Hook fresh")).toBeInTheDocument();
+    expect(screen.queryByText("Hook old")).not.toBeInTheDocument();
+    expect(screen.queryByText("Made without speech")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Older test drafts (1)"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include older test drafts" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play Hook old" }));
+    expect(within(screen.getByRole("dialog")).getByText(/generated without speech/)).toBeInTheDocument();
   });
 
   it("plays an edit from its cover in the Library list", () => {
@@ -640,9 +596,9 @@ describe("clips in the front door", () => {
     // Preview chrome stays decorative: it cannot trigger a social action.
     expect(dialog.querySelector(".gf-reels-rail")).toHaveAttribute("aria-hidden", "true");
     expect(dialog.querySelectorAll(".gf-reels-rail li")).toHaveLength(5);
-    expect(within(dialog).getAllByRole("button").map(button => button.textContent)).toEqual(["Review", "Discard", "Close"]);
+    expect(within(dialog).getAllByRole("button").map(button => button.textContent)).toEqual(["Edit / request change", "Remove", "Close"]);
     // From the quick look, review is one press away and closes the player.
-    fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Edit / request change" }));
     expect(onReview).toHaveBeenCalledWith(clip);
     expect(screen.queryByLabelText("Playing Hook a")).not.toBeInTheDocument();
   });

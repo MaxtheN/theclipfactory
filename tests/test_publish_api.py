@@ -148,7 +148,7 @@ def test_post_package_cover_frames_and_schedule_endpoints(api, tmp_path):
 def test_legacy_direct_meta_runner_ignores_post_lane_schedules(api):
     import time
 
-    session, app, fakes, sha = api
+    _session, app, _fakes, _sha = api
     app.state.store.put("schedules", {"id": "s-lane", "lane": "instagram_post", "clip_id": "clip-1",
                                       "status": "scheduled", "publish_at": "2026-01-01T00:00:00+00:00",
                                       "attempt_ids": [], "overdue_at": None})

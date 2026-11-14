@@ -38,12 +38,12 @@ jobs:
       - name: Verify app-owned Python bootstrap without Homebrew
         run: python scripts/smoke-managed-python.py
       - name: Smoke packaged executable without GUI
-        run: python scripts/smoke-headless.py --executable 'dist/Clip Factory.app/Contents/MacOS/Clip Factory'
+        run: python scripts/smoke-headless.py --executable 'dist/Growth Factory.app/Contents/MacOS/Growth Factory'
       - name: Smoke real Cocoa window, authenticated UI, and reopen
-        run: python scripts/smoke-native.py --executable 'dist/Clip Factory.app/Contents/MacOS/Clip Factory'
+        run: python scripts/smoke-native.py --executable 'dist/Growth Factory.app/Contents/MacOS/Growth Factory'
       - uses: actions/upload-artifact@v4
         with:
-          name: clip-factory-mac-arm64-not-notarized
-          path: dist/clip-factory-mac-arm64.zip
+          name: growth-factory-mac-arm64-not-notarized
+          path: dist/growth-factory-mac-arm64.zip
           if-no-files-found: error
           retention-days: 14

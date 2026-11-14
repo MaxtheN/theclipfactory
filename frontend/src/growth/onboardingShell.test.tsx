@@ -96,16 +96,16 @@ async function enterOnboarding(viaQuickActions = false) {
     fireEvent.click(screen.getByRole("button", { name: "New brand" }));
   }
   await skipWebsite();
-  return screen.findByRole("heading", { name: "Who are we making this for?" });
+  return screen.findByRole("heading", { name: "Who should care?" });
 }
 /** Onboarding opens with "What’s your website?"; these tests cover the typed path. */
 async function skipWebsite() {
   fireEvent.click(
-    await screen.findByRole("button", { name: "Skip" }),
+    await screen.findByRole("button", { name: "Enter details myself" }),
   );
 }
 function next() {
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.click(screen.getByRole("button", { name: /^(Continue|Set my first goal)$/ }));
 }
 
 describe("standalone onboarding shell", () => {
@@ -118,7 +118,7 @@ describe("standalone onboarding shell", () => {
       render(<GrowthApp />);
       await skipWebsite();
       await screen.findByRole("heading", {
-        name: "Who are we making this for?",
+        name: "Who should care?",
       });
       expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
       expect(
@@ -154,7 +154,7 @@ describe("standalone onboarding shell", () => {
       render(<GrowthApp />);
       await skipWebsite();
       await screen.findByRole("heading", {
-        name: "Who are we making this for?",
+        name: "Who should care?",
       });
       expect(window.location.hash).toBe("");
       expect(
@@ -178,7 +178,7 @@ describe("standalone onboarding shell", () => {
       vi.useFakeTimers();
       await act(async () => {
         fireEvent.click(
-          screen.getByRole("button", { name: "Launch" }),
+          screen.getByRole("button", { name: "Open my factory" }),
         );
       });
       const ready = screen.getByRole("status", {
@@ -267,9 +267,9 @@ describe("standalone onboarding shell", () => {
       previewRequest<Campaign[]>("/api/campaigns"),
     ]);
     render(<GrowthApp />);
-    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enter details myself" }));
     const question = screen.getByRole("heading", {
-      name: "Who are we making this for?",
+      name: "Who should care?",
     });
     expect(question).toHaveFocus();
     expect(screen.getByLabelText("Name your brand / podcast")).toHaveValue("");
@@ -333,8 +333,14 @@ describe("standalone onboarding shell", () => {
       previewRequest<Campaign[]>("/api/campaigns"),
     ]);
     render(<GrowthApp />);
-    await screen.findByRole("button", { name: "Back to Factory" });
+    await screen.findByRole("button", { name: "Enter details myself" });
+    expect(
+      screen.queryByRole("button", { name: "Back to Factory" }),
+    ).not.toBeInTheDocument();
     await skipWebsite();
+    expect(
+      screen.getByRole("button", { name: "Back to Factory" }),
+    ).toBeVisible();
     fireEvent.change(screen.getByLabelText("Name your brand / podcast"), {
       target: { value: "Direct preview workspace" },
     });
@@ -348,13 +354,13 @@ describe("standalone onboarding shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Explore first" }));
     next();
     expect(
-      screen.getByRole("heading", { name: "Review your brand" }),
+      screen.getByRole("heading", { name: "Your direction is set." }),
     ).toHaveFocus();
     expect(await previewRequest<Profile[]>("/api/profiles")).toEqual(before[0]);
     expect(await previewRequest<Campaign[]>("/api/campaigns")).toEqual(
       before[1],
     );
-    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open my factory" }));
     await screen.findByRole("heading", { name: "Factory" });
     const profiles = await previewRequest<Profile[]>("/api/profiles");
     const campaigns = await previewRequest<Campaign[]>("/api/campaigns");
@@ -379,7 +385,7 @@ describe("standalone onboarding shell", () => {
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     expect(screen.getByRole("dialog", { name: "Quick actions" })).toBeVisible();
     expect(
-      screen.queryByRole("heading", { name: "Who are we making this for?" }),
+      screen.queryByRole("heading", { name: "Who should care?" }),
     ).not.toBeInTheDocument();
   });
 
@@ -460,7 +466,7 @@ describe("standalone onboarding shell", () => {
     );
     next();
     expect(
-      screen.getByRole("heading", { name: "Review your brand" }),
+      screen.getByRole("heading", { name: "Your direction is set." }),
     ).toHaveFocus();
     expect(await previewRequest<Profile[]>("/api/profiles")).toHaveLength(
       before[0].length,
@@ -468,7 +474,7 @@ describe("standalone onboarding shell", () => {
     expect(await previewRequest<Campaign[]>("/api/campaigns")).toHaveLength(
       before[1].length,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open my factory" }));
     await screen.findByRole("heading", { name: "Factory" });
     expect(
       screen.queryByRole("dialog", { name: "Quick actions" }),

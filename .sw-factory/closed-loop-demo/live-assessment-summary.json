@@ -1,0 +1,86 @@
+{
+  "status": "assessed",
+  "model": "anthropic/claude-haiku-5.5",
+  "clip_id": "d1234e8d53d04659a1d1b7a0f8a55226",
+  "sha256": "9ce3dbf83ea39c36b800c89d9e486354da2936571339919307307dd8655b5781",
+  "rubric_version": "creative-text@1",
+  "assessment": {
+    "hook_clarity": {
+      "score": 2,
+      "reason": "The hook 'You're going to convey over pillow talk' is an incomplete fragment that lacks its subject and context, so a viewer cannot tell who or what is being discussed without the caption.",
+      "evidence": [
+        {
+          "source": "clip_hook",
+          "quote": "You're going to convey over pillow talk"
+        }
+      ]
+    },
+    "source_faithfulness": {
+      "score": 2,
+      "reason": "The hook reverses the speaker's meaning: the source says the IP is 'not the type of IP that you're going to convey over pillow talk,' while the hook asserts the opposite, presenting it as something you would convey over pillow talk. The negation was dropped, reversing the claim.",
+      "evidence": [
+        {
+          "source": "clip_hook",
+          "quote": "You're going to convey over pillow talk"
+        },
+        {
+          "source": "source_speech",
+          "quote": "it's not the type of IP that you're going to convey over pillow talk"
+        }
+      ]
+    },
+    "standalone_context": {
+      "score": 3,
+      "reason": "The source speech supplies the context of the espionage question, the CEO's perspective and the claim about pillow talk, so the clip is understandable on its own, though it relies on an unnamed 'he' and 'suspected intelligence asset' without introduction in the excerpt.",
+      "evidence": [
+        {
+          "source": "source_speech",
+          "quote": "So what is it that people say that he leaked to this suspected intelligence asset?"
+        },
+        {
+          "source": "source_speech",
+          "quote": "as a CEO of a Silicon Valley technology company"
+        }
+      ]
+    },
+    "payoff": {
+      "score": 4,
+      "reason": "The speech builds to a clear conclusion: the IP at stake is the kind needed to tape out the next generation of chips, not casual pillow-talk material. The payoff is delivered, though the hook undercuts it.",
+      "evidence": [
+        {
+          "source": "source_speech",
+          "quote": "It would be things like that would allow you to tape out the next generation of chips."
+        }
+      ]
+    },
+    "brand_fit": {
+      "score": 3,
+      "reason": "The clip touches on chips and AI, matching the 'AI progress depends on chips' message and the sharp, confident tone, but it does not address power, energy, or tech policy directly, and the caption's framing is only partly aligned with the brief.",
+      "evidence": [
+        {
+          "source": "brand_brief",
+          "quote": "AI progress depends on chips and who controls them"
+        },
+        {
+          "source": "clip_caption",
+          "quote": "#Nvidia #AI #Chips"
+        }
+      ]
+    },
+    "suggested_change": "Replace the hook with the accurate negated statement, e.g. 'It's not the kind of IP you'd share over pillow talk', so the hook matches the source meaning.",
+    "score": 55,
+    "editorial_hold": true,
+    "coverage": 1.0,
+    "status": "assessed"
+  },
+  "usage": {
+    "calls": 1,
+    "prompt_tokens": 1782,
+    "completion_tokens": 840,
+    "cost_usd": 0.000598,
+    "provider": "openrouter",
+    "model": "anthropic/claude-haiku-5.5",
+    "cost_basis": "openrouter_reported"
+  },
+  "source": "Actual configured Haiku call on a copy of the historical run6 clip, not synthetic data or a fresh generation."
+}

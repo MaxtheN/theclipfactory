@@ -1,0 +1,1526 @@
+{
+  "clips": [
+    {
+      "id": "bc06893cccba4635a50d319e9704defa",
+      "source_segments": [
+        {
+          "role": "teaser",
+          "start": 499.445,
+          "end": 500.8117
+        },
+        {
+          "role": "main",
+          "start": 467.765,
+          "end": 500.9317
+        }
+      ],
+      "edit_plan": {
+        "loudness": "normalize",
+        "jump_cuts": "silences",
+        "hook_format": "title_card",
+        "caption_emphasis": "keywords",
+        "emphasis_words": [],
+        "punch_in": "off",
+        "cover": "best_frame",
+        "end_card": "none",
+        "cta_text": "",
+        "brand_kit": null,
+        "structure": "auto",
+        "payoff_start": 499.645,
+        "payoff_end": 500.725,
+        "transition": "zoom",
+        "crop_focus": "auto_face",
+        "extensions": {},
+        "start": 467.765,
+        "end": 500.925,
+        "hook": "Four questions nobody is answering",
+        "caption": "Friends unpack the messy questions swirling around this classified leak case and why they matter. #news #politics #analysis",
+        "objective": "traffic",
+        "subtitles": true,
+        "format": "vertical",
+        "framing": "fill",
+        "caption_style": "pop",
+        "motion": "static",
+        "hook_overlay": true,
+        "opening_treatment": null,
+        "cold_open_start": null,
+        "cold_open_end": null,
+        "focus_x": 0.5,
+        "crop_width": null,
+        "changed_variable": ""
+      },
+      "duration": 34.534
+    },
+    {
+      "id": "666845f637114fc3b43f893364acbc2d",
+      "source_segments": [
+        {
+          "role": "teaser",
+          "start": 533.605,
+          "end": 536.205
+        },
+        {
+          "role": "main",
+          "start": 521.225,
+          "end": 536.2583
+        },
+        {
+          "role": "main",
+          "start": 536.7583,
+          "end": 548.3583
+        }
+      ],
+      "edit_plan": {
+        "loudness": "normalize",
+        "jump_cuts": "silences",
+        "hook_format": "title_card",
+        "caption_emphasis": "keywords",
+        "emphasis_words": [],
+        "punch_in": "off",
+        "cover": "best_frame",
+        "end_card": "none",
+        "cta_text": "",
+        "brand_kit": null,
+        "structure": "auto",
+        "payoff_start": 533.785,
+        "payoff_end": 536.105,
+        "transition": "zoom",
+        "crop_focus": "auto_face",
+        "extensions": {},
+        "start": 521.225,
+        "end": 548.345,
+        "hook": "I'm not the only one who has looked",
+        "caption": "Speaker asks why a wave of discrediting stories hit at once, then floats a speculative motive about China chip policy. #AI #Tech #Politics",
+        "objective": "traffic",
+        "subtitles": true,
+        "format": "vertical",
+        "framing": "fill",
+        "caption_style": "pop",
+        "motion": "push_in",
+        "hook_overlay": true,
+        "opening_treatment": null,
+        "cold_open_start": null,
+        "cold_open_end": null,
+        "focus_x": 0.5,
+        "crop_width": null,
+        "changed_variable": ""
+      },
+      "duration": 29.234
+    }
+  ],
+  "transcript": {
+    "provider": "groq",
+    "segments": [
+      {
+        "start": 461.62463,
+        "end": 466.46463,
+        "text": "in violation of the law. That's the only crime to date that we even know about.",
+        "words": [
+          {
+            "word": "in",
+            "start": 461.62463,
+            "end": 462.40463
+          },
+          {
+            "word": "violation",
+            "start": 462.40463,
+            "end": 462.76465
+          },
+          {
+            "word": "of",
+            "start": 462.76465,
+            "end": 463.00464
+          },
+          {
+            "word": "the",
+            "start": 463.00464,
+            "end": 463.12463
+          },
+          {
+            "word": "law.",
+            "start": 463.12463,
+            "end": 463.36462
+          },
+          {
+            "word": "That's",
+            "start": 463.36462,
+            "end": 463.74463
+          },
+          {
+            "word": "the",
+            "start": 463.74463,
+            "end": 463.86462
+          },
+          {
+            "word": "only",
+            "start": 463.86462,
+            "end": 464.12463
+          },
+          {
+            "word": "crime",
+            "start": 464.12463,
+            "end": 464.60464
+          },
+          {
+            "word": "to",
+            "start": 464.60464,
+            "end": 465.14465
+          },
+          {
+            "word": "date",
+            "start": 465.14465,
+            "end": 465.36462
+          },
+          {
+            "word": "that",
+            "start": 465.36462,
+            "end": 465.60464
+          },
+          {
+            "word": "we",
+            "start": 465.60464,
+            "end": 465.72464
+          },
+          {
+            "word": "even",
+            "start": 465.72464,
+            "end": 465.92465
+          },
+          {
+            "word": "know",
+            "start": 465.92465,
+            "end": 466.08463
+          },
+          {
+            "word": "about.",
+            "start": 466.08463,
+            "end": 466.38464
+          }
+        ],
+        "avg_logprob": -0.096541055,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.6357143
+      },
+      {
+        "start": 467.58463,
+        "end": 471.92465,
+        "text": "Number two, why wasn't Jensen given a defensive briefing, which is standard operating procedure?",
+        "words": [
+          {
+            "word": "Number",
+            "start": 467.88464,
+            "end": 468.08463
+          },
+          {
+            "word": "two,",
+            "start": 468.08463,
+            "end": 468.56464
+          },
+          {
+            "word": "why",
+            "start": 468.56464,
+            "end": 468.70465
+          },
+          {
+            "word": "wasn't",
+            "start": 468.70465,
+            "end": 469.00464
+          },
+          {
+            "word": "Jensen",
+            "start": 469.00464,
+            "end": 469.22464
+          },
+          {
+            "word": "given",
+            "start": 469.22464,
+            "end": 469.44464
+          },
+          {
+            "word": "a",
+            "start": 469.44464,
+            "end": 469.60464
+          },
+          {
+            "word": "defensive",
+            "start": 469.60464,
+            "end": 470.00464
+          },
+          {
+            "word": "briefing,",
+            "start": 470.00464,
+            "end": 470.58463
+          },
+          {
+            "word": "which",
+            "start": 470.58463,
+            "end": 470.68463
+          },
+          {
+            "word": "is",
+            "start": 470.68463,
+            "end": 470.78464
+          },
+          {
+            "word": "standard",
+            "start": 470.78464,
+            "end": 471.00464
+          },
+          {
+            "word": "operating",
+            "start": 471.00464,
+            "end": 471.30463
+          },
+          {
+            "word": "procedure?",
+            "start": 471.30463,
+            "end": 471.92465
+          }
+        ],
+        "avg_logprob": -0.096541055,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.6357143
+      },
+      {
+        "start": 471.80463,
+        "end": 479.38464,
+        "text": "It was done with Eric Swalwell. Number three, what secrets is Jensen accused of leaking? What",
+        "words": [
+          {
+            "word": "It",
+            "start": 471.80463,
+            "end": 471.92465
+          },
+          {
+            "word": "was",
+            "start": 471.92465,
+            "end": 472.02463
+          },
+          {
+            "word": "done",
+            "start": 472.02463,
+            "end": 472.14465
+          },
+          {
+            "word": "with",
+            "start": 472.14465,
+            "end": 472.28464
+          },
+          {
+            "word": "Eric",
+            "start": 472.28464,
+            "end": 472.52463
+          },
+          {
+            "word": "Swalwell.",
+            "start": 472.52463,
+            "end": 473.00464
+          },
+          {
+            "word": "Number",
+            "start": 473.00464,
+            "end": 474.30463
+          },
+          {
+            "word": "three,",
+            "start": 474.30463,
+            "end": 475.40463
+          },
+          {
+            "word": "what",
+            "start": 475.40463,
+            "end": 475.54465
+          },
+          {
+            "word": "secrets",
+            "start": 475.54465,
+            "end": 476.92465
+          },
+          {
+            "word": "is",
+            "start": 476.92465,
+            "end": 477.76465
+          },
+          {
+            "word": "Jensen",
+            "start": 477.76465,
+            "end": 478.00464
+          },
+          {
+            "word": "accused",
+            "start": 478.00464,
+            "end": 478.34464
+          },
+          {
+            "word": "of",
+            "start": 478.34464,
+            "end": 478.72464
+          },
+          {
+            "word": "leaking?",
+            "start": 478.72464,
+            "end": 479.18463
+          },
+          {
+            "word": "What",
+            "start": 479.18463,
+            "end": 479.32465
+          }
+        ],
+        "avg_logprob": -0.07354706,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.5020577
+      },
+      {
+        "start": 478.88464,
+        "end": 486.02463,
+        "text": "secrets would even be in his possession? And number four, was Alice Wong even a Chinese spy?",
+        "words": [
+          {
+            "word": "secrets",
+            "start": 478.88464,
+            "end": 479.86462
+          },
+          {
+            "word": "would",
+            "start": 479.86462,
+            "end": 480.00464
+          },
+          {
+            "word": "even",
+            "start": 480.00464,
+            "end": 480.14465
+          },
+          {
+            "word": "be",
+            "start": 480.14465,
+            "end": 480.38464
+          },
+          {
+            "word": "in",
+            "start": 480.38464,
+            "end": 480.96463
+          },
+          {
+            "word": "his",
+            "start": 480.96463,
+            "end": 481.12463
+          },
+          {
+            "word": "possession?",
+            "start": 481.12463,
+            "end": 481.78464
+          },
+          {
+            "word": "And",
+            "start": 481.78464,
+            "end": 482.14465
+          },
+          {
+            "word": "number",
+            "start": 482.14465,
+            "end": 482.32465
+          },
+          {
+            "word": "four,",
+            "start": 482.32465,
+            "end": 483.04465
+          },
+          {
+            "word": "was",
+            "start": 483.04465,
+            "end": 483.64465
+          },
+          {
+            "word": "Alice",
+            "start": 483.64465,
+            "end": 483.98465
+          },
+          {
+            "word": "Wong",
+            "start": 483.98465,
+            "end": 484.16464
+          },
+          {
+            "word": "even",
+            "start": 484.16464,
+            "end": 484.58466
+          },
+          {
+            "word": "a",
+            "start": 484.58466,
+            "end": 485.34464
+          },
+          {
+            "word": "Chinese",
+            "start": 485.34464,
+            "end": 485.54465
+          },
+          {
+            "word": "spy?",
+            "start": 485.54465,
+            "end": 486.02463
+          }
+        ],
+        "avg_logprob": -0.07354706,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.5020577
+      },
+      {
+        "start": 486.02463,
+        "end": 490.88464,
+        "text": "Because now the incoming chair of the House Intelligence Committee, who's a Democrat,",
+        "words": [
+          {
+            "word": "Because",
+            "start": 486.02463,
+            "end": 486.28464
+          },
+          {
+            "word": "now",
+            "start": 486.28464,
+            "end": 486.70465
+          },
+          {
+            "word": "the",
+            "start": 486.70465,
+            "end": 487.30463
+          },
+          {
+            "word": "incoming",
+            "start": 487.30463,
+            "end": 487.74463
+          },
+          {
+            "word": "chair",
+            "start": 487.74463,
+            "end": 488.62463
+          },
+          {
+            "word": "of",
+            "start": 488.62463,
+            "end": 489.20465
+          },
+          {
+            "word": "the",
+            "start": 489.20465,
+            "end": 489.28464
+          },
+          {
+            "word": "House",
+            "start": 489.28464,
+            "end": 489.42462
+          },
+          {
+            "word": "Intelligence",
+            "start": 489.42462,
+            "end": 489.76465
+          },
+          {
+            "word": "Committee,",
+            "start": 489.76465,
+            "end": 490.14465
+          },
+          {
+            "word": "who's",
+            "start": 490.14465,
+            "end": 490.28464
+          },
+          {
+            "word": "a",
+            "start": 490.28464,
+            "end": 490.34464
+          },
+          {
+            "word": "Democrat,",
+            "start": 490.34464,
+            "end": 490.88464
+          }
+        ],
+        "avg_logprob": -0.07354706,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.5020577
+      },
+      {
+        "start": 491.10464,
+        "end": 496.84464,
+        "text": "just threw major cold water on that. So I put all these things together. And I would say at",
+        "words": [
+          {
+            "word": "just",
+            "start": 491.18463,
+            "end": 491.42462
+          },
+          {
+            "word": "threw",
+            "start": 491.42462,
+            "end": 491.78464
+          },
+          {
+            "word": "major",
+            "start": 491.78464,
+            "end": 492.30463
+          },
+          {
+            "word": "cold",
+            "start": 492.30463,
+            "end": 493.08466
+          },
+          {
+            "word": "water",
+            "start": 493.08466,
+            "end": 493.42462
+          },
+          {
+            "word": "on",
+            "start": 493.42462,
+            "end": 493.64465
+          },
+          {
+            "word": "that.",
+            "start": 493.64465,
+            "end": 493.86462
+          },
+          {
+            "word": "So",
+            "start": 493.86462,
+            "end": 494.56464
+          },
+          {
+            "word": "I",
+            "start": 494.56464,
+            "end": 494.76465
+          },
+          {
+            "word": "put",
+            "start": 494.76465,
+            "end": 494.98465
+          },
+          {
+            "word": "all",
+            "start": 494.98465,
+            "end": 495.18463
+          },
+          {
+            "word": "these",
+            "start": 495.18463,
+            "end": 495.34464
+          },
+          {
+            "word": "things",
+            "start": 495.34464,
+            "end": 495.56464
+          },
+          {
+            "word": "together.",
+            "start": 495.56464,
+            "end": 495.88464
+          },
+          {
+            "word": "And",
+            "start": 495.88464,
+            "end": 496.24463
+          },
+          {
+            "word": "I",
+            "start": 496.24463,
+            "end": 496.38464
+          },
+          {
+            "word": "would",
+            "start": 496.38464,
+            "end": 496.50464
+          },
+          {
+            "word": "say",
+            "start": 496.50464,
+            "end": 496.64465
+          },
+          {
+            "word": "at",
+            "start": 496.64465,
+            "end": 496.82465
+          }
+        ],
+        "avg_logprob": -0.07354706,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.5020577
+      },
+      {
+        "start": 496.84464,
+        "end": 500.84464,
+        "text": "this point in time, I think there's more questions than answers.",
+        "words": [
+          {
+            "word": "this",
+            "start": 496.84464,
+            "end": 497.00464
+          },
+          {
+            "word": "point",
+            "start": 497.00464,
+            "end": 497.24463
+          },
+          {
+            "word": "in",
+            "start": 497.24463,
+            "end": 497.38464
+          },
+          {
+            "word": "time,",
+            "start": 497.38464,
+            "end": 498.02463
+          },
+          {
+            "word": "I",
+            "start": 498.02463,
+            "end": 499.30463
+          },
+          {
+            "word": "think",
+            "start": 499.30463,
+            "end": 499.44464
+          },
+          {
+            "word": "there's",
+            "start": 499.44464,
+            "end": 499.64465
+          },
+          {
+            "word": "more",
+            "start": 499.64465,
+            "end": 499.80463
+          },
+          {
+            "word": "questions",
+            "start": 499.80463,
+            "end": 500.14465
+          },
+          {
+            "word": "than",
+            "start": 500.14465,
+            "end": 500.36462
+          },
+          {
+            "word": "answers.",
+            "start": 500.36462,
+            "end": 500.72464
+          }
+        ],
+        "avg_logprob": -0.17128357,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.6126126
+      },
+      {
+        "start": 501.00464,
+        "end": 501.40463,
+        "text": "Yes.",
+        "words": [
+          {
+            "word": "Yes.",
+            "start": 501.00464,
+            "end": 501.40463
+          }
+        ],
+        "avg_logprob": -0.17128357,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.6126126
+      },
+      {
+        "start": 501.00464,
+        "end": 504.20465,
+        "text": "And I would like a full accounting of the facts to come out.",
+        "words": [
+          {
+            "word": "And",
+            "start": 501.00464,
+            "end": 501.46463
+          },
+          {
+            "word": "I",
+            "start": 501.46463,
+            "end": 501.56464
+          },
+          {
+            "word": "would",
+            "start": 501.56464,
+            "end": 501.68463
+          },
+          {
+            "word": "like",
+            "start": 501.68463,
+            "end": 501.88464
+          },
+          {
+            "word": "a",
+            "start": 501.88464,
+            "end": 502.54465
+          },
+          {
+            "word": "full",
+            "start": 502.54465,
+            "end": 502.70465
+          },
+          {
+            "word": "accounting",
+            "start": 502.70465,
+            "end": 503.02463
+          },
+          {
+            "word": "of",
+            "start": 503.02463,
+            "end": 503.58466
+          },
+          {
+            "word": "the",
+            "start": 503.58466,
+            "end": 503.68463
+          },
+          {
+            "word": "facts",
+            "start": 503.68463,
+            "end": 503.90463
+          },
+          {
+            "word": "to",
+            "start": 503.90463,
+            "end": 504.02463
+          },
+          {
+            "word": "come",
+            "start": 504.02463,
+            "end": 504.12463
+          },
+          {
+            "word": "out.",
+            "start": 504.12463,
+            "end": 504.20465
+          }
+        ],
+        "avg_logprob": -0.17128357,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.6126126
+      },
+      {
+        "start": 503.66464,
+        "end": 509.20465,
+        "text": "I think there's a fifth question, though, to yours, Sachs, which is why at all and why",
+        "words": [
+          {
+            "word": "I",
+            "start": 503.66464,
+            "end": 504.36462
+          },
+          {
+            "word": "think",
+            "start": 504.36462,
+            "end": 504.38464
+          },
+          {
+            "word": "there's",
+            "start": 504.38464,
+            "end": 504.54465
+          },
+          {
+            "word": "a",
+            "start": 504.54465,
+            "end": 504.62463
+          },
+          {
+            "word": "fifth",
+            "start": 504.62463,
+            "end": 504.86462
+          },
+          {
+            "word": "question,",
+            "start": 504.86462,
+            "end": 505.34464
+          },
+          {
+            "word": "though,",
+            "start": 505.34464,
+            "end": 505.68463
+          },
+          {
+            "word": "to",
+            "start": 505.68463,
+            "end": 505.78464
+          },
+          {
+            "word": "yours,",
+            "start": 505.78464,
+            "end": 506.66464
+          },
+          {
+            "word": "Sachs,",
+            "start": 506.66464,
+            "end": 506.94464
+          },
+          {
+            "word": "which",
+            "start": 506.94464,
+            "end": 507.10464
+          },
+          {
+            "word": "is",
+            "start": 507.10464,
+            "end": 507.28464
+          },
+          {
+            "word": "why",
+            "start": 507.28464,
+            "end": 507.76465
+          },
+          {
+            "word": "at",
+            "start": 507.76465,
+            "end": 508.42462
+          },
+          {
+            "word": "all",
+            "start": 508.42462,
+            "end": 508.74463
+          },
+          {
+            "word": "and",
+            "start": 508.74463,
+            "end": 508.96463
+          },
+          {
+            "word": "why",
+            "start": 508.96463,
+            "end": 509.16464
+          }
+        ],
+        "avg_logprob": -0.17128357,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.6126126
+      },
+      {
+        "start": 508.70465,
+        "end": 509.54465,
+        "text": "now?",
+        "words": [
+          {
+            "word": "now?",
+            "start": 508.70465,
+            "end": 509.50464
+          }
+        ],
+        "avg_logprob": -0.17128357,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.6126126
+      },
+      {
+        "start": 510.00464,
+        "end": 517.12463,
+        "text": "Meaning, like, why did whoever pulled the pin on this grenade, what did they see where",
+        "words": [
+          {
+            "word": "Meaning,",
+            "start": 510.00464,
+            "end": 510.40463
+          },
+          {
+            "word": "like,",
+            "start": 510.40463,
+            "end": 511.34464
+          },
+          {
+            "word": "why",
+            "start": 511.34464,
+            "end": 511.56464
+          },
+          {
+            "word": "did",
+            "start": 511.56464,
+            "end": 512.1046
+          },
+          {
+            "word": "whoever",
+            "start": 512.1046,
+            "end": 512.6046
+          },
+          {
+            "word": "pulled",
+            "start": 512.6046,
+            "end": 513.38464
+          },
+          {
+            "word": "the",
+            "start": 513.38464,
+            "end": 513.5446
+          },
+          {
+            "word": "pin",
+            "start": 513.5446,
+            "end": 513.6647
+          },
+          {
+            "word": "on",
+            "start": 513.6647,
+            "end": 513.82465
+          },
+          {
+            "word": "this",
+            "start": 513.82465,
+            "end": 514.02466
+          },
+          {
+            "word": "grenade,",
+            "start": 514.02466,
+            "end": 514.3046
+          },
+          {
+            "word": "what",
+            "start": 514.3046,
+            "end": 516.06464
+          },
+          {
+            "word": "did",
+            "start": 516.06464,
+            "end": 516.2446
+          },
+          {
+            "word": "they",
+            "start": 516.2446,
+            "end": 516.4246
+          },
+          {
+            "word": "see",
+            "start": 516.4246,
+            "end": 516.82465
+          },
+          {
+            "word": "where",
+            "start": 516.82465,
+            "end": 517.1046
+          }
+        ],
+        "avg_logprob": -0.17128357,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.6126126
+      },
+      {
+        "start": 516.62463,
+        "end": 518.94464,
+        "text": "they felt this had to happen?",
+        "words": [
+          {
+            "word": "they",
+            "start": 516.62463,
+            "end": 517.28467
+          },
+          {
+            "word": "felt",
+            "start": 517.28467,
+            "end": 517.62463
+          },
+          {
+            "word": "this",
+            "start": 517.62463,
+            "end": 518.18463
+          },
+          {
+            "word": "had",
+            "start": 518.18463,
+            "end": 518.40466
+          },
+          {
+            "word": "to",
+            "start": 518.40466,
+            "end": 518.52466
+          },
+          {
+            "word": "happen?",
+            "start": 518.52466,
+            "end": 518.8646
+          }
+        ],
+        "avg_logprob": -0.17128357,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.6126126
+      },
+      {
+        "start": 519.6046,
+        "end": 520.76465,
+        "text": "And then why now?",
+        "words": [
+          {
+            "word": "And",
+            "start": 519.88464,
+            "end": 520.0446
+          },
+          {
+            "word": "then",
+            "start": 520.0446,
+            "end": 520.18463
+          },
+          {
+            "word": "why",
+            "start": 520.18463,
+            "end": 520.40466
+          },
+          {
+            "word": "now?",
+            "start": 520.40466,
+            "end": 520.7246
+          }
+        ],
+        "avg_logprob": -0.17128357,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.6126126
+      },
+      {
+        "start": 520.76465,
+        "end": 527.96466,
+        "text": "and the other discrediting affair stories coming out in a coordinated way at the same time?",
+        "words": [
+          {
+            "word": "and",
+            "start": 521.3446,
+            "end": 521.4246
+          },
+          {
+            "word": "the",
+            "start": 521.4246,
+            "end": 521.6647
+          },
+          {
+            "word": "other",
+            "start": 521.6647,
+            "end": 521.88464
+          },
+          {
+            "word": "discrediting",
+            "start": 521.88464,
+            "end": 523.2446
+          },
+          {
+            "word": "affair",
+            "start": 523.2446,
+            "end": 524.94464
+          },
+          {
+            "word": "stories",
+            "start": 524.94464,
+            "end": 525.46466
+          },
+          {
+            "word": "coming",
+            "start": 525.46466,
+            "end": 525.8046
+          },
+          {
+            "word": "out",
+            "start": 525.8046,
+            "end": 526.08466
+          },
+          {
+            "word": "in",
+            "start": 526.08466,
+            "end": 526.44464
+          },
+          {
+            "word": "a",
+            "start": 526.44464,
+            "end": 526.52466
+          },
+          {
+            "word": "coordinated",
+            "start": 526.52466,
+            "end": 526.78467
+          },
+          {
+            "word": "way",
+            "start": 526.78467,
+            "end": 527.14465
+          },
+          {
+            "word": "at",
+            "start": 527.14465,
+            "end": 527.3046
+          },
+          {
+            "word": "the",
+            "start": 527.3046,
+            "end": 527.40466
+          },
+          {
+            "word": "same",
+            "start": 527.40466,
+            "end": 527.58466
+          },
+          {
+            "word": "time?",
+            "start": 527.58466,
+            "end": 527.96466
+          }
+        ],
+        "avg_logprob": -0.1424535,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.490991
+      },
+      {
+        "start": 528.14465,
+        "end": 531.46466,
+        "text": "Like it all happens at once. What is the motivation?",
+        "words": [
+          {
+            "word": "Like",
+            "start": 528.1647,
+            "end": 528.40466
+          },
+          {
+            "word": "it",
+            "start": 528.40466,
+            "end": 528.4246
+          },
+          {
+            "word": "all",
+            "start": 528.4246,
+            "end": 528.5446
+          },
+          {
+            "word": "happens",
+            "start": 528.5446,
+            "end": 528.8646
+          },
+          {
+            "word": "at",
+            "start": 528.8646,
+            "end": 529.1046
+          },
+          {
+            "word": "once.",
+            "start": 529.1046,
+            "end": 529.32465
+          },
+          {
+            "word": "What",
+            "start": 529.32465,
+            "end": 530.56464
+          },
+          {
+            "word": "is",
+            "start": 530.56464,
+            "end": 530.70465
+          },
+          {
+            "word": "the",
+            "start": 530.70465,
+            "end": 530.82465
+          },
+          {
+            "word": "motivation?",
+            "start": 530.82465,
+            "end": 531.46466
+          }
+        ],
+        "avg_logprob": -0.1424535,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.490991
+      },
+      {
+        "start": 531.5446,
+        "end": 536.1046,
+        "text": "Probably, and I'm just speculating here, but I'm not the only one who has looked at this.",
+        "words": [
+          {
+            "word": "Probably,",
+            "start": 531.5446,
+            "end": 533.44464
+          },
+          {
+            "word": "and",
+            "start": 533.44464,
+            "end": 533.52466
+          },
+          {
+            "word": "I'm",
+            "start": 533.52466,
+            "end": 533.6046
+          },
+          {
+            "word": "just",
+            "start": 533.6046,
+            "end": 533.78467
+          },
+          {
+            "word": "speculating",
+            "start": 533.78467,
+            "end": 534.18463
+          },
+          {
+            "word": "here,",
+            "start": 534.18463,
+            "end": 534.56464
+          },
+          {
+            "word": "but",
+            "start": 534.56464,
+            "end": 534.64465
+          },
+          {
+            "word": "I'm",
+            "start": 534.64465,
+            "end": 534.82465
+          },
+          {
+            "word": "not",
+            "start": 534.82465,
+            "end": 534.9246
+          },
+          {
+            "word": "the",
+            "start": 534.9246,
+            "end": 535.06464
+          },
+          {
+            "word": "only",
+            "start": 535.06464,
+            "end": 535.18463
+          },
+          {
+            "word": "one",
+            "start": 535.18463,
+            "end": 535.32465
+          },
+          {
+            "word": "who",
+            "start": 535.32465,
+            "end": 535.44464
+          },
+          {
+            "word": "has",
+            "start": 535.44464,
+            "end": 535.56464
+          },
+          {
+            "word": "looked",
+            "start": 535.56464,
+            "end": 535.70465
+          },
+          {
+            "word": "at",
+            "start": 535.70465,
+            "end": 535.8446
+          },
+          {
+            "word": "this.",
+            "start": 535.8446,
+            "end": 536.1046
+          }
+        ],
+        "avg_logprob": -0.1424535,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.490991
+      },
+      {
+        "start": 536.88464,
+        "end": 544.8046,
+        "text": "You had China hawks who lost this debate about sending chip technology to China from the United",
+        "words": [
+          {
+            "word": "You",
+            "start": 536.90466,
+            "end": 537.08466
+          },
+          {
+            "word": "had",
+            "start": 537.08466,
+            "end": 537.3046
+          },
+          {
+            "word": "China",
+            "start": 537.3046,
+            "end": 537.64465
+          },
+          {
+            "word": "hawks",
+            "start": 537.64465,
+            "end": 538.02466
+          },
+          {
+            "word": "who",
+            "start": 538.02466,
+            "end": 538.4846
+          },
+          {
+            "word": "lost",
+            "start": 538.4846,
+            "end": 538.8646
+          },
+          {
+            "word": "this",
+            "start": 538.8646,
+            "end": 539.08466
+          },
+          {
+            "word": "debate",
+            "start": 539.08466,
+            "end": 539.4246
+          },
+          {
+            "word": "about",
+            "start": 539.4246,
+            "end": 539.8646
+          },
+          {
+            "word": "sending",
+            "start": 539.8646,
+            "end": 540.26465
+          },
+          {
+            "word": "chip",
+            "start": 540.26465,
+            "end": 540.96466
+          },
+          {
+            "word": "technology",
+            "start": 540.96466,
+            "end": 541.44464
+          },
+          {
+            "word": "to",
+            "start": 541.44464,
+            "end": 542.46466
+          },
+          {
+            "word": "China",
+            "start": 542.46466,
+            "end": 543.8446
+          },
+          {
+            "word": "from",
+            "start": 543.8446,
+            "end": 544.44464
+          },
+          {
+            "word": "the",
+            "start": 544.44464,
+            "end": 544.58466
+          },
+          {
+            "word": "United",
+            "start": 544.58466,
+            "end": 544.70465
+          }
+        ],
+        "avg_logprob": -0.1424535,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.490991
+      },
+      {
+        "start": 544.8046,
+        "end": 552.52466,
+        "text": "States, and they want to reverse that, and they want to have no chips sent to China, and they also",
+        "words": [
+          {
+            "word": "States,",
+            "start": 544.8046,
+            "end": 545.3446
+          },
+          {
+            "word": "and",
+            "start": 545.3446,
+            "end": 545.8046
+          },
+          {
+            "word": "they",
+            "start": 545.8046,
+            "end": 546.06464
+          },
+          {
+            "word": "want",
+            "start": 546.06464,
+            "end": 547.32465
+          },
+          {
+            "word": "to",
+            "start": 547.32465,
+            "end": 547.52466
+          },
+          {
+            "word": "reverse",
+            "start": 547.52466,
+            "end": 547.8646
+          },
+          {
+            "word": "that,",
+            "start": 547.8646,
+            "end": 548.3446
+          },
+          {
+            "word": "and",
+            "start": 548.3446,
+            "end": 548.46466
+          },
+          {
+            "word": "they",
+            "start": 548.46466,
+            "end": 548.64465
+          },
+          {
+            "word": "want",
+            "start": 548.64465,
+            "end": 549.00464
+          },
+          {
+            "word": "to",
+            "start": 549.00464,
+            "end": 549.3446
+          },
+          {
+            "word": "have",
+            "start": 549.3446,
+            "end": 549.70465
+          },
+          {
+            "word": "no",
+            "start": 549.70465,
+            "end": 550.0446
+          },
+          {
+            "word": "chips",
+            "start": 550.0446,
+            "end": 550.3646
+          },
+          {
+            "word": "sent",
+            "start": 550.3646,
+            "end": 551.06464
+          },
+          {
+            "word": "to",
+            "start": 551.06464,
+            "end": 551.38464
+          },
+          {
+            "word": "China,",
+            "start": 551.38464,
+            "end": 551.62463
+          },
+          {
+            "word": "and",
+            "start": 551.62463,
+            "end": 551.9246
+          },
+          {
+            "word": "they",
+            "start": 551.9246,
+            "end": 552.0446
+          },
+          {
+            "word": "also",
+            "start": 552.0446,
+            "end": 552.40466
+          }
+        ],
+        "avg_logprob": -0.08345572,
+        "no_speech_prob": 0,
+        "compression_ratio": 1.7399104
+      }
+    ]
+  }
+}

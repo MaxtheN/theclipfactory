@@ -226,6 +226,12 @@ class Harness:
                 "id": identifier,
                 "video_id": video["id"],
                 "approved": False,
+                # A successful real render records these (media.py technical checks).
+                "subtitles_burned": True,
+                "technical_checks": {
+                    "playback_format_passed": True,
+                    "captions": [{"id": "timing", "status": "pass"}],
+                },
                 **{k: v for k, v in candidate.items() if k != "_team"},
                 **candidate["_team"],
             },

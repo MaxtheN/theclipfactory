@@ -1,0 +1,402 @@
+{
+  "source": "Recorded engine rehearsal, run 6; not a new generation or live Instagram result",
+  "summary": {
+    "run": 6,
+    "status": "needs_review",
+    "clips": 13,
+    "above_bar": 13,
+    "durations": [
+      32.167,
+      34.0,
+      35.867,
+      31.467,
+      34.9,
+      34.967,
+      32.3,
+      31.967,
+      30.667,
+      33.634,
+      33.0,
+      34.934,
+      37.667
+    ],
+    "median_duration": 33.634,
+    "captions": 13,
+    "hook_first": 13,
+    "reference_hits_above_bar": [
+      "R1",
+      "R2",
+      "R3",
+      "R4",
+      "R5",
+      "R6",
+      "R7"
+    ],
+    "llm_calls": 57,
+    "cost_usd": 0.0298,
+    "elapsed": 235.54158429102972,
+    "stop": "13 clips from 9 stretches; each needs your review.",
+    "rejections": 0
+  },
+  "runs": [
+    {
+      "run": 1,
+      "status": "needs_review",
+      "clips": 8,
+      "above_bar": 8,
+      "durations": [
+        13.367,
+        15.267,
+        18.4,
+        11.5,
+        14.4,
+        16.767,
+        14.2,
+        13.334
+      ],
+      "median_duration": 14.4,
+      "captions": 8,
+      "hook_first": 8,
+      "reference_hits_above_bar": [
+        "R1",
+        "R4",
+        "R5",
+        "R6",
+        "R7"
+      ],
+      "llm_calls": 62,
+      "cost_usd": 0.0283,
+      "elapsed": 185.305548000033,
+      "stop": "8 clips from 14 stretches; each needs your review.",
+      "rejections": 6
+    },
+    {
+      "run": 2,
+      "status": "needs_review",
+      "clips": 6,
+      "above_bar": 6,
+      "durations": [
+        35.0,
+        34.967,
+        30.934,
+        32.0,
+        27.3,
+        24.967
+      ],
+      "median_duration": 32.0,
+      "captions": 6,
+      "hook_first": 6,
+      "reference_hits_above_bar": [
+        "R2",
+        "R3",
+        "R4",
+        "R7"
+      ],
+      "llm_calls": 57,
+      "cost_usd": 0.0289,
+      "elapsed": 190.2922838330269,
+      "stop": "6 clips from 9 stretches; each needs your review.",
+      "rejections": 2
+    },
+    {
+      "run": 3,
+      "status": "needs_review",
+      "clips": 6,
+      "above_bar": 6,
+      "durations": [
+        24.3,
+        32.634,
+        33.9,
+        36.8,
+        37.4,
+        30.5
+      ],
+      "median_duration": 33.9,
+      "captions": 6,
+      "hook_first": 6,
+      "reference_hits_above_bar": [
+        "R1",
+        "R2",
+        "R3",
+        "R5",
+        "R8"
+      ],
+      "llm_calls": 57,
+      "cost_usd": 0.0292,
+      "elapsed": 190.35081479209475,
+      "stop": "6 clips from 9 stretches; each needs your review.",
+      "rejections": 10
+    },
+    {
+      "run": 4,
+      "status": "needs_review",
+      "clips": 10,
+      "above_bar": 10,
+      "durations": [
+        34.667,
+        30.6,
+        32.367,
+        30.367,
+        35.767,
+        31.4,
+        37.0,
+        37.534,
+        37.367,
+        28.367
+      ],
+      "median_duration": 34.667,
+      "captions": 10,
+      "hook_first": 10,
+      "reference_hits_above_bar": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R7"
+      ],
+      "llm_calls": 57,
+      "cost_usd": 0.0288,
+      "elapsed": 200.5168390419567,
+      "stop": "10 clips from 9 stretches; each needs your review.",
+      "rejections": 1
+    },
+    {
+      "run": 5,
+      "status": "needs_review",
+      "clips": 8,
+      "above_bar": 8,
+      "durations": [
+        34.667,
+        31.034,
+        36.5,
+        32.3,
+        14.6,
+        28.5,
+        35.567,
+        31.234
+      ],
+      "median_duration": 32.3,
+      "captions": 8,
+      "hook_first": 8,
+      "reference_hits_above_bar": [
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6"
+      ],
+      "llm_calls": 57,
+      "cost_usd": 0.0297,
+      "elapsed": 210.48432462499477,
+      "stop": "8 clips from 9 stretches; each needs your review.",
+      "rejections": 1
+    },
+    {
+      "run": 6,
+      "status": "needs_review",
+      "clips": 13,
+      "above_bar": 13,
+      "durations": [
+        32.167,
+        34.0,
+        35.867,
+        31.467,
+        34.9,
+        34.967,
+        32.3,
+        31.967,
+        30.667,
+        33.634,
+        33.0,
+        34.934,
+        37.667
+      ],
+      "median_duration": 33.634,
+      "captions": 13,
+      "hook_first": 13,
+      "reference_hits_above_bar": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6",
+        "R7"
+      ],
+      "llm_calls": 57,
+      "cost_usd": 0.0298,
+      "elapsed": 235.54158429102972,
+      "stop": "13 clips from 9 stretches; each needs your review.",
+      "rejections": 0
+    }
+  ],
+  "top_eight": [
+    {
+      "id": "3da57601ebcf49febabaa6e1ff64e711",
+      "hook": "You can't reverse engineer chip from wafer",
+      "duration": 32.167,
+      "structure": "hook_first",
+      "score": 72,
+      "signals": {
+        "strength": 0.7,
+        "payoff": 1.0,
+        "complete": 1.0,
+        "brief": 0.0,
+        "moment": 0.7,
+        "technical": 1.0,
+        "critic": 0.6,
+        "hook": 1.0
+      },
+      "refs": [
+        "R5"
+      ],
+      "captions": true
+    },
+    {
+      "id": "0d776a39faa34cd4a28bde9cd4a9b35d",
+      "hook": "Owning a Blackwell chip isn't national security secrets",
+      "duration": 34.0,
+      "structure": "hook_first",
+      "score": 72,
+      "signals": {
+        "strength": 0.7,
+        "payoff": 1.0,
+        "complete": 1.0,
+        "brief": 0.0,
+        "moment": 0.7,
+        "technical": 1.0,
+        "critic": 0.6,
+        "hook": 1.0
+      },
+      "refs": [
+        "R5"
+      ],
+      "captions": true
+    },
+    {
+      "id": "d1234e8d53d04659a1d1b7a0f8a55226",
+      "hook": "You're going to convey over pillow talk",
+      "duration": 35.867,
+      "structure": "hook_first",
+      "score": 72,
+      "signals": {
+        "strength": 0.7,
+        "payoff": 1.0,
+        "complete": 1.0,
+        "brief": 0.0,
+        "moment": 0.618,
+        "technical": 1.0,
+        "critic": 0.6,
+        "hook": 1.0
+      },
+      "refs": [
+        "R4"
+      ],
+      "captions": true
+    },
+    {
+      "id": "05d85d3945854c969d9f87ee8ff8354e",
+      "hook": "The Swalwell cover: FANG FANG BANG BANG",
+      "duration": 31.467,
+      "structure": "hook_first",
+      "score": 71,
+      "signals": {
+        "strength": 0.6,
+        "payoff": 1.0,
+        "complete": 1.0,
+        "brief": 0.0,
+        "moment": 0.751,
+        "technical": 1.0,
+        "critic": 0.6,
+        "hook": 1.0
+      },
+      "refs": [
+        "R3"
+      ],
+      "captions": true
+    },
+    {
+      "id": "f5d196fdfe1a4690be22eed95fb05298",
+      "hook": "Anonymous sources can mean very low-level people",
+      "duration": 34.9,
+      "structure": "hook_first",
+      "score": 70,
+      "signals": {
+        "strength": 0.6,
+        "payoff": 1.0,
+        "complete": 1.0,
+        "brief": 0.0,
+        "moment": 0.704,
+        "technical": 1.0,
+        "critic": 0.6,
+        "hook": 1.0
+      },
+      "refs": [
+        "R2"
+      ],
+      "captions": true
+    },
+    {
+      "id": "dd92d021ecf84894afdbd2108d2f608e",
+      "hook": "Why at all? And why now?",
+      "duration": 34.967,
+      "structure": "hook_first",
+      "score": 70,
+      "signals": {
+        "strength": 0.6,
+        "payoff": 1.0,
+        "complete": 1.0,
+        "brief": 0.0,
+        "moment": 0.73,
+        "technical": 1.0,
+        "critic": 0.6,
+        "hook": 1.0
+      },
+      "refs": [
+        "R7"
+      ],
+      "captions": true
+    },
+    {
+      "id": "161fa161740f46f5bf3c70efcbf56202",
+      "hook": "China hawks lost. Now they want a rematch",
+      "duration": 32.3,
+      "structure": "hook_first",
+      "score": 70,
+      "signals": {
+        "strength": 0.6,
+        "payoff": 1.0,
+        "complete": 1.0,
+        "brief": 0.0,
+        "moment": 0.663,
+        "technical": 1.0,
+        "critic": 0.6,
+        "hook": 1.0
+      },
+      "refs": [],
+      "captions": true
+    },
+    {
+      "id": "951a61d967af4f18b48ab7ccc0dbda69",
+      "hook": "Overhearing people talking about it at a bar",
+      "duration": 31.967,
+      "structure": "hook_first",
+      "score": 69,
+      "signals": {
+        "strength": 0.6,
+        "payoff": 1.0,
+        "complete": 1.0,
+        "brief": 0.0,
+        "moment": 0.588,
+        "technical": 1.0,
+        "critic": 0.6,
+        "hook": 1.0
+      },
+      "refs": [
+        "R1"
+      ],
+      "captions": true
+    }
+  ]
+}

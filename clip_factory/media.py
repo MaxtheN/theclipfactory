@@ -16,6 +16,7 @@ from .jobs import Jobs, WorkError
 from .store import now
 
 OUTPUT_WIDTH, OUTPUT_HEIGHT, OUTPUT_FPS = 1080, 1920, 30
+CAPTION_TIMELINE_VERSION = 2
 ENCODER = {
     "container": "mp4",
     "width": OUTPUT_WIDTH,
@@ -301,6 +302,52 @@ def chunk_words(words: list[dict]) -> list[list[dict]]:
     return chunks
 
 
+def normalize_caption_entries(entries: list[dict], duration: float) -> list[dict]:
+    """Editorial display intervals, independent of overlapping measured speech times.
+
+    Keep lexical order and verbatim text. Original word times remain in each display
+    group's measured_words; only the caption/highlight presentation is normalized.
+    ASS uses centiseconds, so SRT and ASS share that same positive interval grid.
+    """
+    limit = math.floor((duration + 1e-7) * 100) / 100
+    rows: list[dict] = []
+    for original in entries:
+        row = {**original, "start": max(0.0, round(original["start"], 2)),
+               "end": min(limit, round(original["end"], 2))}
+        row["timed"] = [dict(w) for w in original.get("timed", [])]
+        if row["start"] >= limit or row["end"] <= 0:
+            raise WorkError("Caption text falls outside the rendered timeline; no clip was saved.")
+        if rows and row["start"] <= rows[-1]["start"]:
+            prior = rows[-1]
+            prior["text"] += " " + row["text"]
+            prior["end"] = max(prior["end"], row["end"])
+            prior["timed"].extend(row["timed"])
+        else:
+            if rows and rows[-1]["end"] > row["start"]:
+                rows[-1]["end"] = row["start"]
+            rows.append(row)
+    for row in rows:
+        if row["end"] <= row["start"]:
+            raise WorkError("Caption display intervals have no usable duration; no clip was saved.")
+        groups = []
+        for word in row["timed"]:
+            begin = min(row["end"] - .01, max(row["start"], round(word["start"], 2)))
+            measured = {"text": word["text"], "start": word["start"], "end": word["end"]}
+            if groups and begin <= groups[-1]["start"]:
+                groups[-1]["text"] += " " + word["text"]
+                groups[-1]["measured_words"].append(measured)
+            else:
+                groups.append({"text": word["text"], "start": begin, "measured_words": [measured]})
+        for index, group in enumerate(groups):
+            group["start"] = row["start"] if index == 0 else group["start"]
+            group["end"] = groups[index + 1]["start"] if index + 1 < len(groups) else row["end"]
+        if groups:
+            row["timed"] = groups
+        else:
+            row.pop("timed", None)
+    return rows
+
+
 def caption_entries(transcript: dict | None, segments: list[dict]) -> list[dict]:
     """Verbatim transcript text placed on the output timeline of the rendered source segments.
 
@@ -318,7 +365,7 @@ def caption_entries(transcript: dict | None, segments: list[dict]) -> list[dict]
             if words:
                 inside = [w for w in words if start <= (w["start"] + w["end"]) / 2 < end]
                 for chunk in chunk_words(inside):
-                    a, b = max(start, chunk[0]["start"]), min(end, chunk[-1]["end"])
+                    a, b = max(start, min(w["start"] for w in chunk)), min(end, max(w["end"] for w in chunk))
                     text = clean_caption(" ".join(w["text"] for w in chunk))
                     if b > a and text:
                         timed = [
@@ -353,7 +400,7 @@ def caption_entries(transcript: dict | None, segments: list[dict]) -> list[dict]
                 ]
             entries.append(placed)
         offset += span_out
-    return entries
+    return normalize_caption_entries(entries, offset)
 
 
 def srt_text(entries: list[dict]) -> str:
@@ -1468,7 +1515,8 @@ def render_crafted(
             pick = "+".join(f"between(t,{a - half:.6f},{b - half:.6f})" for a, b in group["keeps"])
             video_graph.append(
                 f"[{index}:v:0]fps={OUTPUT_FPS},{reframe_filters[index] if reframe_filters else ''}"
-                f"select='{pick}',setpts=N/{OUTPUT_FPS}/TB,"
+                f"select='{pick}',tpad=stop_mode=clone:stop_duration=0.1,"
+                f"trim=end_frame={round(sum(b - a for a, b in group['keeps']) * OUTPUT_FPS)},setpts=N/{OUTPUT_FPS}/TB,"
                 f"{layout_for(str(index))}[v{index}]"
             )
             vjoin += f"[v{index}]"

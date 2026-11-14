@@ -491,3 +491,68 @@ def test_publishing_client_pins_version_and_exact_account():
     with pytest.raises(ComposioError) as error:
         client.run(PUBLISH, {"ig_user_id": "1784"}, connected_account_id="ca_1", user_id="gf-user")
     assert error.value.code == "invalid_arguments"
+
+
+def attribution_gate(clip, path, expected_sha256=None, source_video=None):
+    """Real production gate with only local file probing stubbed for tiny fixture bytes."""
+    from clip_factory import quality
+    return quality.evaluate(clip, path, expected_sha256=expected_sha256, source_video=source_video,
+                            inspect=lambda _: {"duration": 30, "video": {"codec": "h264", "width": 1080,
+                                                                         "height": 1920},
+                                               "audio": {"codec": "aac"}},
+                            detect=lambda _: {"black_segments": [], "frozen_segments": []})
+
+
+def attribution_world(world, speech):
+    clip = world["add_clip"](video_id="source-1", start=0, end=10, subtitles_burned=True,
+                             technical_checks={"playback_format_passed": True, "captions": [
+                                 {"id": "timing", "status": "pass"}]})
+    world["add_account"]()
+    world["store"].put("videos", {"id": "source-1", "verified_speakers": ["Ana"], "transcript": {
+        "segments": [{"start": 0, "end": 10, "text": speech}]}})
+    return clip, world["make"](gate=attribution_gate)
+
+
+def test_submitted_caption_unknown_attribution_blocks_before_any_external_effect(world):
+    clip, publisher = attribution_world(world, "Ana is mentioned. The speaker questions this claim.")
+    # A cached pass for a neutral stored caption cannot authorize changed post copy.
+    assert publisher.quality_report(clip)["verdict"] == "pass"
+    with pytest.raises(PublishError) as error:
+        post(world, publisher, caption="Ana points out that the sourcing is vague.")
+    assert error.value.code == "quality_hold"
+    assert "Ana points out" in str(error.value)
+    assert error.value.details["report"]["source_attribution"]["editorial_hold"]
+    assert world["store"].all("publish_attempts") == []
+    assert world["state"]["client"].calls == [] and world["state"]["storage"].uploads == []
+    # An explicit, recorded override is still required and remains visible.
+    _, attempt = post(world, publisher, caption="Ana points out that the sourcing is vague.",
+                      override_reason="I independently verified the speaker and accept this attribution.")
+    assert attempt["quality"]["verdict"] == "hold" and attempt["override_reason"]
+
+
+def test_stored_source_supports_reported_attribution_and_source_change_invalidates_cache(world):
+    clip, publisher = attribution_world(world, "Ana points out that the sourcing is vague.")
+    submitted = {**clip, "caption": "Ana points out that the sourcing is vague."}
+    report = publisher.quality_report(submitted)
+    assert report["verdict"] == "pass"
+    video = world["store"].get("videos", "source-1")
+    video["transcript"]["segments"][0]["text"] = "The sourcing is vague. Ana is a person discussed."
+    world["store"].put("videos", video)
+    changed = publisher.quality_report(submitted)
+    assert changed["context_identity"] != report["context_identity"]
+    assert changed["verdict"] == "hold"
+    assert changed["source_attribution"]["speaker_context"] == "unknown"
+    with pytest.raises(PublishError, match="Ana points out"):
+        post(world, publisher, caption=submitted["caption"])
+    assert world["state"]["client"].calls == []
+
+
+def test_queued_post_rechecks_exact_caption_against_changed_source_before_upload(world):
+    _, publisher = attribution_world(world, "Ana points out that the sourcing is vague.")
+    _, attempt = post(world, publisher, caption="Ana points out that the sourcing is vague.")
+    video = world["store"].get("videos", "source-1")
+    video["transcript"]["segments"][0]["text"] = "The speaker questions this claim."
+    world["store"].put("videos", video)
+    publisher.run(attempt["id"])
+    assert publisher.get(attempt["id"])["error"]["code"] == "quality_hold"
+    assert world["state"]["storage"].uploads == [] and world["state"]["client"].calls == []

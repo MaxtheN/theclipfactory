@@ -1,0 +1,82 @@
+[
+  {
+    "test": "test_moments.py",
+    "exit_code": 0,
+    "seconds": 0.48,
+    "summary": [
+      "17 passed in 0.29s"
+    ]
+  },
+  {
+    "test": "test_creative_score.py",
+    "exit_code": 0,
+    "seconds": 0.69,
+    "summary": [
+      "19 passed, 1 warning in 0.52s"
+    ]
+  },
+  {
+    "test": "test_growth_loop.py",
+    "exit_code": 0,
+    "seconds": 0.72,
+    "summary": [
+      "21 passed in 0.56s"
+    ]
+  },
+  {
+    "test": "test_growth_loop_outcomes.py",
+    "exit_code": 0,
+    "seconds": 0.45,
+    "summary": [
+      "9 passed in 0.29s"
+    ]
+  },
+  {
+    "test": "test_growth_loop_api.py",
+    "exit_code": 0,
+    "seconds": 0.3,
+    "summary": [
+      "1 passed, 1 warning in 0.16s"
+    ]
+  },
+  {
+    "test": "test_growth_loop_render.py",
+    "exit_code": 0,
+    "seconds": 4.37,
+    "summary": [
+      "1 passed, 1 warning in 4.14s"
+    ]
+  },
+  {
+    "test": "test_growth_review_capture.py",
+    "exit_code": 0,
+    "seconds": 0.88,
+    "summary": [
+      "2 passed, 1 warning in 0.70s"
+    ]
+  },
+  {
+    "test": "test_demo_loop.py",
+    "exit_code": 0,
+    "seconds": 0.69,
+    "summary": [
+      "13 passed, 1 warning in 0.51s"
+    ]
+  },
+  {
+    "test": "test_quality.py",
+    "exit_code": 0,
+    "seconds": 0.24,
+    "summary": [
+      "12 passed in 0.11s"
+    ]
+  },
+  {
+    "test": "test_strategist_api.py",
+    "exit_code": 0,
+    "seconds": 1.44,
+    "summary": [
+      "5 passed, 1 warning in 1.24s"
+    ]
+  }
+]

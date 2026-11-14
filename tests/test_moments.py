@@ -91,8 +91,8 @@ def test_the_scouts_quote_is_found_in_the_words_despite_asr_slips():
 def test_the_teaser_is_the_end_of_the_line_where_it_lands():
     words = talk(["It's not the type of IP that you're going to convey, over pillow talk."], start=100)
     a, b = moments.punch_span(words)
-    assert b == words[-1]["end"] and b - a <= moments.PUNCH_SECONDS
-    assert "pillow" in " ".join(w["text"] for w in words if a <= w["start"] < b)
+    assert b - a <= moments.PUNCH_SECONDS
+    assert moments.has_negation(" ".join(w["text"] for w in words if a <= w["start"] < b))
     # When the point sits early in the line, the teaser is the words that carry it, not the tail.
     words = talk(["There's kind of two paths for the future, I would argue."], start=50)
     a, b = moments.punch_span(words)
@@ -112,7 +112,7 @@ def test_hooks_are_short_faithful_and_about_what_is_said():
         hook, source = moments.tidy_hook(bad, "He said she might be a useful idiot.", speech)
         assert source == "payoff_quote" and len(hook.split()) <= moments.HOOK_WORDS
     long = moments.hook_from_quote("It's not the type of IP that you're going to convey over pillow talk.")
-    assert len(long.split()) <= 8 and long.endswith("pillow talk") and not long.lower().startswith("that")
+    assert len(long.split()) <= 8 and moments.has_negation(long) and not long.lower().startswith("that")
     assert moments.tidy_hook("🔥 Who pulled the pin? #ai", "", "Who pulled the pin on this grenade?") == (
         "Who pulled the pin?", "scout")
 
@@ -142,3 +142,24 @@ def test_a_quote_cut_short_by_asr_is_finished_to_its_sentence_end():
     words = talk(["They could be very, very low-level.", "Next thought here."])
     found = moments.locate_quote("They could be very, very", words)
     assert found[-1]["text"] == "low-level."
+
+
+def test_a_fluent_hook_cannot_remove_the_payoffs_negation():
+    quote = "It’s not the type of IP that you’re going to convey over pillow talk."
+    hook, source = moments.tidy_hook("You’re going to convey over pillow talk", quote, quote)
+    assert source == "payoff_quote" and moments.has_negation(hook)
+    assert len(hook.split()) <= moments.HOOK_WORDS
+    assert moments.tidy_hook("You can't reverse engineer chips", "You cannot reverse engineer chips.",
+                             "You cannot reverse engineer chips.")[1] == "scout"
+
+
+def test_negative_teaser_preserves_contracted_negation():
+    words = talk(["You cannot reverse engineer the design of a chip by getting a hold of the wafer."])
+    a, b = moments.punch_span(words)
+    picked = " ".join(w["text"] for w in words if a <= w["start"] < b)
+    assert moments.has_negation(picked)
+
+
+def test_ordinary_words_ending_in_nt_are_not_negation():
+    assert not moments.has_negation("I want to count every point.")
+    assert moments.has_negation("It isn't the point.")

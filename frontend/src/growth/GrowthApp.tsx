@@ -34,6 +34,8 @@ import "./desktop-shell.css";
 import "./navigation.css";
 import "./polish.css";
 import "./pearl-studio.css";
+import "./shell-polish.css";
+import "./website-alignment.css";
 import { cloudApi } from "./cloudApi";
 import { CLOUD_CHANGED } from "./appEvents";
 
@@ -41,7 +43,7 @@ const views = {
   factory: {
     label: "Factory",
     title: "Factory",
-    sub: "Add an episode. Agents find the clips. You approve.",
+    sub: "Bring your footage. Your agents create drafts and prepare the next experiment.",
     icon: "studio",
   },
   library: {
@@ -99,6 +101,7 @@ export function GrowthApp() {
   const [stage, setStage] = useState<Stage>(storedView);
   const [goalsRequest, setGoalsRequest] = useState({ context: "", sequence: 0 });
   const [engineRequest, setEngineRequest] = useState({ context: "", sequence: 0 });
+  const [rehearsalRequest, setRehearsalRequest] = useState({ context: "", sequence: 0 });
   // Account creation is the last onboarding step, asked only when the cloud
   // is configured, nobody is signed in and the creator hasn't chosen offline.
   const [askAccount, setAskAccount] = useState(false);
@@ -131,9 +134,12 @@ export function GrowthApp() {
     creating || onboardingBusy || (!w.loading && !w.error && !usable);
   const blocked = w.busy || onboardingBusy;
   const contextKey = `${w.campaign?.id || "empty"}-${w.profileId}`;
+  const currentContext = useRef(contextKey);
+  currentContext.current = contextKey;
   useEffect(() => {
     setGoalsRequest({ context: contextKey, sequence: 0 });
     setEngineRequest({ context: contextKey, sequence: 0 });
+    setRehearsalRequest({ context: contextKey, sequence: 0 });
   }, [contextKey]);
   const current = views[stage];
   // Sub-pages: a quiet "← Back" sits top-left above the title.
@@ -228,6 +234,11 @@ export function GrowthApp() {
   function openGoals() {
     go("setup");
     setGoalsRequest((request) => ({ context: contextKey, sequence: request.sequence + 1 }));
+  }
+  function openRehearsal() {
+    if (blocked || onboarding || !usable || currentContext.current !== contextKey) return;
+    setRehearsalRequest(request => ({ context: contextKey, sequence: request.context === contextKey ? request.sequence + 1 : 1 }));
+    go("factory");
   }
   function reviewClip(clip: Clip) {
     openProduction(clip.video_id, undefined, clip.id);
@@ -324,7 +335,7 @@ export function GrowthApp() {
       onClick={() => setQuickOpen(true)}
     >
       <Icon name="research" size={16} />
-      <span>Quick actions</span>
+      <span>Search or run a command</span>
       <kbd>⌘K</kbd>
     </button>
   );
@@ -596,6 +607,7 @@ export function GrowthApp() {
                 hidden={onboarding || !usable || stage !== "factory"}
               >
                 <FactoryTabs
+                  rehearsalRequest={rehearsalRequest.context === contextKey ? rehearsalRequest.sequence : 0}
                   w={w}
                   factory={factory}
                   active={!onboarding && stage === "factory"}
@@ -731,6 +743,7 @@ export function GrowthApp() {
                   visible={!onboarding && stage === "results"}
                   onReview={reviewClip}
                   onEditingRules={() => go("research")}
+                  onRehearse={openRehearsal}
                 />
               </div>
             </main>

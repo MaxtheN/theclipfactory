@@ -25,7 +25,7 @@ import re
 
 from .brief import normalize_brief
 
-RANK_VERSION = 2
+RANK_VERSION = 3
 FLOOR = 50
 DUPLICATE_OVERLAP = 0.5
 DEFAULT_TOP_PICKS = 5
@@ -36,6 +36,7 @@ WEIGHTS = {
 NO_SPEECH_FACTOR = 0.4
 NO_CAPTIONS_REASON = "No captions on a speech source"
 NO_SPEECH_REASON = "No speech in this clip"
+CAPTION_CHECK_REASON = "Caption technical checks failed"
 CRITIC = {"pass": 1.0, "not_applicable": 0.6, None: 0.6, "unknown": 0.4, "fail": 0.1}
 
 
@@ -71,15 +72,28 @@ def critic_signal(clip: dict) -> float:
     return CRITIC.get(clip.get("team_review_status"), 0.4)
 
 
+def caption_checks(clip: dict) -> list[dict]:
+    """Recorded renderer caption checks; absent checks mean unmeasured, never passed."""
+    checks = (clip.get("technical_checks") or {}).get("captions")
+    return [c for c in checks if isinstance(c, dict)] if isinstance(checks, list) else []
+
+
 def technical_signal(clip: dict, report: dict | None) -> float:
+    checks = caption_checks(clip)
+    playback = (clip.get("technical_checks") or {}).get("playback_format_passed")
+    if playback is False or any(c.get("status") == "fail" for c in checks):
+        return 0.0
+    value = 1.0 if playback is True else 0.6
+    if not any(c.get("id") == "timing" and c.get("status") == "pass" for c in checks):
+        value = min(value, 0.8)  # Legacy/unmeasured caption timing is not a full technical pass.
+    if any(c.get("status") == "warn" for c in checks):
+        value = min(value, 0.6)
+    if clip.get("subtitles_burned") is not True or clip.get("warning"):
+        value = max(0.0, value - 0.4)
     rubric = (report or {}).get("rubric") or {}
     if isinstance(rubric.get("technical"), (int, float)):
-        return max(0.0, min(1.0, rubric["technical"] / 5))
-    passed = (clip.get("technical_checks") or {}).get("playback_format_passed")
-    value = 1.0 if passed is not False else 0.0
-    if clip.get("subtitles_burned") is not True or clip.get("warning"):
-        value -= 0.4
-    return max(0.0, value)
+        value = min(value, max(0.0, min(1.0, rubric["technical"] / 5)))
+    return value
 
 
 def hook_signal(clip: dict) -> float:
@@ -149,6 +163,8 @@ def score(clip: dict, board: dict | None, brief: dict | None, report: dict | Non
 
 def bar_reason(clip: dict, speech_source: bool) -> str | None:
     """A hard rule that puts a clip under the bar whatever its score, or None."""
+    if any(c.get("status") == "fail" for c in caption_checks(clip)):
+        return CAPTION_CHECK_REASON
     if not speech_source:
         return None
     if speechless_clip(clip, speech_source):

@@ -7,21 +7,24 @@ needs an explicit human override reason (enforced by the publisher, not here).
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
-from . import media
+from . import creative_score, media
 from .jobs import WorkError
 from .publish_storage import MAX_BYTES
+from .ranking import caption_checks
 from .store import now
 
 WIDTH, HEIGHT = 1080, 1920
 MIN_SECONDS, MAX_SECONDS = 7.0, 90.0
 BLACK_SECONDS, FROZEN_SECONDS = 1.0, 2.0
 VIDEO_CODECS = {"h264", "hevc"}
-GATE_VERSION = 1
+GATE_VERSION = 3
 
 
 def detect_black_frozen(path: Path, *, timeout: float = 120) -> dict | None:
@@ -50,11 +53,25 @@ def _check(identifier, label, status, detail, *, technical=True):
     return {"id": identifier, "label": label, "status": status, "detail": detail, "technical": technical}
 
 
+def context_identity(clip: dict, source_video: dict | None = None) -> str:
+    """Cache text/renderer context separately from immutable media bytes."""
+    context = {"evidence": creative_score.evidence_for(clip, source_video or {}),
+               "metadata": {key: clip.get(key) for key in (
+                   "video_id", "sha256", "technical_checks", "team_review_status", "team_checks",
+                   "approval_override", "subtitles_burned", "caption_style", "caption_cues", "warning")}}
+    return hashlib.sha256(json.dumps(context, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
 def evaluate(clip: dict, path: Path, *, expected_sha256: str | None = None,
+             source_video: dict | None = None,
              inspect: Callable[[Path], dict] = media.inspect,
              sha256: Callable[[Path], str] = media.sha256_file,
              detect: Callable[[Path], dict | None] = detect_black_frozen) -> dict:
     checks: list[dict] = []
+    attribution = creative_score.source_attribution_guard(clip, source_video or {})
+    for finding in attribution["findings"]:
+        checks.append(_check("source_attribution", "Source attribution", "fail",
+                             f"{finding['source']}: “{finding['quote']}” — {finding['reason']}", technical=False))
     facts = None
     try:
         facts = inspect(path)
@@ -85,6 +102,18 @@ def evaluate(clip: dict, path: Path, *, expected_sha256: str | None = None,
     else:
         checks.append(_check("captions", "Captions burned in", "fail",
                              clip.get("warning") or "No burned captions in this render.", technical=False))
+    recorded_captions = caption_checks(clip)
+    for check in recorded_captions:
+        status = check.get("status")
+        checks.append(_check("caption_" + str(check.get("id") or "unknown"),
+                             str(check.get("label") or "Caption renderer check"),
+                             status if status in {"pass", "fail", "warn", "not_applicable"} else "unknown",
+                             str(check.get("detail") or "No check detail recorded.")))
+    timing_known = any(c.get("id") == "timing" and c.get("status") in {"pass", "fail"}
+                       for c in recorded_captions)
+    if clip.get("subtitles_burned") is True and not timing_known:
+        checks.append(_check("caption_timing_unmeasured", "Caption timing", "unknown",
+                             "Caption timing was not checked for this render; burned captions alone do not verify it."))
     try:
         size = path.stat().st_size
         checks.append(_check("size", "Within 50 MB hosting limit", "pass" if 0 < size <= MAX_BYTES else "fail",
@@ -120,6 +149,7 @@ def evaluate(clip: dict, path: Path, *, expected_sha256: str | None = None,
     critic_status = clip.get("team_review_status")
     team_checks = clip.get("team_checks") if isinstance(clip.get("team_checks"), dict) else {}
     holds, notes = [], []
+    notes.extend(f"{c['label']}: {c['detail']}" for c in checks if c["status"] in {"warn", "unknown"})
     if critic_status in {"fail", "unknown"} and not clip.get("approval_override"):
         holds.append("Critic review is unresolved (" + critic_status + "). Recheck or approve over it.")
     elif critic_status in {"fail", "unknown"}:
@@ -134,6 +164,12 @@ def evaluate(clip: dict, path: Path, *, expected_sha256: str | None = None,
 
     style = clip.get("caption_style") or "standard"
     legibility = (5 if style in {"high_contrast", "pop"} else 4) if clip.get("subtitles_burned") is True else 1
+    if any(c.get("status") == "fail" for c in recorded_captions):
+        legibility = 1
+    elif clip.get("subtitles_burned") is True and not timing_known:
+        legibility = None
+    elif any(c.get("status") == "warn" for c in recorded_captions):
+        legibility = min(legibility, 3)
 
     def critic_score(*keys):
         values = [team_checks.get(k) for k in keys]
@@ -154,6 +190,8 @@ def evaluate(clip: dict, path: Path, *, expected_sha256: str | None = None,
     }
     return {
         "clip_id": clip.get("id"),
+        "context_identity": context_identity(clip, source_video),
+        "source_attribution": attribution,
         "sha256": actual,
         "verdict": "pass" if not reasons else "hold",
         "reasons": reasons,
@@ -163,7 +201,7 @@ def evaluate(clip: dict, path: Path, *, expected_sha256: str | None = None,
         "rubric_sources": {
             "hook_clarity": "Proxy from the critic's claims/context checks (it does not score clarity); 0 when no hook.",
             "standalone_context": "Critic context check.",
-            "caption_legibility": "Burned captions and caption style.",
+            "caption_legibility": "Proxy from burned caption style and renderer timing/display checks; not a visual readability assessment. Missing timing is unknown; warnings cap the proxy at 3/5.",
             "technical": "Deterministic file checks.",
         },
         "critic": {"status": critic_status, "checks": team_checks or None,

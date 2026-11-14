@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import {
-  GOALS,
+  goalOptions,
+  goalLabel,
   NO_SUGGESTIONS,
   briefFromDraft,
   editableFrom,
@@ -235,14 +236,14 @@ export function WebsiteBrief({
 
   const titles: Record<Phase, string> = {
     input: "What’s your website?",
-    reading: `Reading ${host}`,
-    review: "Your brand, drafted from your site",
+    reading: "Getting to know your brand.",
+    review: "Here’s what we understood.",
     error: "We couldn’t draft it this time",
   };
   const descriptions: Record<Phase, string> = {
-    input: "We’ll draft your brand from it. You can edit everything.",
-    reading: "This usually takes under a minute.",
-    review: "Edit anything. Suggestions are only added if you tick them.",
+    input: "Give us your website and we'll grab everything about your brand.",
+    reading: "Reading your pages for your audience, voice, and what makes you different.",
+    review: "Make it sound like you. Confirm the details you want your agents to use.",
     error: "Your details are safe. You can type them yourself instead.",
   };
 
@@ -258,6 +259,7 @@ export function WebsiteBrief({
         {titles[phase]}
       </h1>
       <p className="gf-wb-lede">{descriptions[phase]}</p>
+      {phase === "input" && <><p className="gf-wb-lede">We need to build a growth engine for you.</p><p className="gf-wb-lede">You’ll review the brand brief before we use it.</p></>}
 
       {phase === "input" && (
         // Not a <form>: this step renders inside the onboarding wizard's own form.
@@ -273,7 +275,7 @@ export function WebsiteBrief({
               inputMode="url"
               autoComplete="url"
               spellCheck={false}
-              placeholder="yourshow.com"
+              placeholder="yourbrand.com"
               maxLength={2048}
               value={url}
               disabled={disabled}
@@ -295,7 +297,7 @@ export function WebsiteBrief({
               disabled={disabled || !url.trim()}
               onClick={() => void begin()}
             >
-              Continue
+              Build my brand brief
             </button>
           </div>
           {inputError && (
@@ -304,7 +306,7 @@ export function WebsiteBrief({
             </p>
           )}
           <button type="button" className="gf-wb-text-button" disabled={disabled} onClick={skip}>
-            Skip
+            Enter details myself
           </button>
         </div>
       )}
@@ -416,7 +418,8 @@ function Review({
   onRestart: () => void;
   onSkip: () => void;
 }) {
-  const goal = GOALS.find((g) => g.objective === edited.objective);
+  const goals = goalOptions(edited.metric);
+  const goal = goals.find((g) => g.objective === edited.objective);
   const groupId = useId();
   // What a ticked suggestion replaced, so unticking puts the creator's value back.
   const before = useRef<{ cta?: Pick<EditableBrief, "ctaText" | "ctaLink">; goal?: Pick<EditableBrief, "objective" | "metric"> }>({});
@@ -500,10 +503,10 @@ function Review({
           <span className="gf-wb-pair">
             <select id={id} value={edited.objective} disabled={disabled}
               onChange={(e) => {
-                const next = GOALS.find((g) => g.objective === e.target.value);
+                const next = goals.find((g) => g.objective === e.target.value);
                 onChange({ objective: e.target.value, metric: next?.metric ?? "" });
               }}>
-              {GOALS.map((g) => (
+              {goals.map((g) => (
                 <option key={g.objective} value={g.objective}>{g.label}</option>
               ))}
             </select>
@@ -606,7 +609,7 @@ function Review({
             {suggested.goal && (
               <Suggestion
                 kind="Goal"
-                value={GOALS.find((g) => g.objective === suggested.goal!.objective)?.label ?? suggested.goal.objective}
+                value={goalLabel(suggested.goal.objective, suggested.goal.metric)}
                 reason={suggested.goal.reason}
                 checked={accepted.goal}
                 disabled={disabled}
@@ -628,7 +631,7 @@ function Review({
           </button>
         </span>
         <button type="button" className="gf-button gf-wb-continue" disabled={disabled} onClick={onApply}>
-          Use this brief
+          Use this brand brief
         </button>
       </div>
     </div>

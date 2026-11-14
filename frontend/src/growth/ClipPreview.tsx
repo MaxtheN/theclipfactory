@@ -17,11 +17,15 @@ export function ClipPreview({
   iconSize = 28,
   onReview,
   onDiscard,
+  reviewLabel,
+  discardLabel,
 }: {
   clip: Clip;
   className: string;
   iconSize?: number;
   onReview?: () => void;
+  reviewLabel?: string;
+  discardLabel?: string;
   /** Deletes the clip file; offered in the quick look where the screen can free space. */
   onDiscard?: () => void;
 }) {
@@ -54,7 +58,9 @@ export function ClipPreview({
           title={title}
           onClose={() => setOpen(false)}
           onReview={onReview}
+          reviewLabel={reviewLabel}
           onDiscard={onDiscard}
+          discardLabel={discardLabel}
         />
       )}
     </>
@@ -67,6 +73,7 @@ export function QuickLook({
   onClose,
   onReview,
   reviewLabel = "Review",
+  discardLabel = "Discard",
   onDiscard,
 }: {
   clip: Clip;
@@ -74,7 +81,8 @@ export function QuickLook({
   onClose: () => void;
   onReview?: () => void;
   onDiscard?: () => void;
-  /** What the follow-up step is called; undirected clips are approved here rather than reviewed in the Studio. */
+  discardLabel?: string;
+  /** The optional editing follow-up, separate from playback. */
   reviewLabel?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -109,6 +117,7 @@ export function QuickLook({
         aria-label={`Playing ${title}`}
         onError={() => setFailed(true)}
       /><ReelsActionRail /></div>
+      {clip.made_without_speech && <p className="gf-inline-error">Older test draft · generated without speech. Inspect carefully before using this version.</p>}
       {failed && (
         <p className="gf-inline-error" role="alert">
           This clip could not be played. Its file may have been removed from
@@ -139,7 +148,7 @@ export function QuickLook({
               onDiscard();
             }}
           >
-            Discard
+            {discardLabel}
           </button>
         )}
         <button

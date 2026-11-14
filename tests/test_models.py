@@ -585,3 +585,23 @@ def test_mlx_batch_goes_through_one_worker_process_and_is_checked(models, monkey
     with pytest.raises(WorkError, match="incomplete batch"):
         models.run_batch("job", "qwen-small", requests)
     assert models.run_batch("job", "qwen-small", []) == []
+
+
+def test_asr_probe_is_independent_of_optional_vision_and_narration_imports(models, monkeypatch):
+    runtime_ready(models, monkeypatch)
+    calls = []
+    expected = json.dumps({"system": "Darwin", "machine": "arm64", "python": [3, 12], "packages": RUNTIME_VERSIONS})
+
+    def probe(command, **kwargs):
+        calls.append(command[-1])
+        if "mlx_vlm" in command[-1]:
+            raise subprocess.CalledProcessError(1, command, stderr="missing optional torch library")
+        return SimpleNamespace(stdout=expected)
+
+    monkeypatch.setattr("clip_factory.models.subprocess.run", probe)
+    assert not models.ready()
+    assert models.ready(kind="asr")
+    assert models.ready(kind="asr")
+    assert len(calls) == 2
+    assert "import mlx.core, mlx_whisper" in calls[1] and "import mlx.core, mlx_vlm" not in calls[1]
+    assert not models.ready()  # Successful speech probe must not mark the full bundle healthy.

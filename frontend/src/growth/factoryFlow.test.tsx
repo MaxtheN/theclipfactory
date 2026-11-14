@@ -628,7 +628,7 @@ describe("Factory imports and scoped Library", () => {
       ),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /^Review \d+ clips?$/ }),
+      screen.queryByRole("button", { name: /^Open \d+ clips?$/ }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Waiting for the saved edits" }),
@@ -659,7 +659,7 @@ describe("Factory imports and scoped Library", () => {
         onDirection={view.onDirection}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Review \d+ clips?$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Open \d+ clips?$/ }));
     expect(view.onReview).toHaveBeenCalledExactlyOnceWith(clip);
     expect(
       screen.queryByText("Already accepted output"),
@@ -684,7 +684,7 @@ describe("Factory imports and scoped Library", () => {
       screen.getByRole("progressbar", { name: "Production progress" }),
     ).not.toHaveAttribute("value");
     expect(
-      screen.queryByRole("button", { name: /^Review \d+ clips?$/ }),
+      screen.queryByRole("button", { name: /^Open \d+ clips?$/ }),
     ).not.toBeInTheDocument();
     f.data.jobs = [
       {
@@ -723,7 +723,7 @@ describe("Factory imports and scoped Library", () => {
     const illustrative = { ...clip, provenance_mode: "preview_fixture" },
       view = home(workspace(), factory([illustrative]));
     await screen.findByText("Illustrative edit");
-    fireEvent.click(screen.getByRole("button", { name: /^Review \d+ clips?$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Open \d+ clips?$/ }));
     expect(view.onReview).toHaveBeenCalledExactlyOnceWith(illustrative);
     expect(illustrative.approved).toBe(false);
   });
@@ -922,7 +922,7 @@ describe("Factory imports and scoped Library", () => {
     );
     expect(screen.queryByText(/Wrong/)).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: "Review A useful edit" }),
+      screen.getByRole("button", { name: "Edit A useful edit" }),
     );
     expect(review).toHaveBeenCalledWith(clip);
     fireEvent.click(screen.getByRole("button", { name: /^Episodes/ }));
@@ -976,7 +976,7 @@ describe("Factory imports and scoped Library", () => {
     );
     expect(screen.getByText("Illustrative edit")).toBeVisible();
     fireEvent.click(
-      screen.getByRole("button", { name: "Review A useful edit" }),
+      screen.getByRole("button", { name: "Edit A useful edit" }),
     );
     expect(review).toHaveBeenCalledExactlyOnceWith(illustrative);
     expect(illustrative.approved).toBe(false);

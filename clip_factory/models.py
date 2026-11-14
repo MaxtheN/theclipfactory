@@ -36,6 +36,14 @@ print(json.dumps({'system': platform.system(), 'machine': platform.machine(),
 """
 
 
+# Speech production imports only Whisper/MLX. Optional vision/narration dependencies
+# must not turn a healthy speech engine into a misleading full-bundle repair request.
+ASR_RUNTIME_PROBE = RUNTIME_PROBE.replace(
+    "import mlx.core, mlx_vlm, mlx_whisper, kokoro, spacy\nspacy.load('en_core_web_sm')",
+    "import mlx.core, mlx_whisper",
+)
+
+
 def child_env() -> dict:
     """Do not pass application/API credentials to third-party inference packages."""
     return {
@@ -193,28 +201,31 @@ class Models:
         self._download_reservations: dict[str, int] = {}
         self._ready_lock = threading.Lock()
         self._ready_cache = None
+        self._asr_ready_cache = None
         self.ollama = Ollama()
 
     @property
     def python(self) -> Path:
         return self.runtime / "bin" / "python"
 
-    def ready(self, *, force=False) -> bool:
+    def ready(self, *, force=False, kind=None) -> bool:
         # UI polling and preflight calls share one probe, not dozens of simultaneous
         # MLX/Torch/spaCy imports. Marker/interpreter changes invalidate the cache.
+        cache_name = "_asr_ready_cache" if kind == "asr" else "_ready_cache"
+        probe_code = ASR_RUNTIME_PROBE if kind == "asr" else RUNTIME_PROBE
         with self._ready_lock:
             key = None
             try:
                 marker_path = self.runtime / ".ready"
                 if self.runtime.is_symlink() or marker_path.is_symlink() or not self.python.is_file():
-                    self._ready_cache = None
+                    setattr(self, cache_name, None)
                     return False
                 marker_stat, python_stat = marker_path.stat(), self.python.stat()
                 if marker_stat.st_size > 4096:
                     return False
                 marker = json.loads(marker_path.read_text())
                 if marker != {"python": [3, 12], "machine": "arm64", "packages": RUNTIME_VERSIONS}:
-                    self._ready_cache = None
+                    setattr(self, cache_name, None)
                     return False
                 key = (
                     marker_stat.st_ino,
@@ -224,12 +235,12 @@ class Models:
                     python_stat.st_mtime_ns,
                     python_stat.st_size,
                 )
-                if not force and self._ready_cache:
-                    cached_key, expires, value = self._ready_cache
+                if not force and getattr(self, cache_name):
+                    cached_key, expires, value = getattr(self, cache_name)
                     if key == cached_key and time.monotonic() < expires:
                         return value
                 probe = subprocess.run(
-                    [str(self.python), "-c", RUNTIME_PROBE],
+                    [str(self.python), "-c", probe_code],
                     env=child_env(),
                     capture_output=True,
                     text=True,
@@ -238,10 +249,10 @@ class Models:
                 )
                 actual = json.loads(probe.stdout)
                 value = actual == {**marker, "system": "Darwin"}
-                self._ready_cache = (key, time.monotonic() + (60 if value else 5), value)
+                setattr(self, cache_name, (key, time.monotonic() + (60 if value else 5), value))
                 return value
             except (OSError, ValueError, subprocess.SubprocessError):
-                self._ready_cache = (key, time.monotonic() + 5, False) if key else None
+                setattr(self, cache_name, (key, time.monotonic() + 5, False) if key else None)
                 return False
 
     @staticmethod
@@ -538,7 +549,7 @@ class Models:
             raise WorkError(
                 "The local inference runtime's files are damaged or were removed — repair (reinstall) it in Models."
             )
-        if not self.ready():
+        if not (self.ready(kind="asr") if kind == "asr" else self.ready()):
             raise WorkError("Set up the local inference runtime in Models first.")
         if not apple_silicon():
             raise WorkError("This inference runtime requires Apple Silicon macOS.")

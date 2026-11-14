@@ -66,6 +66,7 @@ DEFAULT_SETTINGS = {
     "cloud_agents": False,
     "cloud_agent_frames": False,
     "fallback_to_local": False,
+    "speech_provider": "local",  # Separate opt-in: Groq receives extracted audio, not OpenRouter.
 }
 
 MAX_IMAGES = 12
@@ -277,6 +278,8 @@ class LlmGateway:
             value["model"] = DEFAULT_MODEL
         if value["provider"] not in {"cloud", "local"}:
             value["provider"] = "cloud"
+        if not isinstance(value["speech_provider"], str) or value["speech_provider"] not in {"local", "groq"}:
+            value["speech_provider"] = "local"
         return value
 
     def update_settings(self, changes: dict) -> dict:
@@ -288,7 +291,9 @@ class LlmGateway:
                 raise HTTPException(422, "Choose Claude Haiku 5.5 or Claude Sonnet 5.5.")
             if key == "provider" and item not in {"cloud", "local"}:
                 raise HTTPException(422, "Provider must be cloud or local.")
-            if key not in {"model", "provider"} and type(item) is not bool:
+            if key == "speech_provider" and (not isinstance(item, str) or item not in {"local", "groq"}):
+                raise HTTPException(422, "Speech provider must be local or groq.")
+            if key not in {"model", "provider", "speech_provider"} and type(item) is not bool:
                 raise HTTPException(422, f"{key} must be true or false.")
             value[key] = item
         if not value["cloud_agents"]:
@@ -486,11 +491,14 @@ class LlmGateway:
                 "completion_tokens": sum(int(r.get("completion_tokens") or 0) for r in rows)}
 
     def view(self) -> dict:
+        from .cloud_speech import groq_configured
+
         key = self.key_status(force=True)
         settings = self.settings()
         return {
             "key": key,
             "settings": settings,
+            "groq_configured": groq_configured(),
             "routes": {role: self.route(role)["provider"] for role in ROLES},
             "models": [{"id": slug, **{k: v for k, v in info.items()}} for slug, info in MODELS.items()],
             "spend": self.spend(),

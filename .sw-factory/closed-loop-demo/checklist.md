@@ -1,0 +1,28 @@
+# Closed-loop implementation checklist
+
+- [x] Read current handoff, owning code, relevant Software Factory requirements and all referenced blueprints.
+- [x] Read referenced design chat; preserve its in-flight files. Design agent subsequently completed Pearl and isolated master merge5e6c6a.
+- [x] Write implementation plan before code; delegate isolated scoring, growth backend and demo buckets per execution skill.
+- [x] Preserve first-post content approval boundary; audit current source and prior-run data read-only.
+- [x] Document existing rubric and raw prior-run evidence; no approximate scores treated as independent editorial truth.
+- [x] Fix negation loss in hook/teaser shortening with regression tests.
+- [x] Implement exact-file, versioned scoring/grounded optional AI judgments and per-render assessment scheduling.
+- [x] Run one actual isolated Haiku judgment and record provider cost/citations.
+- [x] Implement scoped human preference labels and bounded ranking priorities, with minimum evidence and unknown states.
+- [x] Implement one-variable A/B groups, durable serial dispatch, approved-rule recuts and unknown-submission reconciliation.
+- [x] Implement synthetic replay with real scoring/comparison code and visible negative/pending scenarios.
+- [x] Implement actual-revision rehearsal bridge with separate synthetic provenance and no metric-store pollution.
+- [x] Add real outcome joins with profile/account/exact revision/window checks.
+- [x] Remove Back to Factory only on website-input step; preserve later-step cancellation.
+- [x] Apply the latest header direction: logo/title left, navigation centered, Download right; preserve compact scroll behavior and orange identity.
+- [x] Repair missing PyTorch library and isolate ASR readiness from optional imports; verify the actual runtime and 65 model/speech regressions.
+- [x] Remove Library approval groups/actions, simplify shell hierarchy and align profile icons; keep integrity/quality holds honest.
+- [x] Remove the map approval station and replace the rehearsal sidebar with a compact inline experiment view and Engine details disclosure.
+- [x] Add explicit cloud speech selection, separate receipts, timed words, cancellation and provider-bound queued jobs after the founder requested a memory-independent route.
+- [x] Remove destructive draft deletion at generation admission; test failed-run and cross-campaign preservation. Audit unrecovered legacy media honestly.
+- [x] Peer review round1 recorded; address exact-file freshness, real outcomes, all-render judge coverage and idempotent retries.
+- [ ] Final integration with remote UI merge and final scoped tests/build/browser verification.
+- [ ] Independent final review approved; final handoff and screenshots recorded.
+- [ ] Complete fresh cloud-backed generation and inspect actual media/captions; the first local attempt failed memory admission, not PyTorch. A full-source live Groq response has passed timing validation.
+- [SKIP] External publication still requires the requested exact clip/caption preview and approval. No post has been made.
+- [SKIP] Production website publishing/Mac release: no publication approval or release artifact provided in this pass.

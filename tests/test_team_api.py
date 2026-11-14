@@ -975,7 +975,7 @@ def test_swarm_is_the_default_and_turns_one_source_into_many_reviewable_clips(cl
     assert client.put(f"/api/clips/{clips[0]['id']}", json={"approved": True}).status_code == 200
 
 
-def test_making_clips_again_replaces_earlier_drafts_but_keeps_everything_someone_kept(
+def test_making_clips_again_preserves_earlier_drafts_and_everything_someone_kept(
     client, monkeypatch, scripted
 ):
     video = upload_mock(client, monkeypatch)
@@ -1001,13 +1001,13 @@ def test_making_clips_again_replaces_earlier_drafts_but_keeps_everything_someone
     scripted.outputs = script()
     install_mock_render(client, monkeypatch)
     submission = submit(client, video)
-    assert submission["job"]["context"]["cleared_drafts"] == 1
-    assert store.get("clips", "stale") is None
-    assert not (root / "clips" / "stale.mp4").exists() and not (root / "clips" / "stale.jpg").exists()
+    assert submission["job"]["context"]["cleared_drafts"] == 0
+    assert store.get("clips", "stale") is not None
+    assert (root / "clips" / "stale.mp4").exists() and (root / "clips" / "stale.jpg").exists()
     for kept in ["approved", "exported", "published", "parent", "revision", "handmade", "other-source"]:
         assert store.get("clips", kept) and (root / "clips" / f"{kept}.mp4").exists()
     terminal_run(client, submission)
-    # Turning the setting off keeps every earlier draft.
+    # The legacy setting never grants implicit deletion; both values preserve drafts.
     assert client.patch("/api/settings", json={"replace_drafts": False}).status_code == 200
     before = {c["id"] for c in store.all("clips")}
     scripted.outputs = script()

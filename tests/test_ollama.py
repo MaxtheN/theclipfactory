@@ -495,16 +495,21 @@ def test_learning_cancellation_before_repair_prevents_a_second_model_call(tmp_pa
     assert job["result"] is None
 
 
-def test_learning_repair_must_fit_budget_before_second_inference(tmp_path):
+@pytest.mark.parametrize("unit", ["x", "漢"])
+def test_learning_repair_must_fit_budget_before_second_inference(tmp_path, unit):
     runtime, context, infer, jobs = learning_runtime(tmp_path)
-    # Calibrate using the real assembled schema/prompt, not a duplicated constant.
+    # Required timed evidence is preserved whole; profile audience is intentionally
+    # bounded by brief_block and cannot be used to fill the inference context.
+    cue = {"start": 10, "end": 30, "text": ""}
+    context["source"]["transcript"]["segments"] = [cue]
+    # Calibrate with the actual schema/prompt so unrelated prompt copy can evolve.
     runtime.analyze(context)
     base_bytes = len(infer.call_args.kwargs["prompt"].encode("utf-8"))
     content_limit = 8192 - 1500 - 256
-    # Projected audience was null (4 bytes); the new ASCII string uses two quotes.
-    padding = content_limit - 10 - base_bytes + 2
-    assert padding > 0
-    context["profile"]["audience"] = "x" * padding
+    padding_bytes = content_limit - 10 - base_bytes
+    assert padding_bytes > 0
+    repeats, remainder = divmod(padding_bytes, len(unit.encode("utf-8")))
+    cue["text"] = unit * repeats + "x" * remainder
     infer.reset_mock()
     jobs.submit.reset_mock()
     infer.side_effect = [{"output": json.dumps(learning_reply(proposed_duration_seconds=15))}]
@@ -514,4 +519,4 @@ def test_learning_repair_must_fit_budget_before_second_inference(tmp_path):
     assert infer.call_count == 1 and jobs.submit.call_count == 1
     assert job["status"] == "failed" and job["agent_attempts"] == 1
     assert "repair exceeds" in job["error"]
-    assert len(infer.call_args.kwargs["prompt"].encode("utf-8")) <= content_limit
+    assert len(infer.call_args.kwargs["prompt"].encode("utf-8")) == content_limit - 10

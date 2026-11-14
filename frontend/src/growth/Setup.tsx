@@ -1038,7 +1038,7 @@ export function Setup({
                 ["account", "Account & model", "settings"],
               ] as [typeof section, string, string][]).map(([key, label, icon]) => (
                 <button type="button" key={key} aria-current={section === key ? "page" : undefined} aria-controls={summaryId} onClick={() => setSection(key)}>
-                  <Icon name={icon} size={16} /><span>{label}</span>
+                  <span className="gf-profile-section-icon"><Icon name={icon} size={17} /></span><span>{label}</span>
                 </button>
               ))}
             </nav>

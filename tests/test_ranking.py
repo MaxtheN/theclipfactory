@@ -146,3 +146,30 @@ def test_hooks_over_eight_words_score_lower():
     short = ranking.hook_signal({"hook": "Who pulled the pin?"})
     long = ranking.hook_signal({"hook": "This is the story of who pulled the pin on it all"})
     assert short == 1.0 and long < short
+
+
+def test_caption_timing_failure_holds_a_strong_clip_despite_playback_and_cached_rubric():
+    good = swarm_clip("good", 0, 30)
+    good["technical_checks"]["captions"] = [{"id": "timing", "status": "pass"}]
+    broken = {**swarm_clip("broken", 100, 130), "technical_checks": {
+        "playback_format_passed": True,
+        "captions": [{"id": "timing", "status": "fail", "detail": "2 overlapping cues"}],
+    }}
+    cached = {"broken": {"rubric": {"technical": 5}}}
+    records = ranking.rank([good, broken], board=BOARD, brief=BRIEF, reports=cached, speech_source=True)
+    assert not records["good"]["below_bar"] and records["good"]["signals"]["technical"] == 1
+    assert records["broken"]["signals"]["technical"] == 0
+    assert records["broken"]["score"] >= ranking.FLOOR  # Good content cannot erase a render defect.
+    assert records["broken"]["below_bar"] and not records["broken"]["top_pick"]
+    assert records["broken"]["position"] is None
+    assert records["broken"]["reason"] == ranking.CAPTION_CHECK_REASON
+
+
+def test_unmeasured_caption_timing_is_not_a_technical_pass_and_warning_lowers_proxy():
+    legacy = swarm_clip("legacy", 0, 30)
+    assert 0 < ranking.technical_signal(legacy, {"rubric": {"technical": 5}}) < 1
+    warned = {**legacy, "technical_checks": {"playback_format_passed": True, "captions": [
+        {"id": "timing", "status": "pass"}, {"id": "display_time", "status": "warn"}]}}
+    assert ranking.technical_signal(warned, None) < ranking.technical_signal(legacy, None)
+    assert ranking.technical_signal({"subtitles_burned": True}, None) < 1
+    assert ranking.bar_reason(legacy, True) is None  # Legacy unknown is not fabricated failure.

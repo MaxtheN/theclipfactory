@@ -53,7 +53,12 @@ def main():
             origin = url.split("/?", 1)[0]
             with opener.open(f"{origin}/api/system", timeout=5) as response:
                 assert response.status == 200, "session cookie did not authenticate"
-            print("Headless bootstrap, redirect, frontend, and session cookie passed (not native GUI).")
+            with opener.open(f"{origin}/api/demo-loop/viewer", timeout=5) as response:
+                assert response.status == 200 and b"/api/demo-loop/assets/app.js" in response.read(), "packaged demo viewer missing"
+            for filename in ("app.js", "styles.css"):
+                with opener.open(f"{origin}/api/demo-loop/assets/{filename}", timeout=5) as response:
+                    assert response.status == 200 and response.read(), "packaged demo viewer asset missing"
+            print("Headless bootstrap, redirect, frontend, session cookie and packaged demo viewer passed (not native GUI).")
         finally:
             process.terminate()
             try:

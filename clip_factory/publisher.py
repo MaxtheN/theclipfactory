@@ -15,6 +15,7 @@ frame time, collaborators, scheduled_for) and ``posted_at`` so learning can use 
 
 from __future__ import annotations
 
+import inspect
 import queue
 import re
 import threading
@@ -164,12 +165,21 @@ class Publisher:
         sha = (expected_sha256 or clip.get("sha256") or "").lower()
         key = f"{clip['id']}:{sha}"
         cached = self.store.get(REPORTS, key)
+        source_video = self.store.get("videos", clip.get("video_id") or "") or {}
+        context = quality.context_identity(clip, source_video)
         # Critic status may change after a recheck; the file checks cannot (immutable bytes).
         if (cached and not refresh and cached.get("gate_version") == quality.GATE_VERSION
+                and cached.get("context_identity") == context
                 and (cached.get("critic") or {}).get("status") == clip.get("team_review_status")
                 and (cached.get("critic") or {}).get("overridden_at_approval") == bool(clip.get("approval_override"))):
             return cached
-        report = self.gate(clip, self.clip_path(clip), expected_sha256=sha or None)
+        parameters = inspect.signature(self.gate).parameters
+        source_aware = "source_video" in parameters or any(
+            parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values())
+        kwargs = {"expected_sha256": sha or None}
+        if source_aware:
+            kwargs["source_video"] = source_video
+        report = {**self.gate(clip, self.clip_path(clip), **kwargs), "context_identity": context}
         self.store.put(REPORTS, {**report, "id": key})
         return report
 
@@ -269,7 +279,7 @@ class Publisher:
                        if existing["state"] == "scheduled"
                        else "An attempt for this account exists. Check its status or resume it.")
             raise PublishError(409, message, "attempt_exists", {"attempt_id": existing["id"]})
-        report, override = self._check_quality(clip, override_reason)
+        report, override = self._check_quality({**clip, "caption": caption}, override_reason)
         self.clip_path(clip)
         return clip, account, caption, report, override, self._package(clip, caption, package)
 
@@ -324,7 +334,7 @@ class Publisher:
                 clip = self._require_clip(row["clip_id"], row["sha256"])
                 self._require_account(row["account_id"], clip)
                 validate_caption(row["caption"])
-                self._check_quality(clip, row.get("override_reason"))
+                self._check_quality({**clip, "caption": row["caption"]}, row.get("override_reason"))
             except PublishError as error:
                 return self._save(row, "Scheduled post stopped before anything was sent.", state="failed",
                                   error={"code": error.code, "message": error.message})
@@ -444,6 +454,8 @@ class Publisher:
         if account["instagram_user_id"] != row["instagram_user_id"]:
             raise PublishError(409, "The Instagram identity for this account changed. Start a new post.",
                                "account_changed")
+        if row["state"] != "published":
+            self._check_quality({**clip, "caption": validate_caption(row["caption"])}, row.get("override_reason"))
         return clip, account
 
     def _advance(self, row: dict):

@@ -121,11 +121,6 @@ if (agentsSection && "IntersectionObserver" in window) {
   ).observe(agentsSection);
 }
 
-/* Download buttons: not wired up yet */
-document.querySelectorAll("[data-download]").forEach((button) => {
-  button.addEventListener("click", (event) => event.preventDefault());
-});
-
 /* App window tabs */
 setupTabs([...document.querySelectorAll(".app-tabs [role=tab]")]);
 
@@ -146,3 +141,9 @@ if (!supportsScrollTimeline && !reduceMotion && "IntersectionObserver" in window
   );
   document.querySelectorAll(".rv, .win, .tilt, .grey").forEach((el) => observer.observe(el));
 }
+
+/* A reserved header height prevents layout jumps while its visible surface compacts. */
+const siteHeader = document.querySelector(".site-header");
+const updateHeader = () => siteHeader?.classList.toggle("is-scrolled", window.scrollY > 48);
+window.addEventListener("scroll", updateHeader, { passive: true });
+updateHeader();

@@ -13,12 +13,14 @@ export type LlmRole =
 
 export interface LlmView {
   key: { present: boolean; error: string | null };
+  groq_configured?: boolean;
   settings: {
     provider: "cloud" | "local";
     model: string;
     cloud_agents: boolean;
     cloud_agent_frames: boolean;
     fallback_to_local: boolean;
+    speech_provider?: "local" | "groq";
   };
   routes: Record<LlmRole, "local" | "openrouter">;
   models: { id: string; label: string; tier: string; vision: boolean }[];
@@ -122,6 +124,8 @@ export function AiModelCard() {
   const [editingKey, setEditingKey] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  const [savingSpeech, setSavingSpeech] = useState(false);
+  const speechHelpId = useId();
 
   useEffect(() => {
     let live = true;
@@ -143,11 +147,25 @@ export function AiModelCard() {
     }
   }
 
+  async function changeSpeech(provider: "local" | "groq") {
+    if (savingSpeech || (provider === "groq" && !view?.groq_configured)) return;
+    setSavingSpeech(true);
+    setError("");
+    try {
+      setView(await llmApi.settings({ speech_provider: provider }));
+      setNote(provider === "groq" ? "Cloud speech selected. Audio for future transcription is sent to Groq." : "Local speech selected. Future transcription runs on this Mac.");
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setSavingSpeech(false);
+    }
+  }
+
   async function removeKey() {
     setError("");
     try {
       setView(await llmApi.removeKey());
-      setNote("Key removed from Keychain. Everything runs locally.");
+      setNote("OpenRouter key removed from Keychain. Text models now run locally; your speech setting is unchanged.");
     } catch (e) {
       setError(message(e));
     }
@@ -168,6 +186,28 @@ export function AiModelCard() {
   return (
     <section className="gf-card gf-ai-model" aria-label="AI model">
       <h2>AI model</h2>
+      <label className="gf-ai-field">
+        <span>Speech recognition</span>
+        <select
+          aria-describedby={speechHelpId}
+          value={view.settings.speech_provider ?? "local"}
+          disabled={savingSpeech}
+          onChange={event => void changeSpeech(event.target.value as "local" | "groq")}
+        >
+          <option value="local">Local — Whisper</option>
+          <option value="groq" disabled={!view.groq_configured}>Cloud — Groq Whisper</option>
+        </select>
+      </label>
+      <p id={speechHelpId} className="gf-ai-muted">
+        {view.settings.speech_provider === "groq"
+          ? "Cloud speech is selected. Audio from your footage is sent to Groq for transcription; the audio leaves your Mac."
+          : "Local speech is selected. Transcription audio stays on this Mac and needs free memory. If you choose cloud speech, audio leaves your Mac and is sent to Groq for transcription."} This setting is separate from your text and clip-agent models.
+      </p>
+      <p className="gf-ai-muted">
+        {view.groq_configured
+          ? "Groq key configured in macOS Keychain."
+          : <>Cloud speech needs a Groq API key configured in macOS Keychain. <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">Get a Groq key</a>; configure it in macOS Keychain before choosing cloud speech.</>}
+      </p>
       <div className="gf-ai-choices" role="radiogroup" aria-label="Where the AI runs">
         <label className={`gf-ai-choice${!cloud ? " is-on" : ""}`}>
           <input
@@ -259,7 +299,8 @@ export function AiModelCard() {
             <span>
               <strong>Use cloud model for clip agents too</strong>
               <small>
-                Sends transcript text and frame descriptions to OpenRouter/Anthropic. Never raw video or audio.
+                Sends transcript text and frame descriptions to OpenRouter/Anthropic, without raw video or audio.
+                Speech recognition uses the separate setting above.
                 Costs a few cents per production run.
               </small>
             </span>
@@ -292,7 +333,7 @@ export function AiModelCard() {
           <p className="gf-ai-muted">
             {cloud
               ? "Website reading, post captions, reference patterns and strategist ideas use the cloud model. They send your website text, clip hooks and short transcript snippets."
-              : "Everything runs on this Mac."}{" "}
+              : "Text and clip-agent models run on this Mac."}{" "}
             Cloud spend so far: {money(view.spend.cost_usd)} over {view.spend.calls} calls.
           </p>
         </>

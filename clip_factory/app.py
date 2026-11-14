@@ -341,6 +341,12 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             frames=range_frames,
             baseline=pipeline_task,
         )
+        def after_ranking(run_id):
+            # Follow-up judges/drafts are separate queued work, never production approval.
+            app.state.creative_scores.after_ranking(run_id)
+            app.state.growth_loop.after_ranking(run_id)
+
+        app.state.team.after_ranking = after_ranking
         app.state.schedule_stop = threading.Event()
         app.state.scheduler = threading.Thread(
             target=run_schedules, daemon=True, name="factory-publish-scheduler"
@@ -388,6 +394,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def models() -> Models:
         return app.state.models
 
+    def agent_models() -> RoutedModels:
+        return RoutedModels(models(), app.state.llm, "agents")
+
     def public(item: dict) -> dict:
         return {k: v for k, v in item.items() if k not in {"path"}}
 
@@ -417,6 +426,14 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
     def asr_blocker() -> dict | None:
         """None when speech can be transcribed now; else the actionable setup/repair blocker."""
+        if app.state.llm.settings()["speech_provider"] == "groq":
+            from .cloud_speech import groq_configured
+
+            return None if groq_configured() else {
+                "code": "cloud_speech_unavailable", "scope": "speech", "action": None,
+                "message": "Cloud speech needs your Groq key in macOS Keychain. Choose local speech or configure the key in Brand profile → AI model.",
+                "tab": "AI model", "steps": [], "download_gb": 0,
+            }
         return speech.check(models())
 
     def whisper_ready() -> bool:
@@ -475,7 +492,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             )
         model_id = model_id or choose_model()
         try:
-            models().require(model_id, "llm")
+            agent_models().require(model_id, "llm")
         except WorkError as exc:
             found.append({"code": "model", "message": str(exc), "tab": "Models"})
         # Applies to footage with sound only (see source_blockers); a silent source can still run.
@@ -510,6 +527,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         last = next((j for j in store.all("jobs") if j["kind"] == "speech_setup"), None)
         return {
             "ready": found is None,
+            "speech_provider": app.state.llm.settings()["speech_provider"],
             "blocker": found,
             "runtime": health["runtime"],
             "whisper": health[speech.ASR_MODEL],
@@ -621,7 +639,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "model_runtime": runtime_ready,
             # Cheap file checks: files removed from disk after setup show up as "damaged".
             "integrity": models().integrity(),
-            "engine": engine_status(None if whisper else speech.classify(models())),
+            "engine": (engine_status() if app.state.llm.settings()["speech_provider"] == "groq"
+                       else engine_status(None if whisper else asr_blocker())),
             "ollama": models().ollama.status()["running"],
             "desktop": app.state.desktop,
             "data_dir": str(root),
@@ -747,10 +766,10 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def inference(body: Inference):
         with operations_lock:
             model = choose_model(body.model_id)
-            models().require(model, "llm")
+            agent_models().require(model, "llm")
             return jobs().submit(
                 "inference",
-                lambda job: models().run(job, model, "generate", prompt=body.prompt),
+                lambda job: agent_models().run(job, model, "generate", prompt=body.prompt),
                 model_id=model,
             )
 
@@ -769,20 +788,45 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         work = root / "work" / job_id
         work.mkdir(parents=True, exist_ok=True)
         audio = work / "speech.wav"
+        provider = (store.get("jobs", job_id) or {}).get("context", {}).get("speech_provider", "local")
+        if provider not in {"local", "groq"}:
+            raise WorkError("The queued speech provider is invalid. Start a new transcription.")
+        cloud_receipt_id = None
         jobs().update(job_id, progress=10, message="Extracting audio locally")
         try:
             media.extract_audio(jobs(), job_id, source_path(video), audio)
-            jobs().update(job_id, progress=12, message="Listening: transcribing speech locally")
+            if provider == "groq":
+                from .cloud_speech import transcribe
+
+                class CloudSpeechJobs:
+                    def check(self, identifier):
+                        jobs().check(identifier)
+                        if app.state.llm.settings()["speech_provider"] != "groq":
+                            raise WorkError("Cloud speech was disabled after this job was queued. Start a new transcription with your chosen provider.")
+
+                    def update(self, identifier, **changes):
+                        self.check(identifier)
+                        return jobs().update(identifier, **changes)
+
+                cloud_jobs = CloudSpeechJobs()
+                cloud_jobs.check(job_id)
+                cloud_receipt_id = new_id()
+                store.put("speech_calls", {
+                    "id": cloud_receipt_id, "job_id": job_id, "video_id": video["id"],
+                    "provider": "groq", "status": "running", "created_at": now(),
+                })
+                jobs().update(job_id, progress=12, message="Listening: transcribing audio with Groq Whisper")
+                raw = transcribe(cloud_jobs, job_id, audio, language=language or settings()["language"], duration=video["duration"])
+                cloud_jobs.check(job_id)
+                store.patch("speech_calls", cloud_receipt_id, **raw.get("cloud_receipt", {}), finished_at=now())
+            else:
+                jobs().update(job_id, progress=12, message="Listening: transcribing speech locally")
+                raw = models().run(
+                    job_id, "whisper-turbo", "transcribe", audio=str(audio),
+                    language=language or settings()["language"],
+                )
             result = media.classify_speech(
-                media.clean_transcript(
-                    models().run(
-                        job_id,
-                        "whisper-turbo",
-                        "transcribe",
-                        audio=str(audio),
-                        language=language or settings()["language"],
-                    )
-                ),
+                media.clean_transcript(raw),
                 video["duration"],
             )
             store.patch(
@@ -790,11 +834,17 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 video["id"],
                 transcript=result,
                 transcript_origin="generated",
-                transcript_model="whisper-turbo",
+                transcript_model="groq/whisper-large-v3-turbo" if provider == "groq" else "whisper-turbo",
+                transcript_provider=provider,
+                transcript_call_id=cloud_receipt_id,
                 transcript_updated_at=now(),
                 status="transcribed",
             )
             return {"video_id": video["id"], **result}
+        except Exception:
+            if cloud_receipt_id:
+                store.patch("speech_calls", cloud_receipt_id, status="failed", finished_at=now())
+            raise
         finally:
             audio.unlink(missing_ok=True)
 
@@ -806,7 +856,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         """Long sources: one scout per time window, then a selector (see scouts.py)."""
         try:
             return scouts.scout(
-                generate=lambda prompt, images, max_tokens: models().run(
+                generate=lambda prompt, images, max_tokens: agent_models().run(
                     job_id,
                     model_id,
                     "generate",
@@ -817,7 +867,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 )["output"],
                 video=video,
                 frames_for=lambda index, times: (
-                    range_frames(job_id, video, [(at, at) for at in times], 1) if models().vision(model_id) else []
+                    range_frames(job_id, video, [(at, at) for at in times], 1) if agent_models().vision(model_id) else []
                 ),
                 objective=config["objective"],
                 brand=config["brand"],
@@ -939,7 +989,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         jobs().update(job_id, progress=75, message="Choosing moments from the storyboard")
         for attempt in range(2):
             jobs().check(job_id)
-            output = models().run(job_id, model_id, "generate", prompt=prompt, schema=schema, max_tokens=2000)
+            output = agent_models().run(job_id, model_id, "generate", prompt=prompt, schema=schema, max_tokens=2000)
             try:
                 candidates = parse_candidates(
                     output.get("output", ""),
@@ -1063,6 +1113,16 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             for key, value in after.items()
             if key != "changed_variable" and before.get(key) != value
         ]
+        if body.changed_variable == "caption_timing":
+            if changes:
+                raise HTTPException(422, "A caption timing repair must retain every creative edit decision.")
+            version = parent.get("caption_timeline_version") or 0
+            failed = any(c.get("status") == "fail" for c in (parent.get("technical_checks") or {}).get("captions", []))
+            if not isinstance(version, int) or version >= media.CAPTION_TIMELINE_VERSION or not failed:
+                raise HTTPException(422, "A timing repair needs an older renderer and a recorded caption failure.")
+            changes = [{"field": "caption_timing", "before": version,
+                        "after": media.CAPTION_TIMELINE_VERSION,
+                        "kind": "technical_repair", "audience_evidence": False}]
         if not changes:
             raise HTTPException(
                 422, "This revision changes no edit decision. Change the plan or keep the parent version."
@@ -1206,6 +1266,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "end": body.end,
             "hook": body.hook,
             "caption": body.caption,
+            "caption_timeline_version": media.CAPTION_TIMELINE_VERSION,
             "objective": body.objective,
             "approved": False,
             "created_at": now(),
@@ -1242,6 +1303,14 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             cover.unlink(missing_ok=True)
             target.with_suffix(".srt").unlink(missing_ok=True)
             raise
+        # Finalized revisions (including A/B and recuts) get the same optional judge as swarm clips.
+        # Cache identity prevents a second paid call when the run later records its ranking summary.
+        judge = getattr(app.state, "creative_scores", None)
+        if judge and judge.judge_policy()["automatic_after_production"]:
+            try:
+                judge.request(identifier, checksum)
+            except (HTTPException, OSError, WorkError):
+                store.patch("clips", identifier, creative_assessment_status="held: assessment could not be queued")
         return {"clip_id": identifier, "sha256": checksum, **result}
 
     def moment_of(video: dict) -> dict | None:
@@ -1405,7 +1474,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
     def pipeline_task(job_id: str, video: dict, model_id="qwen-small", config: dict | None = None) -> dict:
         config = config or settings()
-        models().require(model_id, "llm")
+        agent_models().require(model_id, "llm")
         if speech.needs_speech(video):
             found = asr_blocker()
             if found:
@@ -1542,7 +1611,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         model = choose_model(body.model_id)
         usable = True
         try:
-            models().require(model, "llm")
+            agent_models().require(model, "llm")
         except WorkError:
             usable = False  # still useful: measured motion, loudness and speech without descriptions
         refuse_speechless(require("videos", identifier))
@@ -1594,12 +1663,21 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             video = require("videos", identifier)
             if jobs().busy("video_id", identifier):
                 raise HTTPException(409, "This source already has a queued or running task.")
+            context.setdefault("speech_provider", app.state.llm.settings()["speech_provider"])
             return jobs().submit(kind, lambda job: operation(job, video), video_id=identifier, **context)
 
     @app.post("/api/videos/{identifier}/transcribe", status_code=202)
     def transcribe_video(identifier: str):
-        models().require("whisper-turbo", "asr")
-        return submit_source(identifier, "transcribe", transcribe_task, model_id="whisper-turbo")
+        provider = app.state.llm.settings()["speech_provider"]
+        if provider == "local":
+            models().require("whisper-turbo", "asr")
+        else:
+            found = asr_blocker()
+            if found:
+                raise HTTPException(409, found["message"])
+        return submit_source(identifier, "transcribe", transcribe_task,
+                             model_id="groq/whisper-large-v3-turbo" if provider == "groq" else "whisper-turbo",
+                             speech_provider=provider)
 
     @app.put("/api/videos/{identifier}/transcript")
     def import_transcript(identifier: str, body: TranscriptImport):
@@ -1630,7 +1708,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     @app.post("/api/videos/{identifier}/analyze", status_code=202)
     def analyze_video(identifier: str, body: Analysis):
         model = choose_model(body.model_id)
-        models().require(model, "llm")
+        agent_models().require(model, "llm")
         refuse_speechless(require("videos", identifier))
         return submit_source(
             identifier,
@@ -1657,15 +1735,20 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             if jobs().busy("video_id", identifier):
                 raise HTTPException(409, "This source already has a queued or running task.")
             dependencies = [model_id]
+            speech_provider = app.state.llm.settings()["speech_provider"]
             # Footage with sound is transcribed first; without a working speech model nothing is
             # queued (a source with no audio stream is the only speechless run).
             if speech.needs_speech(video):
                 refuse_speechless(video)
-                dependencies.append(speech.ASR_MODEL)
+                if speech_provider == "local":
+                    dependencies.append(speech.ASR_MODEL)
             if preflight:
-                models().require(model_id, "llm")
+                agent_models().require(model_id, "llm")
             config = settings()
-            cleared = clear_drafts(identifier) if config["replace_drafts"] else 0
+            # Generation may fail after admission (ASR memory, provider, or render). Never
+            # destroy earlier artifacts before a replacement exists. Older test drafts
+            # are hidden by the Library; physical removal is an explicit user action.
+            cleared = 0
             if campaign_snapshot:
                 profile = campaign_snapshot["profile_snapshot"]
                 config.update(
@@ -1684,6 +1767,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 model_id=model_id,
                 team_run_id=run["id"],
                 required_model_ids=dependencies,
+                speech_provider=speech_provider,
                 cleared_drafts=cleared,
             )
             app.state.team.bind_job(run["id"], job["id"])
@@ -2018,6 +2102,19 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         videos = {v["id"]: v for v in store.all("videos")}
         return [public(with_speech_flag(c, runs, videos.get(c.get("video_id")))) for c in store.all("clips")]
 
+    def capture_preference(clip, decision, request_id, reason=""):
+        # Legacy unscoped records remain usable; preferences never cross brand boundaries.
+        if not clip.get("profile_id") or not clip.get("sha256"):
+            return
+        try:
+            app.state.growth_loop.record_review(
+                clip["profile_id"], clip["id"], decision, request_id=request_id,
+                reason=reason, expected_sha256=clip["sha256"],
+            )
+        except (HTTPException, OSError, WorkError):
+            # A successful review stays successful even when its secondary evidence is unavailable.
+            store.patch("clips", clip["id"], taste_recording="unavailable: review context or file changed")
+
     @app.put("/api/clips/{identifier}")
     def edit_clip(identifier: str, body: ClipEdit):
         with operations_lock:
@@ -2070,7 +2167,10 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                             }
                         ],
                     )
-            return public(store.patch("clips", identifier, **changes))
+            updated = store.patch("clips", identifier, **changes)
+            if body.approved is True and not clip.get("approved") and not changed:
+                capture_preference(updated, "approve", f"approval:{identifier}:{updated.get('approved_at')}")
+            return public(updated)
 
     @app.post("/api/clips/{identifier}/team-review", status_code=202)
     def recheck_clip(identifier: str):
@@ -2082,7 +2182,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 raise HTTPException(409, "Recheck requires a terminal team run with retained evidence.")
             if jobs().busy("clip_id", identifier) or jobs().busy("video_id", clip["video_id"]):
                 raise HTTPException(409, "Finish current source or clip work before rechecking.")
-            models().require(run["model_id"], "llm")
+            agent_models().require(run["model_id"], "llm")
             return jobs().submit(
                 "team_review",
                 lambda job: app.state.team.review_clip(job, identifier),
@@ -2313,6 +2413,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
     def run_schedules():
         while not app.state.schedule_stop.wait(2):
+            try:
+                app.state.growth_loop.tick()
+            except (HTTPException, WorkError, OSError):
+                # Individual draft failures remain in loop receipts; never stop the publication scheduler.
+                pass
             for entry in store.all("schedules"):
                 # Approve & post schedules run on their own lane (post_schedule.PostScheduler).
                 if entry.get("lane") or entry["status"] != "scheduled" or datetime.fromisoformat(
@@ -2748,6 +2853,14 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             )
             video = require("videos", body.video_id)
             direction = snapshot["strategy_snapshot"]
+            inherited = {}
+            if body.parent_clip_id:
+                parent = require("clips", body.parent_clip_id)
+                if (parent.get("video_id"), parent.get("campaign_id"), parent.get("profile_id")) != (
+                    video["id"], snapshot["campaign_id"], snapshot["profile_id"]
+                ):
+                    raise HTTPException(422, "A revision must retain its source, campaign and profile.")
+                inherited = stored_plan(parent)
             end = (
                 body.end
                 if body.end is not None
@@ -2764,9 +2877,15 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 caption=body.caption,
                 objective=snapshot_goal(snapshot)["objective"],
                 subtitles=body.subtitles,
-                framing=direction["framing"],
-                caption_style=direction["caption_style"],
-                hook_overlay=body.opening_treatment in {None, "text_overlay"},
+                framing=(direction["framing"] if body.changed_variable == "framing"
+                         else inherited.get("framing", direction["framing"])),
+                caption_style=(direction["caption_style"] if body.changed_variable == "caption_style"
+                               else inherited.get("caption_style", direction["caption_style"])),
+                motion=inherited.get("motion", "static"),
+                crop_width=inherited.get("crop_width"),
+                format=inherited.get("format", "vertical"),
+                hook_overlay=(body.opening_treatment in {None, "text_overlay"}
+                              if body.opening_treatment is not None else inherited.get("hook_overlay", True)),
                 opening_treatment=body.opening_treatment,
                 cold_open_start=body.cold_open_start,
                 cold_open_end=body.cold_open_end,
@@ -2789,6 +2908,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             prepared = prepare_renders(render, video, snapshot)
             lineage = prepared[0][1]
             deviations = []
+            for field in ("framing", "caption_style"):
+                if getattr(render, field) != direction[field]:
+                    deviations.append(f"Revision retains its parent's {field} to isolate the declared change.")
             if body.end is not None and end - body.start != direction["duration_seconds"]:
                 deviations.append(
                     "Creator explicitly selected a duration different from the strategy target."
@@ -2808,7 +2930,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 if body.mode == "direct"
                 else "Deterministic range with approved duration and editing direction; not a claim of visual moment analysis.",
             }
-            return submit_source(
+            submitted = submit_source(
                 body.video_id,
                 "render",
                 lambda job, item: render_prepared(job, item, prepared, metadata),
@@ -2820,6 +2942,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 profile_id=snapshot["profile_id"],
                 **({"experiment_id": experiment_id} if experiment_id else {}),
             )
+            if body.parent_clip_id and body.change_reason and not experiment_id:
+                parent = store.get("clips", body.parent_clip_id)
+                if parent:
+                    capture_preference(parent, "request_change", f"revision:{submitted['id']}", body.change_reason)
+            return submitted
 
     def campaign_produce(identifier, body):
         with operations_lock:
@@ -2895,5 +3022,13 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
     # Factory builder: capability requests → work orders → reviewed extension branches (explicit clicks only).
     create_factory_builder(app, store, root)
+
+    from .creative_score_api import install as install_creative_scores
+    from .demo_loop_api import install as install_demo_loop
+    from .growth_loop_api import install as install_growth_loop
+
+    install_creative_scores(app)
+    install_growth_loop(app, campaigns, render=campaign_render)
+    install_demo_loop(app)
 
     return app

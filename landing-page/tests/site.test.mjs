@@ -46,12 +46,10 @@ for (const [label, count] of [
   });
 }
 
-test("download CTAs are real buttons and the old demo link is gone", () => {
-  const buttons = [...html.matchAll(/<button\b[^>]*data-download[^>]*>/g)].map((m) => m[0]);
-  assert.ok(buttons.length >= 4);
-  for (const tag of buttons) assert.ok(tag.includes('type="button"'));
-  const hero = html.split('class="wrap hero-copy"')[1].split('class="hero-clips"')[0];
-  assert.match(hero, /data-download/);
+test("download CTAs lead to honest Mac availability instead of an invented release", () => {
+  const buttons = [...html.matchAll(/<a\b[^>]*href="\/download.html"[^>]*>\s*Download for Mac/g)];
+  assert.equal(buttons.length, 4);
+  assert.doesNotMatch(html, /data-download|download-dialog/);
   assert.doesNotMatch(html, new RegExp(DEMO.replace(/[.]/g, "\\.")));
 });
 
@@ -68,4 +66,51 @@ test("the mobile menu keeps its accessible associations", () => {
 
 test("motion respects reduced-motion preferences", () => {
   assert.match(css, /prefers-reduced-motion: reduce/);
+});
+
+const productPages = ["index.html", "product.html", "learning.html", "download.html"];
+const pageSources = new Map(await Promise.all(productPages.map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+
+test("all product pages have a unique title, one H1 and accessible navigation", () => {
+  const titles = new Set();
+  for (const [name, source] of pageSources) {
+    const title = source.match(/<title>([^<]+)<\/title>/)?.[1];
+    assert.ok(title, `${name}: missing title`);
+    assert.ok(!titles.has(title), `${name}: duplicate title`);
+    titles.add(title);
+    assert.equal((source.match(/<h1\b/g) || []).length, 1, `${name}: one main heading`);
+    assert.match(source, /aria-controls="mobile-nav"/);
+    assert.match(source, /aria-expanded="false"/);
+    assert.match(source, /id="mobile-nav"[^>]*hidden/s);
+    assert.match(source, /href="\/product.html"/);
+    assert.match(source, /href="\/learning.html"/);
+    assert.match(source, /href="\/download.html"/);
+  }
+});
+
+test("all page routes, local assets and cross-page anchors resolve", async () => {
+  for (const [name, source] of pageSources) {
+    const pageIds = [...source.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
+    assert.equal(pageIds.length, new Set(pageIds).size, `${name}: duplicate ID`);
+    for (const [, href] of source.matchAll(/(?:src|href)="([^"\s]+)"/g)) {
+      if (/^(?:https?:|data:|mailto:)/.test(href)) continue;
+      const [path, hash] = href.split("#");
+      const target = path ? (path === "/" ? "index.html" : path.replace(/^\//, "")) : name;
+      if (target) await access(new URL(target, root));
+      if (hash) {
+        const targetSource = pageSources.get(target);
+        assert.ok(targetSource?.includes(`id="${hash}"`), `${name}: unresolved ${href}`);
+      }
+    }
+  }
+});
+
+test("Mac availability is honest and no standalone web rehearsal or invented installer is promoted", () => {
+  const download = pageSources.get("download.html");
+  assert.match(download, /Apple Silicon/);
+  assert.match(download, /notariz/i);
+  assert.match(download, /github.com\/MaxtheN\/theclipfactory/);
+  for (const [name, source] of pageSources) {
+    assert.doesNotMatch(source, /href="[^"]*(?:releases\/download|\.dmg|\.zip|demo-loop|rehearsal)[^"]*"/, `${name}: unverified artifact/demo link`);
+  }
 });

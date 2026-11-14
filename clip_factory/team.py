@@ -825,7 +825,7 @@ class TeamEngine:
             "footage_analyst": f"Pick up to {count} of the strongest moments for short-form clips from the storyboard: a scene-by-scene map of the whole source (seen = what a vision model saw in frames of that scene, text_on_screen = text it read, said = what is spoken, movement = measured picture change, sound = measured loudness where speech matters, interest = the watcher's 0-10 rating). A moment is one scene, or two adjacent scenes when the action or thought runs across them, cited by ref in scenes. Prefer moments that stand on their own: a peak of action, a striking visual, a clear claim, a story beat. For footage with little speech rely on what is seen and on movement. Spread moments across the source rather than clustering them. In summary say what happens and why it works. Timestamps are computed from the scenes you cite; do not state them.",
             "creative_strategist": "Propose one distinct angle for each validated moment, in order of strength, naming the moment by its id. When a moment has seen_up_close, that is the most specific description of what happens in it. Hooks are short viewer-facing text about what is actually seen or said, not editing instructions. Rendering supports existing source footage, a text hook and spoken subtitles; do not propose B-roll, illustrative graphics, or split-screen effects. Keep a specified objective; in discovery label distinct intended outcomes without claiming results.",
             "performance_analyst": "Recommend changes using actual observations or feedback, citing their IDs. Missing/zero/stale and manual/platform evidence differ; attribution never proves causal impact.",
-            "editor": "Turn each angle into one clip. allowed_source_ranges gives, for each angle_id, the permitted source range, its objective, its evidence, the measured peak_time and a suggested_range cut around that peak. Choose start and end in source seconds inside the permitted range: use suggested_range unless an action or a sentence needs a few seconds more; 12-45 seconds unless the range is shorter. For action footage keep peak_time inside the clip with a few seconds of lead-in; when seen_up_close is present it describes that peak. hook: at most 10 words a viewer reads on screen. caption: one or two short sentences for the post, as a person would write them, optionally followed by up to three hashtags. Hook and caption describe what is seen and said; with no speech evidence, describe only what is visible. Never mention timestamps, scenes, measurements, evidence or the transcript in hook or caption (that belongs in reason), and never invent quoted speech, names, scores or outcomes. Cite only evidence_refs listed for that angle. Attached frames, when present, show the footage inside the allowed ranges. " + CRAFT_HINTS,
+            "editor": "Turn each angle into one clip. allowed_source_ranges gives, for each angle_id, the permitted source range, its objective, its evidence, the measured peak_time and a suggested_range cut around that peak. Choose start and end in source seconds inside the permitted range: use suggested_range unless an action or a sentence needs a few seconds more; 12-45 seconds unless the range is shorter. For action footage keep peak_time inside the clip with a few seconds of lead-in; when seen_up_close is present it describes that peak. hook: at most 10 words a viewer reads on screen. caption: one or two short sentences for the post, as a person would write them, optionally followed by up to three hashtags. Never guess who is speaking from voice, face, brand, topic or a name mentioned in speech; use 'the speaker' unless speaker identity is explicitly verified. Hook and caption describe what is seen and said; with no speech evidence, describe only what is visible. Never mention timestamps, scenes, measurements, evidence or the transcript in hook or caption (that belongs in reason), and never invent quoted speech, names, scores or outcomes. Cite only evidence_refs listed for that angle. Attached frames, when present, show the footage inside the allowed ranges. " + CRAFT_HINTS,
             "critic": "Check each candidate independently against its evidence: source context, factual claims, caption support, and duplicates. clip_speech is the verbatim speech inside each candidate (empty means nothing meaningful is said); attached frames, when present, come from inside each candidate's range. Report only what would mislead a viewer: quotes, names, numbers, scores, outcomes or events that the evidence does not show. Wording, tone, emphasis and omissions are not findings, and footage that merely looks similar is not a duplicate (a duplicate repeats the same source range or the same hook). Pass a candidate whose hook and caption are supported. Use unknown only when the evidence cannot settle a factual claim. Report blocking findings, not confidence scores. No approval authority.",
         }[role]
         output_schema = narrowed(schema, limits or {})
@@ -1334,7 +1334,7 @@ class TeamEngine:
                     for i, t in enumerate(tokens)
                 ]
             words.extend(w for w in timed if start <= (w["start"] + w["end"]) / 2 < end)
-        return sorted(words, key=lambda w: w["start"])
+        return words if transcript and transcript.get("provider") == "groq" else sorted(words, key=lambda w: w["start"])
 
     def _swarm(self, run_id: str, job_id: str, run: dict, video: dict, board: dict) -> dict:
         """Many clips, fast: one short prompt per stretch, clips rendered while the next ideas are written.
@@ -1462,7 +1462,7 @@ class TeamEngine:
                     f"- keep_short: almost always empty. Only for a strong moment whose range is under {low:g}s "
                     "because it is already complete: say why in a few words.\n"
                     "- emphasis_words: up to 6 words actually said that carry the point.\n"
-                    "Never invent quotes, names, numbers or outcomes; attribute claims to the speaker. "
+                    "Never invent quotes, names, numbers or outcomes; attribute claims to the speaker. Never guess a speaker name from voice, face, topic or a person mentioned in the speech. Without explicitly verified speaker identity, write 'the speaker' instead of a name. "
                     "Must-avoid items: list one in avoid only when the clip itself would break it. Speakers "
                     "discussing, questioning or attributing a claim is not the same as the clip stating it: "
                     "keep such a moment when it is strong, and make the hook and caption attribute it "
@@ -1586,7 +1586,7 @@ class TeamEngine:
             shaped = (
                 moments.shape_range(
                     max(lowest, idea["start"]), min(highest, idea["end"]), words, target=length, low=low,
-                    high=high, payoff=payoff,
+                    high=high, payoff=payoff, preserve_word_order=transcript.get("provider") == "groq",
                     # A scout's "keep it short" counts only for a short proposal it rates strong.
                     keep_short=(idea.get("keep_short") or "")
                     if idea["end"] - idea["start"] < low and int(idea.get("strength", 5)) >= SWARM_SHORT_STRENGTH
@@ -1755,11 +1755,21 @@ class TeamEngine:
             clips, board=board, brief=brief, reports=reports, top_picks=run.get("review_target"),
             speech_source=speech_source,
         )
+        from .growth_loop import personalize_rankings
+
+        profile_id = (run.get("context", {}).get("campaign_snapshot") or {}).get("profile_id")
+        if not profile_id and clips:
+            profiles = {clip.get("profile_id") for clip in clips}
+            profile_id = profiles.pop() if len(profiles) == 1 else None
+        records = personalize_rankings(self.store, clips, records, profile_id)
         with self.store.lock:
             for identifier, record in records.items():
                 self.store.patch("clips", identifier, rank=record)
         result = ranking.summary(records, run.get("review_target"))
         self.store.patch("team_runs", run_id, ranking=result)
+        callback = getattr(self, "after_ranking", None)
+        if callback:
+            callback(run_id)
         return result
 
     def execute(self, run_id: str, job_id: str) -> dict:

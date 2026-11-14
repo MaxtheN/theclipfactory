@@ -1,0 +1,21 @@
+/* Mac shell hierarchy: quiet product mark, clear working context, generous command target. */
+.gf-flow-app .gf-brand-row .gf-brand { font-size: 18px; line-height: 1.05; letter-spacing: -.45px; gap: 7px; }
+.gf-flow-app .gf-brand-row .gf-brand-logo { width: 60px; height: 34px; flex-basis: 60px; }
+.gf-flow-app .gf-workspace-switcher { gap: 2px; }
+.gf-flow-app .gf-workspace-switcher > span { font-size: 11px; letter-spacing: .01em; }
+.gf-flow-app .gf-workspace-switcher select { min-height: 38px; max-width: 320px; min-width: 190px; padding: 5px 30px 5px 0; font-size: 15px; font-weight: 550; line-height: 1.4; }
+.gf-app .gf-topbar .gf-command-trigger { min-height: 40px; min-width: 245px; padding: 9px 12px; gap: 10px; font-size: 13px; }
+.gf-app .gf-topbar .gf-command-trigger > svg { width: 17px; height: 17px; }
+.gf-app .gf-topbar .gf-command-trigger > kbd { margin-left: auto; }
+.gf-app .gf-profile-sections button { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; align-items: center; min-height: 44px; font-size: 13px; line-height: 1.4; padding: 10px; }
+.gf-profile-section-icon { display: grid; place-items: center; width: 18px; height: 18px; }
+.gf-profile-section-icon svg { display: block; width: 17px; height: 17px; stroke-width: 1.75; }
+.gf-app .gf-profile-sections button > span:last-child { min-width: 0; }
+@media (max-width: 1190px) { .gf-flow-app .gf-brand-row .gf-brand-logo { width: 50px; height: 28px; flex-basis: 50px; } .gf-flow-app .gf-brand-row .gf-brand { font-size: 17px; } }
+@media (max-width: 760px) { .gf-flow-app .gf-workspace-switcher select { min-width: 0; max-width: 210px; font-size: 14px; } .gf-app .gf-topbar .gf-command-trigger { min-width: 40px; } }
+
+.gf-library-older-tests { margin: 0 0 18px; color: var(--material-secondary); font-size: 12px; }
+.gf-library-older-tests summary { cursor: pointer; width: fit-content; padding: 5px 0; }
+.gf-library-older-tests p { margin: 8px 0; max-width: 560px; }
+.gf-library-older-tests label { display: flex; align-items: center; gap: 8px; }
+.gf-library-older-tests input { accent-color: var(--material-focus); }

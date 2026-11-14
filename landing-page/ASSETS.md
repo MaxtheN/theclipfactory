@@ -2,9 +2,9 @@
 
 - The alpine photograph was generated with the built-in image-generation tool for this landing page. It is illustrative and does not represent customer footage, real campaign output, or an endorsement. The original is retained as `assets/alpine-story-original.png` (excluded from deployment); `assets/alpine-story.webp` is the optimized full frame.
 - `assets/peaks.webp`, `valley.webp`, `hiker.webp`, `hiker-close.webp`, `towers.webp` and `summit.webp` are crops of that same photograph, used as sample 9:16 clips and scene thumbnails.
-- `assets/icon.svg`, `mark.svg`, `mark-white.svg` and `favicon.svg` are the Growth Factory mark: a play triangle cut into three clips. Project-native SVG.
-- `assets/social-card.jpg` is a capture of this site's opening screen, used for link previews.
-- Type is Bricolage Grotesque (headings) and Inter (body), loaded from Google Fonts. Both use the SIL Open Font License.
+- `assets/growth-factory-logo.png` is an unchanged copy of the user-supplied Mac app logo in `frontend/src/growth/assets/growth-factory-logo.png`. `icon.svg`, `mark.svg`, `mark-white.svg`, and `favicon.svg` embed that artwork, framed identically to the Mac app and displayed in white on a Signal-orange rounded square with an SVG color filter. No raster artwork was edited.
+- `assets/social-card.jpg` is a capture of the updated opening screen, used for link previews.
+- Type is Manrope (headings) and Inter (body), loaded from Google Fonts. Both use the SIL Open Font License.
 
 ## Image prompt
 

@@ -103,6 +103,7 @@ def shape_range(
     payoff: tuple[float, float] | None = None,
     keep_short: str = "",
     jump_cuts: str = "silences",
+    preserve_word_order: bool = False,
 ) -> tuple[float, float, dict] | None:
     """Fit a proposal to whole sentences and the target length. None when there are no words.
 
@@ -112,7 +113,7 @@ def shape_range(
     it. A clip stays shorter than ``low`` only when the scout said why it is complete (``keep_short``)
     or the source has no more of the thought to give; the reason is recorded.
     """
-    units = sentence_units(sorted(words, key=lambda w: w["start"]))
+    units = sentence_units(words if preserve_word_order else sorted(words, key=lambda w: w["start"]))
     if not units:
         return None
     # Never begin or end inside a sentence: widen to the sentences the proposal touches.
@@ -229,6 +230,13 @@ def locate_quote(quote: str, words: list[dict]) -> list[dict] | None:
     return words[a:b] or None
 
 
+NEGATION = re.compile(r"\b(?:no|not|never|cannot|[a-z]+n['’]t)\b", re.IGNORECASE)
+
+
+def has_negation(text: str) -> bool:
+    return bool(NEGATION.search(text))
+
+
 def punch_span(quote_words: list[dict]) -> tuple[float, float]:
     """A teaser-sized span of the payoff line: the run of words that carries the point.
 
@@ -240,12 +248,16 @@ def punch_span(quote_words: list[dict]) -> tuple[float, float]:
         return quote_words[0]["start"], quote_words[-1]["end"]
     breaks = (",", ";", ":", "—", "-", ".", "?", "!")
     best, best_score = None, None
+    negative = has_negation(" ".join(w["text"] for w in quote_words))
     for i in range(len(quote_words)):
         for j in range(i, len(quote_words)):
             span = quote_words[j]["end"] - quote_words[i]["start"]
             if span > PUNCH_SECONDS:
                 break
             if span < craft.TEASER_MIN:
+                continue
+            # A word-overlap match is not enough: dropping "not" can reverse the claim.
+            if negative and not has_negation(" ".join(w["text"] for w in quote_words[i : j + 1])):
                 continue
             tokens = [craft.norm(w["text"]) for w in quote_words[i : j + 1]]
             content = sum(1 for t in tokens if t and t not in craft.STOPWORDS and t not in WEAK_OPENERS and t not in HEDGES)
@@ -274,14 +286,25 @@ def hook_from_quote(quote: str) -> str:
     def content(text: str) -> int:
         return sum(1 for t in _tokens(text) if t not in craft.STOPWORDS and t not in WEAK_OPENERS and t not in HEDGES)
 
-    fitting = [(content(c), i, c) for i, c in enumerate(clauses) if 3 <= len(c.split()) <= HOOK_WORDS]
+    negative = has_negation(quote)
+    fitting = [(content(c), i, c) for i, c in enumerate(clauses)
+               if 3 <= len(c.split()) <= HOOK_WORDS and (not negative or has_negation(c))]
     if fitting and max(fitting)[0] > 0:
         clause = max(fitting)[2]  # the clause carrying the most point; later wins ties
         return clause[0].upper() + clause[1:]
     words = quote.split()
     if len(words) > HOOK_WORDS:
         # The punch is at the end of a line: keep its last words, without a dangling connector.
-        words = words[-HOOK_WORDS:]
+        tail = words[-HOOK_WORDS:]
+        if negative and not has_negation(" ".join(tail)):
+            negator = next(i for i, word in enumerate(words) if has_negation(word))
+            words = words[max(0, negator - 1):max(0, negator - 1) + HOOK_WORDS]
+            # Prefer a shorter faithful fragment to a fluent claim with reversed meaning.
+            trailing = WEAK_OPENERS | {"you", "your", "you're", "we", "they", "he", "she", "it", "is", "are"}
+            while len(words) > 3 and words[-1].lower().strip(".,!?") in trailing:
+                words = words[:-1]
+        else:
+            words = tail
         while len(words) > 3 and craft.norm(words[0]) in WEAK_OPENERS:
             words = words[1:]
     text = " ".join(words)
@@ -317,6 +340,7 @@ def tidy_hook(hook: str, quote: str, speech: str) -> tuple[str, str]:
         and grounded_share(cleaned, speech) >= HOOK_GROUNDING
         and not grounding["unsupported_numbers"]
         and not VISUAL_HOOK.search(cleaned)
+        and not (has_negation(quote) and not has_negation(cleaned))
     )
     if good:
         return cleaned, "scout"

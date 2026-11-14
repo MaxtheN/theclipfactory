@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Growth Factory — Loop rehearsal</title><link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script></head>
+<body>
+<header><a class="brand" href="#top">Growth Factory<span>Loop rehearsal</span></a><span class="simulation">Synthetic simulation</span></header>
+<main>
+  <section id="top" class="intro"><p class="eyebrow">A department that carries the work forward</p><h1>Every next edit <br>gets a reason.</h1><p class="lead">Follow three reels from the production rubric through simulated Instagram observations to one changed creative plan.</p><p class="truth">No real posts, video renders, AI calls or account changes occur here. Quality scores are editorial proxies, not engagement probabilities.</p></section>
+  <form id="controls" class="controls" aria-label="Rehearsal settings">
+    <label>Scenario<select id="scenario"><option value="mixed">Mixed outcomes</option><option value="decline">Variant underperforms</option><option value="sparse">Measurement still pending</option><option value="no_signal">No clear difference</option></select></label>
+    <label>Primary metric<select id="metric"><option value="completion_rate">Completion rate</option><option value="engagement_rate">Engagement rate</option><option value="views">Views</option><option value="click_rate">Click rate</option></select></label>
+    <label>Seed<input id="seed" type="number" min="0" max="1000000" value="7"></label>
+    <button id="reset" type="submit">Reset replay</button>
+  </form>
+  <p id="error" role="alert" hidden></p>
+  <section class="workspace" aria-label="Learning loop replay">
+    <div class="transport"><div><p class="eyebrow" id="loop-label">Loop 1</p><h2 id="stage-title">Loading rehearsal…</h2></div><div class="playback"><button id="previous" type="button" aria-label="Previous step">←</button><button id="play" type="button">Play</button><button id="next" type="button">Next step →</button></div></div>
+    <div id="progress" class="progress" role="progressbar" aria-label="Rehearsal progress" aria-valuemin="0" aria-valuemax="12" aria-valuenow="0"><span></span></div>
+    <ol class="stages" aria-label="Loop stages"><li>1 · Score</li><li>2 · Observe</li><li>3 · Decide</li><li>4 · Next plan</li></ol>
+    <div id="clips" class="clip-switch" role="group" aria-label="Choose synthetic reel"></div>
+    <p id="narration" class="narration" aria-live="polite"></p>
+    <div class="columns">
+      <article class="panel"><div class="panel-head"><h3>One editorial variable</h3><span class="tag">Hook text</span></div><div class="edit-pair"><div><p class="eyebrow">Current plan</p><h4 id="before-hook"></h4><p class="score"><strong id="before-score"></strong><span>/100 quality proxy</span></p></div><div><p class="eyebrow">Proposed plan</p><h4 id="after-hook"></h4><p class="score"><strong id="after-score"></strong><span>/100 quality proxy</span></p></div></div><p class="fine">Synthetic clip metadata, scored by the actual production ranking code. No video has been inspected or rendered.</p><details><summary>Inspect the weighted rubric</summary><div id="rubric"></div></details><details><summary>Inspect the source and edit</summary><p class="fine">Synthetic source excerpt</p><blockquote id="source"></blockquote><pre id="plan-diff"></pre></details></article>
+      <article class="panel"><div class="panel-head"><h3>Audience evidence</h3><span class="tag">Synthetic Instagram</span></div><div id="metrics-pending" class="pending">Advance to Observe to reveal the synthetic measurement window.</div><div id="metrics" hidden><div class="metric-compare"><div><p class="eyebrow">Current plan</p><strong id="metric-before"></strong></div><div><p class="eyebrow">Proposed plan</p><strong id="metric-after"></strong></div></div><p id="metric-label" class="fine"></p><table><thead><tr><th>Count</th><th>Current</th><th>Proposed</th></tr></thead><tbody id="counts"></tbody></table><p class="fine">Rates retain their numerator and denominator. Missing observations remain unknown, never zero.</p></div><section id="decision" hidden><h4 id="decision-title"></h4><p id="decision-reason"></p><p class="fine">Uses the same bounded observation comparator as the real growth-loop backend. Observational evidence cannot prove causal lift.</p></section></article>
+    </div>
+    <section id="next-plan" class="next-plan" hidden><div><p class="eyebrow">Next batch handoff</p><h3 id="next-title"></h3><p id="next-detail"></p></div><div class="receipt"><b>Plan only · not rendered</b><span>Actual rendering and human publication approval are separate steps.</span></div></section>
+    <details class="trace"><summary>Follow the evidence and proposal IDs</summary><pre id="lineage"></pre></details>
+  </section>
+  <section class="support"><div><p class="eyebrow">The strategist underneath</p><h2>Same decisions.<br>Visible assumptions.</h2><p>The existing Strategist also replays its real belief and portfolio code over a temporary synthetic account. Nothing is written to your real brand.</p></div><div><p id="strategist-summary"></p><details><summary>Inspect the Strategist replay</summary><pre id="strategist"></pre></details><details><summary>Inspect the synthetic generator assumptions</summary><pre id="assumptions"></pre></details></div></section>
+  <footer>Demo contract: no forced improvement, no real engagement claims, no model training claim. <span id="version"></span></footer>
+</main></body></html>

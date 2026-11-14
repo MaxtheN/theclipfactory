@@ -115,9 +115,43 @@ describe("FactoryMap", () => {
     expect(button).toBeDisabled();
     expect(button.getAttribute("title")).toMatch(/No finished run yet/);
     expect(screen.getByText(/Demo replay is unavailable/)).toBeTruthy();
+    expect(document.querySelector(".gf-fmap-engine-details")).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText(/^Engine details/));
     // Honest empty state for missing data, never invented numbers.
     expect(screen.getByRole("button", { name: /Strategist: Idle\. Unavailable right now/ })).toBeTruthy();
     expect(screen.getByText(/No run recorded for this campaign yet/)).toBeTruthy();
+  });
+
+  it("defaults to five compact stages and keeps rehearsal evidence inline without a sidebar", async () => {
+    motion(false);
+    vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([]);
+    const { container } = render(<FactoryMap w={w} factory={factory(false)} />);
+    expect(screen.getByRole("list", { name: "Factory growth loop" }).children).toHaveLength(5);
+    expect(container.querySelector(".gf-fmap-engine-details")).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByRole("button", { name: "Demo rehearsal" }));
+    await screen.findByRole("heading", { name: "Plan-only example" });
+    expect(container.querySelector(".gf-loop-inline-workbench")).toBeTruthy();
+    expect(document.querySelector(".gf-fmap-sheet")).toBeNull();
+    expect(screen.getByRole("button", { name: "Run demo experiment — creates one draft" })).toBeDisabled();
+  });
+
+  it("previews stages on hover and keyboard focus, and restores the clicked selection", () => {
+    motion(false);
+    vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([]);
+    render(<FactoryMap w={w} factory={factory(false)} />);
+    const stages = screen.getByRole("list", { name: "Factory growth loop" });
+    const buttons = stages.querySelectorAll("button");
+    fireEvent.click(buttons[2]);
+    expect(screen.getByRole("heading", { name: "Measure", level: 3 })).toBeTruthy();
+    fireEvent.mouseEnter(buttons[1]);
+    expect(screen.getByRole("heading", { name: "Instagram", level: 3 })).toBeTruthy();
+    expect(screen.getByText("Output evidence")).toBeTruthy();
+    fireEvent.mouseLeave(stages);
+    expect(screen.getByRole("heading", { name: "Measure", level: 3 })).toBeTruthy();
+    fireEvent.focus(buttons[3]);
+    expect(screen.getByRole("heading", { name: "Strategy", level: 3 })).toBeTruthy();
+    fireEvent.blur(stages, { relatedTarget: document.body });
+    expect(screen.getByRole("heading", { name: "Measure", level: 3 })).toBeTruthy();
   });
 
   it("enables Demo replay for a finished, timestamped run", async () => {
@@ -133,6 +167,7 @@ describe("FactoryMap", () => {
     motion(false);
     vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([finishedRun]);
     render(<FactoryMap w={w} factory={factory(false)} />);
+    fireEvent.click(screen.getByText(/^Engine details/));
     const picker = await screen.findByRole("button", { name: /Choose a run/ });
     expect(picker.textContent).toMatch(/^Run.*Needs review$/);
     fireEvent.click(picker);

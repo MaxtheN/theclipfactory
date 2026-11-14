@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { BrandMark } from "./BrandMark";
 
 const SEEN_KEY = "gf-intro-seen";
-const TAGLINE = "Your autonomous growth engine for podcasts and brands.";
+const TAGLINE = "Give your marketing a direction. Build a department that carries it forward.";
 
 export function introSeen() {
   try {
@@ -65,7 +65,7 @@ export function OnboardingIntro({ onStart }: { onStart: () => void }) {
         <span className="gf-intro-mark">
           <BrandMark />
         </span>
-        <h1 id="gf-intro-title">Welcome to Growth Factory</h1>
+        <h1 id="gf-intro-title">Your next chapter starts here.</h1>
         <p className="gf-intro-tagline" aria-label={TAGLINE}>
           <span aria-hidden="true">{TAGLINE.slice(0, typed)}</span>
           <span className={`gf-intro-caret${done ? " is-done" : ""}`} aria-hidden="true" />
@@ -76,7 +76,7 @@ export function OnboardingIntro({ onStart }: { onStart: () => void }) {
           className="gf-button gf-intro-start"
           onClick={go}
         >
-          Get started
+          Build my growth engine
           <ArrowRight size={17} strokeWidth={1.8} aria-hidden="true" />
         </button>
         <button type="button" className="gf-intro-skip" onClick={go}>

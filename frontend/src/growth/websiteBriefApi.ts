@@ -150,8 +150,8 @@ export const GOALS: Array<{ objective: string; label: string; metric: string }> 
     { objective: "awareness", label: "Reach new people", metric: "reach" },
     {
       objective: "traffic",
-      label: "Drive full-episode visits",
-      metric: "full_episode_visits",
+      label: "Bring people to my website",
+      metric: "website_visits",
     },
     {
       objective: "leads",
@@ -163,6 +163,16 @@ export const GOALS: Array<{ objective: string; label: string; metric: string }> 
     { objective: "sales", label: "Drive sales", metric: "sales" },
     { objective: "discovery", label: "Explore first · Discovery", metric: "" },
   ];
+
+/** Preserve an explicitly chosen podcast metric; generic brands start with website traffic. */
+export function goalOptions(metric?: string) {
+  return GOALS.map(goal => goal.objective === "traffic" && metric === "full_episode_visits"
+    ? { ...goal, label: "Drive full-episode visits", metric: "full_episode_visits" }
+    : goal);
+}
+export function goalLabel(objective: string, metric?: string) {
+  return goalOptions(metric).find(goal => goal.objective === objective)?.label ?? objective;
+}
 
 export function editableFrom(draft: BrandDraft): EditableBrief {
   return {

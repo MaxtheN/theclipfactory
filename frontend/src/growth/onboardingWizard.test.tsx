@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { ApiError } from "../api";
 import type { Campaign, Profile } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
+import { OnboardingIntro } from "./OnboardingIntro";
 import { Onboarding, onboardingBodies } from "./Onboarding";
 import {
   LAUNCH_FADE_MS,
@@ -58,7 +59,7 @@ function fillAudience() {
 }
 function next() {
   fireEvent.click(
-    screen.getByRole("button", { name: /^(Continue|Review changes)$/ }),
+    screen.getByRole("button", { name: /^(Continue|Set my first goal|Review changes)$/ }),
   );
 }
 function toVoice(goal = /^Reach new people/) {
@@ -72,7 +73,7 @@ function toReview(goal = /^Reach new people/) {
   next();
 }
 function launch() {
-  fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open my factory" }));
 }
 function boundaries() {
   screen
@@ -129,6 +130,18 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("guided workspace onboarding", () => {
+  it("keeps a chosen podcast outcome visible after audience wording is edited", () => {
+    start(); fillAudience();
+    fireEvent.change(screen.getByRole("textbox", { name: "Name your brand / podcast" }), { target: { value: "Founder podcast" } });
+    next();
+    fireEvent.click(screen.getByRole("radio", { name: /^Drive full-episode visits/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Name your brand / podcast" }), { target: { value: "Founder stories" } });
+    next();
+    expect(screen.getByRole("radio", { name: /^Drive full-episode visits/ })).toBeChecked();
+    noWrites();
+  });
+
   it("announces the current step through the progress bar in both navigation directions", () => {
     start();
     const progress = screen.getByRole("progressbar", {
@@ -186,7 +199,7 @@ describe("guided workspace onboarding", () => {
       </>,
     );
     expect(
-      screen.getByRole("heading", { name: "Who are we making this for?" }),
+      screen.getByRole("heading", { name: "Who should care?" }),
     ).toHaveFocus();
     noWrites();
   });
@@ -201,7 +214,7 @@ describe("guided workspace onboarding", () => {
     fillAudience();
     next();
     expect(
-      screen.getByRole("heading", { name: "What are we working toward?" }),
+      screen.getByRole("heading", { name: "What should marketing do for you?" }),
     ).toHaveFocus();
     expect(
       screen.queryByRole("textbox", { name: "Name your brand / podcast" }),
@@ -210,7 +223,7 @@ describe("guided workspace onboarding", () => {
     fireEvent.click(screen.getByRole("radio", { name: /^Reach new people/ }));
     next();
     expect(
-      screen.getByRole("heading", { name: "How should your edits feel?" }),
+      screen.getByRole("heading", { name: "Make it unmistakably yours." }),
     ).toHaveFocus();
     fireEvent.click(
       screen.getByRole("radio", { name: /^Stories that stay with you/ }),
@@ -233,7 +246,7 @@ describe("guided workspace onboarding", () => {
     ).toBeChecked();
     next();
     expect(
-      screen.getByRole("heading", { name: "Review your brand" }),
+      screen.getByRole("heading", { name: "Your direction is set." }),
     ).toHaveFocus();
     noWrites();
     launch();
@@ -261,9 +274,26 @@ describe("guided workspace onboarding", () => {
     expect(w.setProfileId).toHaveBeenCalledWith("new-profile");
     expect(workspaceApi.upload).not.toHaveBeenCalled();
   });
+  it("welcomes a brand with the growth-engine direction and preserves the explicit start", () => {
+    const onStart = vi.fn();
+    render(<OnboardingIntro onStart={onStart} />);
+    expect(screen.getByRole("heading", { name: "Your next chapter starts here." })).toBeVisible();
+    expect(screen.getByLabelText("Give your marketing a direction. Build a department that carries it forward.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Build my growth engine" }));
+    expect(onStart).toHaveBeenCalledOnce();
+  });
+  it("offers website traffic generally and full episodes only with explicit podcast context", () => {
+    start(); fillAudience(); next();
+    expect(screen.getByRole("radio", { name: /^Bring people to my website/ })).toBeVisible();
+    expect(screen.queryByRole("radio", { name: /^Drive full-episode visits/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Name your brand / podcast" }), { target: { value: "Founder podcast" } });
+    next();
+    expect(screen.getByRole("radio", { name: /^Drive full-episode visits/ })).toBeVisible();
+  });
   it.each([
     [/^Reach new people/, "awareness", "reach"],
-    [/^Drive full-episode visits/, "traffic", "full_episode_visits"],
+    [/^Bring people to my website/, "traffic", "website_visits"],
     [/^Generate qualified leads/, "leads", "qualified_leads"],
   ])(
     "maps familiar suggested outcomes to the actual saved objective and metric",
@@ -287,7 +317,7 @@ describe("guided workspace onboarding", () => {
     noWrites();
     fireEvent.click(screen.getByRole("button", { name: "Explore first" }));
     expect(
-      screen.getByRole("heading", { name: "How should your edits feel?" }),
+      screen.getByRole("heading", { name: "Make it unmistakably yours." }),
     ).toHaveFocus();
     next();
     launch();
@@ -345,7 +375,7 @@ describe("guided workspace onboarding", () => {
   });
   it("edits review choices without discarding other drafts or writing early", () => {
     start();
-    toReview(/^Drive full-episode visits/);
+    toReview(/^Bring people to my website/);
     fireEvent.click(screen.getByRole("button", { name: "Edit audience" }));
     expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
       "Founders",
@@ -355,20 +385,20 @@ describe("guided workspace onboarding", () => {
     });
     next();
     expect(
-      screen.getByRole("heading", { name: "Review your brand" }),
+      screen.getByRole("heading", { name: "Your direction is set." }),
     ).toHaveFocus();
     expect(screen.getByText("Early-stage founders")).toBeInTheDocument();
     noWrites();
     fireEvent.click(screen.getByRole("button", { name: "Edit outcome" }));
     expect(
-      screen.getByRole("radio", { name: /^Drive full-episode visits/ }),
+      screen.getByRole("radio", { name: /^Bring people to my website/ }),
     ).toBeChecked();
     fireEvent.click(
       screen.getByRole("radio", { name: /^Generate qualified leads/ }),
     );
     next();
     expect(
-      screen.getByRole("heading", { name: "Review your brand" }),
+      screen.getByRole("heading", { name: "Your direction is set." }),
     ).toHaveFocus();
     noWrites();
   });
@@ -386,7 +416,7 @@ describe("guided workspace onboarding", () => {
     );
     expect(screen.getByRole("alert")).toHaveTextContent("1–3,000 characters");
     expect(
-      screen.queryByRole("button", { name: "Launch" }),
+      screen.queryByRole("button", { name: "Open my factory" }),
     ).not.toBeInTheDocument();
     noWrites();
     fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
@@ -398,7 +428,7 @@ describe("guided workspace onboarding", () => {
       }),
     );
     expect(
-      screen.getByRole("heading", { name: "Review your brand" }),
+      screen.getByRole("heading", { name: "Your direction is set." }),
     ).toHaveFocus();
     noWrites();
   });
@@ -406,21 +436,21 @@ describe("guided workspace onboarding", () => {
     const user = userEvent.setup();
     const { complete } = start();
     fillAudience();
-    screen.getByRole("button", { name: "Continue" }).focus();
+    screen.getByRole("button", { name: /^(Continue|Set my first goal)$/ }).focus();
     await user.keyboard("{Enter}");
     const outcome = screen.getByRole("radio", { name: /^Reach new people/ });
     outcome.focus();
     await user.keyboard(" ");
     expect(outcome).toBeChecked();
-    screen.getByRole("button", { name: "Continue" }).focus();
+    screen.getByRole("button", { name: /^(Continue|Set my first goal)$/ }).focus();
     await user.keyboard("{Enter}");
     expect(
-      screen.getByRole("heading", { name: "How should your edits feel?" }),
+      screen.getByRole("heading", { name: "Make it unmistakably yours." }),
     ).toHaveFocus();
-    screen.getByRole("button", { name: "Continue" }).focus();
+    screen.getByRole("button", { name: /^(Continue|Set my first goal)$/ }).focus();
     await user.keyboard("{Enter}");
     noWrites();
-    screen.getByRole("button", { name: "Launch" }).focus();
+    screen.getByRole("button", { name: "Open my factory" }).focus();
     await user.keyboard("{Enter}");
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());
   });
@@ -444,18 +474,18 @@ describe("guided workspace onboarding", () => {
         reload = deferred<void>();
       vi.mocked(w.load).mockReturnValueOnce(reload.promise);
       fillAudience();
-      screen.getByRole("button", { name: "Continue" }).focus();
+      screen.getByRole("button", { name: /^(Continue|Set my first goal)$/ }).focus();
       await user.keyboard("{Enter}");
       expect(
-        screen.getByRole("heading", { name: "What are we working toward?" }),
+        screen.getByRole("heading", { name: "What should marketing do for you?" }),
       ).toHaveFocus();
-      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: /^(Continue|Set my first goal)$/ })).toBeEnabled();
       noWrites();
       fireEvent.click(screen.getByRole("radio", { name: /^Reach new people/ }));
       next();
       next();
       const launchButton = screen.getByRole("button", {
-        name: "Launch",
+        name: "Open my factory",
       });
       expect(launchButton).toBeEnabled();
       launchButton.focus();
@@ -467,7 +497,7 @@ describe("guided workspace onboarding", () => {
       await act(async () => reload.resolve());
       expect(complete).toHaveBeenCalledOnce();
       expect(
-        screen.getByRole("button", { name: "Open Factory" }),
+        screen.getByRole("button", { name: "Open my factory" }),
       ).toBeEnabled();
       expect(workspaceApi.profile).toHaveBeenCalledTimes(1);
       expect(workspaceApi.save).toHaveBeenCalledTimes(1);
@@ -487,7 +517,7 @@ describe("guided workspace onboarding", () => {
     const { complete } = start();
     toReview();
     const form = screen
-      .getByRole("button", { name: "Launch" })
+      .getByRole("button", { name: "Open my factory" })
       .closest("form")!;
     fireEvent.submit(form);
     fireEvent.submit(form);
@@ -523,7 +553,7 @@ describe("guided workspace onboarding", () => {
       render(<Onboarding w={w} onComplete={complete} onBusyChange={busy} askWebsite={false} />);
       toReview();
       const form = screen
-        .getByRole("button", { name: "Launch" })
+        .getByRole("button", { name: "Open my factory" })
         .closest("form")!;
       fireEvent.submit(form);
       expect(workspaceApi.profile).toHaveBeenCalledOnce();
@@ -537,7 +567,7 @@ describe("guided workspace onboarding", () => {
         screen.queryByRole("navigation", { name: "Brand setup" }),
       ).not.toBeInTheDocument();
       expect(
-        screen.queryByRole("button", { name: "Launch" }),
+        screen.queryByRole("button", { name: "Open my factory" }),
       ).not.toBeInTheDocument();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2000);
@@ -674,14 +704,14 @@ describe("onboarding validation and write recovery", () => {
         screen.queryByRole("status", { name: "Making it yours" }),
       ).not.toBeInTheDocument();
       expect(
-        screen.getByRole("heading", { name: "Review your brand" }),
+        screen.getByRole("heading", { name: "Your direction is set." }),
       ).toBeVisible();
       expect(screen.getByRole("alert")).toHaveFocus();
       expect(screen.getByRole("alert")).toHaveTextContent(
         "Audience needs clarification",
       );
       expect(
-        screen.getByRole("button", { name: "Launch" }),
+        screen.getByRole("button", { name: "Open my factory" }),
       ).toBeEnabled();
       fireEvent.click(screen.getByRole("button", { name: "Edit audience" }));
       expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
@@ -794,12 +824,12 @@ describe("onboarding validation and write recovery", () => {
       name: "Check saved goals",
     });
     expect(
-      screen.getByRole("button", { name: "Launch" }),
+      screen.getByRole("button", { name: "Open my factory" }),
     ).toBeDisabled();
     fireEvent.click(check);
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Launch" }),
+        screen.getByRole("button", { name: "Open my factory" }),
       ).toBeEnabled(),
     );
     launch();
@@ -822,7 +852,7 @@ describe("onboarding validation and write recovery", () => {
     );
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Launch" }),
+        screen.getByRole("button", { name: "Open my factory" }),
       ).toBeEnabled(),
     );
     launch();
@@ -849,7 +879,7 @@ describe("onboarding validation and write recovery", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Check saved goals" }),
     );
-    const open = await screen.findByRole("button", { name: "Open Factory" });
+    const open = await screen.findByRole("button", { name: "Open my factory" });
     await waitFor(() => expect(open).toBeEnabled());
     fireEvent.click(open);
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());
@@ -871,7 +901,7 @@ describe("onboarding validation and write recovery", () => {
     const { complete } = start();
     toReview();
     fireEvent.click(screen.getByRole("button", { name: "45s" }));
-    fireEvent.click(screen.getByRole("button", { name: "Looks good — use this style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use this style" }));
     expect(screen.getByText("Approved ✓")).toBeInTheDocument();
     noWrites();
     launch();
@@ -890,7 +920,7 @@ describe("onboarding validation and write recovery", () => {
       .mockResolvedValue(undefined);
     toReview();
     launch();
-    const open = await screen.findByRole("button", { name: "Open Factory" });
+    const open = await screen.findByRole("button", { name: "Open my factory" });
     await waitFor(() => expect(open).toBeEnabled());
     fireEvent.click(open);
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());

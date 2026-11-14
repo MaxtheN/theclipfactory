@@ -17,6 +17,21 @@ from clip_factory.store import Store
 KEY = "sk-or-v1-" + "a1b2c3d4" * 8
 
 
+def test_speech_is_a_separate_validated_opt_in(tmp_path, monkeypatch):
+    monkeypatch.setattr("clip_factory.cloud_speech.groq_configured", lambda: True)
+    gate = gateway(tmp_path)
+    assert gate.settings()["speech_provider"] == "local"
+    before = gate.settings()
+    changed = gate.update_settings({"speech_provider": "groq"})
+    assert changed["speech_provider"] == "groq"
+    assert changed["model"] == before["model"] and changed["cloud_agents"] == before["cloud_agents"]
+    assert gate.view()["groq_configured"] is True
+    for bad in (True, "haiku", [], None):
+        with pytest.raises(lp.HTTPException) as error:
+            gate.update_settings({"speech_provider": bad})
+        assert error.value.status_code == 422
+
+
 class Server:
     """A scripted OpenRouter: each entry is a status code, an exception, or a JSON reply."""
 

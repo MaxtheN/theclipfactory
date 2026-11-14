@@ -147,8 +147,11 @@ describe("WebsiteBrief", () => {
     const { container } = render(<WebsiteBrief onApply={vi.fn()} onSkip={onSkip} client={client([])} />);
     expect(screen.getByText("Before we start")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "What’s your website?" })).toBeInTheDocument();
-    expect(screen.getByText("We’ll draft your brand from it. You can edit everything.")).toBeInTheDocument();
-    const go = screen.getByRole("button", { name: "Continue" });
+    expect(screen.getByText("Give us your website and we'll grab everything about your brand.")).toBeInTheDocument();
+    expect(screen.getByText("We need to build a growth engine for you.")).toBeInTheDocument();
+    expect(screen.getByText("You’ll review the brand brief before we use it.")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("yourbrand.com")).toBeInTheDocument();
+    const go = screen.getByRole("button", { name: "Build my brand brief" });
     expect(go).toBeDisabled();
     fireEvent.change(screen.getByRole("textbox", { name: "Your website" }), { target: { value: "not a site" } });
     expect(go).toBeEnabled();
@@ -157,7 +160,7 @@ describe("WebsiteBrief", () => {
     // No illustration, no pill, no footnote, no em dashes in what the creator reads.
     expect(container.querySelector("svg.gf-wb-illustration, .gf-website-brief-kicker, .gf-wb-fineprint")).toBeNull();
     expect(container.textContent).not.toMatch(/—/);
-    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enter details myself" }));
     expect(onSkip).toHaveBeenCalledOnce();
   });
 
@@ -185,9 +188,9 @@ describe("WebsiteBrief", () => {
     const { container } = render(
       <WebsiteBrief onApply={vi.fn()} onSkip={vi.fn()} client={api} pollMs={5} />,
     );
-    fireEvent.change(screen.getByPlaceholderText("yourshow.com"), { target: { value: "allin.com" } });
-    fireEvent.keyDown(screen.getByPlaceholderText("yourshow.com"), { key: "Enter" });
-    expect(await screen.findByRole("heading", { name: "Reading allin.com" })).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("yourbrand.com"), { target: { value: "allin.com" } });
+    fireEvent.keyDown(screen.getByPlaceholderText("yourbrand.com"), { key: "Enter" });
+    expect(await screen.findByRole("heading", { name: "Getting to know your brand." })).toBeInTheDocument();
     expect(api.calls).toEqual(["start allin.com"]);
     expect(await screen.findByText("Found 3 pages")).toBeInTheDocument();
     expect(await screen.findByText("Drafting your brief…")).toBeInTheDocument();
@@ -195,7 +198,7 @@ describe("WebsiteBrief", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/^Drafting your brief…$/); // one line, not a log
     expect(container.querySelector(".gf-wb-browser, .gf-wb-scan, .gf-wb-chips, .gf-wb-steps")).toBeNull();
 
-    expect(await screen.findByRole("heading", { name: "Your brand, drafted from your site" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Here’s what we understood." })).toBeInTheDocument();
     expect(screen.getByLabelText("Brand name")).toHaveValue("All-In");
     expect(screen.getByText(/couldn’t confirm your one-liner/)).toBeInTheDocument();
     expect(screen.getByText("Not confirmed. Add your own.")).toBeInTheDocument();
@@ -205,7 +208,7 @@ describe("WebsiteBrief", () => {
   it("shows the verbatim quote and page behind a field", async () => {
     const api = client([research("done", [opening], { draft })]);
     render(<WebsiteBrief onApply={vi.fn()} onSkip={vi.fn()} client={api} pollMs={1} initialUrl="allin.com" />);
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build my brand brief" }));
     await screen.findByLabelText("Who it’s for");
     const toggles = screen.getAllByRole("button", { name: "Source" });
     expect(toggles).toHaveLength(2);
@@ -223,10 +226,10 @@ describe("WebsiteBrief", () => {
     const onApply = vi.fn();
     const api = client([research("done", [opening], { draft })]);
     render(<WebsiteBrief onApply={onApply} onSkip={vi.fn()} client={api} pollMs={1} initialUrl="allin.com" />);
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build my brand brief" }));
     const name = await screen.findByLabelText("Brand name");
     fireEvent.change(name, { target: { value: "All-In Podcast" } });
-    fireEvent.click(screen.getByRole("button", { name: "Use this brief" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use this brand brief" }));
     expect(onApply).toHaveBeenCalledOnce();
     const result = onApply.mock.calls[0][0];
     expect(result).toMatchObject({
@@ -257,11 +260,25 @@ describe("WebsiteBrief", () => {
     );
   });
 
+  it("keeps website traffic available when a podcast goal is only an unticked model suggestion", async () => {
+    const onApply = vi.fn();
+    const api = client([research("done", [opening], { draft: suggestedDraft })]);
+    render(<WebsiteBrief onApply={onApply} onSkip={vi.fn()} client={api} pollMs={1} initialUrl="allin.com" />);
+    fireEvent.click(screen.getByRole("button", { name: "Build my brand brief" }));
+    await screen.findByRole("region", { name: "Suggested" });
+    expect(screen.getByRole("checkbox", { name: /Drive full-episode visits/ })).not.toBeChecked();
+    expect(screen.getByRole("option", { name: "Bring people to my website" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Goal"), { target: { value: "traffic" } });
+    fireEvent.click(screen.getByRole("button", { name: "Use this brand brief" }));
+    expect(onApply.mock.calls[0][0]).toMatchObject({ objective: "traffic", metric: "website_visits" });
+    expect(onApply.mock.calls[0][0].provenance.some((entry: { source: string; field: string }) => entry.field === "goal" && entry.source === "suggested_by_model")).toBe(false);
+  });
+
   it("shows model suggestions apart, unticked, and records the ones accepted as suggested_by_model", async () => {
     const onApply = vi.fn();
     const api = client([research("done", [opening], { draft: suggestedDraft })]);
     render(<WebsiteBrief onApply={onApply} onSkip={vi.fn()} client={api} pollMs={1} initialUrl="allin.com" />);
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build my brand brief" }));
     const group = await screen.findByRole("region", { name: "Suggested" });
     expect(screen.getByRole("region", { name: "From your site" })).not.toContainElement(
       screen.getByText("No financial advice"),
@@ -283,7 +300,7 @@ describe("WebsiteBrief", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /Drive full-episode visits/ }));
     expect(screen.getByLabelText("Goal")).toHaveValue("discovery");
 
-    fireEvent.click(screen.getByRole("button", { name: "Use this brief" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use this brand brief" }));
     const result = onApply.mock.calls[0][0];
     expect(result.brief).toMatchObject({
       must_avoid: ["No financial advice"],
@@ -310,7 +327,7 @@ describe("WebsiteBrief", () => {
       }),
     ]);
     render(<WebsiteBrief onApply={vi.fn()} onSkip={onSkip} client={api} pollMs={1} initialUrl="allin.com" />);
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build my brand brief" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("robots.txt");
     fireEvent.click(screen.getByRole("button", { name: "Type it instead" }));
     expect(onSkip).toHaveBeenCalledOnce();
@@ -319,7 +336,7 @@ describe("WebsiteBrief", () => {
   it("says when it is waiting for other work on this Mac", async () => {
     const api = client([research("running", [opening, home], { waiting: true })]);
     render(<WebsiteBrief onApply={vi.fn()} onSkip={vi.fn()} client={api} pollMs={5} initialUrl="allin.com" />);
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build my brand brief" }));
     expect(await screen.findByText("Waiting for other work on this Mac to finish…")).toHaveAttribute("role", "status");
   });
 
@@ -327,7 +344,7 @@ describe("WebsiteBrief", () => {
     const onSkip = vi.fn();
     const api = client([research("running", [opening])]);
     render(<WebsiteBrief onApply={vi.fn()} onSkip={onSkip} client={api} pollMs={5} initialUrl="allin.com" />);
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build my brand brief" }));
     fireEvent.click(await screen.findByRole("button", { name: "Stop and type it instead" }));
     await waitFor(() => expect(api.cancel).toHaveBeenCalledWith("r1"));
     expect(onSkip).toHaveBeenCalledOnce();
@@ -371,27 +388,27 @@ describe("onboarding step 1: your website", () => {
     } as unknown as Workspace;
     render(<Onboarding w={w} onComplete={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "What’s your website?" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Continue" })).toHaveLength(1); // only the website step's
-    fireEvent.change(screen.getByPlaceholderText("yourshow.com"), { target: { value: "allin.com" } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Use this brief" }, { timeout: 3000 }));
+    expect(screen.getAllByRole("button", { name: "Build my brand brief" })).toHaveLength(1); // only the website step's
+    fireEvent.change(screen.getByPlaceholderText("yourbrand.com"), { target: { value: "allin.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Build my brand brief" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use this brand brief" }, { timeout: 3000 }));
 
-    expect(await screen.findByRole("heading", { name: "Who are we making this for?" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Who should care?" })).toBeInTheDocument();
     expect(screen.getByText(/Drafted from your website/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Name your brand / podcast" })).toHaveValue("All-In");
     expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
       "Founders and investors who follow tech and markets.",
     );
     expect(profile).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Continue|Set my first goal)$/ }));
     expect(screen.getByRole("radio", { name: /Drive full-episode visits/ })).toBeChecked();
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Continue|Set my first goal)$/ }));
     expect(screen.getByRole("radio", { name: /Other/ })).toBeChecked();
     expect(screen.getByLabelText("Your creative direction")).toHaveValue(
       "Candid, funny, sharp. Argue the point plainly.",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Continue|Set my first goal)$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Open my factory" }));
     await waitFor(() => expect(save).toHaveBeenCalledOnce());
     expect(profile.mock.calls[0][0].brand_context).toContain("Avoid: Investment advice");
     const body = save.mock.calls[0][0];
@@ -413,8 +430,8 @@ describe("onboarding step 1: your website", () => {
         onComplete={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
-    expect(screen.getByRole("heading", { name: "Who are we making this for?" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Enter details myself" }));
+    expect(screen.getByRole("heading", { name: "Who should care?" })).toHaveFocus();
     expect(screen.getByRole("textbox", { name: "Name your brand / podcast" })).toHaveValue("");
   });
 });

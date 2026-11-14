@@ -5,8 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from test_app import upload_mock, wait_job
 from test_app import client as authenticated_client_fixture
+from test_app import upload_mock, wait_job
 from test_models import installed
 
 from clip_factory import ranking, speech

@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { endpoint, post, put } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { endpoint, post } from "../api";
 import { clipMediaUrl } from "./productionApi";
 import type { Clip } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -12,7 +12,6 @@ import { SourceDetails, sourceLabel } from "./sourcePresentation";
 import { ClipPreview, QuickLook } from "./ClipPreview";
 import { newestFirst, undirected } from "./productionState";
 import { deleteEpisode, discardClips } from "./storage";
-import { SpeechlessChip } from "./SpeechSetup";
 import { sourceHasActiveJob } from "../productionPreflight";
 
 export function Library({
@@ -40,6 +39,13 @@ export function Library({
     onView?.(next);
   };
   const [query, setQuery] = useState("");
+  const [olderTests, setOlderTests] = useState(false);
+  const [inspecting, setInspecting] = useState<Clip>();
+  useEffect(() => {
+    setInspecting(undefined);
+    setOlderTests(false);
+    setQuery("");
+  }, [w.campaign?.id, w.profileId]);
   const ids = w.campaign?.video_ids || [];
   const sources = factory.data.videos.filter((v) => ids.includes(v.id));
   const clips = factory.data.clips.filter(
@@ -48,10 +54,13 @@ export function Library({
       c.profile_id === w.profileId &&
       ids.includes(c.video_id),
   );
-  // Made from this footage by the engine with no direction: reviewed on the wall, not in the Studio.
+  // Undirected outputs stay playable locally without borrowing the active brand’s Studio direction.
   const loose = factory.data.clips.filter((c) => undirected(c, ids));
   const normalized = query.trim().toLocaleLowerCase();
-  const edits = clips.filter((c) =>
+  const allClips = [...new Map([...clips, ...loose].map(clip => [clip.id, clip])).values()];
+  const olderCount = allClips.filter(clip => clip.made_without_speech).length;
+  const libraryClips = allClips.filter(clip => olderTests || !clip.made_without_speech);
+  const edits = newestFirst(libraryClips).filter((c) =>
     `${c.name} ${c.hook} ${sourceLabel(c.video_id, ids)} ${sources.find((s) => s.id === c.video_id)?.name || ""}`
       .toLocaleLowerCase()
       .includes(normalized),
@@ -138,17 +147,14 @@ export function Library({
             aria-pressed={tab === "edits"}
             onClick={() => setTab("edits")}
           >
-            Clips<span>{clips.length}</span>
+            Clips<span>{libraryClips.length}</span>
           </button>
           <button
             type="button"
             aria-pressed={tab === "wall"}
             onClick={() => setTab("wall")}
           >
-            Review wall
-            <span>
-              {[...clips, ...loose].filter((c) => !c.approved).length}
-            </span>
+            Clip wall<span>{libraryClips.length}</span>
           </button>
           <button
             type="button"
@@ -169,6 +175,14 @@ export function Library({
           />
         </label>
       </div>
+      {olderCount > 0 && tab !== "footage" && (
+        <details className="gf-library-older-tests">
+          <summary>Older test drafts ({olderCount})</summary>
+          <p>These drafts were generated without speech. They are kept separately from current clips.</p>
+          <label><input type="checkbox" checked={olderTests} onChange={event => setOlderTests(event.target.checked)} /> Include older test drafts</label>
+        </details>
+      )}
+      {inspecting && <QuickLook clip={inspecting} title={inspecting.hook || inspecting.name} onClose={() => setInspecting(undefined)} onDiscard={locked ? undefined : () => discard([inspecting])} discardLabel="Remove" />}
       {outcome && (
         <p
           className={`gf-message ${outcome.ok ? "success" : "error"}`}
@@ -180,8 +194,7 @@ export function Library({
       {tab === "wall" ? (
         <div className="gf-review-wall">
           <ReviewWall
-            factory={factory}
-            clips={[...clips, ...loose]}
+            clips={edits}
             sourceIds={ids}
             onReview={onReview}
             onFactory={onFactory}
@@ -199,14 +212,16 @@ export function Library({
                     clip={clip}
                     className="gf-library-edit-art"
                     iconSize={24}
-                    onReview={() => onReview(clip)}
+                    onReview={clip.campaign_id ? () => onReview(clip) : undefined}
+                    reviewLabel="Edit / request change"
                     onDiscard={locked ? undefined : () => discard([clip])}
+                    discardLabel="Remove"
                   />
                   <button
                     type="button"
                     className="gf-library-edit-open"
-                    onClick={() => onReview(clip)}
-                    aria-label={`Review ${clip.name}`}
+                    onClick={() => clip.campaign_id ? onReview(clip) : setInspecting(clip)}
+                    aria-label={`${clip.campaign_id ? "Edit" : "Inspect"} ${clip.name}`}
                   >
                     <span className="gf-library-edit-copy">
                       <strong>{clip.name}</strong>
@@ -216,10 +231,7 @@ export function Library({
                         {sourceLabel(clip.video_id, ids)}
                       </small>
                     </span>
-                    {clip.made_without_speech && <SpeechlessChip />}
-                    <Pill tone={clip.approved ? "approved" : ""}>
-                      {clip.approved ? "Approved" : "Needs review"}
-                    </Pill>
+                    {(posted(clip) || clip.made_without_speech || clip.rank?.below_bar) && <Pill tone={posted(clip) ? "approved" : ""}>{posted(clip) ? "Posted" : clip.made_without_speech ? "Older test draft" : "Quality hold"}</Pill>}
                     <Icon name="arrow" size={16} />
                   </button>
                 </div>
@@ -234,30 +246,11 @@ export function Library({
               <p>
                 {normalized
                   ? "Try a different name or opening."
-                  : loose.length
-                    ? `${loose.length} clip${loose.length === 1 ? " was" : "s were"} made from this footage before a direction was approved. Play and approve them on the review wall.`
-                    : "Add an episode in Factory to get your first clips."}
+                  : olderCount && !olderTests
+                    ? "Generate fresh clips in Factory. Your older test drafts are available above."
+                    : "Add footage in Factory to get your first clips."}
               </p>
-              {!normalized &&
-                (loose.length ? (
-                  <button
-                    type="button"
-                    className="gf-button secondary"
-                    onClick={() => setTab("wall")}
-                  >
-                    Open the review wall
-                    <Icon name="arrow" size={15} />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="gf-button secondary"
-                    onClick={onFactory}
-                  >
-                    Go to Factory
-                    <Icon name="arrow" size={15} />
-                  </button>
-                ))}
+              {!normalized && <button type="button" className="gf-button secondary" onClick={onFactory}>Go to Factory<Icon name="arrow" size={15} /></button>}
             </div>
           )}
         </>
@@ -267,7 +260,7 @@ export function Library({
             <div className="gf-episode-grid">
               {footage.map((source) => {
                 // Counted like the Factory screen does: clips made before a direction existed are this episode's too.
-                const made = [...clips, ...loose].filter((c) => c.video_id === source.id);
+                const made = libraryClips.filter((c) => c.video_id === source.id);
                 const waiting = made.filter((c) => !c.approved).length;
                 return (
                   <article className="gf-episode-card" key={source.id}>
@@ -303,9 +296,9 @@ export function Library({
                           }
                         >
                           {waiting
-                            ? `${waiting} to review`
+                            ? `${made.length} clips generated`
                             : made.length
-                              ? "All reviewed"
+                              ? "Clips generated"
                               : "No clips yet"}
                         </Pill>
                       </div>
@@ -378,14 +371,14 @@ export function Library({
   );
 }
 
-type WallFilter = "Needs review" | "Approved" | "Posted" | "All";
-const wallFilters: WallFilter[] = ["Needs review", "Approved", "Posted", "All"];
+type WallFilter = "All clips" | "Posted" | "Quality holds";
+const wallFilters: WallFilter[] = ["All clips", "Posted", "Quality holds"];
 const posted = (c: Clip) => !!(c.published_at || c.instagram_media_id);
 function clipStatus(c: Clip) {
   if (posted(c)) return { label: "Posted", tone: "gf-status-posted" };
-  if (c.approved) return { label: "Approved", tone: "gf-status-approved" };
-  if (c.rank?.below_bar || c.made_without_speech) return { label: "Below the bar", tone: "gf-status-below" };
-  return { label: "Needs review", tone: "gf-status-review" };
+  if (c.made_without_speech) return { label: "Older test draft", tone: "gf-status-below" };
+  if (c.rank?.below_bar) return { label: "Quality hold", tone: "gf-status-below" };
+  return { label: "Generated", tone: "gf-status-generated" };
 }
 const reducedMotion = () =>
   typeof window.matchMedia === "function" &&
@@ -393,7 +386,6 @@ const reducedMotion = () =>
 
 /** Vertical 9:16 cards: poster frame, score, hook and status. Hover previews muted; click opens review. */
 function ReviewWall({
-  factory,
   clips,
   sourceIds,
   onReview,
@@ -401,7 +393,6 @@ function ReviewWall({
   onDiscard,
   locked,
 }: {
-  factory: FactoryState;
   clips: Clip[];
   sourceIds: string[];
   onReview: (clip: Clip) => void;
@@ -410,7 +401,7 @@ function ReviewWall({
   onDiscard: (clips: Clip[]) => void;
   locked: boolean;
 }) {
-  const [filter, setFilter] = useState<WallFilter>("Needs review");
+  const [filter, setFilter] = useState<WallFilter>("All clips");
   const [hypothesis, setHypothesis] = useState("");
   const hypotheses = [
     ...new Set(clips.map((c) => c.hypothesis).filter((h): h is string => !!h)),
@@ -418,30 +409,13 @@ function ReviewWall({
   const scoped = newestFirst(clips).filter(
     (c) => !hypothesis || c.hypothesis === hypothesis,
   );
-  const matches = (c: Clip, f: WallFilter) =>
-    f === "All"
-      ? true
-      : f === "Posted"
-        ? posted(c)
-        : f === "Approved"
-          ? c.approved && !posted(c)
-          : !c.approved;
+  const matches = (c: Clip, f: WallFilter) => f === "All clips" || (f === "Posted" ? posted(c) : !!c.rank?.below_bar || !!c.made_without_speech);
   const shown = scoped.filter((c) => matches(c, filter));
-  // Bulk approval only covers clips whose self-check passed and that cleared the bar; the rest need a person.
-  const approvable = shown.filter(
-    (c) =>
-      !c.approved &&
-      !c.rank?.below_bar &&
-      !c.made_without_speech &&
-      (!c.team_run_id ||
-        c.team_review_status === "not_applicable" ||
-        c.team_review_status === "pass"),
-  );
   if (!clips.length)
     return (
       <div className="gf-flow-empty">
         <Icon name="studio" size={26} />
-        <h2>Nothing to review yet</h2>
+        <h2>No clips yet</h2>
         <p>Add an episode in Factory and new clips land here.</p>
         <button type="button" className="gf-button secondary" onClick={onFactory}>
           Go to Factory
@@ -479,32 +453,6 @@ function ReviewWall({
           </select>
         )}
         <span className="gf-wall-spacer" />
-        {approvable.length > 1 && (
-          <button
-            type="button"
-            className="gf-button secondary compact"
-            disabled={factory.busy}
-            onClick={() =>
-              void factory.run(async () => {
-                for (const clip of approvable)
-                  await put(endpoint("clips", clip.id), { approved: true });
-              }, `${approvable.length} clips approved.`)
-            }
-          >
-            <Icon name="check" size={14} />
-            Approve all {approvable.length} shown
-          </button>
-        )}
-        {filter === "Needs review" && shown.length > 0 && (
-          <button
-            type="button"
-            className="gf-button ghost compact"
-            disabled={locked || factory.busy}
-            onClick={() => onDiscard(shown)}
-          >
-            Discard {shown.length} shown
-          </button>
-        )}
       </div>
       {shown.length ? (
         <div className="gf-wall-grid">
@@ -513,14 +461,8 @@ function ReviewWall({
               key={clip.id}
               clip={clip}
               source={sourceLabel(clip.video_id, sourceIds)}
-              // Clips made with no direction cannot open in the Studio; they play here and are approved here.
+              // Clips without saved direction stay playable here without borrowing another workspace’s edit context.
               onReview={clip.campaign_id ? () => onReview(clip) : undefined}
-              onApprove={() =>
-                void factory.run(
-                  () => put(endpoint("clips", clip.id), { approved: true }),
-                  "Clip approved.",
-                )
-              }
               onDiscard={locked ? undefined : () => onDiscard([clip])}
             />
           ))}
@@ -528,20 +470,12 @@ function ReviewWall({
       ) : (
         <div className="gf-flow-empty">
           <Icon name="check" size={26} />
-          <h2>
-            {filter === "Needs review"
-              ? "You're all caught up"
-              : `Nothing ${filter === "All" ? "here" : filter.toLowerCase()} yet`}
-          </h2>
-          <p>
-            {filter === "Needs review"
-              ? "Every clip here has been reviewed."
-              : "Clips show up here as you review and post them."}
-          </p>
+          <h2>{filter === "Quality holds" ? "No quality holds" : filter === "Posted" ? "Nothing posted yet" : "No matching clips"}</h2>
+          <p>Generated clips stay here with their source, quality details, and edit history.</p>
           <button
             type="button"
             className="gf-button secondary"
-            onClick={() => setFilter("All")}
+            onClick={() => setFilter("All clips")}
           >
             Show all clips
           </button>
@@ -555,14 +489,12 @@ function WallCard({
   clip,
   source,
   onReview,
-  onApprove,
   onDiscard,
 }: {
   clip: Clip;
   source: string;
   /** Absent for clips with no direction: those open a quick look instead of the Studio. */
   onReview?: () => void;
-  onApprove: () => void;
   onDiscard?: () => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
@@ -589,7 +521,7 @@ function WallCard({
       <button
         type="button"
         className="gf-wall-card"
-        aria-label={onReview ? `Review ${clip.name}` : `Play ${clip.hook || clip.name}`}
+        aria-label={onReview ? `Edit ${clip.name}` : `Play ${clip.hook || clip.name}`}
         onClick={onReview ?? (() => setLooking(true))}
         onMouseEnter={() => preview(true)}
         onMouseLeave={() => preview(false)}
@@ -621,13 +553,8 @@ function WallCard({
             ) : (
               <span />
             )}
-            <span className={`gf-pill ${status.tone}`}>{status.label}</span>
+            {status.label !== "Generated" && <span className={`gf-pill ${status.tone}`}>{status.label}</span>}
           </span>
-          {clip.made_without_speech && (
-            <span className="gf-wall-warning">
-              <SpeechlessChip />
-            </span>
-          )}
           <span className="gf-wall-duration">
             {illustrative ? "Illustrative" : formatTime(clip.end - clip.start)}
           </span>
@@ -644,9 +571,10 @@ function WallCard({
           clip={clip}
           title={clip.hook || clip.name}
           onClose={() => setLooking(false)}
-          onReview={clip.approved ? undefined : onApprove}
-          reviewLabel="Approve"
+          onReview={onReview}
+          reviewLabel="Edit / request change"
           onDiscard={onDiscard}
+          discardLabel="Remove"
         />
       )}
     </>

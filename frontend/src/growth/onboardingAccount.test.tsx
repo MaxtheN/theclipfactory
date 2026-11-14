@@ -44,7 +44,7 @@ function start() {
   return { w, complete };
 }
 function next() {
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.click(screen.getByRole("button", { name: /^(Continue|Set my first goal)$/ }));
 }
 function toAccount() {
   fireEvent.change(
@@ -60,7 +60,7 @@ function toAccount() {
   next();
   next();
   expect(
-    screen.getByRole("heading", { name: "Review your brand" }),
+    screen.getByRole("heading", { name: "Your direction is set." }),
   ).toBeInTheDocument();
   next();
 }

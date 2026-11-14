@@ -10,6 +10,7 @@ that were said.
 
 from __future__ import annotations
 
+import itertools
 import re
 import uuid
 from pathlib import Path
@@ -311,13 +312,14 @@ def norm(text: str) -> str:
 
 
 def range_words(transcript: dict | None, start: float, end: float, foreground, usable_words) -> list[dict]:
-    """Measured words whose midpoint lies inside [start, end), in time order."""
+    """Measured words inside [start, end); preserve Groq lexical order despite alignment overlap."""
     words = []
     for segment in foreground(transcript):
         for word in usable_words(segment.get("words")):
             if start <= (word["start"] + word["end"]) / 2 < end:
                 words.append(word)
-    words.sort(key=lambda w: w["start"])
+    if not transcript or transcript.get("provider") != "groq":
+        words.sort(key=lambda w: w["start"])
     return words
 
 
@@ -963,7 +965,7 @@ def path_centre(keys: list) -> object:
             return 0.5
         if t <= points[0][0]:
             return points[0][1]
-        for (t0, x0), (t1, x1) in zip(points, points[1:]):
+        for (t0, x0), (t1, x1) in itertools.pairwise(points):
             if t <= t1:
                 return x0 if t1 <= t0 else x0 + (x1 - x0) * (t - t0) / (t1 - t0)
         return points[-1][1]
@@ -993,8 +995,8 @@ def overlay_ass(
     box = ass_color(primary)
     styles = [
         f"Style: Hook,{font},54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,3,3,0,8,80,80,140,1",
-        f"Style: Card,{font},{title_card_size(hook)},&H00FFFFFF,&H00FFFFFF,{box},{box},1,0,0,0,100,100,0,0,3,{CARD_BOX},0,5,"
-        f"{CARD_MARGIN_X},{max(CARD_MARGIN_X, IG_SAFE_RIGHT)},0,1",
+        (f"Style: Card,{font},{title_card_size(hook)},&H00FFFFFF,&H00FFFFFF,{box},{box},1,0,0,0,100,100,0,0,3,{CARD_BOX},0,5,"
+         f"{CARD_MARGIN_X},{max(CARD_MARGIN_X, IG_SAFE_RIGHT)},0,1"),
         f"Style: Flash,{font},10,&H00FFFFFF,&H00FFFFFF,&H00FFFFFF,&H00FFFFFF,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
         f"Style: Dim,{font},10,&H60000000,&H60000000,&H60000000,&H60000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
         f"Style: Cta,{font},76,&H00FFFFFF,&H00FFFFFF,{ass_color(accent)},{ass_color(accent)},1,0,0,0,100,100,0,0,3,24,0,5,90,90,0,1",

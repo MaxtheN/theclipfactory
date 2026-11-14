@@ -23,7 +23,7 @@ import {
   approveClipStyle,
   type ClipStyle,
 } from "./ClipStyle";
-import { GOALS, type WebsiteBriefResult } from "./websiteBriefApi";
+import { goalLabel, type WebsiteBriefResult } from "./websiteBriefApi";
 
 const outcomes = [
   {
@@ -38,9 +38,18 @@ const outcomes = [
   },
   {
     id: "visits",
+    title: "Bring people to my website",
+    description: "Give the right people a reason to visit your website.",
+    objective: "traffic",
+    metric: "website_visits",
+    measure: "Website visits",
+    icon: "play",
+    accent: "222, 188, 141",
+  },
+  {
+    id: "episode_visits",
     title: "Drive full-episode visits",
-    description:
-      "Turn a great short into a reason to watch the whole conversation.",
+    description: "Help podcast listeners find the full conversation.",
     objective: "traffic",
     metric: "full_episode_visits",
     measure: "Full-episode visits",
@@ -341,8 +350,7 @@ export function Onboarding({
     else if (result.objective !== "discovery" && result.metric) {
       setOutcome("other");
       setCustomOutcome(
-        GOALS.find((g) => g.objective === result.objective)?.label ||
-          result.objective,
+        goalLabel(result.objective, result.metric),
       );
       setCustomMetric(result.metric);
     }
@@ -572,19 +580,17 @@ export function Onboarding({
   }
 
   const stepTitles = [
-    "Who are we making this for?",
-    "What are we working toward?",
-    "How should your edits feel?",
-    "Review your brand",
+    "Who should care?",
+    "What should marketing do for you?",
+    "Make it unmistakably yours.",
+    "Your direction is set.",
     "Save your brand to your account",
   ];
   const descriptions = [
-    "Tell us who you make this for. We’ll use it to guide your edits.",
-    "One clear goal helps every edit work toward the same thing.",
-    "Choose the approach that feels most like you. You can refine it later.",
-    askAccount
-      ? "Check your choices. Next, save them to your account."
-      : "Check your choices, then save them and open Factory.",
+    "Describe the people you want to reach—and what matters to them.",
+    "Choose one outcome to guide your first experiments.",
+    "Choose how your brand should sound. Your examples and boundaries shape the work.",
+    "Your brand, audience, and first goal are ready. Bring the footage; your agents take the next step.",
     "Your footage stays on this Mac. An account keeps this brand yours.",
   ];
   function goToProgress(index: number) {
@@ -803,7 +809,7 @@ export function Onboarding({
                       maxLength={3000}
                       value={audience}
                       disabled={locked}
-                      placeholder="Who watches, and what do they care about?"
+                      placeholder="Who do you want to reach, and what matters to them?"
                       onChange={(e) => setAudience(e.target.value)}
                     />
                   )}
@@ -816,7 +822,7 @@ export function Onboarding({
               <>
                 <fieldset className="gf-onboarding-options">
                   <legend className="gf-command-sr-only">Your outcome</legend>
-                  {outcomes.map((option) => (
+                  {outcomes.filter(option => option.id !== "episode_visits" || outcome === "episode_visits" || drafted?.metric === "full_episode_visits" || /\b(podcast|episodes?)\b/i.test(`${name} ${audience}`)).map((option) => (
                     <label
                       key={option.id}
                       className={`gf-onboarding-choice${outcome === option.id ? " is-selected" : ""}`}
@@ -1004,17 +1010,17 @@ export function Onboarding({
                       Your brand is ready
                     </span>
                     <strong>{name.trim() || "Your brand"}</strong>
-                    <p>Check the details below. Agents use them for every clip.</p>
+                    <p>Check the details below. Your agents use this direction for their work.</p>
                   </div>
                   {drafted && <span className="gf-from-site is-static">from your site</span>}
                 </div>
                 <section className="gf-onboarding-style" aria-label="Your clip style">
                   <header>
-                    <h2>Your clip style</h2>
+                    <h2>Set the standard for your first drafts.</h2>
                     {styleApproved ? (
                       <span className="gf-pill approved">Approved ✓</span>
                     ) : (
-                      <p>Sensible defaults. Tap to change anything.</p>
+                      <p>Choose a starting style. Every new version stays yours to review.</p>
                     )}
                   </header>
                   <ClipStylePicker
@@ -1033,7 +1039,7 @@ export function Onboarding({
                       onClick={() => setStyleApproved(clipStyle)}
                     >
                       <Check size={15} strokeWidth={1.8} aria-hidden="true" />
-                      Looks good — use this style
+                      Use this style
                     </button>
                   )}
                 </section>
@@ -1190,18 +1196,9 @@ export function Onboarding({
         </div>
         <footer
           className="gf-onboarding-actions"
-          hidden={!!launchPhase || (website && !onCancel)}
+          hidden={!!launchPhase || website}
         >
-          {website ? (
-            <button
-              type="button"
-              className="gf-button ghost"
-              disabled={busy}
-              onClick={onCancel}
-            >
-              Back to Factory
-            </button>
-          ) : step > 0 ? (
+          {step > 0 ? (
             <button
               type="button"
               className="gf-button ghost"
@@ -1261,15 +1258,15 @@ export function Onboarding({
                     : "Signing in…"
                   : step === last
                     ? campaign
-                      ? "Open Factory"
+                      ? "Open my factory"
                       : askAccount && !signedIn
                         ? account.mode === "sign-up"
                           ? "Create account & launch"
                           : "Sign in & launch"
-                        : "Launch"
+                        : "Open my factory"
                     : editingReview
                       ? "Review changes"
-                      : "Continue"}
+                      : step === 1 ? "Set my first goal" : "Continue"}
             </span>
             <span
               key={flight}

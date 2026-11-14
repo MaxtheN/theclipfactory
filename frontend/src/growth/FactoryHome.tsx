@@ -954,7 +954,7 @@ export function FactoryHome({
               // Counts cover this workspace's edits and what the engine made from this file with no direction;
               // another workspace's edits of the same file do not belong here.
               const own = [...clips, ...loose].filter(
-                (c) => c.video_id === source.id,
+                (c) => c.video_id === source.id && !c.made_without_speech,
               );
               // Best first; clips under the quality floor stay saved but are not counted here.
               const ordered = reviewOrder(own.filter((c) => !c.approved));
@@ -971,11 +971,11 @@ export function FactoryHome({
                 status.state === "cancelled"
                   ? status?.error || status?.headline
                   : unreviewed.length
-                    ? `${unreviewed.length} clip${unreviewed.length === 1 ? "" : "s"} ready for review${lowCount ? ` · ${lowCount} below the bar` : ""}`
+                    ? `${unreviewed.length} clip${unreviewed.length === 1 ? "" : "s"} ready${lowCount ? ` · ${lowCount} below the bar` : ""}`
                     : lowCount
                       ? `${lowCount} clip${lowCount === 1 ? "" : "s"} below the bar`
                       : own.length
-                      ? `${own.length} clip${own.length === 1 ? "" : "s"} approved`
+                      ? `${own.length} clip${own.length === 1 ? "" : "s"} generated`
                       : status.blocked_code?.startsWith("asr_") && status.blocked_reason
                         ? status.blocked_reason
                         : "Ready to make clips";
@@ -997,7 +997,7 @@ export function FactoryHome({
                     className="gf-button primary compact"
                     onClick={() => openReview(unreviewed[0])}
                   >
-                    Review {unreviewed.length} clip
+                    Open {unreviewed.length} clip
                     {unreviewed.length === 1 ? "" : "s"}
                     <Icon name="arrow" size={15} />
                   </button>

@@ -158,13 +158,17 @@ describe("Results page", () => {
     } as unknown as Workspace;
     const factory = { loading: false, errors: {}, data: { clips: [], videos: [], jobs: [] } } as unknown as FactoryState;
     const next = vi.fn();
-    const { rerender } = render(<Results w={w} factory={factory} next={next} />);
+    const onRehearse = vi.fn();
+    const { rerender } = render(<Results w={w} factory={factory} next={next} onRehearse={onRehearse} />);
     const header = screen.getByRole("list", { name: "Post, measure, learn" });
     expect(within(header).getByText("Post")).toBeTruthy();
     expect(screen.getByText("Nothing posted yet — approve a clip and post it")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "What we've learned" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Insights" }));
     expect(await screen.findByRole("heading", { name: "What we've learned" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Rehearse the loop" }));
+    expect(onRehearse).toHaveBeenCalledOnce();
+    expect(document.querySelector("iframe")).toBeNull();
     expect(screen.getByRole("heading", { name: "Next experiment" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Waiting for you" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "See how it learns (simulated data)" })).toBeTruthy();

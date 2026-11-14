@@ -1,4 +1,4 @@
-/* Growth Factory landing page. White and Signal orange, real photography, motion on scroll. */
+/* Growth Factory landing page. Warm paper, Signal orange, illustrative photography. */
 
 :root {
   --signal: #ff5a1f;
@@ -19,7 +19,7 @@
   --pine-soft: #e3efea;
   --field: #f2eeea;
   --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
-  --display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
+  --display: "Manrope", "Inter", system-ui, sans-serif;
   --body: "Inter", system-ui, -apple-system, sans-serif;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   color-scheme: light;
@@ -329,7 +329,7 @@ svg.fill {
   gap: 10px;
   min-height: 44px;
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 21px;
   letter-spacing: -0.03em;
 }
@@ -462,7 +462,7 @@ svg.fill {
   background: var(--white);
   color: var(--ink);
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 14px;
   line-height: 1.08;
   text-align: center;
@@ -576,7 +576,7 @@ svg.fill {
 /* Headings */
 .h-display {
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(42px, 6vw, 88px);
   line-height: 0.9;
   letter-spacing: -0.045em;
@@ -584,7 +584,7 @@ svg.fill {
 
 .h-card {
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(28px, 3vw, 40px);
   letter-spacing: -0.03em;
 }
@@ -686,7 +686,7 @@ svg.fill {
 
 .hero-title {
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(56px, 9vw, 138px);
   line-height: 0.86;
   letter-spacing: -0.05em;
@@ -875,7 +875,7 @@ svg.fill {
   border-radius: 14px;
   background: var(--white);
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(11px, 1.4vw, 18px);
   line-height: 1.05;
   text-align: center;
@@ -1066,7 +1066,7 @@ svg.fill {
 
 .console-num {
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 64px;
   line-height: 0.8;
   letter-spacing: -0.04em;
@@ -1075,7 +1075,7 @@ svg.fill {
 
 .console-info h3 {
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 44px;
   letter-spacing: -0.03em;
 }
@@ -1329,7 +1329,7 @@ svg.fill {
 
 .writer-hook {
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 34px;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -1650,7 +1650,7 @@ svg.fill {
   left: 20px;
   bottom: 14px;
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 34px;
   letter-spacing: -0.03em;
   color: var(--white);
@@ -1718,7 +1718,7 @@ svg.fill {
 
 .ready-num {
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 96px;
   line-height: 0.85;
   letter-spacing: -0.05em;
@@ -1886,7 +1886,7 @@ svg.fill {
 
 .big-stat {
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(72px, 8vw, 120px);
   line-height: 0.82;
   letter-spacing: -0.05em;
@@ -1928,7 +1928,7 @@ svg.fill {
 
 .next-title {
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 32px;
   line-height: 0.96;
   letter-spacing: -0.03em;
@@ -1996,7 +1996,7 @@ svg.fill {
   background: var(--peach);
   color: var(--ember-deep);
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 20px;
   display: inline-flex;
   align-items: center;
@@ -2089,7 +2089,7 @@ svg.fill {
 
 .why-copy h3 {
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 32px;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -2405,3 +2405,131 @@ svg.fill {
     transform: none;
   }
 }
+
+/* Growth department copy: retain the orange identity and give the longer story room. */
+.hero { height: auto; min-height: 860px; }
+.hero-copy { min-height: 860px; padding-top: 72px; padding-bottom: 180px; gap: 22px; }
+.hero-title { max-width: 68%; font-size: clamp(42px, 5.15vw, 78px); line-height: 1.1; letter-spacing: -0.045em; }
+.hero-lead { max-width: 66%; font-size: clamp(15px, 1.3vw, 18px); line-height: 1.7; }
+.hero-lead > span { display: block; }
+.hero-approval { max-width: min(510px, 57%); font-size: 15px; line-height: 1.5; color: var(--white); }
+.hero-note { max-width: 55%; line-height: 1.5; color: var(--white); }
+.hero-chip { height: auto; min-height: 36px; padding-block: 8px; line-height: 1.4; }
+.hero-clips { width: 32%; top: 16%; right: 3%; }
+.growth-cycle .section-head { align-items: flex-start; }
+.growth-cycle .h-display { max-width: 780px; font-size: clamp(40px, 5vw, 72px); }
+.growth-cycle .lead { max-width: 360px; }
+.cycle-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 36px; margin-top: 48px; }
+.cycle-grid li { padding: 28px 0; border-top: 1px solid rgba(23, 18, 14, 0.22); }
+.cycle-number { color: var(--ember); font-size: 13px; font-weight: 700; }
+.cycle-grid h3 { font-family: var(--display); font-size: 28px; letter-spacing: -0.03em; margin: 12px 0 10px; }
+.cycle-grid p, .builder-copy p { color: var(--muted); font-size: 16px; line-height: 1.6; }
+.app-intro { color: var(--white); padding-top: 68px; }
+.app-intro .h-display { font-size: clamp(40px, 5vw, 72px); }
+.app-section { background: linear-gradient(180deg, var(--ink) 0, var(--ink) 550px, var(--field) 550px); }
+.demo-note { color: var(--on-dark); font-size: 13px; line-height: 1.6; margin-top: -20px; }
+.evidence-note { max-width: 760px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.why-copy p { line-height: 1.6; }
+.builder-section { padding-top: 16px; }
+.builder-section .h-display { font-size: clamp(40px, 5vw, 72px); }
+.builder-copy { max-width: 420px; }
+.builder-copy p + p { margin-top: 16px; }
+.builder-flow { display: flex; flex-wrap: wrap; gap: 14px 32px; margin-top: 36px; counter-reset: build; }
+.builder-flow li { counter-increment: build; display: flex; align-items: center; gap: 12px; font-weight: 600; line-height: 1.5; }
+.builder-flow li::before { content: counter(build); display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--peach); color: var(--ember-deep); flex-shrink: 0; }
+.release-note { border-block: 1px solid rgba(23, 18, 14, 0.22); margin-top: 36px; padding-block: 20px; }
+.release-note summary { cursor: pointer; font-weight: 600; min-height: 28px; }
+.release-note p { max-width: 900px; margin-top: 16px; color: var(--muted); line-height: 1.7; }
+.cta-copy .h-display { max-width: 1000px; font-size: clamp(40px, 5.8vw, 84px); line-height: 0.98; }
+.closing-lead { max-width: 640px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+@media (max-width: 820px) {
+  .hero, .hero-copy { min-height: 800px; }
+  .hero-copy { padding-top: 44px; padding-bottom: 130px; }
+  .hero-title { max-width: 100%; font-size: clamp(42px, 8vw, 68px); }
+  .hero-lead, .hero-approval { max-width: 100%; }
+  .hero-note { max-width: 100%; }
+  .hero-scrim { background: linear-gradient(180deg, rgba(23,18,14,0.7), rgba(23,18,14,0.65) 70%, transparent); }
+  .hero-fade { height: 22%; }
+  .cycle-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0 24px; }
+}
+@media (max-width: 480px) {
+  .hero-chip { max-width: 100%; font-size: 12px; }
+  .hero-copy { gap: 20px; }
+  .hero-title { font-size: clamp(38px, 9.7vw, 46px); }
+  .hero-actions { width: 100%; }
+  .hero-actions .btn { width: 100%; }
+  .cycle-grid { grid-template-columns: 1fr; margin-top: 28px; }
+  .cycle-grid li { padding-block: 22px; }
+  .why-grid { grid-template-columns: minmax(0,1fr); }
+  .why-copy { padding-inline: 22px; }
+  .why-copy h3 { font-size: 28px; }
+  .demo-note { margin-top: -12px; }
+  .builder-flow { flex-direction: column; }
+}
+
+/* Compact scrolled header: fixed height avoids shifting the document on scroll. */
+.site-header { height: 73px; border-bottom-color: transparent; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.header-row { position: relative; height: 73px; padding-block: 14px; transition: height 180ms ease, padding 180ms ease; }
+.header-row::before { content: ""; position: absolute; inset: 0 calc((min(100vw, 1320px) - 100vw) / 2); z-index: -1; background: rgba(255,255,255,0.9); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-bottom: 1px solid rgba(23,18,14,0.08); }
+.site-header.is-scrolled .header-row { height: 57px; padding-block: 6px; }
+.site-header.is-scrolled .brand { font-size: 18px; }
+.brand { transition: font-size 180ms ease; }
+.brand > img { transition: width 180ms ease, height 180ms ease; }
+.site-header.is-scrolled .brand > img { width: 30px; height: 30px; }
+.site-header.is-scrolled .nav-desktop { font-size: 14px; gap: 22px; }
+.nav-mobile { position: relative; background: rgba(255,255,255,0.98); border-bottom: 1px solid var(--line); }
+.download-dialog { width: min(480px, calc(100% - 32px)); max-height: calc(100dvh - 40px); margin: auto; padding: 36px; border: 1px solid var(--line); border-radius: 24px; background: var(--paper); color: var(--ink); box-shadow: 0 24px 100px rgba(0,0,0,0.22); }
+.download-dialog::backdrop { background: rgba(23,18,14,0.55); backdrop-filter: blur(6px); }
+.download-dialog > img { margin-bottom: 24px; }
+.download-dialog .label { color: var(--ember); }
+.download-dialog h2 { margin-block: 12px 18px; font-family: var(--display); font-size: 30px; line-height: 1.2; letter-spacing: -0.035em; }
+.download-dialog p:not(.label) { color: var(--muted); line-height: 1.65; }
+.download-dialog .btn { margin-top: 26px; }
+.dialog-close { position: absolute; right: 12px; top: 12px; width: 44px; height: 44px; border: 0; border-radius: 50%; font-size: 28px; background: transparent; cursor: pointer; }
+.dialog-close:hover { background: var(--line); }
+@media (max-width: 480px) {
+  .hero-title { font-size: clamp(30px, 8.2vw, 39px); line-height: 1.15; }
+  .hero-lead { font-size: 16px; }
+  .hero-lead > span + span { margin-top: 8px; }
+  .download-dialog { padding: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-row, .brand, .brand > img { transition: none; }
+}
+@media (max-width: 640px) {
+  .app-inner, .app-window { min-width: 0; }
+  .app-window { width: 100%; }
+  .app-bar-left, .workspace { min-width: 0; }
+  .app-tabs { width: 100%; }
+  .app-tabs button { flex: 1 1 0; min-width: 0; padding-inline: 8px; }
+}
+@media (max-width: 640px) {
+  .app-window.tilt { animation: none; transform: none; opacity: 1; transition: none; }
+}
+
+/* Keep the brand left, section navigation centered, and download right. */
+.site-header .header-row { display: grid; grid-template-columns: 1fr auto 1fr; }
+.header-logo { justify-self: start; }
+.header-title { font-family: var(--display); font-size: 20px; font-weight: 700; letter-spacing: -0.035em; white-space: nowrap; }
+.site-header .nav-desktop { justify-self: center; gap: 22px; font-size: 12px; }
+.site-header .header-download { justify-self: end; min-height: 36px; padding-inline: 15px; font-size: 12px; }
+.site-header.is-scrolled .nav-desktop { gap: 12px; font-size: 12px; }
+.site-header.is-scrolled .header-title { font-size: 18px; }
+@media (max-width: 1040px) {
+  .site-header .header-row { grid-template-columns: minmax(0,1fr) auto; }
+  .site-header .nav-desktop { display: none; }
+  .site-header .header-download { display: none; }
+  .site-header .menu-btn { display: inline-flex; }
+  .site-header .nav-mobile:not([hidden]) { display: flex !important; }
+}
+@media (max-width: 480px) {
+  .header-title, .site-header.is-scrolled .header-title { font-size: 16px; }
+}
+
+/* Product pages use the same action, navigation and type hierarchy as the Mac story. */
+.text-link { color: var(--ember); font-weight: 600; white-space: normal; }
+.text-link:hover { color: var(--ember-deep); text-decoration: underline; text-underline-offset: 4px; }
+.site-header .nav-desktop a { padding-block: 7px; border-bottom: 2px solid transparent; }
+.site-header .nav-desktop a[aria-current="page"] { color: var(--ember); border-color: var(--signal); }
+.site-header .nav-mobile a[aria-current="page"] { color: var(--ember); }
+.site-footer nav a[aria-current="page"] { color: var(--ember); }

@@ -12,11 +12,13 @@ function view(present: boolean, extra: Partial<LlmView["settings"]> = {}): LlmVi
     cloud_agents: false,
     cloud_agent_frames: false,
     fallback_to_local: false,
+    speech_provider: "local" as const,
     ...extra,
   };
   const cloud = present && settings.provider === "cloud";
   return {
     key: { present, error: null },
+    groq_configured: true,
     settings,
     routes: {
       brand_research: cloud ? "openrouter" : "local",
@@ -51,6 +53,45 @@ afterEach(() => {
 });
 
 describe("AiModelCard", () => {
+  it("selects cloud speech independently of Haiku and explains that audio leaves the Mac", async () => {
+    const before = view(true, { cloud_agents: true });
+    const after = view(true, { cloud_agents: true, speech_provider: "groq" });
+    const calls = serve(before, after);
+    render(<AiModelCard />);
+    const speech = await screen.findByRole("combobox", { name: "Speech recognition" });
+    expect(screen.getByText(/audio leaves your Mac/)).toBeInTheDocument();
+    expect(screen.getByText("Groq key configured in macOS Keychain.")).toBeInTheDocument();
+    await userEvent.setup().selectOptions(speech, "groq");
+    await waitFor(() => expect(speech).toHaveValue("groq"));
+    expect(JSON.parse(calls.at(-1)!.body)).toEqual({ speech_provider: "groq" });
+    expect(calls.at(-1)!.url).toBe("/api/llm-provider/settings");
+    expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue("anthropic/claude-haiku-5.5");
+    expect(screen.getByRole("checkbox", { name: /Use cloud model for clip agents too/ })).toBeChecked();
+  });
+
+  it("holds cloud speech when no Groq key exists and gives a missing-key action", async () => {
+    const initial = { ...view(true), groq_configured: false };
+    const calls = serve(initial);
+    render(<AiModelCard />);
+    await screen.findByRole("combobox", { name: "Speech recognition" });
+    expect(screen.getByRole("option", { name: "Cloud — Groq Whisper" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: "Get a Groq key" })).toHaveAttribute("href", "https://console.groq.com/keys");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("keeps the saved speech selection and surfaces a failed setting save", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => ++calls === 1
+      ? new Response(JSON.stringify(view(true)))
+      : new Response(JSON.stringify({ detail: "Groq key is unavailable" }), { status: 409 })));
+    render(<AiModelCard />);
+    const speech = await screen.findByRole("combobox", { name: "Speech recognition" });
+    await userEvent.setup().selectOptions(speech, "groq");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Groq key is unavailable");
+    expect(speech).toHaveValue("local");
+    expect(speech).not.toBeDisabled();
+  });
+
   it("shows local when no key is saved and saves a pasted key to Keychain", async () => {
     const calls = serve(view(false), view(true));
     render(<AiModelCard />);

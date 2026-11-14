@@ -228,7 +228,7 @@ def test_agent_context_uses_only_its_profile_and_campaign(client, monkeypatch):
 
 def test_optional_run_direction_reaches_the_team_run_and_is_bounded(client, monkeypatch):
     video = upload_mock(client, monkeypatch)
-    profiles, campaign, version, path = setup_campaign(client, [video], duration=5)
+    profiles, _campaign, _version, path = setup_campaign(client, [video], duration=5)
     monkeypatch.setattr(client.app.state.models, "require", lambda *a: None)
     seen = []
 

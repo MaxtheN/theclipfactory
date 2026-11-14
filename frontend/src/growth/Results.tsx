@@ -11,6 +11,7 @@ import {
 import { pendingRules, scopeAutomation, type Row } from "./flowEvents";
 import { postedRows, resultsStory, type PostedRow } from "./resultsModel";
 import { StrategistPanel } from "./StrategistPanel";
+import { GrowthLoopPanel } from "./GrowthLoopPanel";
 import { FactoryUpgrades } from "./FactoryUpgrades";
 import { PanelDialog } from "./PanelDialog";
 import type { StrategistView } from "./strategistApi";
@@ -1058,6 +1059,7 @@ export function Results({
   visible = true,
   onReview,
   onEditingRules,
+  onRehearse,
 }: {
   w: Workspace;
   factory: FactoryState;
@@ -1065,6 +1067,7 @@ export function Results({
   visible?: boolean;
   onReview?: (clip: Clip) => void;
   onEditingRules?: () => void;
+  onRehearse?: () => void;
 }) {
   const data = useResultsData(w, visible);
   const [view, setView] = useState<StrategistView | null>(null);
@@ -1223,6 +1226,16 @@ export function Results({
           }
         />
       )}
+      {w.profileId && w.campaign?.id && <GrowthLoopPanel
+        profileId={w.profileId}
+        campaignId={w.campaign.id}
+        strategyVersionId={activeRulesId(w) || w.campaign.active_strategy_id || null}
+        clips={clips}
+        visible={visible && section === "insights"}
+        onReview={onReview}
+        onEditingRules={onEditingRules}
+        onRehearse={onRehearse}
+      />}
       </div>
       <footer className="gf-results-workspace-tools">
         <div>

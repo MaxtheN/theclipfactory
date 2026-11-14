@@ -27,6 +27,9 @@ def no_cloud_key(monkeypatch):
 
     backend = Backend()
     monkeypatch.setattr(llm_provider.OpenRouterSecrets, "_backend", lambda self: backend)
+    from clip_factory.cloud_speech import GroqSpeechSecrets
+
+    monkeypatch.setattr(GroqSpeechSecrets, "_backend", lambda self: backend)
     return backend
 
 
