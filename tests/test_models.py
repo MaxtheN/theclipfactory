@@ -458,7 +458,7 @@ def test_parallel_download_disk_reservations_prevent_overcommit(models, monkeypa
 
 @pytest.mark.parametrize("weight_name", ["weights.safetensors", "weights.npz"])
 def test_whisper_download_accepts_supported_publisher_formats(models, hub, weight_name):
-    api, transfer, info = hub
+    _api, transfer, info = hub
     files = {"config.json": b'{"model_type":"whisper"}', weight_name: b"test model weights"}
     info.siblings = [SimpleNamespace(rfilename=name, size=len(content)) for name, content in files.items()]
 
