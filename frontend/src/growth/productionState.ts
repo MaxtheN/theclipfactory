@@ -8,6 +8,13 @@ export function object(value: unknown): Record<string, unknown> | undefined {
 export function clipInScope(clip: Clip, scope: ProductionScope) {
   return clip.campaign_id === scope.campaignId && clip.profile_id === scope.profileId && scope.sourceIds.includes(clip.video_id);
 }
+/**
+ * A clip the engine made from this workspace's footage outside any workspace run: it has no
+ * direction or profile, so it is shown with the footage and reviewed on the wall, not in the Studio.
+ */
+export function undirected(clip: Clip, sourceIds: readonly string[]) {
+  return !clip.campaign_id && sourceIds.includes(clip.video_id);
+}
 export function jobInScope(job: Job, scope: ProductionScope, runs: TeamRun[] = []) {
   const context = object(job.context);
   if (!context || typeof context.video_id !== "string" || !scope.sourceIds.includes(context.video_id)) return false;

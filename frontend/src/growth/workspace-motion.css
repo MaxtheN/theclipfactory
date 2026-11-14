@@ -97,12 +97,12 @@
 .gf-flow-app:not(.is-onboarding) .gf-footage-row:focus-within {
   background: var(--material-field);
 }
-.gf-flow-app:not(.is-onboarding) .gf-library-edit > svg:last-child,
+.gf-flow-app:not(.is-onboarding) .gf-library-edit-open > svg:last-child,
 .gf-flow-app:not(.is-onboarding) .gf-footage-row > .gf-button > svg:last-child,
 .gf-flow-app:not(.is-onboarding) .gf-cut-copy > span > svg {
   transition: transform 150ms ease;
 }
-.gf-flow-app:not(.is-onboarding) .gf-library-edit:is(:hover, :focus-visible):not(:disabled) > svg:last-child,
+.gf-flow-app:not(.is-onboarding) .gf-library-edit-open:is(:hover, :focus-visible):not(:disabled) > svg:last-child,
 .gf-flow-app:not(.is-onboarding) .gf-footage-row > .gf-button:is(:hover, :focus-visible):not(:disabled) > svg:last-child,
 .gf-flow-app:not(.is-onboarding) .gf-cut-card:is(:hover, :focus-visible):not(:disabled) .gf-cut-copy > span > svg {
   transform: translateX(2px);
@@ -126,7 +126,7 @@
   .gf-operational .nav-item,
   .gf-flow-app:not(.is-onboarding) .gf-nav-item > svg,
   .gf-flow-app:not(.is-onboarding) .gf-footage-row,
-  .gf-flow-app:not(.is-onboarding) .gf-library-edit > svg:last-child,
+  .gf-flow-app:not(.is-onboarding) .gf-library-edit-open > svg:last-child,
   .gf-flow-app:not(.is-onboarding) .gf-footage-row > .gf-button > svg:last-child,
   .gf-flow-app:not(.is-onboarding) .gf-cut-copy > span > svg {
     transition: none !important;

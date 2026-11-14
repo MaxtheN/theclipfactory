@@ -6,6 +6,7 @@ const root = new URL("../", import.meta.url);
 const html = await readFile(new URL("index.html", root), "utf8");
 const css = await readFile(new URL("styles.css", root), "utf8");
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
+const DEMO = "https://theclipfactory-frontend-two.vercel.app";
 
 test("all referenced local assets exist", async () => {
   const paths = new Set([
@@ -23,42 +24,48 @@ test("in-page links and SVG references resolve to unique IDs", () => {
   }
 });
 
-test("preview tabs share a labeled panel and one keyboard entry point", () => {
-  const tabs = [...html.matchAll(/<button\b[^>]*role="tab"[^>]*>/g)].map((m) => m[0]);
-  assert.equal(tabs.length, 3);
-  assert.equal(tabs.filter((tab) => tab.includes('aria-selected="true"')).length, 1);
-  assert.equal(tabs.filter((tab) => tab.includes('tabindex="0"')).length, 1);
-  for (const tab of tabs) assert.ok(tab.includes('aria-controls="preview-panel"'));
-  const selected = tabs.find((tab) => tab.includes('aria-selected="true"'));
-  const selectedId = selected.match(/id="([^"]+)"/)[1];
-  assert.match(html, new RegExp(`role="tabpanel"\\s+aria-labelledby="${selectedId}"`));
-  assert.match(html, /aria-orientation="horizontal"/);
+function tabsIn(listLabel) {
+  const list = html.split(`aria-label="${listLabel}"`)[1].split("</div>")[0];
+  return [...list.matchAll(/<button\b[^>]*role="tab"[^>]*>/g)].map((m) => m[0]);
+}
+
+for (const [label, count] of [
+  ["Agents", 6],
+  ["App screens", 3],
+]) {
+  test(`${label} tabs each control a labelled panel with one keyboard entry point`, () => {
+    const tabs = tabsIn(label);
+    assert.equal(tabs.length, count);
+    assert.equal(tabs.filter((tab) => tab.includes('aria-selected="true"')).length, 1);
+    assert.equal(tabs.filter((tab) => tab.includes('tabindex="0"')).length, 1);
+    for (const tab of tabs) {
+      const id = tab.match(/id="([^"]+)"/)[1];
+      const panel = tab.match(/aria-controls="([^"]+)"/)[1];
+      assert.match(html, new RegExp(`role="tabpanel" id="${panel}" aria-labelledby="${id}"`));
+    }
+  });
+}
+
+test("download CTAs are real buttons and the old demo link is gone", () => {
+  const buttons = [...html.matchAll(/<button\b[^>]*data-download[^>]*>/g)].map((m) => m[0]);
+  assert.ok(buttons.length >= 4);
+  for (const tag of buttons) assert.ok(tag.includes('type="button"'));
+  const hero = html.split('class="wrap hero-copy"')[1].split('class="hero-clips"')[0];
+  assert.match(hero, /data-download/);
+  assert.doesNotMatch(html, new RegExp(DEMO.replace(/[.]/g, "\\.")));
 });
 
-test("every demo CTA retains the existing destination and safe new-tab behavior", () => {
-  const links = [...html.matchAll(/<a\b[^>]*href="https:\/\/theclipfactory-frontend-two\.vercel\.app"[^>]*>/g)];
-  assert.ok(links.length >= 5);
-  for (const [tag] of links) {
-    assert.ok(tag.includes('target="_blank"'));
-    assert.ok(tag.includes('rel="noopener"'));
-    assert.ok(!tag.includes("download"));
-  }
+test("the rotating clip ring behind the closing section is decorative", () => {
+  const cta = html.split('id="get"')[1].split("</section>")[0];
+  assert.match(cta, /class="cta-orbit" aria-hidden="true"/);
+  assert.equal((cta.match(/class="ring-card/g) || []).length, 12);
 });
 
-test("the hero explains the product and distinguishes the demo from the native app", () => {
-  const heroCopy = html.split('<div class="hero-copy">')[1].split('<div class="preview-wrap">')[0];
-  assert.match(heroCopy, /Turn long-form video into short-form clips/);
-  assert.match(heroCopy, /You approve the cut/);
-  assert.match(heroCopy, /Interactive demo with sample data\. No video rendering\./);
-  assert.match(heroCopy, /Mac app for Apple Silicon/);
-  assert.match(heroCopy, /In development/);
-  assert.match(html, /ILLUSTRATIVE PREVIEW/);
-  assert.match(html, /CONCEPT ONLY/);
-});
-
-test("walkthrough and mobile menu controls retain accessible associations", () => {
-  assert.match(html, /<dialog id="workflow-tour" aria-labelledby="tour-title">/);
-  assert.match(html, /aria-label="Close walkthrough"/);
-  assert.match(html, /aria-controls="mobile-nav"\s+aria-expanded="false"/);
+test("the mobile menu keeps its accessible associations", () => {
+  assert.match(html, /aria-controls="mobile-nav" aria-expanded="false"/);
   assert.match(html, /id="mobile-nav"[^>]*hidden/s);
+});
+
+test("motion respects reduced-motion preferences", () => {
+  assert.match(css, /prefers-reduced-motion: reduce/);
 });
