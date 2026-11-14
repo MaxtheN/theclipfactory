@@ -1,16 +1,8 @@
 import { AutoTextarea } from "../components/AutoTextarea";
 import { useState } from "react";
-import { workspaceApi, initialDirection, reviewPreview } from "./workspaceApi";
+import { workspaceApi, initialDirection } from "./workspaceApi";
 import type { Workspace } from "./useCampaignWorkspace";
-import {
-  Disclosure,
-  Field,
-  FieldGroup,
-  Pill,
-  Poster,
-  Empty,
-  PrimaryAction,
-} from "./parts";
+import { Disclosure, Field, Pill, Empty, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
 
 export function Research({ w, next }: { w: Workspace; next: () => void }) {
@@ -70,7 +62,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
       if (
         await w.run(
           () => workspaceApi.approve(w.campaign!.id, pending!.id),
-          "Direction approved. You're ready to make something.",
+          "Style rules approved. New clips will follow them.",
         )
       )
         next();
@@ -88,22 +80,21 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
             ),
             proposedReason,
           ),
-        "Draft saved. Step 2: click Approve direction to activate it.",
+        "Draft saved. Approve it to use it.",
       );
   }
   if (!w.campaign)
     return (
-      <Empty title="Give your idea a home" icon="research">
-        Save a campaign in Setup before choosing its creative direction.
+      <Empty title="No channel yet" icon="research">
+        Set up a channel first.
       </Empty>
     );
   return (
-    <div className="gf-research-grid">
+    <div className="gf-research-grid gf-style-rules">
       <section className="gf-card gf-hypothesis">
         <div className="gf-card-header">
           <div>
-            <span className="gf-overline">THE CREATIVE DIRECTION</span>
-            <h2>Proposed test</h2>
+            <h2>Rules for the next clips</h2>
           </div>
           <Pill tone={pending ? "sand" : active ? "mint" : "quiet"}>
             {pending
@@ -113,47 +104,18 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
                 : "Not saved"}
           </Pill>
         </div>
-        <div className="gf-research-reference">
-          <Disclosure title="Reference & inspection details" icon="link">
-            <div className="gf-reference-art">
-              <Poster compact />
-            </div>
-            <Pill tone="quiet">
-              {reviewPreview
-                ? "Illustrative reference"
-                : "Creator-supplied material"}
-            </Pill>
-            <p className="gf-body-copy">
-              A good reference suggests an experiment. It doesn't predict a
-              result.
-            </p>
-            <Field label="Reference link or source locator">
-              {(id) => (
-                <input
-                  id={id}
-                  placeholder="URL, episode and timestamp"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                />
-              )}
-            </Field>
-
-            <p>
-              This screen saves your supplied rationale. Automated reference
-              inspection is not connected yet. A link alone is not evidence that
-              its contents were analyzed.
-            </p>
-          </Disclosure>
-          <p className="gf-research-note">
-            Creator-provided direction. Automated reference inspection is not
-            connected.
-          </p>
-        </div>
-        <FieldGroup
-          title="01 / The idea & source moment"
-          className="gf-direction-group"
-        >
-          <Field label="The idea worth testing">
+        <div className="gf-form-fields gf-style-rule-fields">
+          <Field label="What moments to look for">
+            {(id) => (
+              <AutoTextarea
+                id={id}
+                value={selection}
+                onChange={(e) => setSelection(e.target.value)}
+                rows={2}
+              />
+            )}
+          </Field>
+          <Field label="The angle">
             {(id) => (
               <AutoTextarea
                 rows={1}
@@ -165,78 +127,57 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
               />
             )}
           </Field>
-          <Field label="What should the source moment do?">
-            {(id) => (
-              <AutoTextarea
-                id={id}
-                value={selection}
-                onChange={(e) => setSelection(e.target.value)}
-                rows={2}
-              />
-            )}
-          </Field>
-        </FieldGroup>
-        <FieldGroup
-          title="02 / The opening experiment"
-          className="gf-experiment-group"
-        >
-          <div className="gf-variant-pair">
-            <div>
-              <span className="gf-variant-letter">A</span>
-              <span className="gf-overline">FIRST APPROACH</span>
-              <Field label="Opening A">
-                {(id) => (
-                  <AutoTextarea
-                    rows={1}
-                    id={id}
-                    value={hookA}
-                    onChange={(e) => setHookA(e.target.value)}
-                    maxLength={250}
-                  />
-                )}
-              </Field>
-            </div>
-            <div>
-              <span className="gf-variant-letter">B</span>
-              <span className="gf-overline">THE ALTERNATIVE</span>
-              <Field label="Opening B">
-                {(id) => (
-                  <AutoTextarea
-                    rows={1}
-                    id={id}
-                    value={hookB}
-                    onChange={(e) => setHookB(e.target.value)}
-                    maxLength={250}
-                  />
-                )}
-              </Field>
-            </div>
+          <div className="gf-form-pair">
+            <Field label="Opening A">
+              {(id) => (
+                <AutoTextarea
+                  rows={1}
+                  id={id}
+                  value={hookA}
+                  onChange={(e) => setHookA(e.target.value)}
+                  maxLength={250}
+                />
+              )}
+            </Field>
+            <Field label="Opening B">
+              {(id) => (
+                <AutoTextarea
+                  rows={1}
+                  id={id}
+                  value={hookB}
+                  onChange={(e) => setHookB(e.target.value)}
+                  maxLength={250}
+                />
+              )}
+            </Field>
           </div>
-          <div className="gf-test-variable">
-            <Icon name="settings" size={15} />
-            <span>
-              One variable: <strong>opening treatment</strong>
-            </span>
-            <span>Same source. Same context.</span>
-          </div>
-        </FieldGroup>
-        <Disclosure title="Reasoning & limits" icon="info">
-          <Field label="Why try this?">
-            {(id) => (
-              <AutoTextarea
-                id={id}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                rows={2}
-              />
-            )}
-          </Field>
-          <p>{seed.limitations}</p>
-          <p>
-            Confidence describes creative judgment, not predicted business
-            impact. Only explicit approval activates a version.
-          </p>
-        </Disclosure>
+          <Disclosure title="Notes & reference" icon="info">
+            <Field label="Why try this?">
+              {(id) => (
+                <AutoTextarea
+                  id={id}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={2}
+                />
+              )}
+            </Field>
+            <Field
+              label="Reference link or source locator"
+              hint="Saved as a note. Links aren't opened or analyzed."
+            >
+              {(id) => (
+                <input
+                  id={id}
+                  placeholder="URL, episode and timestamp"
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                />
+              )}
+            </Field>
+            {seed.limitations && <p className="gf-help">{seed.limitations}</p>}
+          </Disclosure>
+        </div>
         <div className="gf-approval">
           <ol
             className="gf-approval-steps"
@@ -264,17 +205,17 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
         </div>
         <div className="gf-card-action">
           <span>
-            <Icon name="lock" size={13} /> Scoped to{" "}
+            <Icon name="lock" size={13} /> For{" "}
             {w.profiles.find((p) => p.id === w.profileId)?.name ||
-              "this profile"}
+              "this channel"}
           </span>
           <PrimaryAction
             label={
               w.busy
                 ? "Saving…"
                 : canApprove
-                  ? "Approve direction"
-                  : "Save direction draft"
+                  ? "Approve style rules"
+                  : "Save draft"
             }
             intent={canApprove ? "approve" : "direction"}
             disabled={
@@ -306,35 +247,35 @@ export function approvalStep(state: {
       saved: false,
       approved: false,
       message: (draft?: number) =>
-        `Draft v${draft} is out of date: a profile was added or the approved direction changed since it was saved. Save the draft again, then approve it.`,
+        `Draft v${draft} is out of date: a profile was added or the approved rules changed. Save again, then approve.`,
     };
   if (pending && changed)
     return {
       saved: false,
       approved: false,
       message: (draft?: number) =>
-        `You've edited this since draft v${draft} was saved. Save the draft again, then approve it.`,
+        `You've edited this since draft v${draft} was saved. Save again, then approve.`,
     };
   if (pending)
     return {
       saved: true,
       approved: false,
       message: (draft?: number) =>
-        `Step 2 of 2: draft v${draft} is saved but not active yet. Click Approve direction to unlock Studio.`,
+        `Step 2 of 2: draft v${draft} is saved but not active yet. Approve it to use it.`,
     };
   if (active && !changed)
     return {
       saved: true,
       approved: true,
       message: (_draft?: number, current?: number) =>
-        `v${current} is approved and active. Studio is unlocked; editing here creates a new draft to approve.`,
+        `v${current} is approved and active. Edits here become a new draft.`,
     };
   return {
     saved: false,
     approved: false,
     message: () =>
       active
-        ? "Step 1 of 2: save your edits as a draft. The approved direction stays active until you approve the new one."
-        : "Step 1 of 2: save this direction as a draft. Then approve it to unlock Studio.",
+        ? "Step 1 of 2: save your edits as a draft. The approved rules stay active until you approve the new one."
+        : "Step 1 of 2: save these rules as a draft, then approve them.",
   };
 }

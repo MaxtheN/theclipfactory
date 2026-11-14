@@ -10,8 +10,7 @@ import { productionApi } from "./productionApi";
 import { jobInScope, object } from "./productionState";
 import { activeJob } from "../productionPreflight";
 import { Icon } from "./Icon";
-import { FactoryWorkflow } from "./FactoryWorkflow";
-import { Disclosure, Pill, formatTime } from "./parts";
+import { Pill, formatTime } from "./parts";
 import { JourneyProgress } from "./JourneyProgress";
 import { sourceLabel, SourceDetails } from "./sourcePresentation";
 
@@ -295,7 +294,7 @@ export function FactoryHome({
     } catch (e) {
       setSuccess(
         `${video.name} added. Production did not start by itself: ${
-          e instanceof Error ? e.message : "try Make clips."
+          e instanceof Error ? e.message : "try Find clips."
         }`,
       );
     }
@@ -501,10 +500,9 @@ export function FactoryHome({
 
   return (
     <div className="gf-factory-home">
-      <FactoryWorkflow />
       <div
-        className={`gf-upload-stage gf-card${dragging ? " is-dragging" : ""}`}
-        hidden={importing || !!pending || !!unknown || phase === "ready"}
+        className={`gf-upload-stage gf-card${dragging ? " is-dragging" : ""}${sources.length ? " is-compact" : ""}`}
+        hidden={importing || !!pending || !!unknown}
         onDragOver={(e) => {
           e.preventDefault();
           if (!blocked && !pending && !unknown && !importing) setDragging(true);
@@ -516,11 +514,11 @@ export function FactoryHome({
         onDrop={drop}
       >
         <span className="gf-upload-stage-icon" aria-hidden="true">
-          <Icon name="upload" size={30} />
+          <Icon name="upload" size={26} />
         </span>
         <div>
-          <h2>Drop your footage here</h2>
-          <p>A conversation, an interview, a story worth sharing.</p>
+          <h2>Add an episode</h2>
+          <p>Drop a video here, or choose a file.</p>
         </div>
         <button
           type="button"
@@ -529,7 +527,7 @@ export function FactoryHome({
           onClick={() => picker.current?.click()}
         >
           <Icon name="plus" size={16} />
-          Choose video
+          Add episode
         </button>
         <input
           ref={picker}
@@ -545,11 +543,6 @@ export function FactoryHome({
             if (file) void attach(file);
           }}
         />
-        <p className="gf-upload-stage-note">
-          {reviewPreview
-            ? "Preview adds an illustrative placeholder; file contents stay unread."
-            : "Saved on this Mac. Your engine’s automation settings still apply."}
-        </p>
       </div>
       {error && (
         <p className="gf-message error" role="alert">
@@ -581,10 +574,10 @@ export function FactoryHome({
           }
           message={
             phase === "uploading"
-              ? "Transferring the file and preparing its metadata. Waiting for local confirmation."
+              ? "Saving the file on this Mac."
               : phase === "attaching"
-                ? "Your source is saved. Adding it to this workspace."
-                : "Confirming the saved source and campaign attachment."
+                ? "Saved. Adding it to this workspace."
+                : "Confirming the episode is attached."
           }
           receipts={
             phase === "refreshing"
@@ -600,7 +593,7 @@ export function FactoryHome({
           label="Import"
           state="ready"
           step={1}
-          title="Footage is in"
+          title="Episode added"
           message={success}
           source={
             campaign?.video_ids.includes(lastAdded.id)
@@ -618,28 +611,9 @@ export function FactoryHome({
                 Find clips
                 <Icon name="arrow" size={15} />
               </button>
-              <button
-                className="gf-button ghost"
-                disabled={w.busy || w.loading}
-                onClick={() => onProduce(lastAdded.id, "manual")}
-              >
-                Choose a moment
-              </button>
-              <button
-                className="gf-button ghost"
-                disabled={blocked}
-                onClick={() => {
-                  setPhase(null);
-                  picker.current?.click();
-                }}
-              >
-                Add another video
-              </button>
             </>
           }
-        >
-          <SourceDetails source={lastAdded} />
-        </JourneyProgress>
+        />
       )}
       {pending && !importing && (
         <JourneyProgress
@@ -831,101 +805,18 @@ export function FactoryHome({
         />
       )}
 
-      {review.length > 0 && (
+      {sources.length > 0 && (
         <section
-          className="gf-home-section"
-          aria-labelledby="factory-review-heading"
+          className="gf-home-section gf-episodes"
+          aria-labelledby="factory-footage-heading"
         >
           <header>
-            <div>
-              <span className="gf-eyebrow">NEXT UP</span>
-              <h2 id="factory-review-heading">
-                Ready for your review{" "}
-                <span className="gf-inline-count">{review.length}</span>
-              </h2>
-            </div>
-            <button
-              type="button"
-              className="gf-button ghost compact"
-              onClick={() => onReview(review[0])}
-            >
-              Review clips
-              <Icon name="arrow" size={15} />
-            </button>
-          </header>
-          <div className="gf-cut-grid">
-            {review.slice(0, 3).map((clip) => (
-              <button
-                type="button"
-                key={clip.id}
-                className="gf-cut-card"
-                onClick={() => onReview(clip)}
-              >
-                <span
-                  className="gf-cut-art"
-                  style={
-                    reviewPreview || clip.provenance_mode === "preview_fixture"
-                      ? undefined
-                      : {
-                          backgroundImage: `url(${endpoint("clips", clip.id, "cover")})`,
-                        }
-                  }
-                >
-                  <Icon name="play" size={28} />
-                  <span>
-                    {reviewPreview || clip.provenance_mode === "preview_fixture"
-                      ? "Illustrative edit"
-                      : formatTime(clip.end - clip.start)}
-                  </span>
-                </span>
-                <span className="gf-cut-copy">
-                  <strong>{clip.hook || clip.name}</strong>
-                  <small>{clip.name}</small>
-                  <span>
-                    Review this edit
-                    <Icon name="arrow" size={14} />
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section
-        className="gf-home-section"
-        aria-labelledby="factory-footage-heading"
-      >
-        <header>
-          <div>
-            <span className="gf-eyebrow">IN THIS WORKSPACE</span>
             <h2 id="factory-footage-heading">
-              Your footage{" "}
-              <span className="gf-inline-count">{sources.length}</span>
+              Episodes <span className="gf-inline-count">{sources.length}</span>
             </h2>
-          </div>
-          {sources.length > 0 && (
-            <button
-              type="button"
-              className="gf-button ghost compact"
-              onClick={onLibrary}
-            >
-              Open Library
-              <Icon name="arrow" size={15} />
-            </button>
-          )}
-        </header>
-        {!sources.length ? (
-          <div className="gf-flow-empty">
-            <Icon name="studio" size={24} />
-            <p>
-              Your first video starts the loop. Add footage above, then choose
-              how to produce your clips.
-            </p>
-          </div>
-        ) : (
+          </header>
           <div className="gf-footage-list">
-            {sources.map((source) => {
+            {sources.map((source, index) => {
               const status = line?.sources.find(
                 (item) => item.video_id === source.id,
               );
@@ -939,18 +830,75 @@ export function FactoryHome({
                 !w.loading;
               // Counts are for this workspace: clips made elsewhere from the same file do not belong here.
               const own = clips.filter((c) => c.video_id === source.id);
-              const waiting = own.filter((c) => !c.approved).length;
+              const unreviewed = own.filter((c) => !c.approved);
+              const illustrative = unreviewed.some(
+                (c) => reviewPreview || c.provenance_mode === "preview_fixture",
+              );
+              const label = sourceLabel(source.id, campaign?.video_ids || []);
               const headline =
                 !status ||
                 working ||
                 status.state === "failed" ||
                 status.state === "cancelled"
                   ? status?.error || status?.headline
-                  : waiting
-                    ? `${waiting} clip${waiting === 1 ? "" : "s"} ready for review`
+                  : unreviewed.length
+                    ? `${unreviewed.length} clip${unreviewed.length === 1 ? "" : "s"} ready for review`
                     : own.length
                       ? `${own.length} clip${own.length === 1 ? "" : "s"} approved`
                       : "Ready to make clips";
+              let action;
+              if (working && status?.job_id)
+                action = (
+                  <button
+                    type="button"
+                    className="gf-button ghost compact"
+                    onClick={() => void cancel(status.job_id!)}
+                  >
+                    Cancel
+                  </button>
+                );
+              else if (unreviewed.length)
+                action = (
+                  <button
+                    type="button"
+                    className="gf-button primary compact"
+                    onClick={() => onReview(unreviewed[0])}
+                  >
+                    Review {unreviewed.length} clip
+                    {unreviewed.length === 1 ? "" : "s"}
+                    <Icon name="arrow" size={15} />
+                  </button>
+                );
+              else if (status && !working)
+                action = (
+                  <button
+                    type="button"
+                    className="gf-button secondary compact"
+                    disabled={!ready}
+                    title={
+                      !direction
+                        ? "Approve your style rules first."
+                        : !modelId
+                          ? "Set up a local model: Channel settings → Advanced → Advanced tools."
+                          : status.blocked_reason || undefined
+                    }
+                    onClick={() => void makeClips(source)}
+                  >
+                    Find clips
+                  </button>
+                );
+              else if (!status)
+                action = (
+                  <button
+                    type="button"
+                    className="gf-button secondary compact"
+                    disabled={w.busy || w.loading}
+                    onClick={() => onProduce(source.id, "agent")}
+                  >
+                    Find clips
+                    <Icon name="arrow" size={15} />
+                  </button>
+                );
               return (
                 <div
                   className="gf-source-entry gf-footage-item"
@@ -958,62 +906,52 @@ export function FactoryHome({
                 >
                   <div className="gf-footage-row">
                     <span className="gf-footage-icon">
-                      <Icon name="studio" size={22} />
+                      <Icon name="studio" size={20} />
                     </span>
                     <div className="gf-footage-copy">
-                      <strong>
-                        {sourceLabel(source.id, campaign?.video_ids || [])}
-                      </strong>
+                      <strong>{label}</strong>
                       <span>
                         {reviewPreview
                           ? "Illustrative source"
                           : formatTime(source.duration)}
                         {source.has_audio === true && source.transcript == null
-                          ? " · Transcript needed for captions"
+                          ? " · Needs a transcript for captions"
                           : ""}
                       </span>
+                      {/* One quiet reminder for the whole list, never a banner. */}
+                      {!direction && index === 0 && (
+                        <span className="gf-row-note">
+                          Style rules need approval first.{" "}
+                          <button
+                            type="button"
+                            className="gf-link-button"
+                            disabled={w.busy}
+                            onClick={onDirection}
+                          >
+                            Approve style rules
+                          </button>
+                        </span>
+                      )}
                     </div>
-                    {status &&
-                      (working && status.job_id ? (
-                        <button
-                          type="button"
-                          className="gf-button secondary compact"
-                          onClick={() => void cancel(status.job_id!)}
-                        >
-                          Cancel
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="gf-button primary compact"
-                          disabled={!ready}
-                          title={
-                            !direction
-                              ? "Approve the creative direction first."
-                              : !modelId
-                                ? "Set up a local model in Advanced tools → Models."
-                                : status.blocked_reason || undefined
-                          }
-                          onClick={() => void makeClips(source)}
-                        >
-                          Make clips
-                        </button>
-                      ))}
-                    <button
-                      type="button"
-                      className="gf-button secondary compact"
-                      disabled={w.busy || w.loading}
-                      onClick={() => onProduce(source.id, "agent")}
-                    >
-                      Find clips
-                      <Icon name="arrow" size={15} />
-                    </button>
+                    {illustrative && <Pill tone="sand">Illustrative edit</Pill>}
+                    {action}
+                    {(status || unreviewed.length > 0) && (
+                      <button
+                        type="button"
+                        className="gf-icon-button gf-row-open"
+                        aria-label={`Open ${label} in the studio`}
+                        title="Open in the studio"
+                        disabled={w.busy || w.loading}
+                        onClick={() => onProduce(source.id, "agent")}
+                      >
+                        <Icon name="arrow" size={16} />
+                      </button>
+                    )}
                   </div>
-                  <SourceDetails source={source} />
                   {status && (
                     <div className="gf-footage-line">
                       <div className="source-card-body">
-                        <Stages source={status} />
+                        {working && <Stages source={status} />}
                         <p className="gf-footage-status" role="status">
                           {headline}
                         </p>
@@ -1059,52 +997,8 @@ export function FactoryHome({
               );
             })}
           </div>
-        )}
-      </section>
-
-      {sources.length > 0 && !direction && (
-        <div className="gf-direction-nudge">
-          <Icon name="info" size={18} />
-          <div>
-            <strong>One direction to review before production</strong>
-            <p>
-              Your workspace context is saved. Review the creative direction
-              before the first run.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="gf-button secondary compact"
-            disabled={w.busy}
-            onClick={onDirection}
-          >
-            Review direction
-          </button>
-        </div>
+        </section>
       )}
-      <Disclosure title="How the factory loop works" icon="refresh">
-        <div className="gf-loop-explainer">
-          <p>
-            Upload footage → let local agents inspect it and plan concepts →
-            review rendered options → approve and export → bring performance
-            back into the next test.
-          </p>
-          <p>
-            External precedent research is not connected. A three-day follow-up
-            needs connected performance data and the app running; it is not
-            scheduled automatically.
-          </p>
-          <button
-            type="button"
-            className="gf-button ghost compact"
-            disabled={w.busy || !sources.length}
-            onClick={() => onProduce(sources[0]?.id, "manual")}
-          >
-            Choose a source moment yourself
-            <Icon name="arrow" size={14} />
-          </button>
-        </div>
-      </Disclosure>
     </div>
   );
 }

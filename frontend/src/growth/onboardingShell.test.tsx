@@ -87,6 +87,8 @@ async function enterOnboarding(viaQuickActions = false) {
     fireEvent.change(search, { target: { value: "new workspace" } });
     fireEvent.keyDown(search, { key: "Enter" });
   } else {
+    // New workspace lives in Channel settings → Advanced, not the sidebar.
+    fireEvent.click(screen.getByRole("button", { name: "Channel settings" }));
     screen
       .getByLabelText("Advanced controls")
       .closest("details")

@@ -188,7 +188,7 @@ describe("unified channel settings", () => {
     expect(screen.queryByRole("button", { name: /Save & find direction/ })).toBeNull();
     expect(screen.getAllByRole("button", { name: /^Save/ })).toHaveLength(1);
     expect(view.container.querySelector('input[type="file"]')).toBeNull();
-    expect(screen.queryByText("Drop your footage here")).toBeNull();
+    expect(screen.queryByText("Add an episode")).toBeNull();
     // Discovery needs no metric.
     expect(screen.getByLabelText("Primary metric")).toBeDisabled();
     expect(saveButton()).toBeEnabled();
@@ -367,12 +367,12 @@ describe("unified channel settings", () => {
     noSideEffects(api);
   });
 
-  it("opens editing rules only through the explicit action", async () => {
+  it("opens style rules only through the explicit action", async () => {
     const { next, onSaved } = fixture();
     fireEvent.click(saveButton());
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(next).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Editing rules" }));
+    fireEvent.click(screen.getByRole("button", { name: "Style rules" }));
     expect(next).toHaveBeenCalledTimes(1);
   });
 

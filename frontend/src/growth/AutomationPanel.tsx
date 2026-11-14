@@ -1023,7 +1023,7 @@ export function AutomationPanel({
             Proposed editing rule{p.version !== null ? ` v${p.version}` : ""} is
             waiting for your approval. Nothing changes until you approve it.{" "}
             {onEditingRules && (
-              <button onClick={onEditingRules}>Review in Editing rules</button>
+              <button onClick={onEditingRules}>Review in Style rules</button>
             )}
           </p>
         ))}

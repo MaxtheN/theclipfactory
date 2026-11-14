@@ -153,24 +153,23 @@ describe("production line on the Factory screen", () => {
     const w = workspace();
     home(w, factory());
     expect(screen.getByText("Ready to make clips")).toBeInTheDocument();
-    expect(screen.getByText("Listen")).toBeInTheDocument(); // the stage tracker from the local service
-    fireEvent.click(screen.getByRole("button", { name: "Make clips" }));
+    fireEvent.click(screen.getByRole("button", { name: "Find clips" }));
     await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("c1", swarm));
     expect(await screen.findByText(/Making clips from Conversation.mp4/)).toBeInTheDocument();
     // The detailed, slower path stays one click away.
-    expect(screen.getByRole("button", { name: /Find clips/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Open .* in the studio$/ })).toBeEnabled();
   });
 
   it("waits for an approved direction and a usable model, and says which is missing", () => {
     const first = home(workspace(false), factory());
-    const blocked = screen.getByRole("button", { name: "Make clips" });
+    const blocked = screen.getByRole("button", { name: "Find clips" });
     expect(blocked).toBeDisabled();
-    expect(blocked).toHaveAttribute("title", "Approve the creative direction first.");
+    expect(blocked).toHaveAttribute("title", "Approve your style rules first.");
     first.unmount();
     home(workspace(), factory({}, { model: null }));
-    expect(screen.getByRole("button", { name: "Make clips" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Find clips" })).toHaveAttribute(
       "title",
-      "Set up a local model in Advanced tools → Models.",
+      "Set up a local model: Channel settings → Advanced → Advanced tools.",
     );
     expect(productionApi.campaignProduce).not.toHaveBeenCalled();
   });
@@ -186,7 +185,8 @@ describe("production line on the Factory screen", () => {
     home(workspace(), f);
     expect(screen.getByText("Swarm: stretch 17 of 57 · 16 clips ready")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Progress for Conversation.mp4" })).toHaveValue(49);
-    expect(screen.queryByRole("button", { name: "Make clips" })).not.toBeInTheDocument();
+    expect(screen.getByText("Listen")).toBeInTheDocument(); // the stage tracker from the local service
+    expect(screen.queryByRole("button", { name: "Find clips" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(requests).toContainEqual({ url: "/api/jobs/job-1/cancel", method: "POST" }));
     expect(f.refresh).toHaveBeenCalled();

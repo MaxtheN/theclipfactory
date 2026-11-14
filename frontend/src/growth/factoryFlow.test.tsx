@@ -292,7 +292,7 @@ describe("Factory imports and scoped Library", () => {
       });
       await waitFor(() => expect(retry).toBeEnabled());
       expect(
-        screen.queryByRole("button", { name: "Choose video" }),
+        screen.queryByRole("button", { name: "Add episode" }),
       ).not.toBeInTheDocument();
       expect(screen.getByLabelText("Upload footage")).toBeDisabled();
       refreshNextRun(view);
@@ -342,7 +342,7 @@ describe("Factory imports and scoped Library", () => {
       );
       await waitFor(() =>
         expect(
-          screen.getByRole("button", { name: "Choose video" }),
+          screen.getByRole("button", { name: "Add episode" }),
         ).toBeEnabled(),
       );
       expect(
@@ -378,13 +378,13 @@ describe("Factory imports and scoped Library", () => {
     });
     expect(screen.getByLabelText("Upload footage")).toBeDisabled();
     expect(
-      screen.queryByRole("heading", { name: "Footage is in" }),
+      screen.queryByRole("heading", { name: "Episode added" }),
     ).not.toBeInTheDocument();
     refreshNextRun(view);
     fireEvent.click(
       screen.getByRole("button", { name: "Refresh saved source" }),
     );
-    await screen.findByRole("heading", { name: "Footage is in" });
+    await screen.findByRole("heading", { name: "Episode added" });
     expect(workspaceApi.upload).toHaveBeenCalledOnce();
     expect(workspaceApi.save).toHaveBeenCalledOnce();
     expect(w.run).toHaveBeenCalledTimes(2);
@@ -423,7 +423,7 @@ describe("Factory imports and scoped Library", () => {
         name: "Saved source needs a refresh",
       });
       expect(
-        screen.queryByRole("heading", { name: "Footage is in" }),
+        screen.queryByRole("heading", { name: "Episode added" }),
       ).not.toBeInTheDocument();
       const refresh = screen.getByRole("button", {
         name: "Refresh saved source",
@@ -436,7 +436,7 @@ describe("Factory imports and scoped Library", () => {
       ]);
       refreshNextRun(view);
       fireEvent.click(refresh);
-      await screen.findByRole("heading", { name: "Footage is in" });
+      await screen.findByRole("heading", { name: "Episode added" });
       expect(workspaceApi.upload).toHaveBeenCalledOnce();
       expect(workspaceApi.save).toHaveBeenCalledOnce();
       expect(view.w.run).toHaveBeenCalledTimes(2);
@@ -461,11 +461,11 @@ describe("Factory imports and scoped Library", () => {
     expect(workspaceApi.upload).toHaveBeenCalledOnce();
     expect(workspaceApi.save).toHaveBeenCalledOnce();
     expect(
-      screen.queryByRole("heading", { name: "Footage is in" }),
+      screen.queryByRole("heading", { name: "Episode added" }),
     ).not.toBeInTheDocument();
     refreshNextRun(view);
     fireEvent.click(attach);
-    await screen.findByRole("heading", { name: "Footage is in" });
+    await screen.findByRole("heading", { name: "Episode added" });
     expect(workspaceApi.upload).toHaveBeenCalledOnce();
     expect(workspaceApi.save).toHaveBeenCalledTimes(2);
     expect(workspaceApi.save).toHaveBeenLastCalledWith(
@@ -531,7 +531,7 @@ describe("Factory imports and scoped Library", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Attach imported footage" }),
     );
-    await screen.findByRole("heading", { name: "Footage is in" });
+    await screen.findByRole("heading", { name: "Episode added" });
     expect(workspaceApi.upload).toHaveBeenCalledOnce();
     expect(workspaceApi.save).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ video_ids: ["v1", "savedB22"] }),
@@ -580,7 +580,7 @@ describe("Factory imports and scoped Library", () => {
       ),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Review clips" }),
+      screen.queryByRole("button", { name: /^Review \d+ clips?$/ }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Waiting for the saved edits" }),
@@ -611,7 +611,7 @@ describe("Factory imports and scoped Library", () => {
         onDirection={view.onDirection}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Review clips" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Review \d+ clips?$/ }));
     expect(view.onReview).toHaveBeenCalledExactlyOnceWith(clip);
     expect(
       screen.queryByText("Already accepted output"),
@@ -636,7 +636,7 @@ describe("Factory imports and scoped Library", () => {
       screen.getByRole("progressbar", { name: "Production progress" }),
     ).not.toHaveAttribute("value");
     expect(
-      screen.queryByRole("button", { name: "Review clips" }),
+      screen.queryByRole("button", { name: /^Review \d+ clips?$/ }),
     ).not.toBeInTheDocument();
     f.data.jobs = [
       {
@@ -675,7 +675,7 @@ describe("Factory imports and scoped Library", () => {
     const illustrative = { ...clip, provenance_mode: "preview_fixture" },
       view = home(workspace(), factory([illustrative]));
     await screen.findByText("Illustrative edit");
-    fireEvent.click(screen.getByRole("button", { name: "Review clips" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Review \d+ clips?$/ }));
     expect(view.onReview).toHaveBeenCalledExactlyOnceWith(illustrative);
     expect(illustrative.approved).toBe(false);
   });
@@ -877,7 +877,7 @@ describe("Factory imports and scoped Library", () => {
       screen.getByRole("button", { name: "Review A useful edit" }),
     );
     expect(review).toHaveBeenCalledWith(clip);
-    fireEvent.click(screen.getByRole("button", { name: /^Footage/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Episodes/ }));
     expect(screen.getByText("Conversation.mp4")).toBeInTheDocument();
     expect(screen.queryByText("Other footage")).not.toBeInTheDocument();
   });
@@ -897,7 +897,7 @@ describe("Factory imports and scoped Library", () => {
         onFactory={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Footage/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Episodes/ }));
     const filter = screen.getByRole("searchbox", { name: "Filter library" });
     fireEvent.change(filter, { target: { value: "Podcast 2" } });
     expect(screen.getByText("Podcast 2")).toBeInTheDocument();

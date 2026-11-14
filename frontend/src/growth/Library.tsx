@@ -52,7 +52,7 @@ export function Library({
             aria-pressed={tab === "edits"}
             onClick={() => setTab("edits")}
           >
-            Edits<span>{clips.length}</span>
+            Clips<span>{clips.length}</span>
           </button>
           <button
             type="button"
@@ -66,7 +66,7 @@ export function Library({
             aria-pressed={tab === "footage"}
             onClick={() => setTab("footage")}
           >
-            Footage<span>{sources.length}</span>
+            Episodes<span>{sources.length}</span>
           </button>
         </div>
         <label className="gf-library-filter">
@@ -80,13 +80,6 @@ export function Library({
           />
         </label>
       </div>
-      <p className="gf-library-scope">
-        {tab === "edits"
-          ? "Edits for the selected workspace and profile. Every version keeps its own review state."
-          : tab === "wall"
-            ? "Every edit side by side: play, filter by hypothesis, and approve or discard in place."
-            : "Original footage attached to this workspace. Source files stay on this Mac."}
-      </p>
       {tab === "wall" ? (
         <div className="gf-review-wall">
           <Clips
@@ -122,7 +115,7 @@ export function Library({
                   </span>
                   <span className="gf-library-edit-copy">
                     <strong>{clip.name}</strong>
-                    <span>{clip.hook || "Source-grounded edit"}</span>
+                    <span>{clip.hook || "Clip"}</span>
                     <small>
                       {formatTime(clip.start)}–{formatTime(clip.end)} ·{" "}
                       {sourceLabel(clip.video_id, ids)}
@@ -139,12 +132,12 @@ export function Library({
             <div className="gf-flow-empty">
               <Icon name="studio" size={26} />
               <h2>
-                {normalized ? "No matching edits" : "Your edits will live here"}
+                {normalized ? "No matching clips" : "No clips yet"}
               </h2>
               <p>
                 {normalized
                   ? "Try a different name or opening."
-                  : "Add footage in Factory, produce a few options, then review the exact versions you want to keep."}
+                  : "Add an episode in Factory to get your first clips."}
               </p>
               {!normalized && (
                 <button
@@ -199,13 +192,13 @@ export function Library({
               <Icon name="folder" size={26} />
               <h2>
                 {normalized
-                  ? "No matching footage"
-                  : "No footage in this workspace yet"}
+                  ? "No matching episodes"
+                  : "No episodes yet"}
               </h2>
               <p>
                 {normalized
-                  ? "Try another source name."
-                  : "Upload a video in Factory to start building your library."}
+                  ? "Try another name."
+                  : "Add an episode in Factory."}
               </p>
               {!normalized && (
                 <button

@@ -30,7 +30,7 @@ function factory(clips: ProductionClip[] = []): FactoryState {
 }
 const queued = (id = "job-1"): Job => ({ id, kind: "render", status: "queued", context: { video_id: "v1", campaign_id: "camp", profile_id: "profile" } });
 function loaded() { fireEvent.loadedData(screen.getByLabelText("Review Test clip")); }
-function settings() { fireEvent.click(screen.getByText("Opening & output settings")); }
+function settings() { fireEvent.click(screen.getByText("Fine-tune")); }
 beforeEach(() => {
   mode.preview = false;
   vi.clearAllMocks();
@@ -40,8 +40,17 @@ beforeEach(() => {
 });
 
 describe("Studio production integration", () => {
+  it("defaults to one agent action with every pipeline control behind a closed Fine-tune", () => {
+    render(<Studio w={workspace()} factory={factory()} next={() => {}} />);
+    expect(screen.getByRole("button", { name: "Let agents find clips" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Make this clip" })).not.toBeInTheDocument();
+    const fineTune = screen.getByText("Fine-tune").closest("details")!;
+    expect(fineTune.open).toBe(false);
+    expect(fineTune).toContainElement(screen.getByLabelText("Production mode"));
+    expect(fineTune).toContainElement(screen.getByLabelText("Installed vision model"));
+  });
   it("sends actual cold-open, crop and caption controls with approved version", async () => {
-    render(<Studio w={workspace()} factory={factory()} next={() => {}} preferredSource="v1" />);
+    render(<Studio w={workspace()} factory={factory()} next={() => {}} preferredSource="v1" preferredMode="manual" />);
     expect(screen.getByLabelText("End (seconds)")).toHaveValue(24);
     settings();
     fireEvent.change(screen.getByLabelText("Opening treatment"), { target: { value: "cold_open" } });
@@ -49,17 +58,17 @@ describe("Studio production integration", () => {
     fireEvent.change(screen.getByLabelText("Cold open end (seconds)"), { target: { value: "44" } });
     fireEvent.change(screen.getByLabelText("Crop focus"), { target: { value: "0.8" } });
     fireEvent.click(screen.getByLabelText("Include captions"));
-    fireEvent.click(screen.getByRole("button", { name: "Make the first cut" }));
+    fireEvent.click(screen.getByRole("button", { name: "Make this clip" }));
     await waitFor(() => expect(productionApi.campaignRender).toHaveBeenCalledOnce());
     expect(productionApi.campaignRender).toHaveBeenCalledWith("camp", expect.objectContaining({ expected_strategy_version_id: "strategy", video_id: "v1", profile_id: "profile", start: 0, end: 24, opening_treatment: "cold_open", cold_open_start: 40, cold_open_end: 44, focus_x: .8, subtitles: false }));
   });
   it("blocks captions without a transcript and offers an explicit captions-off path", async () => {
     const f = factory(); f.data.videos[0].transcript = null;
-    render(<Studio w={workspace()} factory={f} next={() => {}} />);
-    expect(screen.getByRole("button", { name: "Make the first cut" })).toBeDisabled();
+    render(<Studio w={workspace()} factory={f} next={() => {}} preferredMode="manual" />);
+    expect(screen.getByRole("button", { name: "Make this clip" })).toBeDisabled();
     expect(screen.getByText(/Captions need a source transcript/)).toBeInTheDocument();
     settings(); fireEvent.click(screen.getByLabelText("Include captions"));
-    expect(screen.getByRole("button", { name: "Make the first cut" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Make this clip" })).toBeEnabled();
   });
   it("requires an actual revision delta and records parent, reason and changed fields", async () => {
     render(<Studio w={workspace()} factory={factory([clip])} next={() => {}} />);
@@ -72,15 +81,15 @@ describe("Studio production integration", () => {
   });
   it("never selects an unrelated new output; selects only the submitted terminal job result", async () => {
     const w = workspace(), f = factory();
-    const view = render(<Studio w={w} factory={f} next={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "Make the first cut" }));
+    const view = render(<Studio w={w} factory={f} next={() => {}} preferredMode="manual" />);
+    fireEvent.click(screen.getByRole("button", { name: "Make this clip" }));
     await waitFor(() => expect(productionApi.campaignRender).toHaveBeenCalledOnce());
     const unrelated = { ...clip, id: "other", name: "Unrelated" };
     const pending = { ...f, data: { ...f.data, jobs: [queued()], clips: [unrelated] } };
-    view.rerender(<Studio w={w} factory={pending} next={() => {}} />);
-    expect(screen.getByRole("heading", { name: "Output preview" })).toBeInTheDocument();
+    view.rerender(<Studio w={w} factory={pending} next={() => {}} preferredMode="manual" />);
+    expect(screen.queryByLabelText(/^Review /)).not.toBeInTheDocument();
     const done = { ...pending, data: { ...pending.data, clips: [unrelated, clip], jobs: [{ ...queued(), status: "completed", result: { clip_id: "c1" } }] } };
-    view.rerender(<Studio w={w} factory={done} next={() => {}} />);
+    view.rerender(<Studio w={w} factory={done} next={() => {}} preferredMode="manual" />);
     await waitFor(() => expect(screen.getByLabelText("Review Test clip")).toBeInTheDocument());
     expect(screen.queryByLabelText("Review Unrelated")).not.toBeInTheDocument();
   });
@@ -99,14 +108,14 @@ describe("Studio production integration", () => {
     expect(screen.queryByRole("option", { name: "Text only" })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByLabelText("Installed vision model")).toHaveValue("ollama:vision:latest"));
     fireEvent.change(screen.getByLabelText("Correction budget"), { target: { value: "2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Start agent production" }));
+    fireEvent.click(screen.getByRole("button", { name: "Let agents find clips" }));
     await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("camp", { expected_strategy_version_id: "strategy", video_id: "v1", profile_id: "profile", model_id: "ollama:vision:latest", revision_budget: 2 }));
     expect(productionApi.campaignRender).not.toHaveBeenCalled();
   });
   it("does not run agents in the illustrative hosted preview", () => {
     mode.preview = true;
     render(<Studio w={workspace()} factory={factory()} next={() => {}} preferredMode="agent" />);
-    expect(screen.getByRole("button", { name: "Start agent production" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Let agents find clips" })).toBeDisabled();
     expect(productionApi.campaignProduce).not.toHaveBeenCalled();
   });
   it("requires playable exact output and an explicit acceptance before export", async () => {
@@ -164,12 +173,12 @@ describe("Studio production integration", () => {
 });
 
 describe("failed agent runs", () => {
-  it("points to Start agent production instead of a render retry it cannot do", () => {
+  it("points to Let agents find clips instead of a render retry it cannot do", () => {
     const f = factory();
     f.data.jobs = [{ ...queued("failed-team"), kind: "team", status: "failed", error: "This FFmpeg build lacks libass", context: { video_id: "v1", campaign_id: "camp", profile_id: "profile", team_run_id: "run" } }];
     render(<Studio w={workspace()} factory={f} next={() => {}} />);
     expect(screen.queryByRole("button", { name: "Retry saved render" })).not.toBeInTheDocument();
     expect(screen.queryByText(/belongs to another source/)).not.toBeInTheDocument();
-    expect(screen.getByText(/use Start agent production/)).toBeInTheDocument();
+    expect(screen.getByText(/use Let agents find clips/)).toBeInTheDocument();
   });
 });

@@ -1,11 +1,10 @@
 import { AutoTextarea } from "../components/AutoTextarea";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../api";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, type CampaignInput } from "./workspaceApi";
 import {
-  Disclosure,
   Empty,
   Field,
   FieldGroup,
@@ -87,12 +86,15 @@ export function Setup({
   next,
   creating,
   onSaved,
+  advanced,
 }: {
   w: Workspace;
   factory: FactoryState;
   next: () => void;
   creating: boolean;
   onSaved: () => void;
+  /** Rarely used workspace actions, shown inside the single Advanced section. */
+  advanced?: ReactNode;
 }) {
   const campaign = creating ? undefined : w.campaign;
   // The profile being edited is fixed for this mount (GrowthApp keys Setup by
@@ -233,7 +235,7 @@ export function Setup({
         failure = message(error, "The save failed.");
         throw error;
       }
-    }, "Channel settings saved and confirmed. Approved editing rules and earlier clips are unchanged.");
+    }, "Channel settings saved. Style rules and earlier clips are unchanged.");
     if (!started) return;
     if (ok) {
       setLinkProfiles([]);
@@ -356,14 +358,14 @@ export function Setup({
       <Empty title="No channel selected" icon="settings">
         {w.loading
           ? "Opening your channel…"
-          : "Choose a channel, or use New workspace under Advanced to set one up."}
+          : "Choose a channel from the top bar."}
       </Empty>
     );
   if (!profile)
     return (
       <Empty title="Choose a linked profile" icon="settings">
-        The selected profile is not linked to this channel. Refresh and choose
-        one of its profiles; nothing is changed automatically.
+        This profile isn't linked to the channel. Refresh and pick another;
+        nothing changes automatically.
       </Empty>
     );
   const otherLinked = w.profiles.filter(
@@ -407,7 +409,7 @@ export function Setup({
             </Field>
             <Field
               label="What are we working toward?"
-              hint="Guides future production for this profile. Earlier clips keep the goal they were made with."
+              hint="Applies to new clips only."
             >
               {(id) => (
                 <select
@@ -430,8 +432,8 @@ export function Setup({
               label="Primary metric"
               hint={
                 metricNeeded
-                  ? "Required for goal-directed work. Naming it does not imply a measured improvement."
-                  : "Discovery keeps this unset; it does not pick a winner."
+                  ? "Required for this goal."
+                  : "Not needed while exploring."
               }
             >
               {(id) => (
@@ -455,7 +457,7 @@ export function Setup({
             </Field>
             <Field
               label="Voice and boundaries"
-              hint="One rule per line. Every edit should respect these."
+              hint="One rule per line."
             >
               {(id) => (
                 <AutoTextarea
@@ -487,18 +489,18 @@ export function Setup({
             </Field>
             {otherLinked.length > 0 && (
               <p className="gf-help">
-                Editing the goal and preferences of profile{" "}
-                <strong>{profile.name}</strong>. Other linked profiles are not
-                changed; switch profiles from the top bar.
+                Editing <strong>{profile.name}</strong> only.
               </p>
             )}
           </FieldGroup>
-          <FieldGroup title="Advanced">
-            <Disclosure title="Footage in this channel" icon="folder">
-              <p>
-                Attach footage you already imported. To add new footage, use
-                Factory. Attached footage stays attached for production history.
-              </p>
+          <details className="gf-disclosure gf-advanced-settings">
+            <summary aria-label="Advanced controls">
+              <Icon name="settings" />
+              Advanced
+              <Icon name="down" size={15} />
+            </summary>
+            <div className="gf-disclosure-body">
+              <h3>Episodes in this channel</h3>
               {factory.data.videos.length === 0 && (
                 <p className="gf-help">No imported footage yet.</p>
               )}
@@ -530,12 +532,7 @@ export function Setup({
                   );
                 })}
               </div>
-            </Disclosure>
-            <Disclosure title="Linked profiles" icon="headphones">
-              <p>
-                Profiles are local planning identities, not social accounts.
-                Linked profiles stay linked for production history.
-              </p>
+              <h3>Linked profiles</h3>
               <div className="gf-profile-options">
                 {w.profiles.map((p) => {
                   const on = linked.has(p.id) || linkProfiles.includes(p.id);
@@ -582,19 +579,14 @@ export function Setup({
                 Create profile
                 <Icon name="plus" size={14} />
               </button>
-            </Disclosure>
-            <Disclosure
-              title="Editing rules and technical tools"
-              icon="settings"
-            >
-              <p>
-                Editing rules are versioned. Use Editing rules below to propose
-                a version and approve it explicitly; saving channel settings
-                never changes or approves them. Models and local capabilities
-                live under Advanced → Advanced tools.
-              </p>
-            </Disclosure>
-          </FieldGroup>
+              {advanced && (
+                <>
+                  <h3>Workspace</h3>
+                  {advanced}
+                </>
+              )}
+            </div>
+          </details>
         </div>
       </section>
       <div className="gf-stage-action">
@@ -608,7 +600,7 @@ export function Setup({
           }
         >
           {state.kind === "idle"
-            ? "Saving updates this channel only. It does not start production or publish anything."
+            ? "Saves this channel only. Nothing is published."
             : state.message}
         </span>
         <div className="gf-channel-actions">
@@ -629,7 +621,7 @@ export function Setup({
             disabled={w.busy || checking}
             onClick={next}
           >
-            Editing rules
+            Style rules
             <Icon name="research" size={14} />
           </button>
           <PrimaryAction

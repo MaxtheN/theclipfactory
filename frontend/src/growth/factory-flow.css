@@ -1347,3 +1347,88 @@
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7));
   color: #fff;
 }
+
+/* Simplification pass: one primary action per screen, quiet secondary detail. */
+.gf-flow-app .gf-factory-home .gf-upload-stage.is-compact {
+  min-height: 0;
+  padding: 18px 22px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+.gf-flow-app .gf-factory-home .gf-upload-stage.is-compact .gf-upload-stage-icon {
+  width: 44px;
+  height: 52px;
+  border-radius: 12px;
+}
+.gf-flow-app .gf-factory-home .gf-upload-stage.is-compact h2 {
+  font-size: 18px;
+  margin: 0 0 2px;
+}
+.gf-flow-app .gf-factory-home .gf-upload-stage.is-compact p {
+  line-height: 1.5;
+}
+.gf-flow-app .gf-factory-home .gf-upload-stage.is-compact > .gf-button {
+  min-height: 40px;
+  padding: 8px 18px;
+}
+.gf-episodes .gf-footage-row {
+  align-items: center;
+}
+.gf-row-open {
+  opacity: 0.6;
+}
+.gf-row-open:hover:not(:disabled) {
+  opacity: 1;
+}
+.gf-footage-copy .gf-row-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--material-secondary);
+}
+.gf-link-button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--material-focus);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.gf-link-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.gf-studio-media.is-simple > video,
+.gf-studio-media.is-simple .gf-preview-film {
+  width: 300px;
+  max-width: 80%;
+  max-height: 560px;
+}
+.gf-studio-media.is-simple > video.is-source {
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16/9;
+  max-height: 420px;
+}
+.gf-advanced-settings .gf-disclosure-body h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.gf-advanced-settings .gf-disclosure-body h3:first-child {
+  margin-top: 0;
+}
+.gf-advanced-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gf-review-details .gf-disclosure-body h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+}
+.gf-style-rule-fields {
+  padding: 0 20px;
+}

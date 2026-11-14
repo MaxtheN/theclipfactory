@@ -677,7 +677,7 @@ describe("closed learning loop", () => {
       within(panel).getByText("Demo override · 2.5 h after posting"),
     ).toBeInTheDocument();
     fireEvent.click(
-      within(panel).getByRole("button", { name: "Review in Editing rules" }),
+      within(panel).getByRole("button", { name: "Review in Style rules" }),
     );
     expect(onEditingRules).toHaveBeenCalledTimes(1);
   });

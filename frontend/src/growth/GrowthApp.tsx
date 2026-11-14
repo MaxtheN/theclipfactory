@@ -34,37 +34,37 @@ const views = {
   factory: {
     label: "Factory",
     title: "Factory",
-    sub: "Turn long-form video into short-form clips. Set the direction, let agents shape the edit, and review every cut.",
+    sub: "Add an episode. Agents find the clips. You approve.",
     icon: "studio",
   },
   library: {
     label: "Library",
     title: "Library",
-    sub: "Your footage and every version worth keeping.",
+    sub: "Every episode and clip in this channel.",
     icon: "folder",
   },
   results: {
     label: "Results",
     title: "Results & next test",
-    sub: "Bring the evidence back into your next edit.",
+    sub: "What worked, and what to try next.",
     icon: "results",
   },
   setup: {
     label: "Channel settings",
     title: "Channel settings",
-    sub: "Audience, goals and the boundaries your edits should respect.",
+    sub: "Who it's for, the goal, and the voice to keep.",
     icon: "settings",
   },
   research: {
-    label: "Editing rules",
-    title: "Editing rules",
-    sub: "Review the idea and the opening treatments before production.",
+    label: "Style rules",
+    title: "Style rules",
+    sub: "How agents pick and open each clip. Save, then approve.",
     icon: "research",
   },
   studio: {
-    label: "Production & review",
-    title: "Production & review",
-    sub: "Inspect the source, produce options, and review the exact version.",
+    label: "Studio",
+    title: "Studio",
+    sub: "Find clips in an episode, then review each one.",
     icon: "studio",
   },
 } as const;
@@ -101,7 +101,6 @@ export function GrowthApp() {
   const [preferredSource, setPreferredSource] = useState<string>();
   const [preferredMode, setPreferredMode] = useState<"manual" | "agent">();
   const [preferredClip, setPreferredClip] = useState<string>();
-  const [help, setHelp] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const toolsReturn = useRef<HTMLButtonElement>(null);
@@ -188,19 +187,18 @@ export function GrowthApp() {
       group: "Workspace" as const,
       keywords: `${id} ${views[id].sub}`,
       disabled: blocked || onboarding || !usable,
-      hint:
-        id === "factory" ? "Upload footage and review your cuts" : undefined,
+      hint: id === "factory" ? "Add episodes and review clips" : undefined,
       run: () => go(id),
     })),
     {
       id: "research",
-      label: "Editing rules",
+      label: "Style rules",
       icon: "research",
       group: "Workspace",
       disabled: blocked || onboarding || !usable,
       keywords:
-        "research creative direction editing rules approval channel settings",
-      hint: "Advanced · Channel settings",
+        "style rules editing rules creative direction approval channel settings",
+      hint: "Channel settings",
       run: () => go("research"),
     },
     {
@@ -210,7 +208,7 @@ export function GrowthApp() {
       group: "Workspace",
       disabled: blocked,
       keywords: "podcast profile onboarding",
-      hint: "Advanced · create another workspace",
+      hint: "Channel settings · Advanced",
       run: newWorkspace,
     },
     {
@@ -220,19 +218,8 @@ export function GrowthApp() {
       group: "Workspace",
       disabled: blocked,
       keywords: "models runtime integrations settings",
-      hint: "Advanced · local capabilities",
+      hint: "Models and local tools",
       run: () => setTools(true),
-    },
-    {
-      id: "guide",
-      label: "How the factory works",
-      icon: "info",
-      group: "Workspace",
-      keywords: "help guide loop",
-      run: () => {
-        setTools(false);
-        setHelp(true);
-      },
     },
     {
       id: "refresh",
@@ -359,40 +346,12 @@ export function GrowthApp() {
                 <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
                 <span>Channel settings</span>
               </button>
-              <details className="gf-nav-group gf-workspace-menu">
-                <summary
-                  aria-label="Advanced controls"
-                  title="Advanced controls"
-                >
-                  <Icon name="settings" size={16} />
-                  <span>Advanced</span>
-                  <Icon name="down" size={13} />
-                </summary>
-                <nav aria-label="Advanced navigation">
-                  <button
-                    type="button"
-                    disabled={blocked}
-                    onClick={newWorkspace}
-                  >
-                    <Icon name="plus" size={17} />
-                    New workspace
-                  </button>
-                  <button
-                    type="button"
-                    disabled={blocked}
-                    onClick={() => setTools(true)}
-                  >
-                    <Icon name="settings" size={17} />
-                    Advanced tools
-                  </button>
-                </nav>
-              </details>
             </div>
           </aside>
           <div className="gf-workspace">
             <header className="gf-topbar" hidden={onboarding}>
               <label className="gf-workspace-switcher">
-                <span>Campaign</span>
+                <span>Channel</span>
                 <select
                   aria-label="Current campaign"
                   value={onboarding ? "__new__" : w.selected}
@@ -412,7 +371,7 @@ export function GrowthApp() {
                     <option value="__new__">Set up your workspace</option>
                   )}
                   {!onboarding && !w.campaign && (
-                    <option value="">Choose a workspace</option>
+                    <option value="">Choose a channel</option>
                   )}
                   {w.campaigns.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -460,17 +419,6 @@ export function GrowthApp() {
                 hidden={onboarding}
               >
                 <div>
-                  <div className="gf-eyebrow">
-                    {onboarding
-                      ? "WELCOME TO GROWTH FACTORY"
-                      : stage === "setup" || stage === "research"
-                        ? "YOUR CHANNEL"
-                        : stage === "studio"
-                          ? "FACTORY"
-                          : stage === "factory"
-                            ? "YOUR VIDEO PRODUCTION WORKSPACE"
-                            : "YOUR WORKSPACE"}
-                  </div>
                   <h1 tabIndex={-1} ref={heading}>
                     {onboarding ? "Your stories start here." : current.title}
                   </h1>
@@ -492,26 +440,6 @@ export function GrowthApp() {
                   </button>
                 )}
               </header>
-              {help && !onboarding && (
-                <div className="gf-message">
-                  <Icon name="info" />
-                  <span>
-                    <strong>Upload → produce → review → learn.</strong> Your
-                    workspace keeps the audience and goal. Local production
-                    still needs a ready model and your approved direction.
-                    Export follows human approval; publishing and scheduled
-                    analytics are separate connections.
-                  </span>
-                  <button
-                    type="button"
-                    className="gf-icon-button"
-                    aria-label="Close guide"
-                    onClick={() => setHelp(false)}
-                  >
-                    <Icon name="close" />
-                  </button>
-                </div>
-              )}
               {!onboarding && w.loading && (
                 <div className="gf-loading" role="status">
                   <span className="gf-spinner" />
@@ -533,10 +461,7 @@ export function GrowthApp() {
                           )}
                         </small>
                       )}
-                      <small>
-                        Your inputs stay here. Refresh saved state before
-                        retrying an uncertain action.
-                      </small>
+                      <small>Your inputs are kept. Reconnect, then retry.</small>
                     </span>
                     <button
                       type="button"
@@ -631,6 +556,31 @@ export function GrowthApp() {
                   w={w}
                   factory={factory}
                   next={() => go("research")}
+                  advanced={
+                    <nav
+                      className="gf-advanced-actions"
+                      aria-label="Advanced navigation"
+                    >
+                      <button
+                        type="button"
+                        className="gf-button secondary compact"
+                        disabled={blocked}
+                        onClick={newWorkspace}
+                      >
+                        <Icon name="plus" size={15} />
+                        New workspace
+                      </button>
+                      <button
+                        type="button"
+                        className="gf-button secondary compact"
+                        disabled={blocked}
+                        onClick={() => setTools(true)}
+                      >
+                        <Icon name="settings" size={15} />
+                        Advanced tools
+                      </button>
+                    </nav>
+                  }
                 />
               </div>
               <div
@@ -676,13 +626,9 @@ export function GrowthApp() {
                   onReview={reviewClip}
                   onEditingRules={() => go("research")}
                 />
+                {/* Mount slot: the Strategist panels (StrategistPanel, BeliefLedger)
+                    render here, below the learning loop, inside Results. */}
               </div>
-              {reviewPreview && stage === "factory" && !onboarding && (
-                <p className="gf-flow-preview-note">
-                  Sources and outputs marked illustrative are sample content,
-                  not rendered media or measured performance.
-                </p>
-              )}
             </main>
           </div>
         </div>
