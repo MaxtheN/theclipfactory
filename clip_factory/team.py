@@ -25,8 +25,9 @@ from typing import Literal
 import psutil
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from . import media
+from . import media, scouts
 from . import storyboard as boards
+from .inference_worker import MAX_PROMPT
 from .jobs import JobCancelled, Jobs, WorkError
 from .models import Models
 from .store import Store, new_id, now
@@ -683,6 +684,12 @@ class TeamEngine:
                     + "\nDATA:\n"
                     + json.dumps(request_data, ensure_ascii=False)
                 )
+                if len(request) > MAX_PROMPT:
+                    raise WorkError(
+                        f"The {LABELS[role]} prompt is {len(request):,} characters, over the "
+                        f"{MAX_PROMPT:,} local limit. Shorten brand notes, campaign direction or feedback "
+                        "history and retry."
+                    )
                 payload = {"prompt": request, "max_tokens": 2200, "schema": output_schema}
                 if images:
                     payload["images"] = list(images)
@@ -877,6 +884,67 @@ class TeamEngine:
             looked.append({"scenes": moment["scenes"], "peak_time": best, **seen})
         return looked
 
+    def _scout_footage(self, run_id: str, job_id: str, run: dict, video: dict, board: dict, count: int) -> dict:
+        """Long, speech-led sources: scouts read each time window's full transcript (see scouts.py)."""
+        settings, model_id = run["context"]["settings"], run["model_id"]
+        found = scouts.scout(
+            generate=lambda prompt, images, max_tokens: self.models.run(
+                job_id,
+                model_id,
+                "generate",
+                keep_warm=True,
+                prompt=prompt,
+                images=list(images),
+                max_tokens=max_tokens,
+            )["output"],
+            video=video,
+            frames_for=lambda index, times: (
+                self.frames(job_id, video, [(at, at) for at in times], 1) if self.models.vision(model_id) else []
+            ),
+            objective=settings.get("objective", "discovery"),
+            brand=settings.get("brand", ""),
+            count=max(count, 3),
+            direction=run["context"].get("campaign_snapshot"),
+            check=lambda: self.jobs.check(job_id),
+            progress=lambda message: self.jobs.update(job_id, message=message),
+        )
+        self.store.patch(
+            "team_runs",
+            run_id,
+            scouting={k: found[k] for k in ["chunks", "skipped", "selector"]}
+            | {"candidates_found": len(found["pool"])},
+        )
+        moments = []
+        for moment in found["moments"]:
+            # Tie each scout range to the storyboard scenes it overlaps, so the usual evidence applies.
+            scenes = [
+                boards.scene_ref(scene["index"])
+                for scene in board["scenes"]
+                if scene.get("usable", True) and min(moment["end"], scene["end"]) > max(moment["start"], scene["start"])
+            ]
+            if scenes:
+                summary = f"{moment['hook']}. {moment['reason']}".strip(". ")
+                moments.append(
+                    {
+                        "start": moment["start"],
+                        "end": moment["end"],
+                        "summary": summary[:1200] or "Scout moment",
+                        "scenes": scenes,
+                        "evidence_refs": list(scenes),
+                        "peak_time": round((moment["start"] + moment["end"]) / 2, 2),
+                    }
+                )
+        if not moments:
+            raise WorkError("Scouts found no speech-backed moments in this source. Select a range manually.")
+        moments = moments[:count]
+        for position, moment in enumerate(moments):
+            moment["id"] = f"moment-{position + 1}"
+        return {
+            "moments": moments,
+            "limitations": f"{found['chunks']} scouts each reviewed one time window's transcript and sampled "
+            "frames; nothing between sampled frames was seen.",
+        }
+
     @staticmethod
     def _suggested(moment: dict, transcript: dict | None, limit: float) -> dict:
         """A default cut: about half a minute around the measured peak, on speech boundaries."""
@@ -1038,32 +1106,43 @@ class TeamEngine:
                 output["moments"] = moments[:count]
 
             shortlisted = False
+            speech_led = (video.get("transcript") or {}).get("speech", "throughout") == "throughout"
             try:
-                footage = self._agent(
-                    run_id,
-                    job_id,
-                    "footage_analyst",
-                    Footage,
-                    {
-                        "assignment": assignments["footage_analyst"],
-                        "requested_moments": count,
-                        "objective": run["objective"],
-                        "brand": context["settings"]["brand"],
-                        "source": context["source"],
-                        "storyboard": [
-                            {"ref": ref, **{k: v for k, v in evidence[ref].items() if k != "type"}}
-                            for ref in scene_refs
-                        ],
-                        "approved_campaign_direction": context.get("campaign_snapshot"),
-                        "limitations": context["limitations"],
-                    },
-                    refs=scene_refs,
-                    limits={
-                        "$defs.Moment.properties.scenes.items": {"enum": scene_refs},
-                        "properties.moments": {"maxItems": count},
-                    },
-                    validate=validate_footage,
-                )
+                if scouts.is_long(video) and speech_led:
+                    # Long talk: a scout swarm reads every time window instead of one thinned prompt.
+                    footage = self._operation(
+                        run_id,
+                        job_id,
+                        "footage_analyst",
+                        lambda: self._scout_footage(run_id, job_id, run, video, board, count),
+                        refs=scene_refs,
+                    )
+                else:
+                    footage = self._agent(
+                        run_id,
+                        job_id,
+                        "footage_analyst",
+                        Footage,
+                        {
+                            "assignment": assignments["footage_analyst"],
+                            "requested_moments": count,
+                            "objective": run["objective"],
+                            "brand": context["settings"]["brand"],
+                            "source": context["source"],
+                            "storyboard": [
+                                {"ref": ref, **{k: v for k, v in evidence[ref].items() if k != "type"}}
+                                for ref in scene_refs
+                            ],
+                            "approved_campaign_direction": context.get("campaign_snapshot"),
+                            "limitations": context["limitations"],
+                        },
+                        refs=scene_refs,
+                        limits={
+                            "$defs.Moment.properties.scenes.items": {"enum": scene_refs},
+                            "properties.moments": {"maxItems": count},
+                        },
+                        validate=validate_footage,
+                    )
             except WorkError:
                 footage = self._operation(
                     run_id, job_id, "shortlist", lambda: self._shortlist(board, count), refs=scene_refs

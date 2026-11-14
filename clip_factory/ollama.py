@@ -169,8 +169,8 @@ class Ollama:
         schema: dict | None = None,
         temperature: float = 0.3,
         max_tokens: int = 1500,
-        keep_loaded: bool = False,
         check=lambda: None,
+        keep_alive: int | str = 0,
     ) -> str:
         """Stream a chat completion so cancellation is honoured between chunks."""
         info = self.model(name)
@@ -199,9 +199,9 @@ class Ollama:
             "model": name,
             "messages": [message],
             "stream": True,
-            # Unload after the task, like the MLX worker, so Whisper/Kokoro jobs get the memory.
-            # A batch keeps the model warm between its requests and unloads on the last one.
-            "keep_alive": "5m" if keep_loaded else 0,
+            # Default: unload after the task, like the MLX worker, so Whisper/Kokoro get the memory.
+            # Multi-call runs (batches, agent swarms) pass a duration to avoid reloading weights per call.
+            "keep_alive": keep_alive,
             "options": {"temperature": temperature, "num_predict": max_tokens},
         }
         if info["thinking"]:

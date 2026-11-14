@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from platformdirs import user_data_path
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import media
+from . import media, scouts
 from .ads import AdsClient
 from .campaign_api import install as install_campaign_api
 from .campaigns import Campaigns
@@ -202,6 +202,18 @@ class Narration(Body):
     text: str = Field(min_length=1, max_length=5000)
 
 
+def _json_payload(text: str):
+    """First JSON object or array in the reply; tolerates fences and surrounding prose."""
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(text):
+        if char in "{[":
+            try:
+                return decoder.raw_decode(text, index)[0]
+            except ValueError:
+                continue
+    raise ValueError("No JSON payload")
+
+
 def parse_candidates(
     output: str,
     duration: float,
@@ -213,11 +225,10 @@ def parse_candidates(
 ) -> list[dict]:
     # Model output is untrusted data; strict schema and video boundaries precede any rendering.
     stripped = re.sub(r"<think>.*?</think>", "", output, flags=re.DOTALL).strip()
-    stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", stripped).strip()
-    begin, end = stripped.find("{"), stripped.rfind("}")
     try:
-        value = json.loads(stripped[begin : end + 1])
-        rows = value["candidates"]
+        value = _json_payload(stripped)
+        # Local models often return the candidate list bare instead of {"candidates": [...]}.
+        rows = value if isinstance(value, list) else value["candidates"]
         if not isinstance(rows, list):
             raise TypeError()
         valid = []
@@ -648,8 +659,54 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         finally:
             audio.unlink(missing_ok=True)
 
+    def speech_led(video: dict) -> bool:
+        """Speech carries this source throughout (not footage with stray chatter)."""
+        return (video.get("transcript") or {}).get("speech", "throughout") == "throughout"
+
+    def scout_source(job_id: str, video: dict, model_id: str, config: dict, count: int = 3) -> dict:
+        """Long sources: one scout per time window, then a selector (see scouts.py)."""
+        return scouts.scout(
+            generate=lambda prompt, images, max_tokens: models().run(
+                job_id,
+                model_id,
+                "generate",
+                keep_warm=True,
+                prompt=prompt,
+                images=images,
+                max_tokens=max_tokens,
+            )["output"],
+            video=video,
+            frames_for=lambda index, times: (
+                range_frames(job_id, video, [(at, at) for at in times], 1) if models().vision(model_id) else []
+            ),
+            objective=config["objective"],
+            brand=config["brand"],
+            count=count,
+            direction=config.get("_campaign_snapshot"),
+            check=lambda: jobs().check(job_id),
+            progress=lambda message: jobs().update(job_id, message=message),
+        )
+
     def analyze_task(job_id: str, video: dict, model_id: str, config: dict | None = None) -> dict:
         config = config or settings()
+        if scouts.is_long(video) and speech_led(video):
+            # Long talk: scouts read every window's full transcript; no need to watch every scene first.
+            wanted = max(1, min(MAX_CLIPS, int(config.get("clip_count") or 3)))
+            found = scout_source(job_id, video, model_id, config, wanted)
+            candidates = parse_candidates(
+                json.dumps({"candidates": found["moments"]}), video["duration"], config["objective"], limit=wanted
+            )
+            result = {
+                "video_id": video["id"],
+                "candidates": candidates,
+                "method": "scouts",
+                "scouting": {k: found[k] for k in ["chunks", "skipped", "selector"]}
+                | {"candidates_found": len(found["pool"])},
+                "limitations": "Scouts each reviewed one time window with sampled frames; review all proposed "
+                "ranges and claims before publishing.",
+            }
+            store.patch("videos", video["id"], analysis=result, status="analyzed")
+            return result
         board = storyboards().ensure(job_id, video, model_id, progress=(5, 70))
         rows = storyboard_digest(board)
         if not rows:
@@ -752,6 +809,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         result = {
             "video_id": video["id"],
             "candidates": candidates,
+            "method": "storyboard",
             "scenes_watched": len(board["scenes"]),
             "limitations": board["limitations"],
         }

@@ -1351,3 +1351,80 @@ def test_too_long_proposals_keep_the_stretch_around_the_peak():
     assert fit_range(0, 100, 0, 100, 60, peak=70) == (40, 100)
     assert fit_range(0, 100, 0, 100, 60, peak=10) == (0, 60)
     assert fit_range(0, 100, 0, 100, 60) == (0, 60)
+
+
+class ScoutingModels(ScriptedModels):
+    """Answers scout and selector prompts itself; team roles go to the scripted outputs."""
+
+    def __init__(self, outputs, scout_answer):
+        super().__init__(outputs)
+        self.scout_answer, self.scout_calls = scout_answer, []
+
+    def run(self, job_id, model_id, action, keep_warm=False, **payload):
+        if payload["prompt"].startswith(("You are one scout", "Scouts reviewed")):
+            self.scout_calls.append(keep_warm)
+            lo = payload["prompt"].split("You only see seconds ", 1)[-1].split("-", 1)[0]
+            return {"output": json.dumps(self.scout_answer.get(lo, []))}
+        return super().run(job_id, model_id, action, **payload)
+
+
+def long_talk(harness, text="speech {}"):
+    segments = [{"start": s, "end": s + 4, "text": text.format(s)} for s in range(0, 1800, 5)]
+    harness.video = harness.store.put(
+        "videos", {**harness.video, "duration": 1800, "has_audio": True, "transcript": {"segments": segments}}
+    )
+    harness.board = board("source", 1800.0, scenes=36)  # 50-second scenes
+
+
+def test_long_talk_footage_comes_from_scouts_and_is_tied_to_storyboard_scenes(harness):
+    long_talk(harness)
+    outputs = script()
+    del outputs[1]  # no footage-analyst prompt: scouts replace it
+    harness.models = ScoutingModels(
+        outputs, {"0": [{"start": 0, "end": 30, "hook": "Opening bit", "score": 7, "why": "clear payoff"}]}
+    )
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review" and result["review_status"] == "pass"
+    assert harness.models.scout_calls and all(harness.models.scout_calls)  # every scout call kept warm
+    assert run["scouting"]["chunks"] == 3 and run["scouting"]["candidates_found"] == 1
+    moment = role(run, "footage_analyst")["output"]["moments"][0]
+    assert (moment["start"], moment["end"], moment["scenes"], moment["id"]) == (0, 30, ["scene:0"], "moment-1")
+    assert "Opening bit" in moment["summary"]
+    # The words spoken inside the scout's range join the evidence for the editor and critic.
+    assert "transcript:0" in harness.models.calls[2]["data"]["evidence"]
+    assert harness.rendered[0]["start"] == 0
+
+
+def test_long_talk_with_no_scout_moments_falls_back_to_the_measured_shortlist(harness):
+    long_talk(harness, text="um")
+    outputs = script()
+    del outputs[1]
+    harness.models = ScoutingModels(outputs, {})
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    assert role(run, "footage_analyst")["status"] == "failed"
+    assert "no speech-backed moments" in role(run, "footage_analyst")["error"]
+    assert role(run, "shortlist")["status"] == "completed" and len(harness.rendered) == 1
+    assert "shortlisted from measured signals" in run["stop_reason"]
+
+
+def test_footage_with_only_background_chatter_is_never_sent_to_scouts(harness):
+    long_talk(harness)
+    transcript = harness.video["transcript"]
+    for segment in transcript["segments"]:
+        segment["background"] = True
+    harness.store.patch("videos", "source", transcript={**transcript, "speech": "none"})
+    harness.models = ScoutingModels(script(), {})
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    assert not harness.models.scout_calls and "scouting" not in run
+    assert titles(harness.models) == ["Plan", "Footage", "Strategy", "Edits", "Critique"]
+
+
+def test_a_prompt_over_the_local_limit_is_refused_with_what_to_shorten(harness):
+    harness.config["brand"] = "x" * 100_000
+    run = harness.create()
+    with pytest.raises(WorkError, match="over the 96,000 local limit"):
+        harness.engine.execute(run["id"], "job")
+    assert not harness.models.calls and not harness.rendered

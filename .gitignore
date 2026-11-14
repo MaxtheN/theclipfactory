@@ -14,3 +14,5 @@ dist/
 coverage/
 playwright-report/
 test-results/
+scripts/experiments/.work/
+scripts/experiments/results/

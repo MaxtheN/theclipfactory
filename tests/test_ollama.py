@@ -242,3 +242,24 @@ def test_vision_is_known_per_model(models):
     assert models.vision("ollama:missing:1b") is False and models.vision("ollama:../evil") is False
     assert models.vision("qwen-small") is True and models.vision("qwen-large") is True
     assert models.vision("whisper-turbo") is False and models.vision("unknown") is False
+
+
+def test_raw_reply_is_kept_in_the_job_log(models):
+    models.ollama = fake()
+    models.run("job-1", "ollama:llama3.2:3b", "generate", prompt="p")
+    models.ollama = fake(chat=[{"error": "boom"}])
+    with pytest.raises(WorkError):
+        models.run("job-1", "ollama:llama3.2:3b", "generate", prompt="p")
+    log = (models.logs / "job-1.log").read_text()
+    assert "hello" in log and "ERROR: Ollama error: boom" in log
+    assert (models.logs / "job-1.log").stat().st_mode & 0o777 == 0o600
+
+
+def test_keep_warm_calls_keep_the_model_loaded_between_scout_prompts(models):
+    seen = []
+    models.ollama = fake(seen=seen)
+    models.run("job", "ollama:llama3.2:3b", "generate", keep_warm=True, prompt="p")
+    models.run("job", "ollama:llama3.2:3b", "generate", prompt="p")
+    assert [body["keep_alive"] for body in seen] == ["10m", 0]
+    # Progress wording belongs to the caller (a role, a scout, a scene), not to the model runner.
+    assert models.jobs.update.call_count == 0

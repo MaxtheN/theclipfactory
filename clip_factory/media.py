@@ -1034,13 +1034,16 @@ def extract_audio(jobs: Jobs, job_id: str, source: Path, output: Path):
     )
 
 
-def sample_frames(jobs: Jobs, job_id: str, source: Path, directory: Path, duration: float) -> list[dict]:
+def sample_frames(
+    jobs: Jobs, job_id: str, source: Path, directory: Path, duration: float, times: list[float] | None = None
+) -> list[dict]:
     directory.mkdir(parents=True, exist_ok=True)
     frames = []
     # Bounded sampling is intentional: analysis is approximate, not exhaustive temporal recall.
     count = min(12, max(1, math.ceil(duration / 10)))
-    for i in range(count):
-        at = min(duration - 0.05, (i + 0.5) * duration / count)
+    points = times[:12] if times is not None else [(i + 0.5) * duration / count for i in range(count)]
+    for i, point in enumerate(points):
+        at = min(duration - 0.05, max(0.0, point))
         target = directory / f"frame-{i:02}.jpg"
         jobs.process(
             job_id,

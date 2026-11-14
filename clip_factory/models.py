@@ -539,11 +539,13 @@ class Models:
                         schema=request.get("schema"),
                         temperature=request.get("temperature", 0.3),
                         max_tokens=request.get("max_tokens", 1500),
-                        keep_loaded=index + 1 < len(requests),
+                        keep_alive="5m" if index + 1 < len(requests) else 0,
                         check=lambda: self.jobs.check(job_id),
                     )
+                    self._log_ollama(job_id, name, text)
                     results.append({"output": text})
                 except OllamaError as exc:
+                    self._log_ollama(job_id, name, f"ERROR: {exc}")
                     if index == 0:
                         raise WorkError(f"{exc} No output was fabricated.") from exc
                     results.append({"error": str(exc)[:300]})
@@ -554,7 +556,8 @@ class Models:
             raise WorkError("Inference worker returned an incomplete batch.")
         return [o if isinstance(o, dict) else {"error": "Invalid result"} for o in outputs]
 
-    def run(self, job_id: str, identifier: str, action: str, **payload) -> dict:
+    def run(self, job_id: str, identifier: str, action: str, *, keep_warm: bool = False, **payload) -> dict:
+        """keep_warm: one of many calls in a row (scout swarm); Ollama keeps weights loaded between them."""
         if action not in {"generate", "batch", "transcribe", "narrate"}:
             raise WorkError("Unsupported inference action.")
         from .inference_worker import validate_request
@@ -570,7 +573,7 @@ class Models:
         if is_ollama(identifier):
             if action != "generate":
                 raise WorkError("Unsupported inference action.")
-            return self._run_ollama(job_id, identifier, data)
+            return self._run_ollama(job_id, identifier, data, keep_warm=keep_warm)
         worker = Path(__file__).with_name("inference_worker.py")
         if not worker.is_file():
             raise WorkError(
@@ -617,7 +620,7 @@ class Models:
         except (OSError, ValueError, TypeError) as exc:
             raise WorkError("Inference worker returned an invalid result.") from exc
 
-    def _run_ollama(self, job_id: str, identifier: str, data: dict) -> dict:
+    def _run_ollama(self, job_id: str, identifier: str, data: dict, *, keep_warm: bool = False) -> dict:
         name = model_name(identifier)
         try:
             text = self.ollama.generate(
@@ -629,7 +632,23 @@ class Models:
                 temperature=data.get("temperature", 0.3),
                 max_tokens=data.get("max_tokens", 1500),
                 check=lambda: self.jobs.check(job_id),
+                keep_alive="10m" if keep_warm else 0,
             )
         except OllamaError as exc:
+            self._log_ollama(job_id, name, f"ERROR: {exc}")
             raise WorkError(f"{exc} No output was fabricated.") from exc
+        self._log_ollama(job_id, name, text)
         return {"output": text}
+
+    def _log_ollama(self, job_id: str, name: str, text: str):
+        """Keep the raw reply in the local job log, like the MLX worker's output, for diagnosis."""
+        path = self.logs / f"{job_id}.log"
+        try:
+            if path.is_symlink():
+                return
+            with path.open("a", encoding="utf-8") as log:
+                log.write(f"--- {time.strftime('%Y-%m-%dT%H:%M:%S')} ollama:{name} raw reply ---\n")
+                log.write(text[:65536] + ("\n[truncated]" if len(text) > 65536 else "") + "\n")
+            path.chmod(0o600)
+        except OSError:
+            pass
