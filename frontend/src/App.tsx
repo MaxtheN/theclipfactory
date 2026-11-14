@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useFactory } from "./useFactory";
+import { Campaigns } from "./pages/Campaigns";
 import { Dashboard } from "./pages/Dashboard";
 import { Library } from "./pages/Library";
 import { Factory } from "./pages/Factory";
@@ -8,6 +9,7 @@ import { Instagram } from "./pages/Instagram";
 import { Results } from "./pages/Results";
 import { SettingsPage } from "./pages/Settings";
 const tabs = [
+  "Campaigns",
   "Dashboard",
   "Library",
   "Factory",
@@ -18,6 +20,7 @@ const tabs = [
 ] as const;
 type Tab = (typeof tabs)[number];
 const descriptions: Record<Tab, string> = {
+  Campaigns: "Saved profiles. Approved direction. Evidence-led revisions.",
   Dashboard: "Your creative intent. A local production system.",
   Library: "Source footage, ready for your next idea.",
   Factory: "Find the moment. Shape the story. Keep control.",
@@ -29,9 +32,9 @@ const descriptions: Record<Tab, string> = {
 function initialTab(): Tab {
   try {
     const saved = localStorage.getItem("clip-factory-tab");
-    return tabs.includes(saved as Tab) ? (saved as Tab) : "Dashboard";
+    return tabs.includes(saved as Tab) ? (saved as Tab) : "Campaigns";
   } catch {
-    return "Dashboard";
+    return "Campaigns";
   }
 }
 export function App() {
@@ -83,7 +86,7 @@ export function App() {
               onClick={() => setTab(item)}
             >
               <span className="nav-icon" aria-hidden="true">
-                {["◫", "▤", "◈", "⬡", "◎", "↗", "⚙"][index]}
+                {["▦", "◫", "▤", "◈", "⬡", "◎", "↗", "⚙"][index]}
               </span>
               {item}
               {item === "Factory" && active > 0 && (
@@ -183,6 +186,7 @@ export function App() {
               </button>
             </div>
           )}
+          {tab === "Campaigns" && <Campaigns state={state} openFactory={() => setTab("Factory")} />}
           {tab === "Dashboard" && <Dashboard state={state} navigate={setTab} />}
           {tab === "Library" && (
             <Library

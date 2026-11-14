@@ -79,6 +79,13 @@ export interface Video {
   status?: string;
 }
 export interface Clip {
+  campaign_id?: string | null;
+  profile_id?: string | null;
+  strategy_version_id?: string | null;
+  strategy_snapshot?: unknown;
+  edit_plan?: unknown;
+  provenance_mode?: string | null;
+  creator_instructions?: string | null;
   team_run_id?: string | null;
   team_review_status?: "pass" | "fail" | "unknown" | "not_applicable" | null;
   team_findings?: unknown;
@@ -209,4 +216,70 @@ export interface TeamComparison {
     }
   >;
   notes: string[];
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+  audience: string;
+  brand_context: string;
+  objective: string;
+  primary_metric: string | null;
+  creative_preferences: string;
+}
+export interface CampaignBrief {
+  audience: string;
+  constraints: string[];
+  requested_outputs: string[];
+  measurement_intent: string;
+}
+export interface Campaign {
+  id: string;
+  name: string;
+  brief: CampaignBrief;
+  profile_ids: string[];
+  video_ids: string[];
+  active_strategy_id: string | null;
+}
+export interface Direction {
+  angles: string[];
+  moment_selection: string;
+  hooks: string[];
+  pacing: string;
+  duration_seconds: number;
+  framing: "fit" | "fill";
+  caption_style: "standard" | "high_contrast";
+  editing_preferences: string;
+  measurement_questions: string[];
+  next_experiments: string[];
+  evidence_refs: string[];
+  limitations: string;
+  confidence: "low" | "medium" | "high";
+}
+export interface StrategyVersion {
+  id: string;
+  campaign_id: string;
+  version: number;
+  status: "proposed" | "approved" | "rejected";
+  base_version_id: string | null;
+  reason: string;
+  hypothesis: string;
+  created_at: string;
+  approved_at: string | null;
+  changed_profile_ids: string[];
+  directions: Record<string, Direction>;
+}
+export interface Observation {
+  id: string;
+  profile_id: string;
+  clip_id: string;
+  metric: string;
+  value: number | null;
+  unit: string;
+  source: "manual_import";
+  publication_reference: string;
+  window_start: string;
+  window_end: string;
+  collected_at: string;
+  notes: string;
 }
