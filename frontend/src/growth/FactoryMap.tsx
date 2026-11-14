@@ -737,13 +737,13 @@ const OVERVIEW_STAGES: { label: string; ids: StationId[]; detail: string }[] = [
   { label: "Ship", ids: ["post", "measure"], detail: "Instagram and measurement" },
   { label: "Learn", ids: ["strategist", "rules", "builder"], detail: "Strategist and style rules" },
 ];
-function FactoryOverview({ model, rehearsal, selected, onSelect, onPreview }: { model: FactoryMapModel; rehearsal?: ReturnType<typeof useLoopRehearsal>; selected: number; onSelect: (index: number) => void; onPreview: (index: number | null) => void }) {
+function FactoryOverview({ model, rehearsal, selected, onSelect }: { model: FactoryMapModel; rehearsal?: ReturnType<typeof useLoopRehearsal>; selected: number; onSelect: (index: number) => void }) {
   const activeStage = rehearsal ? [0, 1, 2, 3, 4, 4][rehearsal.phase] : OVERVIEW_STAGES.findIndex(group => model.stations.some(s => group.ids.includes(s.id) && s.state === "active"));
-  return <ol className="gf-fmap-overview" aria-label="Factory growth loop" onMouseLeave={() => onPreview(null)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) onPreview(null); }}>{OVERVIEW_STAGES.map((group, index) => {
+  return <ol className="gf-fmap-overview" aria-label="Factory growth loop">{OVERVIEW_STAGES.map((group, index) => {
     const members = model.stations.filter(s => group.ids.includes(s.id));
     const current = members.find(s => s.state === "failed") || members.find(s => s.state === "active") || members.find(s => s.state === "waiting") || members.find(s => s.state === "done") || members[0];
     const status = rehearsal ? index === activeStage ? rehearsal.result?.status === "completed" ? "Draft saved" : rehearsal.title : index < activeStage ? "Inspected" : "Next" : current?.status || "No work recorded";
-    return <li key={group.label} className={`${index === activeStage ? "is-current" : ""}${rehearsal?.transition && index === activeStage ? " is-transition" : ""}`}><button type="button" aria-current={index === activeStage ? "step" : undefined} aria-pressed={selected === index} onMouseEnter={() => onPreview(index)} onFocus={() => onPreview(index)} onClick={() => { onSelect(index); onPreview(null); }}><span className="gf-fmap-overview-step">{String(index + 1).padStart(2, "0")}</span><strong>{group.label}</strong><span>{status}</span></button></li>;
+    return <li key={group.label} className={`${index === activeStage ? "is-current" : ""}${selected === index ? " is-selected" : ""}${rehearsal?.transition && index === activeStage ? " is-transition" : ""}`}><button type="button" aria-current={index === activeStage ? "step" : undefined} aria-pressed={selected === index} onClick={() => onSelect(index)}><span className="gf-fmap-overview-step">{String(index + 1).padStart(2, "0")}</span><strong>{group.label}</strong><span>{status}</span></button></li>;
   })}</ol>;
 }
 
@@ -806,14 +806,13 @@ export function FactoryMap({
   const pulses = usePulses(model);
   const [open, setOpen] = useState<StationId | null>(null);
   const [overview, setOverview] = useState(0);
-  const [previewStage, setPreviewStage] = useState<number | null>(null);
   const track = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
   const { paths, loop, size } = useWires(track, [model.stations.map((s) => s.status).join("|")]);
   const closeSheet = useCallback(() => { setOpen(null); rehearsal.pause(); }, [rehearsal.pause]);
   const opened = model.stations.find((s) => s.id === open);
   useEffect(() => { if (mode === "demo") { setOpen(null); setOverview([0, 1, 2, 3, 4, 4][rehearsal.phase]); } }, [mode, rehearsal.phase]);
-  useEffect(() => { setOpen(null); setOverview(0); setPreviewStage(null); }, [w.profileId, w.campaign?.id]);
+  useEffect(() => { setOpen(null); setOverview(0); }, [w.profileId, w.campaign?.id]);
   const flowing = model.edges.filter((e) => e.flowing);
   const working = model.stations.filter((s) => s.state === "active").length;
 
@@ -838,7 +837,7 @@ export function FactoryMap({
           </span>
         </div>
       </header>
-      <FactoryOverview model={model} rehearsal={mode === "demo" ? rehearsal : undefined} selected={overview} onSelect={setOverview} onPreview={setPreviewStage} />
+      <FactoryOverview model={model} rehearsal={mode === "demo" ? rehearsal : undefined} selected={overview} onSelect={setOverview} />
       {mode === "demo" && <><LoopRehearsalControls state={rehearsal} /><LoopRehearsalInspector state={rehearsal} /></>}
       <details className="gf-fmap-engine-details"><summary>Open full map</summary>
       {mode === "real" && replay.on && replayRun && (

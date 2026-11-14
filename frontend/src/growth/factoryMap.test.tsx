@@ -116,6 +116,22 @@ describe("FactoryMap", () => {
     expect(screen.getByText("Open full map")).toBeTruthy();
   });
 
+  it("keeps the chosen stage selected and visibly marked while the pointer moves", () => {
+    motion(false);
+    vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([]);
+    render(<FactoryMap w={w} factory={factory(false)} />);
+    const stages = screen.getByRole("list", { name: "Factory growth loop" });
+    const buttons = [...stages.querySelectorAll("button")];
+    fireEvent.click(buttons[2]);
+    expect(buttons[2]).toHaveAttribute("aria-pressed", "true");
+    expect(buttons[2].closest("li")).toHaveClass("is-selected");
+    fireEvent.mouseEnter(buttons[4]);
+    fireEvent.focus(buttons[4]);
+    expect(buttons[2]).toHaveAttribute("aria-pressed", "true");
+    expect(buttons[4]).toHaveAttribute("aria-pressed", "false");
+    expect(buttons[4].closest("li")).not.toHaveClass("is-selected");
+  });
+
   it("summarises the chosen run compactly and lists full detail in the menu", async () => {
     motion(false);
     vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([finishedRun]);
