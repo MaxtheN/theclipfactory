@@ -2559,7 +2559,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             ],
         }
 
-    def campaign_render(identifier, body, *, experiment_id=None):
+    def campaign_render(identifier, body, *, experiment_id=None, provenance=None):
         with operations_lock:
             snapshot = campaigns.snapshot(
                 identifier, body.profile_id, body.video_id, body.expected_strategy_version_id
@@ -2616,6 +2616,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             metadata = {
                 **snapshot,
                 **({"experiment_id": experiment_id} if experiment_id else {}),
+                # e.g. reference_research_id: the pattern this render tests (references_api.py).
+                **(provenance or {}),
                 "provenance_mode": body.mode,
                 "creator_instructions": body.instructions,
                 "strategy_departures": deviations,
@@ -2685,5 +2687,15 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
     # Approve & post: human-approved, quality-gated Reels via Composio with durable attempts.
     install_publish_api(app, runtime, engine, campaigns)
+
+    from .references_api import install as install_references_api
+
+    # Research what works: reference reels -> one cited pattern -> an A/B render + a PROPOSED rules note.
+    install_references_api(app, campaigns, render=campaign_render)
+
+    from .post_copy import install as install_post_copy
+
+    # Per-clip Instagram caption copy (model with a labelled template fallback); never posts.
+    install_post_copy(app, store)
 
     return app
