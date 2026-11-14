@@ -12,6 +12,7 @@ import { pendingRules, scopeAutomation, type Row } from "./flowEvents";
 import { postedRows, resultsStory, type PostedRow } from "./resultsModel";
 import { StrategistPanel } from "./StrategistPanel";
 import { GrowthLoopPanel } from "./GrowthLoopPanel";
+import { DemoLoopButton } from "./LearningLoopDemo";
 import { FactoryUpgrades } from "./FactoryUpgrades";
 import { PanelDialog } from "./PanelDialog";
 import type { StrategistView } from "./strategistApi";
@@ -1165,6 +1166,7 @@ export function Results({
             {pendingCount + drafts.length > 0 && <span>{pendingCount + drafts.length} to review</span>}
           </button>
         </div>
+        {onRehearse && <DemoLoopButton compact onClick={onRehearse} />}
         <button type="button" className="gf-button secondary compact" onClick={toAccounts}>
           <Icon name="link" size={15} /> Accounts & tracking
         </button>
@@ -1180,6 +1182,7 @@ export function Results({
           onOpenStyleRules={onEditingRules}
           onView={onView}
           learnedExtra={<LearnedExtra memory={data.memory} />}
+          onDemo={onRehearse}
           extraWaitingCount={memoryPending.length + drafts.length}
           extraWaiting={
             <>

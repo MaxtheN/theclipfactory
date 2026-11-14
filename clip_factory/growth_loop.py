@@ -541,6 +541,30 @@ class GrowthLoop:
             return self._request(profile_id, request_id, payload, slots, kind="rehearsal",
                                  rule_id=expected_strategy_version_id, evidence=evidence)
 
+    def demo_recut(self, profile_id, *, request_id, clip_id, target_seconds, rule):
+        """Learning-loop demo: one real, unapproved length re-cut backed by SIMULATED evidence only."""
+        payload = {"kind": "demo_loop", "clip_id": clip_id, "target": target_seconds}
+        with self.store.lock:
+            existing = self._existing(profile_id, request_id, payload)
+            if existing:
+                return existing
+            profile = self.campaigns.require("profiles", profile_id)
+            version_id = profile.get("active_strategy_id")
+            if not version_id:
+                raise HTTPException(409, "Approve this brand's Style rules once before running the demo re-edit.")
+            clip = self._parent(profile_id, clip_id)
+            snapshot = self.campaigns.snapshot(clip["campaign_id"], profile_id, clip["video_id"], version_id)
+            body = self._body(clip, snapshot, variable="duration_seconds", value=float(target_seconds),
+                              reason=f"Learning-loop demo (simulated results): {rule}.")
+            evidence = {"simulated_evidence": True, "evidence_kind": "simulated_observation_rehearsal",
+                        "source_clip_id": clip_id, "source_sha256": clip["sha256"],
+                        "comparison": {"status": "simulated", "decision": "test", "metric": "completion_rate"},
+                        "proposal": {"status": "learning_demo", "variable": "duration_seconds",
+                                     "before": clip["edit_plan"]["end"] - clip["edit_plan"]["start"],
+                                     "after": float(target_seconds), "reason": rule}}
+            return self._request(profile_id, request_id, payload, [(clip, body)], kind="demo_loop",
+                                 rule_id=version_id, evidence=evidence)
+
     def reconcile(self, identifier):
         with self.store.lock:
             receipt = self.campaigns.require("growth_loops", identifier)

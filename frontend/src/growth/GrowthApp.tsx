@@ -16,6 +16,7 @@ import {
   type OpenProduction,
 } from "./FactoryHome";
 import { FactoryTabs } from "./FactoryMap";
+import { LearningLoopDemo } from "./LearningLoopDemo";
 import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
 import { QuickActions, type QuickAction } from "./QuickActions";
@@ -103,7 +104,7 @@ export function GrowthApp() {
   const [stage, setStage] = useState<Stage>(storedView);
   const [goalsRequest, setGoalsRequest] = useState({ context: "", sequence: 0 });
   const [engineRequest, setEngineRequest] = useState({ context: "", sequence: 0 });
-  const [rehearsalRequest, setRehearsalRequest] = useState({ context: "", sequence: 0 });
+  const [demoOpen, setDemoOpen] = useState(false);
   // Account creation is the last onboarding step, asked only when the cloud
   // is configured, nobody is signed in and the creator hasn't chosen offline.
   const [askAccount, setAskAccount] = useState(false);
@@ -141,7 +142,7 @@ export function GrowthApp() {
   useEffect(() => {
     setGoalsRequest({ context: contextKey, sequence: 0 });
     setEngineRequest({ context: contextKey, sequence: 0 });
-    setRehearsalRequest({ context: contextKey, sequence: 0 });
+    setDemoOpen(false);
   }, [contextKey]);
   const current = views[stage];
   // Sub-pages: a quiet "← Back" sits top-left above the title.
@@ -239,8 +240,7 @@ export function GrowthApp() {
   }
   function openRehearsal() {
     if (blocked || onboarding || !usable || currentContext.current !== contextKey) return;
-    setRehearsalRequest(request => ({ context: contextKey, sequence: request.context === contextKey ? request.sequence + 1 : 1 }));
-    go("factory");
+    setDemoOpen(true);
   }
   function reviewClip(clip: Clip) {
     openProduction(clip.video_id, undefined, clip.id);
@@ -609,7 +609,7 @@ export function GrowthApp() {
                 hidden={onboarding || !usable || stage !== "factory"}
               >
                 <FactoryTabs
-                  rehearsalRequest={rehearsalRequest.context === contextKey ? rehearsalRequest.sequence : 0}
+                  onDemo={openRehearsal}
                   w={w}
                   factory={factory}
                   active={!onboarding && stage === "factory"}
@@ -752,6 +752,7 @@ export function GrowthApp() {
           </div>
         </div>
       </div>
+      <LearningLoopDemo profileId={w.profileId} open={demoOpen && !onboarding} onClose={() => setDemoOpen(false)} />
       <QuickActions
         open={quickOpen && !onboarding}
         onDismiss={() => setQuickOpen(false)}

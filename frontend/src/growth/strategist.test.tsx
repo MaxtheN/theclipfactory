@@ -211,49 +211,6 @@ describe("StrategistPanel", () => {
     expect(viewSpy).toHaveBeenCalledTimes(2);
   });
 
-  it("plays the simulation behind a permanent synthetic banner", async () => {
-    stubMotion(false);
-    vi.spyOn(strategistApi, "view").mockResolvedValue(view());
-    vi.spyOn(strategistApi, "simulate").mockResolvedValue(simulation());
-    render(<StrategistPanel profileId="p" />);
-    fireEvent.click(await screen.findByRole("button", { name: "See how it learns (simulated data)" }));
-    expect(await screen.findByText(/Simulation — synthetic data/)).toBeTruthy();
-    expect(screen.getByText("Synthetic belief at step 1.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Run strategist" })).toHaveProperty("disabled", true);
-    expect(screen.queryByRole("button", { name: "Retire belief" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText("Synthetic belief at step 2.")).toBeTruthy();
-    expect(screen.getByText(/Simulation — synthetic data/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Back to real data" }));
-    expect(screen.queryByText(/Simulation — synthetic data/)).toBeNull();
-  });
-
-  it("respects reduced motion: no autoplay, final step, no transition class", async () => {
-    stubMotion(true);
-    vi.spyOn(strategistApi, "view").mockResolvedValue(view());
-    vi.spyOn(strategistApi, "simulate").mockResolvedValue(simulation());
-    const { container } = render(<StrategistPanel profileId="p" />);
-    fireEvent.click(await screen.findByRole("button", { name: "See how it learns (simulated data)" }));
-    expect(await screen.findByText("Synthetic belief at step 3.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
-    expect(container.querySelector(".gf-strategist.is-reduced")).toBeTruthy();
-  });
-
-  it("autoplays the timeline when motion is allowed", async () => {
-    stubMotion(false);
-    vi.spyOn(strategistApi, "view").mockResolvedValue(view());
-    vi.spyOn(strategistApi, "simulate").mockResolvedValue(simulation());
-    render(<StrategistPanel profileId="p" />);
-    fireEvent.click(await screen.findByRole("button", { name: "See how it learns (simulated data)" }));
-    await screen.findByText("Synthetic belief at step 1.");
-    expect(
-      await screen.findByText("Synthetic belief at step 2.", {}, { timeout: 2500 }),
-    ).toBeTruthy();
-  });
-});
-
-describe("BeliefCard", () => {
   it("marks model suggestions and offers retire", () => {
     const retire = vi.fn();
     render(

@@ -42,6 +42,7 @@ import { factoryBuilderApi, type FactoryBuilderView } from "./factoryBuilderApi"
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { workspaceApi } from "./workspaceApi";
 import { Icon } from "./Icon";
+import { DemoLoopButton } from "./LearningLoopDemo";
 import { LoopRehearsalControls, LoopRehearsalInspector, rehearsalModel, useLoopRehearsal } from "./LoopRehearsal";
 import "./factory-map.css";
 
@@ -761,14 +762,12 @@ export function FactoryMap({
   w,
   factory,
   active = true,
-  rehearsalRequest = 0,
 }: {
   w: Workspace;
   factory: FactoryState;
   active?: boolean;
-  rehearsalRequest?: number;
 }) {
-  const [mode, setMode] = useState<"real" | "demo">("real");
+  const mode = "real" as "real" | "demo";
   const rehearsal = useLoopRehearsal(w, factory, active && mode === "demo");
   const data = useMapData(w, factory, active && mode === "real");
   const { sources, clips, runs } = scope(w, factory, data.runs);
@@ -816,7 +815,6 @@ export function FactoryMap({
   const opened = model.stations.find((s) => s.id === open);
   useEffect(() => { if (mode === "demo") { setOpen(null); setOverview([0, 1, 2, 3, 4, 4][rehearsal.phase]); } }, [mode, rehearsal.phase]);
   useEffect(() => { setOpen(null); setOverview(0); setPreviewStage(null); }, [w.profileId, w.campaign?.id]);
-  useEffect(() => { if (rehearsalRequest > 0) { setMode("demo"); setOpen(null); } }, [rehearsalRequest]);
   const flowing = model.edges.filter((e) => e.flowing);
   const working = model.stations.filter((s) => s.state === "active").length;
 
@@ -834,41 +832,15 @@ export function FactoryMap({
             Open Engine details when you want to see how the work happens.
           </p>
         </div>
-        <div className="gf-fmap-mode" role="group" aria-label="Factory map mode">
-          <button type="button" aria-pressed={mode === "real"} onClick={() => { setMode("real"); setOpen(null); }}>Real work</button>
-          <button type="button" aria-pressed={mode === "demo"} onClick={() => { if (replay.on) replay.toggle(); setMode("demo"); setOpen(null); }}>Demo rehearsal</button>
-        </div>
-        {mode === "real" && <div className="gf-fmap-actions" role="toolbar" aria-label="Factory map controls">
+        <div className="gf-fmap-actions" aria-label="Factory map status">
           <span
             className={`gf-fmap-live${model.live ? " is-on" : ""}`}
             title={working ? `${working} station${working === 1 ? "" : "s"} working` : undefined}
           >
             <i aria-hidden="true" />
-            {replay.on ? "Replay" : model.live ? "Working now" : "Resting"}
+            {model.live ? "Working now" : "Resting"}
           </span>
-          <span className="gf-fmap-actions-rule" aria-hidden="true" />
-          <button
-            type="button"
-            className="gf-fmap-tool"
-            aria-pressed={replay.on}
-            disabled={!replayRun}
-            title={
-              replayRun
-                ? `Replays run ${replayRun.id} from its recorded timestamps at ${REPLAY_SPEED}× speed`
-                : "No finished run yet. Produce clips from an episode to record one."
-            }
-            aria-describedby="gf-fmap-replay-help"
-            onClick={replay.toggle}
-          >
-            <Icon name={replay.on ? "close" : "play"} size={13} />
-            {replay.on ? "Stop replay" : "Demo replay"}
-          </button>
-          <span id="gf-fmap-replay-help" className="gf-visually-hidden">
-            {replayRun
-              ? `Replays the most recent recorded run at ${REPLAY_SPEED} times speed. Recorded events only.`
-              : "Demo replay is unavailable: no finished run has been recorded yet."}
-          </span>
-        </div>}
+        </div>
       </header>
       <FactoryOverview model={model} rehearsal={mode === "demo" ? rehearsal : undefined} selected={overview} onSelect={setOverview} onPreview={setPreviewStage} />
       <StagePreview index={previewStage ?? overview} model={model} rehearsal={mode === "demo" ? rehearsal : undefined} />
@@ -1051,13 +1023,13 @@ export function FactoryTabs({
   factory,
   active,
   children,
-  rehearsalRequest = 0,
+  onDemo,
 }: {
   w: Workspace;
   factory: FactoryState;
   active: boolean;
   children: React.ReactNode;
-  rehearsalRequest?: number;
+  onDemo?: () => void;
 }) {
   const [tab, setTab] = useState<"episodes" | "map">(() => {
     try {
@@ -1074,7 +1046,6 @@ export function FactoryTabs({
       /* A remembered tab is only a convenience. */
     }
   };
-  useEffect(() => { if (rehearsalRequest > 0) choose("map"); }, [rehearsalRequest]);
   // The first episode dropped on Factory opens the map so the stations can be watched.
   useEffect(() => {
     const show = () => choose("map");
@@ -1083,6 +1054,7 @@ export function FactoryTabs({
   }, []);
   return (
     <>
+      <div className="gf-factory-tabs-row">
       <div className="gf-fmap-segment" data-view={tab} role="tablist" aria-label="Factory view">
         <span className="gf-fmap-segment-selection" aria-hidden="true" />
         {(
@@ -1114,6 +1086,8 @@ export function FactoryTabs({
           </button>
         ))}
       </div>
+      {onDemo && <DemoLoopButton compact onClick={onDemo} />}
+      </div>
       <div
         id="gf-factory-panel-episodes"
         className="gf-fmap-view"
@@ -1130,9 +1104,75 @@ export function FactoryTabs({
           role="tabpanel"
           aria-labelledby="gf-factory-tab-map"
         >
-          <FactoryMap w={w} factory={factory} active={active} rehearsalRequest={rehearsalRequest} />
+          <FactoryMap w={w} factory={factory} active={active} />
         </div>
       )}
     </>
+  );
+}
+
+/** The station map as a stage for the learning-loop demo: scripted states, flowing wires, return arc. */
+export function FactoryStage({
+  stations,
+  flowing,
+  returnLit,
+  returnLabel,
+  reduced,
+}: {
+  stations: Station[];
+  /** Path keys, e.g. "listen>watch", "demo:strategist>editor" or "return". */
+  flowing: string[];
+  returnLit: boolean;
+  returnLabel: string;
+  reduced: boolean;
+}) {
+  const track = useRef<HTMLDivElement>(null);
+  const model: FactoryMapModel = { stations, edges: [], returnArc: { lit: returnLit, label: returnLabel }, live: true, runId: null };
+  const pulses = usePulses(model);
+  const { paths, loop, size } = useWires(track, [stations.map((s) => s.status).join("|")]);
+  const order = stations.map((s) => s.id);
+  const wires = order.slice(1).map((id, i) => `${order[i]}>${id}`);
+  return (
+    <section className={`gf-fmap gf-fmap-stage${reduced ? " is-reduced" : ""}`} aria-label="Factory map">
+      <div className="gf-fmap-canvas">
+        <div className="gf-fmap-track" ref={track}>
+          <svg className="gf-fmap-wires" width={size.w} height={size.h} aria-hidden="true">
+            {wires.map((key) => paths.get(key) && (
+              <path key={key} d={paths.get(key)} className={`gf-fmap-wire${flowing.includes(key) ? " is-flowing" : ""}`} />
+            ))}
+            {flowing.filter((key) => key.startsWith("demo:")).map((key) => paths.get(key) && (
+              <path key={key} d={paths.get(key)} className="gf-fmap-wire is-flowing is-jump" />
+            ))}
+            {paths.get("return") && (
+              <path d={paths.get("return")} className={`gf-fmap-wire is-return${returnLit ? " is-lit" : ""}`} />
+            )}
+          </svg>
+          {!reduced && flowing.map((key) => {
+            const d = paths.get(key);
+            return d ? [0, 1, 2].map((n) => (
+              <span key={`${key}-${n}`} className={`gf-fmap-token is-demo${key === "return" ? " is-return" : ""}`}
+                data-testid="flow-token" style={{ offsetPath: `path('${d}')`, animationDelay: `${n * 0.45}s` }} aria-hidden="true" />
+            )) : null;
+          })}
+          <span className={`gf-fmap-return-label${returnLit ? " is-lit" : ""}`} style={loop ? { left: loop.x, top: loop.y } : undefined} hidden={!loop}>
+            <Icon name="refresh" size={11} />
+            {returnLabel}
+          </span>
+          <div className="gf-fmap-grid">
+            {FAMILIES.map((family, index) => (
+              <div key={family} className="gf-fmap-col" role="group" aria-label={FAMILY_LABEL[family]}>
+                <div className="gf-fmap-phase">
+                  <span className="gf-fmap-phase-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                  <span>{FAMILY_LABEL[family]}</span>
+                </div>
+                {stations.filter((s) => s.family === family).map((s) => (
+                  <StationCard key={s.id} station={s} pulse={pulses.has(s.id)} selected={false} onOpen={() => {}} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

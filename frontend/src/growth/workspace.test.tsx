@@ -75,24 +75,17 @@ function openEditingRules() {
 }
 
 describe("Growth Factory interface", () => {
-  it("opens native Factory-map rehearsal from Results without an embedded website", async () => {
+  it("opens the one learning-loop demo from Results and closes it with Escape", async () => {
     localStorage.setItem("growth-view-v2", "results");
     render(<GrowthApp />);
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Current brand" })).toHaveValue("preview-profile-allin"));
-    fireEvent.click(screen.getByRole("button", { name: /^Insights\b/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Rehearse the loop" }));
-    expect(await screen.findByRole("tab", { name: "Factory map" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("button", { name: "Demo rehearsal" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("heading", { name: "Factory" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Rehearse the loop" })).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: /Run the learning loop/ })[0]);
+    expect(await screen.findByRole("dialog", { name: "Learning loop demo" })).toBeTruthy();
+    expect(screen.getByText("Simulated")).toBeTruthy();
     expect(document.querySelector("iframe")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Real work" }));
-    expect(screen.getByRole("button", { name: "Real work" })).toHaveAttribute("aria-pressed", "true");
-    const profiles = within(screen.getByRole("combobox", { name: "Current brand" })).getAllByRole("option").map(option => (option as HTMLOptionElement).value);
-    const other = profiles.find(id => id !== "preview-profile-allin" && id !== "__new__");
-    expect(other).toBeTruthy();
-    fireEvent.change(screen.getByRole("combobox", { name: "Current brand" }), { target: { value: other } });
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "Current brand" })).toHaveValue(other));
-    expect(screen.getByRole("button", { name: "Real work" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Learning loop demo" })).toBeNull());
   });
 
   it("switches workspaces without changing campaign membership and shows the campaign picker only for several campaigns", async () => {

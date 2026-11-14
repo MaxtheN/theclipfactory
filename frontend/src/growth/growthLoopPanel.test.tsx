@@ -18,14 +18,14 @@ function ready() { vi.mocked(api).mockImplementation(async path => path.endsWith
 async function inspect() { await screen.findByText(/2 reviewed revisions/); fireEvent.click(screen.getByText("Inspect clip quality (3)")); }
 
 describe("growth loop panel", () => {
-  it("loads only visible Insights and routes rehearsal to the native Factory map", async () => {
+  it("loads only visible Insights; the demo lives in one entry point outside this panel", async () => {
     ready(); const onRehearse = vi.fn();
     const ui = render(<GrowthLoopPanel {...props} visible={false} onRehearse={onRehearse} />);
     expect(api).not.toHaveBeenCalled();
     ui.rerender(<GrowthLoopPanel {...props} onRehearse={onRehearse} />);
     await screen.findByText(/2 reviewed revisions/);
-    fireEvent.click(screen.getByRole("button", { name: "Rehearse the loop" }));
-    expect(onRehearse).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Rehearse the loop" })).toBeNull();
+    expect(onRehearse).not.toHaveBeenCalled();
     expect(document.querySelector("iframe")).toBeNull();
     expect(post).not.toHaveBeenCalled();
   });

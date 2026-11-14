@@ -71,6 +71,10 @@ function runLabel(run: StrategistRun | undefined): string | null {
   if (run.status === "queued") return "Waiting for the local worker…";
   if (run.status === "running") return `${run.message} (${run.progress}%)`;
   if (run.status === "failed") return `Last run failed: ${run.message}`;
+  if (run.status === "completed" && !run.measured_posts)
+    return "No real measured posts yet — nothing to learn from. Try the learning loop demo.";
+  if (run.status === "completed")
+    return `Reviewed ${run.measured_posts} measured post${run.measured_posts === 1 ? "" : "s"}${run.proposals?.length ? ` · ${run.proposals.length} new suggestion${run.proposals.length === 1 ? "" : "s"}` : " · nothing new"}.`;
   return null;
 }
 
@@ -95,6 +99,7 @@ export function StrategistPanel({
   extraWaiting,
   extraWaitingCount = 0,
   learnedExtra,
+  onDemo,
 }: {
   profileId: string;
   onOpenStyleRules?: () => void;
@@ -105,6 +110,8 @@ export function StrategistPanel({
   extraWaitingCount?: number;
   /** Shown under the lanes, e.g. measured tests and the account's typical numbers. */
   learnedExtra?: ReactNode;
+  /** Opens the learning-loop demo (shown when there is no real data to learn from). */
+  onDemo?: () => void;
 }) {
   const [view, setView] = useState<StrategistView | null>(null);
   const [error, setError] = useState("");
@@ -265,7 +272,7 @@ export function StrategistPanel({
             onClick={() => void run()}
             disabled={busy || active || !!simulation}
           >
-            {active ? "Strategist running…" : "Run strategist"}
+            {busy || active ? "Strategist running…" : "Run strategist"}
           </button>
         </div>
       </header>
@@ -277,6 +284,14 @@ export function StrategistPanel({
       {!simulation && progress && (
         <p className="gf-strategist-progress" role="status">
           {progress}
+          {latest?.status === "completed" && !latest.measured_posts && onDemo && (
+            <>
+              {" "}
+              <button type="button" className="gf-strategist-link" onClick={onDemo}>
+                Run the learning loop
+              </button>
+            </>
+          )}
         </p>
       )}
       {note && (
@@ -393,22 +408,6 @@ export function StrategistPanel({
           {extraWaiting}
         </section>
       )}
-      <section className="gf-strategist-section gf-strategist-sim" aria-labelledby="gf-simulation">
-        <span className="gf-results-step">05</span>
-        <h3 id="gf-simulation">See how it learns</h3>
-        <p className="gf-strategist-note">
-          A replay on made-up posts, so you can watch beliefs form. It is
-          clearly labelled and never mixed with your real results.
-        </p>
-        <button
-          type="button"
-          aria-pressed={!!simulation}
-          onClick={() => void toggleSimulation()}
-          disabled={busy && !simulation}
-        >
-          {simulation ? "Back to real data" : "See how it learns (simulated data)"}
-        </button>
-      </section>
       <p className="gf-strategist-caveat">
         {simulation?.caveat ?? view?.caveat}
       </p>

@@ -98,6 +98,7 @@ export interface StrategistRun {
   }[];
   created_at: string;
   finished_at: string | null;
+  measured_posts?: number;
 }
 
 export interface CampaignProposal {

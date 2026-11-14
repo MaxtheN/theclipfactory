@@ -152,7 +152,7 @@ function GrowthLoopBody({ profileId, campaignId, strategyVersionId, clips, visib
   }
   const canStart = !reviewPreview && !!view && ((!!strategyVersionId && !!eligible.length) || !!retry) && !busy;
   return <section className="gf-growth-loop" aria-label="Growth loop">
-    <header><div><h2>Make the next round count.</h2><p>Inspect the rubric, learn your preferences, and render one-variable tests.</p></div><button className="gf-button secondary compact" type="button" onClick={onRehearse} disabled={!onRehearse}>Rehearse the loop</button></header>
+    <header><div><h2>Make the next round count.</h2><p>Inspect the rubric, learn your preferences, and render one-variable tests.</p></div></header>
     {reviewPreview ? <p className="gf-growth-note">Design preview. Real preference, assessment, and render controls are available in the Mac app. Open the Factory map to rehearse with clearly labeled synthetic data.</p> : <>
       {error && <p role="alert" className="gf-growth-error">{error}</p>}
       {!view && !error && visible && <p role="status">Loading growth-loop receipts…</p>}

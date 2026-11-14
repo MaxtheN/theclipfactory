@@ -171,7 +171,7 @@ describe("Results page", () => {
     expect(document.querySelector("iframe")).toBeNull();
     expect(screen.getByRole("heading", { name: "Next experiment" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Waiting for you" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "See how it learns (simulated data)" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "See how it learns (simulated data)" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Accounts & tracking" }));
     const accounts = screen.getByRole("dialog", { name: "Instagram accounts" });

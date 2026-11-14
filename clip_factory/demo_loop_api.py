@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .demo_loop import rubric, simulate_loop
+from .learning_demo import build as build_learning_demo
 
 
 class DemoLoopBody(BaseModel):
@@ -16,6 +17,14 @@ class DemoLoopBody(BaseModel):
     rounds: int = Field(default=3, ge=1, le=6)
     scenario: Literal["mixed", "decline", "sparse", "no_signal"] = "mixed"
     metric: Literal["views", "engagement_rate", "completion_rate", "click_rate"] = "completion_rate"
+
+
+class LearningRecutBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: str = Field(min_length=1, max_length=128)
+    clip_id: str = Field(min_length=1, max_length=200)
+    target_seconds: float = Field(ge=8, le=90)
+    rule: str = Field(default="Shorter cuts hold viewers", max_length=120)
 
 
 def install(app):
@@ -44,3 +53,26 @@ def install(app):
         profile = app.state.strategist.require_profile(profile_id)
         body = body or DemoLoopBody()
         return simulate_loop(profile, **body.model_dump())
+
+    @app.post("/api/demo-loop/{profile_id}/learning-loop")
+    def learning_loop(profile_id: str):
+        """Real clips + SIMULATED results + real belief math. Read-only: nothing is stored."""
+        return build_learning_demo(app.state.store, profile_id, Path(app.state.root))
+
+    @app.post("/api/demo-loop/{profile_id}/learning-loop/recut", status_code=202)
+    def learning_recut(profile_id: str, body: LearningRecutBody):
+        return app.state.growth_loop.demo_recut(profile_id, **body.model_dump())
+
+    @app.get("/api/demo-loop/loops/{loop_id}")
+    def learning_loop_status(loop_id: str):
+        receipt = app.state.growth_loop.reconcile(loop_id)
+        slot = (receipt.get("slots") or [{}])[0]
+        clip = app.state.store.get("clips", slot["clip_id"]) if slot.get("clip_id") else None
+        job = app.state.store.get("jobs", slot["job_id"]) if slot.get("job_id") else None
+        return {"id": receipt["id"], "number": receipt.get("number"), "status": receipt["status"],
+                "slot_status": slot.get("status"), "error": slot.get("error"),
+                "progress": (job or {}).get("progress"), "message": (job or {}).get("message"),
+                "output": None if not clip else {
+                    "clip_id": clip["id"], "seconds": clip.get("duration"), "approved": bool(clip.get("approved")),
+                    "hook": (clip.get("edit_plan") or {}).get("hook"), "parent_clip_id": clip.get("parent_clip_id"),
+                    "media_url": f"/api/clips/{clip['id']}/media"}}
