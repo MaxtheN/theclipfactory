@@ -9,6 +9,7 @@ import math
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from . import craft, extensions, reframe
@@ -193,8 +194,20 @@ def inspect(path: Path) -> dict:
 FULL_FFMPEG_DIRS = ("/opt/homebrew/opt/ffmpeg-full/bin", "/usr/local/opt/ffmpeg-full/bin")
 
 
+def bundled_tool_dirs() -> list[str]:
+    """FFmpeg shipped inside the packaged app (PyInstaller puts it under <bundle>/bin)."""
+    dirs = []
+    if getattr(sys, "frozen", False) and getattr(sys, "_MEIPASS", None):
+        dirs.append(str(Path(sys._MEIPASS) / "bin"))
+    return dirs
+
+
 def find_tool(name: str) -> str | None:
-    for directory in FULL_FFMPEG_DIRS:
+    """Homebrew ffmpeg-full first (libass/drawtext), then the copy bundled in the app, then PATH.
+
+    A double-clicked macOS app gets a bare PATH, so the bundled copy is what makes a fresh install work.
+    """
+    for directory in (*FULL_FFMPEG_DIRS, *bundled_tool_dirs()):
         if found := shutil.which(f"{directory}/{name}"):
             return found
     return shutil.which(name)

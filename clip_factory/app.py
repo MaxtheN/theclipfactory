@@ -482,7 +482,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def blockers(model_id: str | None = None) -> list[dict]:
         """Plain reasons production cannot start, each with the screen that fixes it."""
         found = []
-        if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        if not media.find_tool("ffmpeg") or not media.find_tool("ffprobe"):
             found.append(
                 {
                     "code": "ffmpeg",

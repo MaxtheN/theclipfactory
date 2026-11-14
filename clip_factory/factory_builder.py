@@ -539,7 +539,7 @@ class FactoryBuilder:
         self.repo = repo if repo is not None else repo_root()
         self.requests = capabilities.CapabilityRequests(store)
         self.model_factory = model_factory
-        self.ffmpeg = ffmpeg or (lambda: shutil.which("ffmpeg"))
+        self.ffmpeg = ffmpeg or (lambda: __import__("clip_factory.media", fromlist=["find_tool"]).find_tool("ffmpeg"))
         self.runner = runner
         self.lock = threading.Lock()
 

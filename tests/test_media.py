@@ -379,3 +379,22 @@ def test_word_by_word_captions_highlight_the_spoken_word_with_the_same_verbatim_
     assert script.count("{") == 2 * 4 and "PlayResY: 1920" in script
     assert media.srt_text(entries).count("-->") == 2  # the sidecar captions are unchanged
     assert media.pop_captions([]).count("Dialogue:") == 0
+
+
+def test_find_tool_uses_the_copy_bundled_in_the_packaged_app(tmp_path, monkeypatch):
+    import sys as _sys
+
+    from clip_factory import media as _media
+
+    bundled = tmp_path / "bin"
+    bundled.mkdir()
+    tool = bundled / "ffprobe"
+    tool.write_text("#!/bin/sh\nexit 0\n")
+    tool.chmod(0o755)
+    monkeypatch.setattr(_media, "FULL_FFMPEG_DIRS", ())
+    monkeypatch.setenv("PATH", "")  # a double-clicked app gets a bare PATH
+    monkeypatch.setattr(_sys, "frozen", True, raising=False)
+    monkeypatch.setattr(_sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert _media.find_tool("ffprobe") == str(tool)
+    monkeypatch.setattr(_sys, "frozen", False, raising=False)
+    assert _media.find_tool("ffprobe") is None
