@@ -892,13 +892,14 @@ def draft_brief(site: Site, *, admit: Callable[[], list[str]], generate: Callabl
     """Admission-checked inference with one repair attempt; abstains rather than fabricating."""
     emit("voice", "Understanding your voice")
     prompt = build_prompt(site)
-    emit("drafting", "Drafting your brand brief")
     attempts = [prompt]
     problem = ""
     for attempt in range(2):
         reasons = admit()  # before EVERY call, including the repair
         if reasons:
             raise ModelHeld(" ".join(reasons)[:500])
+        if attempt == 0:
+            emit("drafting", "Drafting your brand brief")  # only once the model is admitted
         reply = generate(attempts[-1])
         try:
             draft = parse_reply(reply)

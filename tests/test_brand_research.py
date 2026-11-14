@@ -359,9 +359,11 @@ def test_invalid_twice_abstains_without_fallback():
 
 def test_admission_held_never_infers_and_repair_is_rechecked():
     model = Model([good_reply()], held=["Learning is paused because this Mac reports warning memory pressure."])
+    stages = []
     with pytest.raises(br.ModelHeld, match="memory pressure"):
-        br.draft_brief(site(), admit=model.admit, generate=model.generate)
-    assert model.prompts == []
+        br.draft_brief(site(), admit=model.admit, generate=model.generate,
+                       emit=lambda stage, label, **d: stages.append(stage))
+    assert model.prompts == [] and stages == ["voice"]  # never claims to be drafting
 
     model = Model(["junk"], held=[])
     calls = iter([[], ["held for repair"]])
