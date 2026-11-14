@@ -48,6 +48,8 @@ VOCAB: dict[str, dict[str, tuple[str, ...]]] = {
         "structure": ("linear", "hook_first"),
         "hook_format": ("overlay", "title_card"),
         "jump_cuts": ("off", "silences", "silences_and_fillers"),
+        # 9:16 crops only: the crop followed the speaker's face, or stayed at a fixed position.
+        "crop_focus": ("fixed", "auto_face"),
     },
     "selection": {
         "moment_type": ("bold_claim", "question", "story", "lesson", "contrast", "emotion", "humor", "spectacle"),
@@ -62,7 +64,7 @@ VARIABLE_LAYER = {variable: layer for layer, variables in VOCAB.items() for vari
 # Fixed, documented prior weights for "how much would knowing this change the next batch".
 IMPORTANCE = {"hook_style": 1.0, "moment_type": 1.0, "duration_bucket": 0.8, "opening_type": 0.8,
               "posting_window": 0.7, "caption_style": 0.6, "framing": 0.5, "speaker_role": 0.6, "day_type": 0.4,
-              "structure": 0.8, "hook_format": 0.6, "jump_cuts": 0.5}
+              "structure": 0.8, "hook_format": 0.6, "jump_cuts": 0.5, "crop_focus": 0.5}
 TAG_VERSION = "strategist-tags-v1"
 DEFAULT_METRICS = ("views", "plays", "reach", "impressions", "likes")
 MIN_EVIDENCE = 3            # matching measured posts before a belief can leave "testing"
@@ -116,6 +118,14 @@ def _duration_bucket(seconds) -> str | None:
     return "short" if seconds < 20 else "medium" if seconds <= 40 else "long"
 
 
+def _crop_focus(clip: dict, plan: dict) -> str | None:
+    """As rendered: auto_face only when the face path was applied (fallbacks rendered fixed)."""
+    if plan.get("framing") != "fill":
+        return None
+    reframed = ((clip.get("craft") or {}).get("reframe") or {}) if isinstance(clip.get("craft"), dict) else {}
+    return "auto_face" if reframed.get("status") == "applied" else "fixed"
+
+
 def _opening(clip: dict, plan: dict) -> str | None:
     value = clip.get("opening_treatment") or plan.get("opening_treatment")
     if value in VOCAB["craft"]["opening_type"]:
@@ -160,6 +170,7 @@ def tag_clip(clip: dict, publication: dict | None = None) -> dict:
         "structure": pick("craft", "structure", clip.get("structure") or legacy.get("structure")),
         "hook_format": pick("craft", "hook_format", legacy.get("hook_format")) if opening == "text_overlay" else None,
         "jump_cuts": pick("craft", "jump_cuts", legacy.get("jump_cuts")),
+        "crop_focus": _crop_focus(clip, plan),
         "moment_type": pick("selection", "moment_type", clip.get("hypothesis")),
         "speaker_role": pick("selection", "speaker_role", clip.get("speaker_role")),
         "posting_window": window,
@@ -286,7 +297,7 @@ def evaluate_belief(belief: dict, posts: list[dict], baseline: dict) -> dict:
 def describe(layer: str, variable: str, value: str, direction: str, metric: str) -> str:
     noun = {"hook_style": f"{value.replace('_', '-')} hooks", "duration_bucket": f"{value} clips",
             "opening_type": f"a {value.replace('_', ' ')} opening", "caption_style": f"{value.replace('_', ' ')} captions",
-            "framing": f"'{value}' framing", "moment_type": f"{value.replace('_', ' ')} moments",
+            "framing": f"'{value}' framing", "crop_focus": "a face-following crop" if value == "auto_face" else "a fixed crop", "moment_type": f"{value.replace('_', ' ')} moments",
             "speaker_role": f"moments led by the {value}", "posting_window": f"posting in the {value} (UTC)",
             "day_type": f"posting on {value}s"}.get(variable, f"{variable}={value}")
     verb = "beat" if direction == "increase" else "fall short of"

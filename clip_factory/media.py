@@ -11,7 +11,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import craft
+from . import craft, reframe
 from .jobs import Jobs, WorkError
 from .store import now
 
@@ -1300,6 +1300,29 @@ def render_crafted(
     ]
     teaser_seconds = groups[0]["keeps"][0][1] if teaser else 0.0
 
+    # Speaker/face-aware crop path for 9:16 crops of wider sources (fixed focus_x otherwise).
+    reframe_filters: list[str] | None = None
+    if framing == "fill" and options.get("crop_focus") == "auto_face":
+        if report:
+            jobs.update(job_id, progress=12, message="Following the speaker for the 9:16 crop")
+        scenes = (moment or {}).get("scenes") or []
+        framed = reframe.plan(
+            ffmpeg(),
+            source,
+            [{"start": g["start"], "span": g["keeps"][-1][1] + 0.05} for g in groups],
+            width=info["width"],
+            height=info["height"],
+            scene_cuts=[float(s["start"]) for s in scenes if isinstance(s, dict) and isinstance(s.get("start"), (int, float))],
+            default=focus_x,
+        )
+        applied = framed["status"] == "applied"
+        reframe_filters = framed["filters"] if applied else None
+        record["reframe"] = {"status": framed["status"], **framed["summary"],
+                             "fallback": None if applied else f"fixed crop at focus_x {focus_x:.3f}"}
+        jobs.check(job_id)
+    else:
+        record["reframe"] = {"mode": options.get("crop_focus", "fixed") if framing == "fill" else None, "status": "off"}
+
     # 3. Captions on the cut timeline, emphasis and punch-ins.
     timeline = caption_entries(transcript, segments)
     entries = timeline if burn_subtitles else []
@@ -1412,7 +1435,8 @@ def render_crafted(
             inputs += ["-ss", f"{group['start']:.6f}", "-t", f"{span + 0.05:.6f}", "-i", str(source)]
             pick = "+".join(f"between(t,{a - half:.6f},{b - half:.6f})" for a, b in group["keeps"])
             video_graph.append(
-                f"[{index}:v:0]fps={OUTPUT_FPS},select='{pick}',setpts=N/{OUTPUT_FPS}/TB,"
+                f"[{index}:v:0]fps={OUTPUT_FPS},{reframe_filters[index] if reframe_filters else ''}"
+                f"select='{pick}',setpts=N/{OUTPUT_FPS}/TB,"
                 f"{layout_for(str(index))}[v{index}]"
             )
             vjoin += f"[v{index}]"

@@ -2,18 +2,18 @@ import { Field } from "./parts";
 import type { CraftRequest } from "./productionContracts";
 
 /** Editing-craft options for a manual render (backend: clip_factory/craft.py). One line each. */
-export type CraftValues = Required<Pick<CraftRequest, "structure" | "jump_cuts" | "loudness" | "hook_format" | "caption_emphasis" | "punch_in" | "cover">> & { cta_text: string };
+export type CraftValues = Required<Pick<CraftRequest, "structure" | "jump_cuts" | "loudness" | "hook_format" | "caption_emphasis" | "punch_in" | "cover" | "crop_focus">> & { cta_text: string };
 export type AbVariable = "" | "structure" | "hook_format" | "caption_style";
 export interface CraftState { values: CraftValues; touched: (keyof CraftValues)[]; ab: AbVariable }
 
 export const CRAFT_DEFAULTS: CraftValues = {
   structure: "auto", jump_cuts: "silences", loudness: "normalize", hook_format: "title_card",
-  caption_emphasis: "keywords", punch_in: "off", cover: "best_frame", cta_text: "",
+  caption_emphasis: "keywords", punch_in: "off", cover: "best_frame", crop_focus: "auto_face", cta_text: "",
 };
 // What plans saved before these options existed were rendered with.
 const LEGACY: CraftValues = {
   structure: "linear", jump_cuts: "off", loudness: "off", hook_format: "overlay",
-  caption_emphasis: "off", punch_in: "off", cover: "first_frame", cta_text: "",
+  caption_emphasis: "off", punch_in: "off", cover: "first_frame", crop_focus: "fixed", cta_text: "",
 };
 const AB_VALUES: Record<Exclude<AbVariable, "">, string[]> = {
   structure: ["hook_first", "linear"], hook_format: ["title_card", "overlay"], caption_style: ["pop", "standard"],
@@ -49,7 +49,7 @@ export function CraftControls({ value, onChange }: { value: CraftState; onChange
   const set = <K extends keyof CraftValues>(key: K, next: CraftValues[K]) =>
     onChange({ ...value, values: { ...value.values, [key]: next }, touched: value.touched.includes(key) ? value.touched : [...value.touched, key] });
   const v = value.values;
-  const toggle = (key: "loudness" | "caption_emphasis" | "punch_in" | "cover", on: string, off: string, label: string) =>
+  const toggle = (key: "loudness" | "caption_emphasis" | "punch_in" | "cover" | "crop_focus", on: string, off: string, label: string) =>
     <Field label={label}>{id => <input id={id} type="checkbox" checked={v[key] === on} onChange={e => set(key, (e.target.checked ? on : off) as never)} />}</Field>;
   return <>
     <Field label="Story structure">{id => <select id={id} value={v.structure} onChange={e => set("structure", e.target.value as CraftValues["structure"])}><option value="auto">Hook first when a payoff exists</option><option value="hook_first">Hook first (payoff teaser)</option><option value="linear">In order</option></select>}</Field>
@@ -59,6 +59,7 @@ export function CraftControls({ value, onChange }: { value: CraftState; onChange
     {toggle("punch_in", "emphasis", "off", "Punch-in on key words")}
     {toggle("loudness", "normalize", "off", "Normalise loudness (−14 LUFS)")}
     {toggle("cover", "best_frame", "first_frame", "Pick the best cover frame")}
+    {toggle("crop_focus", "auto_face", "fixed", "Follow the speaker's face (9:16 crop)")}
     <Field label="End card call to action">{id => <input id={id} type="text" maxLength={80} placeholder="None" value={v.cta_text} onChange={e => set("cta_text", e.target.value)} />}</Field>
     <Field label="A/B variants">{id => <select id={id} value={value.ab} onChange={e => onChange({ ...value, ab: e.target.value as AbVariable })}><option value="">One version</option><option value="structure">Hook first vs in order</option><option value="hook_format">Title card vs text strip</option><option value="caption_style">Word-pop vs plain captions</option></select>}</Field>
   </>;

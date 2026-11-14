@@ -85,6 +85,7 @@ LEGACY_PLAN = {
     "payoff_start": None,
     "payoff_end": None,
     "transition": "cut",
+    "crop_focus": "fixed",
 }
 VARIABLES = ("hook", "opening_treatment", "caption_style", "hook_format", "structure")
 VARIANT_VALUES = {
@@ -170,6 +171,10 @@ class CraftOptions(BaseModel):
     payoff_end: float | None = Field(default=None, gt=0)
     # From the teaser back to the setup.
     transition: Literal["cut", "zoom", "flash"] = "zoom"
+    # 9:16 crop (`framing="fill"`) of a wider source: follow the speaker's face over time
+    # (reframe.py, Apple Vision on-device) or keep the fixed horizontal `focus_x`. Without the
+    # detector, or with too few faces, the render keeps focus_x and records why.
+    crop_focus: Literal["fixed", "auto_face"] = "auto_face"
     variants: Variants | None = None
     # Set on each expanded variant copy (group id, variable, value); never part of the plan.
     _variant: dict = PrivateAttr(default_factory=dict)

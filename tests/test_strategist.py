@@ -129,11 +129,15 @@ def test_tags_are_deterministic_and_unknown_stays_null():
                      "caption_style": "pop", "framing": "blur", "moment_type": "humor", "speaker_role": None,
                      "posting_window": "evening", "day_type": "weekend",
                      # Saved before craft options existed: rendered linear, overlay hook, no cuts.
-                     "structure": "linear", "hook_format": "overlay", "jump_cuts": "off"}
+                     "structure": "linear", "hook_format": "overlay", "jump_cuts": "off", "crop_focus": None}
     crafted = tag_clip({**clip, "structure": "hook_first",
                         "edit_plan": {**clip["edit_plan"], "structure": "auto", "hook_format": "title_card",
                                       "jump_cuts": "silences"}})
     assert (crafted["structure"], crafted["hook_format"], crafted["jump_cuts"]) == ("hook_first", "title_card", "silences")
+    filled = {**clip, "edit_plan": {**clip["edit_plan"], "framing": "fill"}}
+    assert tag_clip(filled)["crop_focus"] == "fixed"  # saved before face reframing, or a fallback
+    assert tag_clip({**filled, "craft": {"reframe": {"status": "applied"}}})["crop_focus"] == "auto_face"
+    assert tag_clip({**filled, "craft": {"reframe": {"status": "unavailable"}}})["crop_focus"] == "fixed"
     bare = tag_clip({"id": "legacy"})
     assert all(value is None for value in bare.values())
     assert tag_clip({"hook": "Why rates matter?", "hypothesis": "invented"})["moment_type"] is None

@@ -10,6 +10,7 @@ export interface CraftRequest {
   emphasis_words?: string[];
   punch_in?: "off" | "emphasis";
   cover?: "first_frame" | "best_frame";
+  crop_focus?: "fixed" | "auto_face";
   end_card?: "none" | "cta";
   cta_text?: string;
   structure?: "auto" | "linear" | "hook_first";

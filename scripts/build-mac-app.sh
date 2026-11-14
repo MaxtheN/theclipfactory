@@ -24,6 +24,7 @@ cp -R frontend/dist/. clip_factory/ui/
   --collect-submodules clip_factory --collect-submodules platformdirs \
   --hidden-import clip_factory.app --hidden-import clip_factory.main \
   --hidden-import Foundation --hidden-import AppKit --hidden-import WebKit \
+  --hidden-import Vision --hidden-import CoreML --hidden-import Quartz \
   --distpath "$ROOT/dist" --workpath "$ROOT/build" --specpath "$ROOT/build" \
   "$ROOT/scripts/desktop-entry.py"
 "$PYTHON" "$ROOT/scripts/verify-bundle-assets.py" "$ROOT/dist/Clip Factory.app"
