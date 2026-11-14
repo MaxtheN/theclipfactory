@@ -17,6 +17,8 @@
   --on-dark: #cfcbc5;
   --pine: #1e4d43;
   --pine-soft: #e3efea;
+  --field: #f2eeea;
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
   --display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
   --body: "Inter", system-ui, -apple-system, sans-serif;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -232,6 +234,74 @@ svg.fill {
 .btn-glass svg {
   width: 16px;
   height: 16px;
+}
+
+/* Bloom field: the 21st.dev "Bloom Field" gradient recipe (stacked radial
+   blooms, a highlight wash and an overlay grain), recoloured from blue to
+   Signal orange, soft orange and peach on a warm off-white field.
+   Positions and intensity (--k) are set per use. */
+.bloom {
+  --k: 1;
+  --hx: 67%;
+  --hy: 46%;
+  --ax: 35%;
+  --ay: 66%;
+  --bx: 48%;
+  --by: 20%;
+  --cx: 81%;
+  --cy: 88%;
+  --top: rgba(242, 238, 234, 0);
+  background-color: var(--field);
+  background-image:
+    var(--noise),
+    linear-gradient(180deg, var(--top) 0, rgba(242, 238, 234, 0) 280px),
+    radial-gradient(circle at var(--hx) var(--hy), rgba(242, 238, 234, 1) 0%, rgba(242, 238, 234, 0.844) 19.02%, rgba(242, 238, 234, 0.5) 38.05%, rgba(242, 238, 234, 0.156) 57.07%, rgba(242, 238, 234, 0) 76.1%),
+    radial-gradient(circle at var(--ax) var(--ay), rgba(255, 90, 31, var(--k)) 0%, rgba(255, 90, 31, calc(0.844 * var(--k))) 12.9%, rgba(255, 90, 31, calc(0.5 * var(--k))) 25.8%, rgba(255, 90, 31, calc(0.156 * var(--k))) 38.7%, rgba(255, 90, 31, 0) 51.6%),
+    radial-gradient(circle at var(--bx) var(--by), rgba(255, 138, 92, var(--k)) 0%, rgba(255, 138, 92, calc(0.844 * var(--k))) 16.75%, rgba(255, 138, 92, calc(0.5 * var(--k))) 33.5%, rgba(255, 138, 92, calc(0.156 * var(--k))) 50.25%, rgba(255, 138, 92, 0) 67%),
+    radial-gradient(circle at var(--cx) var(--cy), rgba(255, 196, 160, var(--k)) 0%, rgba(255, 196, 160, calc(0.844 * var(--k))) 10.28%, rgba(255, 196, 160, calc(0.5 * var(--k))) 20.55%, rgba(255, 196, 160, calc(0.156 * var(--k))) 30.83%, rgba(255, 196, 160, 0) 41.1%);
+  background-size: 120px 120px, auto, auto, auto, auto, auto;
+  background-blend-mode: overlay, normal, normal, normal, normal, normal;
+}
+
+/* Under the hero: clip reel and the picked-out clips */
+.bloom-flow {
+  --k: 0.62;
+  --top: var(--field);
+  --hx: 26%;
+  --hy: 30%;
+  --ax: 92%;
+  --ay: 34%;
+  --bx: 6%;
+  --by: 82%;
+  --cx: 64%;
+  --cy: 98%;
+}
+
+/* Behind the three cards and the closing panel */
+.bloom-tail {
+  --k: 0.9;
+  --top: var(--field);
+  --hx: 52%;
+  --hy: 70%;
+  --ax: 12%;
+  --ay: 36%;
+  --bx: 88%;
+  --by: 22%;
+  --cx: 78%;
+  --cy: 62%;
+}
+
+/* The closing panel: blooms pushed to the corners, pale behind the headline */
+.bloom-cta {
+  --k: 1;
+  --hx: 50%;
+  --hy: 46%;
+  --ax: 4%;
+  --ay: 96%;
+  --bx: 96%;
+  --by: 6%;
+  --cx: 92%;
+  --cy: 96%;
 }
 
 /* Header */
@@ -569,9 +639,21 @@ svg.fill {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
-  height: 42%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 45%, #ffffff 92%);
+  bottom: -3px;
+  height: calc(42% + 3px);
+  background: linear-gradient(180deg, rgba(242, 238, 234, 0) 0%, rgba(242, 238, 234, 0.55) 45%, var(--field) 92%);
+}
+
+/* Same grain as the bloom field, so the hero melts into it without a seam */
+.hero-fade::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--noise);
+  background-size: 120px 120px;
+  mix-blend-mode: overlay;
+  -webkit-mask-image: linear-gradient(180deg, transparent 30%, #000 90%);
+  mask-image: linear-gradient(180deg, transparent 30%, #000 90%);
 }
 
 .hero-copy {
@@ -1383,7 +1465,7 @@ svg.fill {
 
 /* App window */
 .app-section {
-  background: linear-gradient(180deg, var(--ink) 0, var(--ink) 220px, var(--white) 220px);
+  background: linear-gradient(180deg, var(--ink) 0, var(--ink) 220px, var(--field) 220px);
 }
 
 .app-inner {
@@ -1923,7 +2005,7 @@ svg.fill {
 
 /* Why */
 .why {
-  background: var(--mist);
+  background: transparent;
 }
 
 .why-grid {
@@ -2110,25 +2192,9 @@ svg.fill {
   max-width: 1408px;
   margin: 0 auto;
   border-radius: clamp(24px, 3vw, 44px);
-  background: var(--ink);
-  color: var(--white);
+  color: var(--ink);
   overflow: hidden;
-}
-
-.cta-photo {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 50% 30%;
-  opacity: 0.6;
-}
-
-.cta-shade {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(23, 18, 14, 0.92) 0%, rgba(23, 18, 14, 0.7) 45%, rgba(23, 18, 14, 0.25) 100%);
+  box-shadow: 0 0 0 1px rgba(23, 18, 14, 0.06), 0 40px 80px -40px rgba(194, 65, 12, 0.45);
 }
 
 /* A ring of clips turning slowly behind the closing headline */
@@ -2163,14 +2229,15 @@ svg.fill {
   inset: 0;
   border-radius: clamp(10px, 1.1vw, 16px);
   overflow: hidden;
-  outline: 2px solid rgba(255, 255, 255, 0.6);
-  opacity: 0.38;
+  outline: 3px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 20px 40px -14px rgba(23, 18, 14, 0.45);
+  opacity: 0.62;
   transform: rotateY(calc(var(--i) * 30deg)) translateZ(var(--r));
 }
 
 .ring-card.hot {
   outline-color: var(--signal);
-  opacity: 0.55;
+  opacity: 0.8;
 }
 
 .ring-card img {
@@ -2196,6 +2263,10 @@ svg.fill {
 
 .cta-copy > img {
   filter: drop-shadow(0 20px 30px rgba(255, 90, 31, 0.45));
+}
+
+.cta-copy .h-display {
+  text-shadow: 0 2px 30px rgba(242, 238, 234, 0.9);
 }
 
 .cta-copy .h-display {
