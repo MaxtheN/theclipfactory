@@ -273,6 +273,7 @@ export function CloudAccountRow({ onSignIn }: { onSignIn?: () => void }) {
   const [status, setStatus] = useState<CloudStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -286,6 +287,19 @@ export function CloudAccountRow({ onSignIn }: { onSignIn?: () => void }) {
   }, []);
 
   if (!status?.configured && !error) return null;
+
+  if (signingIn)
+    return (
+      <CloudSignIn
+        onDone={() => {
+          setSigningIn(false);
+          void cloudApi
+            .status()
+            .then(setStatus, (err: unknown) => setError(message(err)));
+        }}
+        onSkip={() => setSigningIn(false)}
+      />
+    );
 
   async function signOut() {
     setBusy(true);
@@ -317,15 +331,15 @@ export function CloudAccountRow({ onSignIn }: { onSignIn?: () => void }) {
         status?.configured && (
           <>
             <span>Not signed in. Everything stays on this Mac.</span>
-            {onSignIn && (
+            {
               <button
                 type="button"
                 className="gf-button ghost compact"
-                onClick={onSignIn}
+                onClick={onSignIn ?? (() => setSigningIn(true))}
               >
                 Sign in
               </button>
-            )}
+            }
           </>
         )
       )}
