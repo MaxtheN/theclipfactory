@@ -1446,7 +1446,7 @@ class SwarmModels(ScriptedModels):
         for request in requests:
             start = float(request["prompt"].split("Your stretch is ", 1)[1].split("s", 1)[0])
             wanted = request["schema"]["properties"]["ideas"]["maxItems"]
-            kinds = ["question", "spectacle", "story"]
+            kinds = request["schema"]["$defs"]["Idea"]["properties"]["hypothesis"]["enum"]
             ideas = [
                 {"hypothesis": kinds[n], "start": start + 20 * n, "end": start + 20 * n + 15,
                  "hook": f"{kinds[n]} at {start:.0f}", "caption": "Caption. #tag"}
@@ -1481,10 +1481,13 @@ def test_swarm_makes_about_a_clip_a_minute_each_on_its_own_hypothesis(harness):
     assert (result["target"], result["ideas"], result["clips"], result["stretches"]) == (7, 9, 9, 6)
     assert [r["schema"]["properties"]["ideas"]["maxItems"] for r in harness.models.batches[0]] == [2, 2, 2, 1, 1, 1]
     assert len(harness.rendered) == 9 and len(run["clip_ids"]) == 9
-    assert result["hypotheses"] == ["question", "spectacle"]
+    # Each stretch is offered a different slice of the hypotheses, so the set stays varied.
+    offered = [r["schema"]["$defs"]["Idea"]["properties"]["hypothesis"]["enum"] for r in harness.models.batches[0]]
+    assert offered[0] == ["spectacle", "emotion", "contrast", "humor"] and offered[1][0] == "humor"
+    assert result["hypotheses"] == ["contrast", "emotion", "humor", "spectacle"]
     first = harness.rendered[0]
-    assert (first["start"], first["end"], first["hook"]) == (0.0, 15.0, "question at 0")
-    assert first["_team"]["hypothesis"] == "question" and first["_team"]["team_review_status"] == "not_applicable"
+    assert (first["start"], first["end"], first["hook"]) == (0.0, 15.0, "spectacle at 0")
+    assert first["_team"]["hypothesis"] == "spectacle" and first["_team"]["team_review_status"] == "not_applicable"
     assert first["_team"]["scene_refs"] == ["scene:0"] and first["_team"]["team_run_id"] == run["id"]
     # No committee: the only model work is one short prompt per stretch.
     assert not harness.models.calls and len(harness.models.batches) == 1
@@ -1501,6 +1504,9 @@ def test_swarm_cuts_a_talk_from_its_words_without_first_watching_every_scene(har
     assert harness.watched == [("job", "source", None)]  # measured signals only: clips start sooner
     prompt = harness.models.batches[0][0]["prompt"]
     assert "[0.0-8.0] Six words are spoken right here." in prompt and "[60.0-" not in prompt
+    # A talk is offered spoken hypotheses; "spectacle" is for footage you look at.
+    spoken = harness.models.batches[0][0]["schema"]["$defs"]["Idea"]["properties"]["hypothesis"]["enum"]
+    assert spoken == ["bold_claim", "question", "story", "lesson"]
     # Cuts land on sentence boundaries: 0-15s becomes 0-18.2s (the sentence ending at 18s, plus air).
     assert (harness.rendered[0]["start"], harness.rendered[0]["end"]) == (0.0, 18.2)
     assert run["status"] == "needs_review"

@@ -82,7 +82,10 @@ SWARM_CLIPS_PER_MINUTE = 1.2
 SWARM_MAX_CLIPS = 150
 SWARM_BATCH = 8
 SWARM_CLIP_SECONDS = 45.0
-SWARM_MIN_SECONDS = 8.0
+# Spoken ideas need room for a complete thought; a visual beat can be brief.
+SWARM_MIN_SPOKEN, SWARM_MIN_VISUAL = 15.0, 8.0
+SPOKEN_HYPOTHESES = ["bold_claim", "question", "story", "lesson", "contrast", "emotion", "humor"]
+VISUAL_HYPOTHESES = ["spectacle", "emotion", "contrast", "humor"]
 DEFAULT_ASSIGNMENTS = {
     "footage_analyst": "Find the strongest self-contained moments in the storyboard.",
     "performance_analyst": "Recommend changes only from recorded observations and feedback.",
@@ -1061,6 +1064,11 @@ class TeamEngine:
                 lines.append(line)
                 used += len(line)
             wanted = quotas[scene["index"]]
+            # Left to itself the model files half of everything under one hypothesis. Each stretch
+            # is offered a different slice of the list, so the set as a whole stays varied.
+            pool = SPOKEN_HYPOTHESES if lines else VISUAL_HYPOTHESES
+            turn = order.index(scene["index"]) * 3
+            offered = [pool[(turn + n) % len(pool)] for n in range(min(len(pool), wanted + 2))]
             seen = {
                 key: value
                 for key, value in {
@@ -1077,11 +1085,12 @@ class TeamEngine:
                     f"clips. Your stretch is {scene['start']:.1f}s to {scene['end']:.1f}s of the source. "
                     f"Propose up to {wanted} clip idea{'s' if wanted != 1 else ''} from this stretch only"
                     + (", each on a different hypothesis" if wanted > 1 else "")
-                    + ". hypothesis is why a viewer would stop scrolling: bold_claim (a strong statement), "
-                    "question (it raises one), story (a beat with a turn), lesson (something useful), contrast "
-                    "(a surprise or reversal), emotion (a human reaction), humor, spectacle (something to look at). "
-                    "start and end are source seconds inside your stretch, 12-45 seconds apart: begin at the start "
-                    "of a sentence or just before the action and end on the payoff. hook: at most 10 words shown "
+                    + f". hypothesis is why a viewer would stop scrolling; for this stretch choose from "
+                    f"{', '.join(offered)}: bold_claim (a strong statement), question (it raises one), story "
+                    "(a beat with a turn), lesson (something useful), contrast (a surprise or reversal), emotion "
+                    "(a human reaction), humor, spectacle (something to look at). "
+                    "start and end are source seconds inside your stretch, 15-40 seconds apart: begin at the start "
+                    "of a sentence or just before the action and end on the payoff, with the whole thought inside. hook: at most 10 words shown "
                     "on screen, specific, no emoji. caption: one or two short sentences for the post, then up to "
                     "three hashtags. Never invent quotes, names, numbers or outcomes. With no speech, describe "
                     "only what is visible and prefer spectacle, emotion or contrast. Return an empty list only if "
@@ -1090,7 +1099,10 @@ class TeamEngine:
                     f"What was seen: {json.dumps(seen, ensure_ascii=False)}\n"
                     "Speech, each line [start-end seconds]:\n" + ("\n".join(lines) or "(none)")
                 ),
-                "schema": narrowed(Ideas, {"properties.ideas": {"maxItems": wanted}}),
+                "schema": narrowed(
+                    Ideas,
+                    {"properties.ideas": {"maxItems": wanted}, "$defs.Idea.properties.hypothesis": {"enum": offered}},
+                ),
                 "max_tokens": 160 + 190 * wanted,
                 "temperature": 0.5,
             }
@@ -1163,11 +1175,16 @@ class TeamEngine:
                             start, end = snap_to_speech(
                                 start, end, transcript, scene["start"], scene["end"], SWARM_CLIP_SECONDS
                             )
-                            if end - start < SWARM_MIN_SECONDS:
-                                # Too brief to register: widen around it, inside the stretch.
-                                length = min(12.0, scene["end"] - scene["start"])
+                            spoken = bool(media.caption_entries(transcript, [{"start": start, "end": end}]))
+                            if end - start < (SWARM_MIN_SPOKEN if spoken else SWARM_MIN_VISUAL):
+                                # Too brief to carry a thought: widen around it, inside the stretch, and
+                                # settle the new edges on sentence boundaries.
+                                length = min(22.0 if spoken else 12.0, scene["end"] - scene["start"])
                                 start = min(max(scene["start"], (start + end - length) / 2), scene["end"] - length)
-                                start, end = round(start, 3), round(start + length, 3)
+                                start, end = snap_to_speech(
+                                    round(start, 3), round(start + length, 3), transcript, scene["start"],
+                                    scene["end"], SWARM_CLIP_SECONDS,
+                                )
                             # Two ideas on (nearly) the same footage are one clip, whatever they are called.
                             if idea["hypothesis"] in seen_here or any(
                                 min(end, b) - max(start, a) > 0.7 * min(end - start, b - a) for a, b in taken

@@ -957,7 +957,7 @@ def test_swarm_is_the_default_and_turns_one_source_into_many_reviewable_clips(cl
     assert not scripted.calls  # no committee: one short prompt per stretch
     assert [r["schema"]["properties"]["ideas"]["maxItems"] for r in batches[0]] == [3, 3]
     clips = client.get("/api/clips").json()
-    assert len(clips) == 2 and {c["hypothesis"] for c in clips} == {"question"}
+    assert len(clips) == 2 and {c["hypothesis"] for c in clips} == {"question"}  # as scripted
     assert all(c["team_review_status"] == "not_applicable" and c["approved"] is False for c in clips)
     assert sorted((c["start"], c["end"]) for c in clips) == [(5.0, 35.0), (305.0, 335.0)]
     assert all(c["reason"] == "Hypothesis: question." and c["scene_refs"] for c in clips)
