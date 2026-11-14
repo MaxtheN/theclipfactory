@@ -139,6 +139,7 @@ class Learning(Body):
 
 
 class Production(Body):
+    expected_strategy_version_id: Identifier | None = None
     video_id: Identifier
     profile_id: Identifier
     start: float = Field(default=0, ge=0)
@@ -151,6 +152,7 @@ class Production(Body):
 
 
 class AgentProduction(Body):
+    expected_strategy_version_id: Identifier | None = None
     video_id: Identifier
     profile_id: Identifier
     model_id: Literal["qwen-small", "qwen-large"] = "qwen-small"
@@ -362,9 +364,9 @@ class Campaigns:
     def learn(self, campaign_id, body):
         with self.store.lock:
             self._evidence(campaign_id, body.profile_id, body.observation_ids, known=True)
-            direction = body.proposed_direction.model_copy(
-                update={"evidence_refs": list(dict.fromkeys(body.observation_ids))}
-            )
+            refs = list(dict.fromkeys(body.proposed_direction.evidence_refs + body.observation_ids))
+            self._evidence(campaign_id, body.profile_id, refs)
+            direction = body.proposed_direction.model_copy(update={"evidence_refs": refs})
             return self.propose(
                 campaign_id,
                 Proposal(
@@ -375,11 +377,18 @@ class Campaigns:
                 hypothesis=body.hypothesis,
             )
 
-    def snapshot(self, campaign_id, profile_id, video_id):
+    def snapshot(self, campaign_id, profile_id, video_id, expected_strategy_version_id=None):
         with self.store.lock:
             campaign = self.require("campaigns", campaign_id)
             if profile_id not in campaign["profile_ids"] or video_id not in campaign["video_ids"]:
                 raise HTTPException(422, "Select a source and profile belonging to this campaign.")
+            if (
+                expected_strategy_version_id
+                and expected_strategy_version_id != campaign["active_strategy_id"]
+            ):
+                raise HTTPException(
+                    409, "Active strategy changed since it was displayed. Reload before production."
+                )
             if not campaign["active_strategy_id"]:
                 raise HTTPException(409, "Approve a campaign strategy before starting production.")
             strategy = self.require("strategy_versions", campaign["active_strategy_id"])

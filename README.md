@@ -242,3 +242,7 @@ local socket. They do not assert real model inference or Meta permissions.
 - Hardware/native acceptance, real model quality/performance, approved Meta app
   flows, live publishing/insights, and notarized distribution require separate
   validation. Automated tests are not a declaration of production readiness.
+
+### Saved campaigns and learning
+
+Start new work in **Campaigns**: save independent offline account profiles, attach source videos and an editable brief, and explicitly approve a saved strategy. Direct rendering and local agent teams capture the active campaign/profile/strategy version. Import real account-scoped observations, propose an evidence-backed change, approve it, and apply the revised direction to another source without changing the other profile. Approval/rejection/history and profile-specific restoration persist across reopening. See [campaign workflow and verified boundaries](docs/campaigns.md).

@@ -445,6 +445,7 @@ describe("Campaigns strategy and production gates", () => {
     );
     await waitFor(() =>
       expect(payload(fetch, "/api/campaigns/c1/render")).toEqual({
+        expected_strategy_version_id: "s1",
         video_id: "v2",
         profile_id: "p2",
         start: 0,

@@ -1143,6 +1143,7 @@ function ProductionForm({
   const [hook, setHook] = useState("");
   const [caption, setCaption] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [modelId, setModelId] = useState("qwen-small");
   const source = state.data.videos.find((v) => v.id === videoId);
   const busySource = sourceHasActiveJob(state.data.jobs, videoId);
   const ready =
@@ -1155,6 +1156,17 @@ function ProductionForm({
     !busySource &&
     campaign.video_ids.includes(videoId) &&
     campaign.profile_ids.includes(productionProfile);
+  const agentReady =
+    ready &&
+    !state.errors.models &&
+    !state.errors.system &&
+    state.data.system?.model_runtime === true &&
+    state.data.models.some((m) => m.id === modelId && m.installed === true) &&
+    (!source?.has_audio ||
+      !!source.transcript ||
+      state.data.models.some(
+        (m) => m.id === "whisper-turbo" && m.installed === true,
+      ));
   const rangeValid =
     Number.isFinite(Number(start)) &&
     Number(start) >= 0 &&
@@ -1171,6 +1183,7 @@ function ProductionForm({
         void mutate(
           () =>
             post(campaignPath(campaign.id, "render"), {
+              expected_strategy_version_id: active!.id,
               video_id: videoId,
               profile_id: productionProfile,
               start: Number(start),
@@ -1271,6 +1284,42 @@ function ProductionForm({
         <button disabled={!ready || !rangeValid || (mode === "direct" && !end)}>
           Render campaign clip
         </button>
+        <Field
+          label="Campaign agent model"
+          hint="Local agents select source-backed moments using this profile's approved direction. Direct range and free-text instructions above are not supplied to this action."
+        >
+          <select value={modelId} onChange={(e) => setModelId(e.target.value)}>
+            <option value="qwen-small">Qwen small</option>
+            <option value="qwen-large">Qwen large</option>
+          </select>
+        </Field>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!agentReady}
+          onClick={() => {
+            if (!agentReady || !active) return;
+            void mutate(
+              () =>
+                post(campaignPath(campaign.id, "produce"), {
+                  expected_strategy_version_id: active.id,
+                  video_id: videoId,
+                  profile_id: productionProfile,
+                  model_id: modelId,
+                  revision_budget: 2,
+                }),
+              "Campaign agent team queued with approved scoped direction. Inspect handoffs in Factory; human review is still required.",
+            );
+          }}
+        >
+          Run campaign agent team
+        </button>
+        {!agentReady && (
+          <p className="muted">
+            Agent production additionally requires installed local models and
+            runtime; deterministic rendering does not.
+          </p>
+        )}
       </fieldset>
     </form>
   );

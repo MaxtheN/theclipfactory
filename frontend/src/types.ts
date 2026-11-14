@@ -79,6 +79,7 @@ export interface Video {
   status?: string;
 }
 export interface Clip {
+  hook_rendered?: boolean;
   campaign_id?: string | null;
   profile_id?: string | null;
   strategy_version_id?: string | null;
