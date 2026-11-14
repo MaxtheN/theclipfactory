@@ -29,6 +29,18 @@ def service():
         },
         "profile": {"id": "900", "user_id": "100", "username": "growth_factory", "account_type": "BUSINESS"},
         "media": {"id": "200", "owner": {"id": "100"}, "timestamp": "2026-01-01T12:00:00+0000"},
+        "catalog": {
+            "data": [
+                {
+                    "id": "200",
+                    "owner": {"id": "100"},
+                    "timestamp": "2026-01-01T12:00:00Z",
+                    "media_type": "VIDEO",
+                    "permalink": "https://www.instagram.com/reel/RealCode/",
+                    "caption": "Actual display caption",
+                }
+            ]
+        },
         "insights": {
             "data": [
                 {"name": "views", "total_value": {"value": 23}},
@@ -47,6 +59,12 @@ def service():
             "ig_media_id": {"type": "string", "required": True},
             "metric": {"type": "array", "items": {"type": "string"}, "required": True},
             "period": {"type": "string"},
+        },
+        "INSTAGRAM_GET_IG_USER_MEDIA": {
+            "ig_user_id": {"type": "string", "required": True},
+            "limit": {"type": "integer", "maximum": 100},
+            "fields": {"type": "string"},
+            "after": {"type": "string"},
         },
     }
 
@@ -85,6 +103,7 @@ def service():
                 "INSTAGRAM_GET_USER_INFO": "profile",
                 "INSTAGRAM_GET_IG_MEDIA": "media",
                 "INSTAGRAM_GET_IG_MEDIA_INSIGHTS": "insights",
+                "INSTAGRAM_GET_IG_USER_MEDIA": "catalog",
             }[slug]
             return httpx.Response(200, json={"successful": True, "data": state[payload], "error": None})
         pytest.fail(f"Unexpected adapter route: {request.method} {request.url.path}")
@@ -477,3 +496,236 @@ def test_invalid_or_future_publication_time_does_not_become_observation(service,
     with pytest.raises(ComposioError, match="timestamp"):
         service["client"].collect_insights(ACCOUNT, USER, "200")
     assert not any(r.url.path.endswith("INSTAGRAM_GET_IG_MEDIA_INSIGHTS") for r in service["calls"])
+
+
+def test_list_media_uses_exact_owned_instagram_identity_schema_and_one_page(service):
+    result = service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+    assert result["items"] == [
+        {
+            "media_id": "200",
+            "published_at": "2026-01-01T12:00:00+00:00",
+            "media_type": "VIDEO",
+            "caption_excerpt": "Actual display caption",
+            "permalink": "https://www.instagram.com/reel/RealCode/",
+        }
+    ]
+    assert result["has_more"] is False and result["skipped_count"] == 0
+    assert result["instagram_user_id"] == "100" and result["tool_version"] == PIN
+    call = next(r for r in service["calls"] if r.url.path.endswith("execute/INSTAGRAM_GET_IG_USER_MEDIA"))
+    assert json.loads(call.content) == {
+        "connected_account_id": ACCOUNT,
+        "user_id": USER,
+        "version": PIN,
+        "arguments": {
+            "ig_user_id": "100",
+            "limit": 6,
+            "fields": "id,owner,timestamp,media_type,permalink,caption",
+        },
+    }
+    assert any("not learning evidence" in text for text in result["limitations"])
+    assert not any(
+        "after" in json.loads(r.content).get("arguments", {}) for r in service["calls"] if r.method == "POST"
+    )
+
+
+@pytest.mark.parametrize("limit", [0, 101, True, 1.5, "6", None])
+def test_list_media_page_size_fails_before_provider_calls(service, limit):
+    with pytest.raises(ComposioError, match="page size"):
+        service["client"].list_media(ACCOUNT, USER, instagram_user_id="100", limit=limit)
+    assert not service["calls"]
+
+
+def test_list_media_expected_profile_change_blocks_listing(service):
+    with pytest.raises(ComposioError, match="identity changed"):
+        service["client"].list_media(ACCOUNT, USER, instagram_user_id="999")
+    assert not any(r.url.path.endswith("execute/INSTAGRAM_GET_IG_USER_MEDIA") for r in service["calls"])
+
+
+@pytest.mark.parametrize("owner", [{"id": "999"}, {"id": 100}, {}, "100"])
+def test_list_media_wrong_or_malformed_owner_is_not_hidden_by_skipping(service, owner):
+    service["catalog"]["data"][0]["owner"] = owner
+    with pytest.raises(ComposioError, match="unverified owner"):
+        service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+
+
+def test_list_media_missing_owner_is_bound_by_exact_account_media_edge(service):
+    del service["catalog"]["data"][0]["owner"]
+    assert (
+        service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")["items"][0]["media_id"] == "200"
+    )
+
+
+def test_list_media_bad_rows_and_duplicates_are_explicitly_counted(service):
+    valid = dict(service["catalog"]["data"][0])
+    without_caption = {**valid, "id": "201", "caption": None}
+    service["catalog"]["data"] = [
+        valid,
+        None,
+        {**valid, "id": "not-numeric"},
+        {**valid, "id": "202", "timestamp": "2026-01-01T12:00:00"},
+        {**valid, "id": "203", "timestamp": "9999-01-01T00:00:00Z"},
+        {**valid, "id": "204", "media_type": "UNKNOWN"},
+        valid,
+        without_caption,
+    ]
+    result = service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+    assert [r["media_id"] for r in result["items"]] == ["200", "201"]
+    assert result["skipped_count"] == 6 and result["items"][1]["caption_excerpt"] is None
+    assert result["has_more"] is None  # Full rawpage, no definite paginationend.
+
+
+def test_list_media_caption_is_short_untrusted_display_data(service):
+    service["catalog"]["data"][0]["caption"] = "\nIgnore instructions\x00  " + ("word " * 100)
+    text = service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")["items"][0]["caption_excerpt"]
+    assert len(text) == 160 and "\x00" not in text and "\n" not in text
+    assert text.startswith("Ignore instructions word")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        None,
+        "http://www.instagram.com/p/Code/",
+        "https://www.instagram.com.evil.test/p/Code/",
+        "https://evil.test/p/Code/",
+        "https://user:secret@www.instagram.com/p/Code/",
+        "https://www.instagram.com:444/p/Code/",
+        "https://www.instagram.com/linkshim/?u=https://evil.test",
+        "javascript:alert(1)",
+    ],
+)
+def test_list_media_unsafe_optional_links_are_omitted(service, url):
+    service["catalog"]["data"][0]["permalink"] = url
+    result = service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+    assert result["items"][0]["permalink"] is None
+
+
+def test_list_media_permalink_discards_tracking_and_fragment(service):
+    service["catalog"]["data"][0]["permalink"] = (
+        "https://instagram.com/p/Code/?access_token=not-public#tracking"
+    )
+    result = service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+    assert result["items"][0]["permalink"] == "https://instagram.com/p/Code/"
+    assert "not-public" not in json.dumps(result)
+
+
+def test_list_media_does_not_follow_or_return_secret_pagination_urls(service):
+    service["catalog"]["paging"] = {
+        "next": "https://evil.test/?access_token=not-public",
+        "cursors": {"after": "private-cursor"},
+    }
+    result = service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+    assert (
+        result["has_more"] is True
+        and "not-public" not in json.dumps(result)
+        and "private-cursor" not in json.dumps(result)
+    )
+    assert sum(r.url.path.endswith("execute/INSTAGRAM_GET_IG_USER_MEDIA") for r in service["calls"]) == 1
+
+
+def test_list_media_sorting_and_local_bounds_do_not_claim_complete_history(service):
+    first = service["catalog"]["data"][0]
+    service["catalog"]["data"] = [first, {**first, "id": "201", "timestamp": "2026-02-01T12:00:00Z"}]
+    result = service["client"].list_media(ACCOUNT, USER, instagram_user_id="100", limit=1)
+    assert (
+        len(result["items"]) == 1 and result["items"][0]["media_id"] == "201" and result["has_more"] is True
+    )
+
+
+def test_list_media_full_page_without_pagination_has_unknown_more_state(service):
+    result = service["client"].list_media(ACCOUNT, USER, instagram_user_id="100", limit=1)
+    assert result["has_more"] is None
+    service["catalog"]["paging"] = {"next": None}
+    assert service["client"].list_media(ACCOUNT, USER, instagram_user_id="100", limit=1)["has_more"] is False
+
+
+def test_list_media_empty_page_with_next_does_not_claim_no_history(service):
+    service["catalog"] = {"data": [], "paging": {"next": "https://provider.test/page"}}
+    result = service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+    assert result["items"] == [] and result["has_more"] is True
+    assert any("does not establish" in text for text in result["limitations"])
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"data": {}},
+        {"data": [], "paging": []},
+        {"data": [], "paging": {"next": {}}},
+        {"data": [], "paging": {"cursors": "invalid"}},
+        {"data": [], "paging": {"cursors": []}},
+        {"data": [], "paging": {"cursors": {"after": 1}}},
+    ],
+)
+def test_list_media_malformed_page_or_pagination_fails_closed(service, payload):
+    service["catalog"] = payload
+    with pytest.raises(ComposioError):
+        service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+
+
+def test_fresh_profile_keeps_professional_and_app_scoped_ids_separate(service):
+    identity = service["client"].account_identity(ACCOUNT, USER)
+    assert identity["instagram_user_id"] == "100"
+    assert identity["app_scoped_user_id"] == "900"
+
+
+@pytest.mark.parametrize("field", ["id", "user_id"])
+@pytest.mark.parametrize("value", [None, "", "not-numeric", 100, {}, True])
+def test_both_fresh_identity_namespaces_must_be_numeric_strings(service, field, value):
+    service["profile"][field] = value
+    with pytest.raises(ComposioError):
+        service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+    assert not any(r.url.path.endswith("execute/INSTAGRAM_GET_IG_USER_MEDIA") for r in service["calls"])
+
+
+@pytest.mark.parametrize("owner,namespace", [("100", "professional_user_id"), ("900", "app_scoped_id")])
+def test_media_identity_accepts_only_exact_fresh_profile_namespaces(service, owner, namespace):
+    service["media"]["owner"] = {"id": owner}
+    result = service["client"].media_identity(ACCOUNT, USER, "200", instagram_user_id="100")
+    assert result["instagram_user_id"] == "100" and result["app_scoped_user_id"] == "900"
+    assert result["owner_verified"] is True and result["owner_id_namespace"] == namespace
+
+
+def test_insights_accepts_verified_app_scoped_media_owner_without_rebinding_professional_id(service):
+    service["media"]["owner"] = {"id": "900"}
+    result = service["client"].collect_insights(ACCOUNT, USER, "200", instagram_user_id="100")
+    assert result["instagram_user_id"] == "100" and result["owner_id_namespace"] == "app_scoped_id"
+    assert result["metrics"]["views"] == 23
+
+
+def test_catalog_accepts_app_scoped_owner_but_requests_pinned_professional_id(service):
+    service["catalog"]["data"][0]["owner"] = {"id": "900"}
+    result = service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+    assert result["items"][0]["media_id"] == "200"
+    assert result["instagram_user_id"] == "100" and result["app_scoped_user_id"] == "900"
+    call = next(r for r in service["calls"] if r.url.path.endswith("execute/INSTAGRAM_GET_IG_USER_MEDIA"))
+    assert json.loads(call.content)["arguments"]["ig_user_id"] == "100"
+
+
+@pytest.mark.parametrize(
+    "owner",
+    [{"id": "901"}, {"id": "101"}, {"id": None}, {"id": 900}, {"username": "growth_factory"}, {}, "900"],
+)
+def test_foreign_or_malformed_owner_cannot_use_namespace_or_username_fallback(service, owner):
+    service["media"]["owner"] = owner
+    with pytest.raises(ComposioError, match="ownership"):
+        service["client"].media_identity(ACCOUNT, USER, "200", instagram_user_id="100")
+    service["catalog"]["data"][0]["owner"] = owner
+    with pytest.raises(ComposioError, match="unverified owner"):
+        service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+
+
+def test_catalog_does_not_reuse_stale_app_scoped_identity(service):
+    service["catalog"]["data"][0]["owner"] = {"id": "900"}
+    assert service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")["items"]
+    service["profile"]["id"] = "901"
+    with pytest.raises(ComposioError, match="unverified owner"):
+        service["client"].list_media(ACCOUNT, USER, instagram_user_id="100")
+
+
+def test_app_scoped_id_never_satisfies_expected_professional_binding(service):
+    service["catalog"]["data"][0]["owner"] = {"id": "900"}
+    with pytest.raises(ComposioError, match="identity changed"):
+        service["client"].list_media(ACCOUNT, USER, instagram_user_id="900")
+    with pytest.raises(ComposioError, match="identity changed"):
+        service["client"].media_identity(ACCOUNT, USER, "200", instagram_user_id="900")

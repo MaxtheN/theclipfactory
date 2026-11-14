@@ -7,7 +7,7 @@ Set audience and goal once. Upload footage, inspect agent work, review real cuts
 ## Implemented on our feature branch
 
 - Animated four-step onboarding; daily Factory/Library/Results flow and real production/review/export wiring.
-- Teammate master7e5d880 merged; reviewed fixes preserve exact selected speech for editor/critic, reject invalid scout ranges and release warm models.
+- Teammate master through dab3066 merged; reviewed fixes preserve exact selected speech for editor/critic, reject invalid scout ranges and release warm models.
 - SQLite persists policies, publication mappings, cumulative snapshots, work leases/backoff, experiments and verified production receipts. Paused or unknown work does not blindly repeat an external effect.
 - Composio adapter verifies exact connected-account/user/configuration, professional Instagram identity, media ownership and provider publication time. Each local clip-to-post mapping requires an explicit human confirmation.
 - Three-/six-day local collection and bounded analyst trigger. One hook or duration change per experiment; active approved strategy remains intact; resulting drafts start unapproved.
@@ -26,8 +26,8 @@ Set audience and goal once. Upload footage, inspect agent work, review real cuts
 
 ## Remaining live gates
 
-- Enter the Composio project key in the real app (native Keychain) and import the two existing Active accounts; dashboard connection alone is not an app binding.
-- Verify provider calls/scopes and map a real published post to its exact approved local clip. The provider can verify account/media/time; it cannot prove remote bytes equal a local MP4.
+- Completed: scoped Composio key saved in native Keychain; @kartik._builds and @kartikey_bihani verified through actual provider readbacks and bound in the app.
+- Provider post listing and owned-media insights passed for both accounts. Still required: map a real published post to its exact approved local clip. The provider can verify account/media/time; it cannot prove remote bytes equal a local MP4.
 - Composio publishing execution remains disabled. Existing direct-Meta publishing is a separate path. A reviewed publish flow needs exact approval, trusted public HTTPS media hosting, durable attempt state and unknown-outcome reconciliation.
 - External precedent research/EvidenceBrief ingestion remains separate work. Source footage analysis is not a cited internet research result.
 - Paid activation/spending, attribution and causal-lift claims are outside this prototype.
@@ -36,4 +36,4 @@ Set audience and goal once. Upload footage, inspect agent work, review real cuts
 
 ## Team handoff
 
-Kartik owns interface, account integration and the persistent learning/experiment layer. James owns reliable transcription/scouting/clipping. Nur coordinates saved workflow state against explicit contracts. New work stays on kartik/backend-integration and draftPR5; no main/master push or merge. README files remain unchanged.
+Kartik owns interface, account integration and the persistent learning/experiment layer. James owns reliable transcription/scouting/clipping. Nur coordinates saved workflow state against explicit contracts. New work stays on kartik/backend-integration and draftPR8; no main/master push or merge. README files remain unchanged.

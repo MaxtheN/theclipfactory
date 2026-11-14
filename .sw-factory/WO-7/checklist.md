@@ -9,7 +9,10 @@
 - [x] Actual user-approved3-scope project key created in browser, transferred privately, saved to nativeKeychain and transfer/clipboard cleared; no secret inGit/chat/logs.
 - [x] Actual provider verified @kartik._builds and @kartikey_bihani; distinct professionalInstagramIDs bound to All-In creative demo profile.
 - [x] Phase2 implementation and live account verification certification.
-- [SKIP] Live media-insight/post mapping: no matching reviewed local clip/publication supplied yet; mocked contract tests are not live performance.
+- [x] Actual provider bounded post catalogs and owned-media insights succeeded for both accounts with fresh same-profile app-scoped/professional identity checks; private readbacks retained outside Git.
+- [SKIP] Live post-to-local-clip mapping: no matching reviewed local clip/publication supplied yet. Connectivity analytics are not All-In campaign results.
 - [SKIP] New managed OAuth creation with current dedicated key: it has existing-account reads/tool execution, not connected-account management. Additional accounts can be connected in Composio then imported.
 - [SKIP] Composio publishing execution: disabled; documented handshake, public asset and approval/reconciliation gates remain later.
 - [x] Branch-only baseline handoff prepared with scoped capability limits; no default-branch change.
+
+- [x] Added bounded recent-post chooser, verified-binding route guards, safe display parsing, account-change reset and stale-refresh protection; selection alone has no learning/publication effect.

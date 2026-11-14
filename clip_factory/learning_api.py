@@ -42,6 +42,19 @@ def install(app, runtime, engine):
     def accounts():
         return runtime.store.all("connected_accounts")
 
+    @app.get("/api/automation/accounts/{identifier}/posts")
+    def recent_posts(identifier: str, profile_id: str):
+        account = runtime.store.get("connected_accounts", identifier)
+        if not account:
+            raise HTTPException(404, "Connected account not found.")
+        if (account.get("profile_id") != profile_id or account.get("status") != "active"
+            or account.get("provider") != "composio" or account.get("toolkit") != "instagram"
+            or not isinstance(account.get("user_id"), str) or not account["user_id"].strip()
+            or not isinstance(account.get("instagram_user_id"), str) or not account["instagram_user_id"].isdigit()):
+            raise HTTPException(422, "Choose the active account verified for this workspace.")
+        return runtime.client().list_media(account["id"], account["user_id"],
+            instagram_user_id=account["instagram_user_id"], limit=6)
+
     @app.post("/api/automation/connections", status_code=201)
     def begin_connection(body: ConnectProfile):
         return runtime.connection_start(body.profile_id)
