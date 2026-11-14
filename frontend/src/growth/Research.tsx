@@ -82,7 +82,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
   if (!workspace)
     return (
       <Empty title="No brand yet" icon="research">
-        Create a workspace first.
+        Create a brand first.
       </Empty>
     );
   return (
