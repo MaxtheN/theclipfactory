@@ -556,3 +556,13 @@ def test_queued_post_rechecks_exact_caption_against_changed_source_before_upload
     publisher.run(attempt["id"])
     assert publisher.get(attempt["id"])["error"]["code"] == "quality_hold"
     assert world["state"]["storage"].uploads == [] and world["state"]["client"].calls == []
+
+
+def test_container_status_reads_the_live_composio_shape():
+    from clip_factory.publisher import _container_status
+
+    live = {"data": {"objects": {"18092637188505740": {"id": "18092637188505740", "status": "FINISHED",
+                                                       "status_code": "FINISHED"}}}}
+    assert _container_status(live, "18092637188505740") == "FINISHED"
+    assert _container_status(live["data"], "18092637188505740") == "FINISHED"
+    assert _container_status({"data": {"objects": {}}}, "18092637188505740") is None

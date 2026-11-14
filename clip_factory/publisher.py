@@ -72,11 +72,15 @@ def validate_caption(caption) -> str:
 
 def _container_status(payload, container_id):
     """INSTAGRAM_GET_MULTIPLE_NODES result keyed by node ID; parsed defensively (shape unverified)."""
+    # Verified live shape (Nov 14): {"data": {"objects": {"<id>": {"id", "status", "status_code"}}}}.
     candidates = [payload]
-    if isinstance(payload, dict):
-        for key in ("data", "nodes", "results"):
-            if key in payload:
-                candidates.append(payload[key])
+    for container in list(candidates):
+        if isinstance(container, dict):
+            for key in ("data", "nodes", "results", "objects"):
+                if key in container:
+                    candidates.append(container[key])
+                    if isinstance(container[key], dict) and "objects" in container[key]:
+                        candidates.append(container[key]["objects"])
     for item in candidates:
         if isinstance(item, dict) and isinstance(item.get(container_id), dict):
             item = item[container_id]
