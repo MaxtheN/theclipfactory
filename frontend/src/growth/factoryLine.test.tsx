@@ -264,6 +264,48 @@ describe("production line on the Factory screen", () => {
   });
 });
 
+describe("autopilot and footage that was waiting for a direction", () => {
+  const screenFor = (w: Workspace, f: FactoryState) => (
+    <FactoryHome w={w} factory={f} onProduce={vi.fn()} onReview={vi.fn()} onLibrary={vi.fn()} onDirection={vi.fn()} />
+  );
+  const approvedNotice = /Style approved\. Conversation\.mp4 is queued for production/;
+
+  it("starts the swarm on waiting footage the moment a direction is approved", async () => {
+    const f = factory({}, { autonomy: "auto" });
+    const { rerender } = render(screenFor(workspace(false), f));
+    expect(productionApi.campaignProduce).not.toHaveBeenCalled();
+    rerender(screenFor(workspace(), f)); // the creator approves the direction on another screen
+    await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("c1", swarm));
+    expect(productionApi.campaignProduce).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(approvedNotice)).toBeInTheDocument();
+  });
+
+  it("does not start anything when a workspace opens with its direction already approved", async () => {
+    const f = factory({}, { autonomy: "auto" });
+    const opening = { ...workspace(false), loading: true } as Workspace;
+    const { rerender } = render(screenFor(opening, f));
+    rerender(screenFor(workspace(), f)); // loading finished: the direction was there all along
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(productionApi.campaignProduce).not.toHaveBeenCalled();
+  });
+
+  it("leaves alone footage that already has clips or a run, and everything when autopilot is off", async () => {
+    const made = { id: "a", video_id: "v1", campaign_id: null, start: 0, end: 20, approved: false } as unknown as Clip;
+    for (const f of [
+      factory({}, { autonomy: "auto", clips: [made] }),
+      factory({ run_id: "run-1" }, { autonomy: "auto" }),
+      factory({ state: "working", can_produce: false, job_id: "job-1" }, { autonomy: "auto" }),
+      factory({}, { autonomy: "review" }),
+    ]) {
+      const { rerender, unmount } = render(screenFor(workspace(false), f));
+      rerender(screenFor(workspace(), f));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      unmount();
+    }
+    expect(productionApi.campaignProduce).not.toHaveBeenCalled();
+  });
+});
+
 describe("review wall in the Library", () => {
   const made = (id: string, changes: Partial<Clip> = {}): Clip =>
     ({

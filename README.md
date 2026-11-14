@@ -15,8 +15,13 @@ clips are for and what they should achieve), approve its creative direction,
 then drop footage on **Factory**. Each source shows where it is on the line
 (Import, Listen, Watch, Pick moments, Write and check, Render), a **Make clips**
 button that starts a swarm under the approved direction, and *What the factory
-saw*. With **Autopilot** on (the default) and a direction approved, attaching
-new footage starts production by itself; clips always wait for your approval.
+saw*. **Find clips** opens Production & review, where agent production is the
+same swarm by default (*Whole episode, best first*: about one clip per minute
+of footage); choosing *Deep edit* there runs the slower team that plans,
+critiques and revises a handful (3 by default). With **Autopilot** on (the
+default) and a direction approved, attaching new footage starts production by
+itself, and footage attached before a direction existed starts the moment one
+is approved; clips always wait for your approval.
 Pressing a clip's cover on **Factory** or in **Library** plays it in place,
 with sound; review is a separate step. **Library → Review wall** shows every
 edit side by side with bulk approval. Clips the engine made from a workspace's
