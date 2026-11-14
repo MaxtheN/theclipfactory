@@ -81,7 +81,8 @@ describe("Growth Factory interface", () => {
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Current brand" })).toHaveValue("preview-profile-allin"));
     expect(screen.queryByRole("button", { name: "Rehearse the loop" })).toBeNull();
     fireEvent.click(screen.getAllByRole("button", { name: /Run the learning loop/ })[0]);
-    expect(await screen.findByRole("dialog", { name: "Learning loop demo" })).toBeTruthy();
+    const demo = await screen.findByRole("dialog", { name: "Learning loop demo" });
+    expect(demo.closest("#growth-main")).toBeTruthy(); // plays inside the Factory pane, not a new window
     expect(screen.getByText("Simulated")).toBeTruthy();
     expect(document.querySelector("iframe")).toBeNull();
     fireEvent.keyDown(window, { key: "Escape" });

@@ -215,15 +215,13 @@ export function LearningLoopDemo({ profileId, open, onClose }: { profileId: stri
   const elapsed = BEATS.slice(0, step).reduce((sum, b) => sum + b.ms, 0);
 
   return (
-    <div className="gf-lld" role="dialog" aria-modal="true" aria-label="Learning loop demo">
+    <section className="gf-lld" role="dialog" aria-label="Learning loop demo">
       <header className="gf-lld-top">
         <span className="gf-lld-pill">Simulated</span>
         <h2 className="gf-lld-caption" key={step} aria-live="polite">
           {error ? "Demo unavailable" : plan ? beat.caption : "Starting the factory…"}
         </h2>
-        <button type="button" className="gf-lld-close" onClick={onClose} aria-label="Close demo">
-          ✕
-        </button>
+        <span aria-hidden="true" />
       </header>
       <div className="gf-lld-progress" aria-hidden="true">
         <i style={{ width: `${Math.round((100 * (elapsed + (plan ? beat.ms : 0))) / total)}%` }} />
@@ -358,8 +356,12 @@ export function LearningLoopDemo({ profileId, open, onClose }: { profileId: stri
             ↺ Replay
           </button>
         )}
+        <span className="gf-lld-foot-sep" aria-hidden="true" />
+        <button type="button" className="gf-lld-next-btn is-quiet" onClick={onClose} aria-label="Close demo">
+          Close<kbd>Esc</kbd>
+        </button>
       </footer>
-    </div>
+    </section>
   );
 }
 

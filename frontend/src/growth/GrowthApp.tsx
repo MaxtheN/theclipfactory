@@ -144,6 +144,11 @@ export function GrowthApp() {
     setEngineRequest({ context: contextKey, sequence: 0 });
     setDemoOpen(false);
   }, [contextKey]);
+  // Leaving Factory closes the demo; it only lives inside that pane.
+  useEffect(() => {
+    if (stage !== "factory") setDemoOpen(false);
+  }, [stage]);
+  const demoInPane = demoOpen && !onboarding && usable && stage === "factory";
   const current = views[stage];
   // Sub-pages: a quiet "← Back" sits top-left above the title.
   const back: Stage | undefined =
@@ -240,6 +245,7 @@ export function GrowthApp() {
   }
   function openRehearsal() {
     if (blocked || onboarding || !usable || currentContext.current !== contextKey) return;
+    go("factory"); // the demo plays inside the Factory pane, never as a separate window
     setDemoOpen(true);
   }
   function reviewClip(clip: Clip) {
@@ -506,10 +512,10 @@ export function GrowthApp() {
               </div>
               <div className="gf-top-right">{commandTrigger}</div>
             </header>
-            <main id="growth-main" className="gf-main" tabIndex={-1}>
+            <main id="growth-main" className={`gf-main${demoInPane ? " is-demo" : ""}`} tabIndex={-1}>
               <header
                 className={`gf-page-heading${stage === "factory" ? " gf-landing-heading" : ""}${narrowStage ? " is-narrow" : ""}`}
-                hidden={onboarding}
+                hidden={onboarding || demoInPane}
               >
                 {back && !onboarding && (
                   <button
@@ -608,26 +614,31 @@ export function GrowthApp() {
                 className="gf-stage"
                 hidden={onboarding || !usable || stage !== "factory"}
               >
-                <FactoryTabs
-                  onDemo={openRehearsal}
-                  w={w}
-                  factory={factory}
-                  active={!onboarding && stage === "factory"}
-                >
-                  <FactoryHome
-                    key={contextKey}
+                {demoInPane && (
+                  <LearningLoopDemo profileId={w.profileId} open onClose={() => setDemoOpen(false)} />
+                )}
+                <div hidden={demoInPane}>
+                  <FactoryTabs
+                    onDemo={openRehearsal}
                     w={w}
                     factory={factory}
                     active={!onboarding && stage === "factory"}
-                    onProduce={openProduction}
-                    onReview={reviewClip}
-                    onLibrary={(view) => {
-                      if (view) setLibraryView(view);
-                      go("library");
-                    }}
-                    onDirection={() => go("research")}
-                  />
-                </FactoryTabs>
+                  >
+                    <FactoryHome
+                      key={contextKey}
+                      w={w}
+                      factory={factory}
+                      active={!onboarding && stage === "factory"}
+                      onProduce={openProduction}
+                      onReview={reviewClip}
+                      onLibrary={(view) => {
+                        if (view) setLibraryView(view);
+                        go("library");
+                      }}
+                      onDirection={() => go("research")}
+                    />
+                  </FactoryTabs>
+                </div>
               </div>
               <div
                 className="gf-stage"
@@ -752,7 +763,6 @@ export function GrowthApp() {
           </div>
         </div>
       </div>
-      <LearningLoopDemo profileId={w.profileId} open={demoOpen && !onboarding} onClose={() => setDemoOpen(false)} />
       <QuickActions
         open={quickOpen && !onboarding}
         onDismiss={() => setQuickOpen(false)}
