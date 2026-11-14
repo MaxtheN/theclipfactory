@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { cloudApi, type CloudStatus } from "./cloudApi";
+import { announceCloudChange } from "./cloudEvents";
 import { Field } from "./parts";
 import { Icon } from "./Icon";
 
@@ -60,7 +61,10 @@ export function useCloudAccount(initialMode: Mode = "sign-in") {
           ? await cloudApi.signUp(body)
           : await cloudApi.signIn(body);
       setPassword("");
-      if (result.signed_in) return result;
+      if (result.signed_in) {
+        announceCloudChange();
+        return result;
+      }
       setNotice(
         result.message ||
           "Check your email to confirm your account, then sign in.",
@@ -182,7 +186,7 @@ export function CloudAccountFields({
 }
 
 /**
- * Optional Growth Factory account, used from Workspace settings. First-run
+ * Optional Growth Factory account, used from Brand profile. First-run
  * onboarding embeds the same fields as its final step instead.
  * "Continue offline" keeps the app fully local.
  */
@@ -239,8 +243,8 @@ export function CloudSignIn({
       aria-busy={phase === "checking" || account.submitting}
     >
       {phase === "checking" && (
-        <div className="gf-loading" role="status">
-          <span className="gf-spinner" />
+        <div className="gf-loading gf-skeleton-inline" role="status">
+          <span className="gf-skeleton is-dot" aria-hidden="true" />
           Checking your account…
         </div>
       )}
@@ -294,8 +298,15 @@ export function CloudSignIn({
   );
 }
 
-/** "Signed in as … / Sign out" row for Channel settings. Renders nothing when not configured. */
-export function CloudAccountRow({ onSignIn }: { onSignIn?: () => void }) {
+/** "Signed in as … / Sign out" row for Brand profile and the post panel. Renders nothing when not configured. */
+export function CloudAccountRow({
+  onSignIn,
+  showLocal = false,
+}: {
+  onSignIn?: () => void;
+  /** Say "this Mac only" instead of rendering nothing when accounts are not set up. */
+  showLocal?: boolean;
+}) {
   const [status, setStatus] = useState<CloudStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -312,7 +323,12 @@ export function CloudAccountRow({ onSignIn }: { onSignIn?: () => void }) {
     };
   }, []);
 
-  if (!status?.configured && !error) return null;
+  if (!status?.configured && !error)
+    return showLocal && status ? (
+      <div className="gf-cloud-account-row" aria-label="Growth Factory account">
+        <span>Accounts aren't set up on this Mac. Everything stays local.</span>
+      </div>
+    ) : null;
 
   if (signingIn)
     return (
@@ -333,6 +349,7 @@ export function CloudAccountRow({ onSignIn }: { onSignIn?: () => void }) {
     setError("");
     try {
       setStatus(await cloudApi.signOut());
+      announceCloudChange();
     } catch (err) {
       setError(message(err));
     } finally {

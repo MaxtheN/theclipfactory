@@ -29,7 +29,9 @@ import "./factory-flow.css";
 import "./landing.css";
 import "./desktop-shell.css";
 import "./navigation.css";
+import "./polish.css";
 import { cloudApi } from "./cloudApi";
+import { CLOUD_CHANGED } from "./cloudEvents";
 
 const views = {
   factory: {
@@ -105,6 +107,7 @@ export function GrowthApp() {
   const [preferredClip, setPreferredClip] = useState<string>();
   const [quickOpen, setQuickOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const toolsReturn = useRef<HTMLButtonElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const previousTools = useRef(false);
@@ -125,6 +128,14 @@ export function GrowthApp() {
   const blocked = w.busy || onboardingBusy;
   const contextKey = `${w.campaign?.id || "empty"}-${w.profileId}`;
   const current = views[stage];
+  // Sub-pages: a quiet "← Back" sits top-left above the title.
+  const back: Stage | undefined =
+    stage === "research" || stage === "campaign"
+      ? "setup"
+      : stage === "studio"
+        ? "factory"
+        : undefined;
+  const narrowStage = stage === "setup" || stage === "research" || stage === "campaign";
   const primaryStage =
     stage === "studio"
       ? "factory"
@@ -148,6 +159,21 @@ export function GrowthApp() {
       live = false;
     };
   }, [onboarding, onboardingSession]);
+  // Small signed-in email in the sidebar footer; refreshed when the account changes.
+  useEffect(() => {
+    let live = true;
+    const read = () =>
+      cloudApi
+        .status()
+        .then((s) => live && setAccountEmail(s.signed_in ? s.email : null))
+        .catch(() => live && setAccountEmail(null));
+    read();
+    window.addEventListener(CLOUD_CHANGED, read);
+    return () => {
+      live = false;
+      window.removeEventListener(CLOUD_CHANGED, read);
+    };
+  }, []);
   useEffect(() => {
     function shortcut(event: KeyboardEvent) {
       if (
@@ -404,6 +430,12 @@ export function GrowthApp() {
                 <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
                 <span>Brand profile</span>
               </button>
+              {accountEmail && (
+                <p className="gf-sidebar-account" title={`Signed in as ${accountEmail}`}>
+                  <span aria-hidden="true" className="gf-sidebar-account-dot" />
+                  <span>{accountEmail}</span>
+                </p>
+              )}
             </div>
           </aside>
           <div className="gf-workspace">
@@ -483,9 +515,22 @@ export function GrowthApp() {
             </header>
             <main id="growth-main" className="gf-main" tabIndex={-1}>
               <header
-                className={`gf-page-heading${stage === "factory" ? " gf-landing-heading" : ""}`}
+                className={`gf-page-heading${stage === "factory" ? " gf-landing-heading" : ""}${narrowStage ? " is-narrow" : ""}`}
                 hidden={onboarding}
               >
+                {back && !onboarding && (
+                  <button
+                    type="button"
+                    className="gf-back-link"
+                    aria-label={`Back to ${views[back].label}`}
+                    title={`Back to ${views[back].label}`}
+                    disabled={blocked}
+                    onClick={() => go(back)}
+                  >
+                    <Icon name="back" size={15} />
+                    <span>{views[back].label}</span>
+                  </button>
+                )}
                 <div>
                   <h1 tabIndex={-1} ref={heading}>
                     {onboarding ? "Your stories start here." : current.title}
@@ -496,22 +541,12 @@ export function GrowthApp() {
                       : current.sub}
                   </p>
                 </div>
-                {stage === "research" && !onboarding && (
-                  <button
-                    type="button"
-                    className="gf-button secondary compact"
-                    disabled={blocked}
-                    onClick={() => go("setup")}
-                  >
-                    <Icon name="back" size={15} />
-                    Back to Brand profile
-                  </button>
-                )}
               </header>
               {!onboarding && w.loading && (
-                <div className="gf-loading" role="status">
-                  <span className="gf-spinner" />
-                  Loading your brand…
+                <div className="gf-skeleton-page" role="status" aria-label="Loading your brand…">
+                  <span className="gf-skeleton is-title" />
+                  <span className="gf-skeleton is-line" />
+                  <span className="gf-skeleton is-card" />
                 </div>
               )}
               {!onboarding &&
