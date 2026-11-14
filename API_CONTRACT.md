@@ -17,3 +17,14 @@ All /api routes require same-origin local session cookie or X-Clip-Token. JSON e
 - Ads must be gated: no unattended launch, no simulated running campaigns. Can expose settings/capability setup and explicit preflight. Paid insights only if Meta ad account is configured. No credentials in frontend persistence.
 
 Frontend React/Vite, no external remote assets. Desktop pywebview wraps same origin FastAPI. Main launcher runs loopback random port, browser fallback explicit --browser. macOS double-click launcher and CI .app packaging. API media playback same-origin cookie supports range response. Local storage is only UI preferences (no tokens).
+
+## Local campaign context
+
+- `/api/profiles`: list/create local profiles; `/api/profiles/{id}`: get/update, with production history on reads. Goal-directed profiles require a user-selected primary metric. Profiles are not Meta account connections.
+- `/api/campaigns`: list/create; `/{id}`: get/update editable brief, source/profile membership. Historical membership cannot be silently removed.
+- `/{id}/strategies`: list/create immutable proposed versions. `/{id}/strategies/{version}/approve`, `/reject`, `/restore` provide explicit decisions; restore proposes selected-profile direction rather than auto-activating it. Proposals identify their base version; stale approvals conflict.
+- `/{id}/observations`: append/list scoped manual-import observations for an approved clip, retaining source publication, unit, nullable value, timezone-bearing window/collection time, notes and reviewed clip snapshot. Unknown is never coerced to zero.
+- `/{id}/learning`: proposes a hypothesis and direction for one profile from validated known-value evidence. Retained references are merged and scope-checked. No winner or causal lift is inferred.
+- `/{id}/render`, `/{id}/produce`: queue deterministic or agent production with immutable approved context. UI requests include `expected_strategy_version_id`; mismatches return 409 before queueing. Direct ranges are preserved with recorded deviations. Burned hook changes require a new render, not metadata relabeling.
+
+Here `/{id}` routes are under `/api/campaigns`. All routes use the existing authenticated same-origin session. No action grants publication/spend permission. The heavy worker serializes runtime setup, model inference and media work; model **downloads** use their separate bounded three-worker lane.

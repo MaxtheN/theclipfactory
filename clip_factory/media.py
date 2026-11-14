@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -84,6 +85,9 @@ def render(
     end: float,
     transcript: dict | None = None,
     burn_subtitles=True,
+    framing="fit",
+    caption_style="standard",
+    hook="",
 ) -> dict:
     output.parent.mkdir(parents=True, exist_ok=True)
     srt = output.with_suffix(".srt")
@@ -91,21 +95,50 @@ def render(
     if caption_text:
         srt.write_text(caption_text, encoding="utf-8")
     # Preserve the complete source frame instead of silently cropping subjects/products.
-    vf = "scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+    if framing not in {"fit", "fill"} or caption_style not in {"standard", "high_contrast"}:
+        raise WorkError("Unsupported framing or caption style.")
+    vf = (
+        "scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2,"
+        "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+        if framing == "fit"
+        else "scale=1080:1920:force_original_aspect_ratio=increase:force_divisible_by=2,crop=1080:1920,setsar=1"
+    )
     filters = subprocess.run(
         [ffmpeg(), "-hide_banner", "-filters"], capture_output=True, text=True, timeout=10, check=False
     )
-    if caption_text:
+    if caption_text or hook:
         if " subtitles " not in filters.stdout:
             raise WorkError(
                 "This FFmpeg build lacks libass subtitles. Install full Homebrew FFmpeg or render without captions."
             )
         # cwd is output directory; filename consists exclusively of generated hexadecimal IDs.
-        # Use output-pixel coordinates instead of libass's small default script canvas.
-        vf += (
-            f",subtitles={srt.name}:force_style='PlayResX=1080,PlayResY=1920,"
-            "FontName=Arial,FontSize=52,MarginL=72,MarginR=72,MarginV=144,Outline=3,Shadow=0,Alignment=2'"
-        )
+        if caption_text:
+            # Use output-pixel coordinates instead of libass's small default script canvas.
+            font_size = 52 if caption_style == "standard" else 60
+            style = (
+                f"PlayResX=1080,PlayResY=1920,FontName=Arial,FontSize={font_size},"
+                "MarginL=72,MarginR=72,MarginV=144,Outline=3,Shadow=0,Alignment=2"
+            )
+            if caption_style == "high_contrast":
+                style += ",BorderStyle=3,BackColour=&H80000000"
+            vf += f",subtitles={srt.name}:force_style='{style}'"
+        if hook:
+            # Hook is creator/strategy text, not a fabricated source transcript.
+            # Remove ASS control syntax and write only to a generated local filename.
+            safe_hook = re.sub(r"[\\{}\x00-\x1f]", " ", hook).strip()[:250]
+            hook_file = output.with_suffix(".hook.ass")
+            duration = min(3.0, end - start)
+            centiseconds = round(duration * 100)
+            timestamp = f"0:00:{centiseconds // 100:02}.{centiseconds % 100:02}"
+            hook_file.write_text(
+                "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n"
+                "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+                "Style: Hook,Arial,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,3,3,0,8,80,80,140,1\n"
+                "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+                f"Dialogue: 1,0:00:00.00,{timestamp},Hook,,0,0,0,,{safe_hook}\n",
+                encoding="utf-8",
+            )
+            vf += f",subtitles={hook_file.name}"
     temporary = output.with_name(output.stem + ".partial.mp4")
     jobs.update(job_id, progress=20, message="Rendering 1080 × 1920 H.264 clip")
     try:
@@ -156,6 +189,9 @@ def render(
         temporary.replace(output)
         return {
             "subtitles_burned": bool(caption_text),
+            "hook_rendered": bool(hook),
+            "framing": framing,
+            "caption_style": caption_style,
             "width": actual["width"],
             "height": actual["height"],
             "duration": actual["duration"],

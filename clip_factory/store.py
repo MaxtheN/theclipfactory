@@ -54,6 +54,15 @@ class Store:
             )
         return item
 
+    def put_many(self, records: list[tuple[str, dict]]):
+        """Commit related record updates atomically (approval and active pointer)."""
+        rows = [(kind, item["id"], json.dumps(item, allow_nan=False)) for kind, item in records]
+        with self.lock, self.connect() as db:
+            db.executemany(
+                "INSERT INTO records(kind,id,data) VALUES (?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data",
+                rows,
+            )
+
     def patch(self, kind: str, identifier: str, **changes) -> dict:
         with self.lock:
             item = self.get(kind, identifier)

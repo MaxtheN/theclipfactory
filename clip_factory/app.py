@@ -26,6 +26,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import media
 from .ads import AdsClient
+from .campaign_api import install as install_campaign_api
+from .campaigns import Campaigns
 from .jobs import Jobs, WorkError
 from .meta import MetaClient, MetaError, MetaOAuth, SecureTokenStore, validate_public_video_url
 from .models import Models, apple_silicon
@@ -65,6 +67,9 @@ class Render(Body):
     objective: Objective = "discovery"
     subtitles: bool = True
     format: Literal["vertical"] = "vertical"
+    framing: Literal["fit", "fill"] = "fit"
+    caption_style: Literal["standard", "high_contrast"] = "standard"
+    hook_overlay: bool = False
 
 
 class Analysis(Body):
@@ -188,6 +193,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     for name in ["videos", "clips", "work", "narrations"]:
         (root / name).mkdir(exist_ok=True)
     store = Store(root)
+    campaigns = Campaigns(store)
     auth = token or secrets.token_urlsafe(32)
     token_store = SecureTokenStore()
     operations_lock = store.lock
@@ -222,6 +228,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         app.state.jobs.close()
 
     app = FastAPI(title="Clip Factory", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.campaigns = campaigns
     app.state.store = store
     app.state.root = root
     app.state.desktop = False
@@ -474,14 +481,20 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         config = config or settings()
         evidence = config.get("_previous_observations")
         if evidence is None:
+            eligible = [c for c in store.all("clips") if not c.get("profile_id")]
             evidence = [
                 {
                     "hook": c["hook"],
                     "objective": c["objective"],
                     "feedback": [f for f in store.all("feedback") if f["clip_id"] == c["id"]],
-                    "metrics": store.get("insights", c.get("instagram_media_id") or ""),
+                    "metrics": (
+                        insight
+                        if (insight := store.get("insights", c.get("instagram_media_id") or ""))
+                        and insight.get("account_id") == c.get("instagram_account_id")
+                        else None
+                    ),
                 }
-                for c in store.all("clips")[:12]
+                for c in eligible[:12]
             ]
         transcript = video.get("transcript")
         if transcript:
@@ -519,6 +532,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                     "suggested_windows": windows,
                     "transcript": transcript,
                     "previous_observations": evidence,
+                    "approved_campaign_direction": config.get("_campaign_snapshot"),
                 },
                 ensure_ascii=False,
             )
@@ -561,6 +575,15 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             end=body.end,
             transcript=video.get("transcript"),
             burn_subtitles=body.subtitles,
+            **(
+                {
+                    "framing": body.framing,
+                    "caption_style": body.caption_style,
+                    "hook": body.hook if body.hook_overlay else "",
+                }
+                if body.framing != "fit" or body.caption_style != "standard" or body.hook_overlay
+                else {}
+            ),
         )
         cover = target.with_suffix(".jpg")
         try:
@@ -622,7 +645,16 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         body = Render.model_validate(
             {k: candidate[k] for k in ["start", "end", "hook", "caption", "objective"]}
         )
-        return render_task(job_id, video, body, team_metadata=candidate["_team"])
+        metadata = candidate["_team"]
+        if metadata.get("strategy_snapshot"):
+            direction = metadata["strategy_snapshot"]
+            body.framing = direction["framing"]
+            body.caption_style = direction["caption_style"]
+            body.hook_overlay = True
+            body.end = min(body.end, body.start + direction["duration_seconds"])
+            metadata["edit_plan"] = body.model_dump()
+            metadata["provenance_mode"] = "strategy"
+        return render_task(job_id, video, body, team_metadata=metadata)
 
     def pipeline_task(job_id: str, video: dict, model_id="qwen-small", config: dict | None = None) -> dict:
         config = config or settings()
@@ -644,6 +676,19 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 if config.get("_team_run_id")
                 else None
             )
+            snapshot = config.get("_campaign_snapshot")
+            if snapshot:
+                direction = snapshot["strategy_snapshot"]
+                body.end = min(body.end, body.start + direction["duration_seconds"])
+                body.framing, body.caption_style = direction["framing"], direction["caption_style"]
+                body.hook_overlay = True
+                metadata = {
+                    **(metadata or {}),
+                    **snapshot,
+                    "provenance_mode": "strategy",
+                    "creator_instructions": "",
+                    "edit_plan": body.model_dump(),
+                }
             output.append(render_task(job_id, video, body, team_metadata=metadata))
         return {"video_id": video["id"], "clips": output, "requires_review": True}
 
@@ -732,7 +777,13 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         )
 
     def submit_production(
-        identifier: str, model_id: str, mode: str, revision_budget=2, *, preflight=True
+        identifier: str,
+        model_id: str,
+        mode: str,
+        revision_budget=2,
+        *,
+        preflight=True,
+        campaign_snapshot=None,
     ) -> dict:
         with operations_lock:
             video = require("videos", identifier)
@@ -745,9 +796,15 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 models().require(model_id, "llm")
                 if "whisper-turbo" in dependencies:
                     models().require("whisper-turbo", "asr")
-            run = app.state.team.create(
-                video, settings(), model_id, mode=mode, revision_budget=revision_budget
-            )
+            config = settings()
+            if campaign_snapshot:
+                profile = campaign_snapshot["profile_snapshot"]
+                config.update(
+                    brand=profile["brand_context"],
+                    objective=profile["objective"],
+                    _campaign_snapshot=campaign_snapshot,
+                )
+            run = app.state.team.create(video, config, model_id, mode=mode, revision_budget=revision_budget)
             job = jobs().submit(
                 "team" if mode == "team" else "pipeline",
                 lambda job: app.state.team.execute(run["id"], job),
@@ -815,6 +872,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             clip = require("clips", identifier)
             if jobs().busy("clip_id", identifier):
                 raise HTTPException(409, "Cannot edit while a clip task is running.")
+            if clip.get("hook_rendered") and body.hook is not None and body.hook != clip.get("hook"):
+                raise HTTPException(
+                    409,
+                    "This hook is burned into the video. Render a new campaign output to change it; original video and plan remain unchanged.",
+                )
             changed = any(
                 value is not None and value != clip.get(key)
                 for key, value in {"hook": body.hook, "caption": body.caption}.items()
@@ -1366,5 +1428,64 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 "Conversion tracking and paid creative mapping are not configured; causal impact requires controlled experiments.",
             ],
         }
+
+    def campaign_render(identifier, body):
+        with operations_lock:
+            snapshot = campaigns.snapshot(
+                identifier, body.profile_id, body.video_id, body.expected_strategy_version_id
+            )
+            video = require("videos", body.video_id)
+            direction = snapshot["strategy_snapshot"]
+            end = (
+                body.end
+                if body.end is not None
+                else min(video["duration"], body.start + direction["duration_seconds"])
+            )
+            if end <= body.start or end > video["duration"] or end - body.start > 180:
+                raise HTTPException(
+                    422, "Select a positive range within the source and 180-second output limit."
+                )
+            render = Render(
+                start=body.start,
+                end=end,
+                hook=body.hook if body.hook is not None else (direction["hooks"] or [""])[0],
+                caption=body.caption,
+                objective=snapshot["profile_snapshot"]["objective"],
+                subtitles=body.subtitles,
+                framing=direction["framing"],
+                caption_style=direction["caption_style"],
+                hook_overlay=True,
+            )
+            deviations = []
+            if body.end is not None and end - body.start != direction["duration_seconds"]:
+                deviations.append(
+                    "Creator explicitly selected a duration different from the strategy target."
+                )
+            if body.hook is not None and body.hook not in direction["hooks"]:
+                deviations.append("Creator supplied an explicit hook rather than a saved strategy hook.")
+            metadata = {
+                **snapshot,
+                "provenance_mode": body.mode,
+                "creator_instructions": body.instructions,
+                "strategy_departures": deviations,
+                "edit_plan": render.model_dump(),
+                "selection_rationale": "Creator-selected source range."
+                if body.mode == "direct"
+                else "Deterministic range with approved duration and editing direction; not a claim of visual moment analysis.",
+            }
+            return submit_source(
+                body.video_id, "render", lambda job, item: render_task(job, item, render, metadata)
+            )
+
+    def campaign_produce(identifier, body):
+        with operations_lock:
+            snapshot = campaigns.snapshot(
+                identifier, body.profile_id, body.video_id, body.expected_strategy_version_id
+            )
+            return submit_production(
+                body.video_id, body.model_id, "team", body.revision_budget, campaign_snapshot=snapshot
+            )
+
+    install_campaign_api(app, campaigns, render=campaign_render, produce=campaign_produce)
 
     return app

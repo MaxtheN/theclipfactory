@@ -89,8 +89,12 @@ def sample(tmp_path, request):
     return path, audio
 
 
-@pytest.mark.parametrize("sample", [False, True], indirect=True)
-def test_real_render_preserves_audio_and_truthful_subtitles(tmp_path, sample):
+@pytest.mark.parametrize(
+    "sample,caption_style",
+    [(False, "standard"), (True, "standard"), (True, "high_contrast")],
+    indirect=["sample"],
+)
+def test_real_render_preserves_audio_and_truthful_subtitles(tmp_path, sample, caption_style):
     source, audio = sample
     before = media.probe(source)
     assert before["has_audio"] is audio
@@ -104,7 +108,8 @@ def test_real_render_preserves_audio_and_truthful_subtitles(tmp_path, sample):
             pytest.skip("FFmpeg lacks libass")
     try:
         job = jobs.submit("render", lambda identifier: media.render(
-            jobs, identifier, source, output, start=0.1, end=0.5, transcript=transcript))
+            jobs, identifier, source, output, start=0.1, end=0.5, transcript=transcript,
+            caption_style=caption_style))
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             final = store.get("jobs", job["id"])

@@ -191,7 +191,19 @@ class TeamEngine:
 
     def create(self, video: dict, config: dict, model_id: str, *, mode="team", revision_budget=2) -> dict:
         previous = []
-        for clip in self.store.all("clips")[:8]:
+        snapshot = config.get("_campaign_snapshot")
+        clips = self.store.all("clips")
+        if snapshot:
+            clips = [
+                c
+                for c in clips
+                if c.get("profile_id") == snapshot["profile_id"]
+                and c.get("campaign_id") == snapshot["campaign_id"]
+            ]
+        else:
+            # Unassigned legacy work never borrows evidence from named profiles.
+            clips = [c for c in clips if not c.get("profile_id")]
+        for clip in clips[:8]:
             insight = self.store.get("insights", clip.get("instagram_media_id") or "")
             if insight and insight.get("account_id") != clip.get("instagram_account_id"):
                 insight = None
@@ -208,6 +220,14 @@ class TeamEngine:
                     "media_observation": insight,
                     "manual_observations": [
                         e for e in self.store.all("events") if e["clip_id"] == clip["id"]
+                    ][:6]
+                    + [
+                        e
+                        for e in self.store.all("campaign_observations")
+                        if e["clip_id"] == clip["id"]
+                        and snapshot
+                        and e["profile_id"] == snapshot["profile_id"]
+                        and e["campaign_id"] == snapshot["campaign_id"]
                     ][:6],
                 }
             )
@@ -219,6 +239,8 @@ class TeamEngine:
             "previous_observations": previous,
             "limitations": "Sampled frames and speech are incomplete evidence. Attribution is not causality.",
         }
+        if snapshot:
+            context["campaign_snapshot"] = snapshot
         tasks = [self._new_task(role, iteration=0) for role in (ROLES if mode == "team" else ["baseline"])]
         identifier = new_id()
         return self.store.put(
@@ -242,7 +264,17 @@ class TeamEngine:
                 "clip_ids": [],
                 "plan": None,
                 "context": context,
-                "comparison_fingerprint": digest({"source": source, "settings": intent}),
+                "comparison_fingerprint": digest(
+                    {
+                        "source": source,
+                        "settings": intent,
+                        **(
+                            {"campaign_snapshot": {k: v for k, v in snapshot.items() if k != "captured_at"}}
+                            if snapshot
+                            else {}
+                        ),
+                    }
+                ),
                 "permissions": {"publish": False, "ads": False},
                 "tasks": tasks,
             },
@@ -406,7 +438,7 @@ class TeamEngine:
         instruction = {
             "producer": "Decompose the production request into exactly one assignment for each supported role. Do not grant permissions.",
             "footage_analyst": "Identify 1-3 source-backed moments of 30-60 seconds, never more than 180 seconds. Cite only 1-4 representative evidence reference IDs per moment. Every cited transcript segment must overlap that moment's start/end; every cited frame time must lie inside it. Sampled frames do not prove unseen action or exact quotes.",
-            "creative_strategist": "Propose distinct angles from validated moments. Hooks are short viewer-facing text, not editing instructions. Rendering preserves existing source footage and burns spoken subtitles; do not propose B-roll, graphics, or split-screen effects. Keep a specified objective; in discovery label distinct intended outcomes without claiming results.",
+            "creative_strategist": "Propose distinct angles from validated moments. Hooks are short viewer-facing text, not editing instructions. Rendering supports existing source footage, approved framing/text hook settings, and spoken subtitles; do not propose B-roll, illustrative graphics, or split-screen effects. Keep a specified objective; in discovery label distinct intended outcomes without claiming results.",
             "performance_analyst": "Recommend changes using actual observations or feedback, citing their IDs. Missing/zero/stale and manual/platform evidence differ; attribution never proves causal impact.",
             "editor": "Propose 1-3 source ranges and creative metadata. Each must fit entirely in its angle's validated moment and use its objective. Cite only exact evidence_refs listed in that selected moment, including when revising a caption; do not add references from other moments or critic findings. Hooks are short viewer-facing text, not instructions for unsupported visual effects. Never invent quoted speech.",
             "critic": "Check source context, factual claims, caption support, and duplicates independently. Use unknown when evidence is insufficient. Report blocking findings, not confidence scores. No approval authority.",
@@ -421,6 +453,8 @@ class TeamEngine:
                 request_data = data if feedback is None else {**data, "format_correction": feedback}
                 request = (
                     f"You are the {LABELS[role]} in a local video-production team. {instruction}\n"
+                    "If approved_campaign_direction or campaign_snapshot is supplied, use the account-scoped "
+                    "selection/editing constraints and target duration. You cannot approve or replace saved strategy. "
                     "Return exactly one JSON object following the schema below, no hidden reasoning. "
                     "Respect every required field and array length limit. When format_correction is "
                     "present, regenerate the handoff with those validation errors corrected, using "
@@ -537,6 +571,11 @@ class TeamEngine:
                             **run["context"]["settings"],
                             "_previous_observations": run["context"]["previous_observations"],
                             "_team_run_id": run_id,
+                            **(
+                                {"_campaign_snapshot": run["context"]["campaign_snapshot"]}
+                                if run["context"].get("campaign_snapshot")
+                                else {}
+                            ),
                         },
                     ),
                     refs=[f"source:{video['id']}"],
@@ -653,6 +692,7 @@ class TeamEngine:
                     "brand": context["settings"]["brand"],
                     "footage": footage,
                     "performance": performance,
+                    "approved_campaign_direction": context.get("campaign_snapshot"),
                 },
                 refs=refs,
                 validate=validate_strategy,
@@ -661,10 +701,14 @@ class TeamEngine:
             omitted_edits = []
 
             def validate_edits(output):
+                saved = context.get("campaign_snapshot")
+                limit = saved["strategy_snapshot"]["duration_seconds"] if saved else 180
                 valid = []
                 rejected = None
                 for candidate in output["candidates"]:
                     try:
+                        if candidate["end"] - candidate["start"] > limit + 0.000001:
+                            raise WorkError("Editor exceeded the approved account-specific duration target.")
                         angle = angles.get(candidate["angle_id"])
                         if not angle:
                             raise WorkError("Editor referenced an unavailable creative angle.")
@@ -699,6 +743,7 @@ class TeamEngine:
                 "footage": footage,
                 "evidence": evidence,
                 "performance": performance,
+                "approved_campaign_direction": context.get("campaign_snapshot"),
             }
             edits = self._agent(
                 run_id, job_id, "editor", Edits, edit_data, refs=refs, validate=validate_edits
@@ -801,6 +846,8 @@ class TeamEngine:
                         {
                             **candidate,
                             "_team": {
+                                **(run["context"].get("campaign_snapshot") or {}),
+                                "creator_instructions": "",
                                 "team_run_id": run_id,
                                 "team_task_id": self._task(run_id, "render", index)["id"],
                                 "team_review_status": review_status,
