@@ -3480,7 +3480,7 @@ dialog::backdrop {
 .demo-note { font-size: 12px; color: var(--muted); margin-top: 22px; line-height: 1.6; }
 .platform-note { justify-content: flex-start; flex-wrap: wrap; margin-top: 12px; font-size: 11px; color: var(--muted); }
 .preview-wrap { margin-top: 0; min-width: 0; }
-.preview-wrap::before { inset: -60px -25px; background: radial-gradient(ellipse at 60% 50%, #df5b3014, transparent 70%); }
+.preview-wrap::before { inset: -60px 0; background: radial-gradient(ellipse at 60% 50%, #df5b3014, transparent 70%); }
 .app-preview { transform: none; border-radius: 16px; box-shadow: 0 24px 70px -26px #464b3650, 0 2px 6px #282b1b08; }
 .preview-titlebar { gap: 16px; padding: 0 16px; height: 44px; }
 .preview-title { font-size: 10px; }
@@ -3489,7 +3489,7 @@ dialog::backdrop {
 .preview-body { display: block; }
 .preview-sidebar { padding: 10px 14px; border-right: 0; border-bottom: 1px solid #e8e9e0; }
 .preview-tabs { flex-direction: row; gap: 6px; }
-.preview-tabs button { flex: 1; justify-content: center; gap: 7px; padding: 12px 8px; font-size: 12px; color: #536147; min-height: 44px; }
+.preview-tabs button { flex: 1; min-width: 0; justify-content: center; gap: 7px; padding: 12px 8px; font-size: 12px; color: #536147; min-height: 44px; }
 .preview-tabs button > .icon { width: 15px; height: 15px; }
 .tab-number { display: none; }
 .preview-content { padding: 24px; }
@@ -3526,7 +3526,7 @@ dialog::backdrop {
 .step-title h3 { font-size: 20px; }
 .step-title > span { font-size: 11px; color: var(--orange-dark); }
 .step-visual { border-radius: 14px; }
-.local-section { border-radius: 28px; margin: 0 16px; }
+.local-section { border-radius: 28px; margin: 0 16px; overflow: clip; }
 .local-copy > p:not(.eyebrow), .principles p { color: #c4ceba; }
 .local-copy .eyebrow { font-size: 10px; letter-spacing: 1.2px; }
 .principles h3 { font-size: 15px; }
@@ -3579,7 +3579,7 @@ dialog::backdrop {
   .shell { width: calc(100% - 40px); }
   .site-header { height: 76px; }
   .hero { padding-top: 40px; padding-bottom: 40px; gap: 36px; }
-  .hero h1 { font-size: clamp(50px, 12vw, 70px); letter-spacing: -2.8px; margin-top: 20px; }
+  .hero h1 { font-size: clamp(44px, 12vw, 70px); letter-spacing: -2.8px; margin-top: 20px; }
   .hero h1 em { letter-spacing: -2px; }
   .hero-eyebrow { font-size: 9px; }
   .hero-description { font-size: 15px; max-width: 440px; margin-top: 24px; }
