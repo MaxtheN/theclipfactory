@@ -97,6 +97,7 @@ def test_browser_ready_then_shutdown(monkeypatch, parent, tmp_path):
 
 
 def test_native_close_cleanup(monkeypatch, parent):
+    settings = {}
     class Event:
         def __iadd__(self, callback):
             self.callback = callback
@@ -107,13 +108,14 @@ def test_native_close_cleanup(monkeypatch, parent):
 
     def start(callback, **kwargs):
         assert kwargs["private_mode"] is True
+        assert settings["ALLOW_DOWNLOADS"] is True
         event.callback()
         callback()
 
     monkeypatch.setitem(
         sys.modules,
         "webview",
-        types.SimpleNamespace(create_window=lambda *args, **kwargs: window, start=start),
+        types.SimpleNamespace(settings=settings, create_window=lambda *args, **kwargs: window, start=start),
     )
     assert launcher.main([]) == 0
     assert parent["app"].state.desktop
@@ -124,7 +126,7 @@ def test_no_implicit_browser_fallback(monkeypatch, parent, capsys):
     def fail(*args, **kwargs):
         raise RuntimeError("sensitive GUI failure")
 
-    monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(create_window=fail))
+    monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(settings={}, create_window=fail))
     monkeypatch.setattr(launcher.webbrowser, "open", lambda _: pytest.fail("implicit browser fallback"))
     assert launcher.main([]) == 1
     output = capsys.readouterr()
@@ -207,7 +209,7 @@ def test_windowed_failure_records_safe_diagnostics_without_stderr(monkeypatch, p
     def fail(*args, **kwargs):
         raise RuntimeError("secret token and bootstrap URL must never appear in logs")
 
-    monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(create_window=fail))
+    monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(settings={}, create_window=fail))
     monkeypatch.setattr(launcher.sys, "stderr", None)
     alerts = []
     monkeypatch.setattr(launcher, "show_launch_error", alerts.append)
