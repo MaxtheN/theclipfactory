@@ -350,6 +350,15 @@ function route(
     };
   if (method === "GET" && path === "/api/team/runs") return [];
   if (method === "GET" && resource === "exports") return [];
+  if (
+    method === "GET" &&
+    resource === "clips" &&
+    identifier &&
+    parts.length === 4 &&
+    action &&
+    ["quality", "post-targets", "post-package", "post-copy"].includes(action)
+  )
+    return previewPostPackage(requireRecord(s.clips, identifier, "Clip"), action);
   if (method === "POST" && resource === "clips" && action === "export")
     fail("Illustrative clips have no native media. No export was created.");
   if (resource === "settings" && method === "PUT")
@@ -833,5 +842,60 @@ function previewCloud(path: string, options: RequestInit) {
     signed_in: configured && !!previewCloudEmail,
     email: configured ? previewCloudEmail : null,
     workspace_id: configured && previewCloudEmail ? "preview-workspace" : null,
+  };
+}
+
+/** Illustrative frame art (inline SVG) so the cover strip and phone preview render without media. */
+function previewFrame(hue: number): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 160"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(${hue} 32% 34%)"/><stop offset="1" stop-color="hsl(${(hue + 40) % 360} 28% 16%)"/></linearGradient></defs><rect width="90" height="160" fill="url(#g)"/><circle cx="45" cy="58" r="17" fill="hsl(${hue} 20% 70%)" opacity=".55"/><rect x="22" y="80" width="46" height="60" rx="18" fill="hsl(${hue} 20% 70%)" opacity=".4"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+/** Post package for the review preview: illustrative data only; posting itself stays unsupported. */
+function previewPostPackage(clip: ProductionClip, action: string): unknown {
+  const times = [1200, 4300, 8000, 12500, 17000, 22400];
+  if (action === "quality")
+    return {
+      clip_id: clip.id,
+      sha256: clip.sha256 ?? null,
+      verdict: "hold",
+      reasons: [
+        "No captions burned in (illustrative preview: nothing was rendered)",
+        "Technical checks did not run on preview artwork",
+      ],
+      notes: ["Review preview fixture."],
+      checks: [],
+      rubric: { hook_clarity: 4, standalone_context: 3, caption_legibility: null, technical: 2 },
+    };
+  if (action === "post-targets")
+    return {
+      accounts: [{ id: "preview-account", display_name: "allin_clips" }],
+      cloud_configured: true,
+      signed_in: true,
+      attempts: [],
+      schedules: [],
+      default_caption: clip.caption || clip.hook || "",
+    };
+  if (action === "post-copy")
+    return {
+      clip_id: clip.id,
+      post_copy: {
+        caption: `${clip.hook || clip.name}\n\nFour panels, one call, and the question nobody wanted to answer on air. Full episode on the channel.`,
+        hashtags: ["allin", "podcast", "ai", "startups", "venturecapital"],
+        source: "template",
+        label: "Illustrative copy",
+        model_id: null,
+        fallback_reason: null,
+        checks: [],
+        generated_at: stamp(),
+      },
+      job: null,
+    };
+  return {
+    limits: { caption_chars: 2200, hashtags: 30, mentions: 20, collaborators: 3, collaborators_supported: false },
+    auto_cover: { source: "preview", time_ms: times[1], url: previewFrame(192) },
+    candidates: times.map((t, i) => ({ time_ms: t, url: previewFrame(170 + i * 22), auto: i === 1 })),
+    duration: 30,
+    collaborators_note: "The connected Instagram tool has no collaborators option; mention people with @ in the caption instead.",
   };
 }
