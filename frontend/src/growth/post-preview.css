@@ -1,0 +1,83 @@
+/* Post package: phone preview, cover strip, caption counters, schedule controls. Neutral, not branded. */
+.gf-post-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .gf-post-layout { grid-template-columns: minmax(0, 1fr); }
+  .gf-post-preview { max-width: 260px; margin-inline: auto; }
+}
+.gf-post-preview { margin: 0; position: sticky; top: 12px; }
+.gf-phone {
+  border-radius: 30px;
+  padding: 8px;
+  background: #1d2321;
+  box-shadow: 0 18px 40px rgba(20, 30, 28, 0.22);
+}
+.gf-phone-screen {
+  position: relative;
+  aspect-ratio: 9 / 16;
+  border-radius: 23px;
+  overflow: hidden;
+  background: #0d1110;
+}
+.gf-phone-video { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
+.gf-phone-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 36px 12px 14px;
+  color: #fff;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.66), rgba(0, 0, 0, 0));
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+.gf-phone-account { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+.gf-phone-avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  background: #dceee1; color: #202a27; font-weight: 700; font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+.gf-phone-caption { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 45%; }
+.gf-phone-more {
+  pointer-events: auto;
+  border: 0; padding: 0; background: none; color: rgba(255, 255, 255, 0.75);
+  font: inherit; cursor: pointer;
+}
+.gf-post-preview-meta { display: flex; gap: 10px; align-items: center; margin-top: 12px; font-size: 12px; }
+.gf-post-preview-meta div:last-child { display: grid; gap: 2px; }
+.gf-post-preview-meta small { color: var(--muted, #64716a); }
+.gf-grid-cover {
+  width: 48px; aspect-ratio: 3 / 4; border-radius: 6px; overflow: hidden;
+  background: var(--line, #d8e0dc); display: grid; place-items: center; flex: none;
+}
+.gf-grid-cover img { width: 100%; height: 100%; object-fit: cover; }
+
+.gf-cover-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.gf-cover-strip button {
+  padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden;
+  aspect-ratio: 9 / 16; background: var(--line, #d8e0dc); cursor: pointer; position: relative;
+}
+.gf-cover-strip button[aria-pressed="true"] { border-color: var(--ink, #202a27); }
+.gf-cover-strip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gf-cover-strip small {
+  position: absolute; inset: auto 0 0 0; font-size: 10px; color: #fff;
+  background: rgba(0, 0, 0, 0.45); padding: 1px 0;
+}
+
+.gf-caption-counters { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted, #64716a); }
+.gf-caption-counters .over { color: var(--danger, #9b3935); font-weight: 600; }
+.gf-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.gf-chip {
+  border: 1px solid var(--line, #d8e0dc); border-radius: 999px; padding: 3px 10px;
+  background: transparent; font: inherit; font-size: 12px; cursor: pointer; color: inherit;
+}
+.gf-chip[aria-pressed="true"] { background: var(--mint, #dceee1); border-color: transparent; }
+.gf-post-when { display: grid; gap: 8px; }
+.gf-post-when-modes { display: flex; gap: 16px; }
+.gf-schedule-list { list-style: none; padding: 0; display: grid; gap: 8px; }
+.gf-schedule-list li { display: grid; gap: 6px; }
+.gf-schedule-actions { display: flex; flex-wrap: wrap; gap: 6px; }

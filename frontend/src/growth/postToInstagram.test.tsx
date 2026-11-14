@@ -1,14 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PostToInstagram } from "./PostToInstagram";
-import { publishApi, type PostTargets, type PublishAttempt, type QualityReport } from "./publishApi";
+import {
+  publishApi, withOffset, type PostPackageView, type PostSchedule, type PostTargets, type PublishAttempt,
+  type QualityReport,
+} from "./publishApi";
+import { truncateForFeed } from "./PostPreview";
 
 vi.mock("./publishApi", async (original) => {
   const actual = await original<typeof import("./publishApi")>();
   return {
     ...actual,
-    publishApi: { quality: vi.fn(), targets: vi.fn(), post: vi.fn(), attempt: vi.fn(), reconcile: vi.fn(), resume: vi.fn() },
+    publishApi: {
+      quality: vi.fn(), targets: vi.fn(), post: vi.fn(), attempt: vi.fn(), reconcile: vi.fn(), resume: vi.fn(),
+      postPackage: vi.fn(), schedule: vi.fn(), decide: vi.fn(),
+    },
   };
 });
 
@@ -29,10 +36,24 @@ const attempt = (over: Partial<PublishAttempt> = {}): PublishAttempt => ({
 });
 const clip = { id: "c1", approved: false, sha256: SHA, hook: "Hook", caption: "Caption" };
 
+const pkg: PostPackageView = {
+  limits: { caption_chars: 2200, hashtags: 30, mentions: 20, collaborators: 3, collaborators_supported: false },
+  auto_cover: { source: "auto_best_frame", time_ms: 4250, url: "/api/clips/c1/cover" },
+  candidates: [500, 4250, 8000, 11000, 15000, 19500].map(t => ({ time_ms: t, url: `/api/clips/c1/cover-frames/${t}`, auto: t === 4250 })),
+  duration: 20, collaborators_note: "The connected Instagram tool has no collaborators option; mention people with @ in the caption instead.",
+};
+const schedule = (over: Partial<PostSchedule> = {}): PostSchedule => ({
+  id: "s1", clip_id: "c1", account_ids: ["acct-1"], publish_at: "2026-11-14T19:00:00+00:00", timezone: "UTC",
+  status: "scheduled", overdue_at: null, note: "The app must be open at that time.",
+  attempts: [attempt({ state: "scheduled", active: false, scheduled_for: "2026-11-14T19:00:00+00:00" })], ...over,
+});
+const NOW = new Date(2026, 10, 14, 12, 0, 0);
+
 beforeEach(() => {
   vi.resetAllMocks();
   api.quality.mockResolvedValue(pass);
   api.targets.mockResolvedValue(targets());
+  api.postPackage.mockResolvedValue(pkg);
 });
 
 describe("PostToInstagram", () => {
@@ -62,7 +83,8 @@ describe("PostToInstagram", () => {
     await userEvent.click(screen.getByRole("button", { name: "Approve & post" }));
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
     expect(approve).toHaveBeenCalledTimes(1);
-    expect(api.post).toHaveBeenNthCalledWith(1, "c1", { account_id: "acct-1", caption: "Default caption", sha256: SHA });
+    expect(api.post).toHaveBeenNthCalledWith(1, "c1", { account_id: "acct-1", caption: "Default caption", sha256: SHA,
+      share_to_feed: true, cover_time_ms: null });
     expect(await screen.findAllByText("Queued")).toHaveLength(2);
   });
 
@@ -102,5 +124,103 @@ describe("PostToInstagram", () => {
     expect(api.reconcile).toHaveBeenCalledWith("at-1");
     expect(await screen.findByRole("button", { name: "Continue" })).toBeInTheDocument();
     expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("counts caption limits live and blocks posting over a limit", async () => {
+    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} />);
+    const field = await screen.findByLabelText("Caption");
+    await userEvent.click(screen.getByLabelText(/brand/));
+    expect(screen.getByText("15 / 2,200 characters")).toBeInTheDocument();
+    fireEvent.change(field, { target: { value: Array.from({ length: 31 }, (_, i) => `#t${i}`).join(" ") } });
+    expect(screen.getByText("31 / 30 hashtags")).toHaveClass("over");
+    expect(screen.getByRole("alert")).toHaveTextContent("at most 30 hashtags");
+    expect(screen.getByRole("button", { name: "Post to Instagram" })).toBeDisabled();
+    fireEvent.change(field, { target: { value: "x".repeat(2201) } });
+    expect(screen.getByText("2,201 / 2,200 characters")).toHaveClass("over");
+    expect(screen.getByRole("button", { name: "Post to Instagram" })).toBeDisabled();
+  });
+
+  it("adds link in bio, picks a cover frame and turns off feed sharing", async () => {
+    api.post.mockResolvedValue(attempt());
+    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    await screen.findByDisplayValue("Default caption");
+    await userEvent.click(screen.getByRole("button", { name: "Add “Link in bio”" }));
+    expect(screen.getByLabelText("Caption")).toHaveValue("Default caption\n\nLink in bio.");
+    expect(await screen.findByRole("button", { name: "Cover at 4.3s (suggested)" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Cover at 8.0s" }));
+    expect(screen.getByRole("button", { name: "Cover at 8.0s" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByAltText("Cover as it appears on your profile grid")).toHaveAttribute("src", "/api/clips/c1/cover-frames/8000");
+    await userEvent.click(screen.getByLabelText(/Also show in the main feed/));
+    expect(screen.getByText("Shows in Reels only")).toBeInTheDocument();
+    expect(screen.getByText(/no collaborators option/)).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText(/brand/));
+    await userEvent.click(screen.getByRole("button", { name: "Post to Instagram" }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith("c1", {
+      account_id: "acct-1", caption: "Default caption\n\nLink in bio.", sha256: SHA, share_to_feed: false, cover_time_ms: 8000,
+    }));
+  });
+
+  it("previews the post on a phone with a feed-truncated caption", async () => {
+    const long = "First line of the caption that is pretty long\nSecond line keeps going\nThird line is hidden until more";
+    api.targets.mockResolvedValue(targets({ default_caption: long }));
+    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} />);
+    const preview = await screen.findByLabelText("Post preview");
+    await waitFor(() => expect(within(preview).getByTestId("preview-caption")).toHaveTextContent(/Second line keeps going… more$/));
+    expect(within(preview).getByText("brand")).toBeInTheDocument();
+    expect(within(preview).getByLabelText("Clip with burned-in captions")).toHaveAttribute("src", "/api/clips/c1/media");
+    await userEvent.click(within(preview).getByRole("button", { name: "more" }));
+    expect(within(preview).getByTestId("preview-caption")).toHaveTextContent("Third line is hidden until more");
+    expect(truncateForFeed("short").truncated).toBe(false);
+  });
+
+  it("uses a per-account caption override for the second account", async () => {
+    api.post.mockResolvedValueOnce(attempt()).mockResolvedValueOnce(attempt({ id: "at-2", account_id: "acct-2" }));
+    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    await screen.findByDisplayValue("Default caption");
+    await userEvent.click(screen.getByLabelText(/brand/));
+    await userEvent.click(screen.getByLabelText(/second/));
+    await userEvent.click(screen.getByRole("button", { name: "Own caption for second" }));
+    const own = screen.getByLabelText("Caption for second");
+    fireEvent.change(own, { target: { value: "Words just for the second account" } });
+    expect(within(screen.getByLabelText("Post preview")).getByTestId("preview-caption")).toHaveTextContent("Words just for the second account");
+    await userEvent.click(screen.getByRole("button", { name: "Post to Instagram" }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+    expect(api.post).toHaveBeenNthCalledWith(1, "c1", expect.objectContaining({ account_id: "acct-1", caption: "Default caption" }));
+    expect(api.post).toHaveBeenNthCalledWith(2, "c1", expect.objectContaining({ account_id: "acct-2", caption: "Words just for the second account" }));
+  });
+
+  it("schedules for later with a suggestion chip, local timezone and the app-open warning", async () => {
+    api.schedule.mockResolvedValue(schedule());
+    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} now={() => NOW} />);
+    await screen.findByDisplayValue("Default caption");
+    await userEvent.click(screen.getByLabelText(/brand/));
+    await userEvent.click(screen.getByLabelText("Schedule"));
+    expect(screen.getByText("The app must be open at that time.")).toBeInTheDocument();
+    expect(screen.getByText(/^Times are in /)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Tomorrow 9am" }));
+    expect(screen.getByLabelText("Date and time")).toHaveValue("2026-11-15T09:00");
+    await userEvent.click(screen.getByRole("button", { name: "Schedule post" }));
+    await waitFor(() => expect(api.schedule).toHaveBeenCalledWith("c1", expect.objectContaining({
+      account_ids: ["acct-1"], captions: { "acct-1": "Default caption" }, sha256: SHA,
+      publish_at: withOffset("2026-11-15T09:00"), share_to_feed: true, cover_time_ms: null,
+    })));
+    expect(api.post).not.toHaveBeenCalled();
+    expect(await screen.findByRole("status")).toHaveTextContent(/^Scheduled for .*The app must be open at that time\.$/);
+    expect(within(screen.getByLabelText("Scheduled posts")).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  it("asks before posting an overdue schedule: Post now, Reschedule or Cancel", async () => {
+    api.targets.mockResolvedValue(targets({ schedules: [schedule({ overdue_at: "2026-11-14T20:00:00+00:00" })],
+      attempts: [attempt({ state: "scheduled", active: false })] }));
+    api.decide.mockResolvedValue(schedule({ status: "submitted", attempts: [attempt({ state: "created" })] }));
+    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} now={() => NOW} />);
+    expect(await screen.findByText("Missed while the app was closed.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reschedule" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(api.decide).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Post now" }));
+    expect(api.decide).toHaveBeenCalledWith("s1", "post_now", undefined);
+    expect(await screen.findByText("Queued")).toBeInTheDocument();
   });
 });
