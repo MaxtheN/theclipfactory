@@ -283,9 +283,9 @@ describe("review wall in the Library", () => {
     render(<Library w={workspace()} factory={f} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Review wall/ }));
     const wall = document.querySelector(".gf-review-wall") as HTMLElement;
-    expect(within(wall).getByDisplayValue("Hook a")).toBeInTheDocument();
-    expect(within(wall).getByDisplayValue("Hook b")).toBeInTheDocument();
-    expect(within(wall).queryByDisplayValue("Hook elsewhere")).not.toBeInTheDocument();
+    expect(within(wall).getByText("Hook a")).toBeInTheDocument();
+    expect(within(wall).getByText("Hook b")).toBeInTheDocument();
+    expect(within(wall).queryByText("Hook elsewhere")).not.toBeInTheDocument();
     expect(within(wall).getByRole("combobox", { name: "Filter by hypothesis" })).toBeInTheDocument();
     fireEvent.click(within(wall).getByRole("button", { name: "Approve all 2 shown" }));
     await waitFor(() =>
