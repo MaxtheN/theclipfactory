@@ -410,6 +410,24 @@ def test_grounding_correction_honors_cancellation(harness):
     assert not harness.rendered
 
 
+@pytest.mark.parametrize("invalid_angle", [
+    {"id": "angle-2", "moment_index": 1},
+    {"id": "angle-1"},
+    {"id": "angle-2", "objective": "traffic"},
+])
+def test_strategy_keeps_valid_angles_when_another_cannot_be_used(harness, invalid_angle):
+    outputs = script()
+    rejected = {**outputs[2]["angles"][0], **invalid_angle}
+    outputs[2]["angles"].append(rejected)
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    assert harness.models.calls[3]["data"]["strategy"] == strategy()
+    assert run["status"] == "needs_review"
+    assert "Omitted 1 invalid creative angles" in run["stop_reason"]
+    assert len(harness.rendered) == 1
+
+
 @pytest.mark.parametrize("role_index", [1, 3])
 def test_grounding_correction_stops_after_one_rejected_retry(harness, role_index):
     outputs = script()[:role_index + 1]

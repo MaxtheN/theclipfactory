@@ -438,7 +438,7 @@ class TeamEngine:
         instruction = {
             "producer": "Decompose the production request into exactly one assignment for each supported role. Do not grant permissions.",
             "footage_analyst": "Identify 1-3 source-backed moments of 30-60 seconds, never more than 180 seconds. Cite only 1-4 representative evidence reference IDs per moment. Every cited transcript segment must overlap that moment's start/end; every cited frame time must lie inside it. Sampled frames do not prove unseen action or exact quotes.",
-            "creative_strategist": "Propose distinct angles from validated moments. Hooks are short viewer-facing text, not editing instructions. Rendering supports existing source footage, approved framing/text hook settings, and spoken subtitles; do not propose B-roll, illustrative graphics, or split-screen effects. Keep a specified objective; in discovery label distinct intended outcomes without claiming results.",
+            "creative_strategist": "Propose distinct angles from validated moments. moment_index is a zero-based index into the supplied footage.moments list; multiple angles may reuse a moment. Hooks are short viewer-facing text, not editing instructions. Rendering supports existing source footage, approved framing/text hook settings, and spoken subtitles; do not propose B-roll, illustrative graphics, or split-screen effects. Keep a specified objective; in discovery label distinct intended outcomes without claiming results.",
             "performance_analyst": "Recommend changes using actual observations or feedback, citing their IDs. Missing/zero/stale and manual/platform evidence differ; attribution never proves causal impact.",
             "editor": "Propose 1-3 source ranges and creative metadata. Each must fit entirely in its angle's validated moment and use its objective. Cite only exact evidence_refs listed in that selected moment, including when revising a caption; do not add references from other moments or critic findings. Hooks are short viewer-facing text, not instructions for unsupported visual effects. Never invent quoted speech.",
             "critic": "Check source context, factual claims, caption support, and duplicates independently. Use unknown when evidence is insufficient. Report blocking findings, not confidence scores. No approval authority.",
@@ -686,14 +686,27 @@ class TeamEngine:
                     finished_at=now(),
                 )
 
+            omitted_angles = []
+
             def validate_strategy(output):
                 ids = set()
+                valid = []
+                rejected = None
                 for angle in output["angles"]:
-                    if angle["id"] in ids or angle["moment_index"] >= len(footage["moments"]):
-                        raise WorkError("Strategist proposed a duplicate angle or unavailable source moment.")
+                    try:
+                        if angle["id"] in ids or angle["moment_index"] >= len(footage["moments"]):
+                            raise WorkError("Strategist proposed a duplicate angle or unavailable source moment.")
+                        if run["objective"] != "discovery" and angle["objective"] != run["objective"]:
+                            raise WorkError("Strategist attempted to change the user-selected objective.")
+                    except WorkError as exc:
+                        rejected = exc
+                        continue
                     ids.add(angle["id"])
-                    if run["objective"] != "discovery" and angle["objective"] != run["objective"]:
-                        raise WorkError("Strategist attempted to change the user-selected objective.")
+                    valid.append(angle)
+                if not valid:
+                    raise rejected
+                omitted_angles.append(len(output["angles"]) - len(valid))
+                output["angles"] = valid
 
             strategy = self._agent(
                 run_id,
@@ -880,6 +893,8 @@ class TeamEngine:
 
             if sum(omitted_edits):
                 stop = f"{stop or 'Human review is required.'} Omitted {sum(omitted_edits)} invalid editor candidates."
+            if sum(omitted_angles):
+                stop = f"{stop or 'Human review is required.'} Omitted {sum(omitted_angles)} invalid creative angles."
             self._finish(run_id, "needs_review", stop)
             return {
                 "team_run_id": run_id,
