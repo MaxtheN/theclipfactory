@@ -1,7 +1,7 @@
 # Work Order Entity Index: WO-4
 
 **Initialized At (UTC):** 2026-11-14T12:02:28Z
-**Current Status:** in_progress
+**Current Status:** in_review
 
 ## Work Order
 
@@ -27,7 +27,7 @@ Blueprints reached through `@…` mentions and links while reading linked bluepr
 ## Delivery
 
 - Branch: kartik/backend-integration
-- Pull Request URL: 
+- Pull Request URL: https://github.com/MaxtheN/theclipfactory/pull/5
 
 ## Integration refresh
 
@@ -45,3 +45,10 @@ Blueprints reached through `@…` mentions and links while reading linked bluepr
 - Actual All-In: fixed-range twohookvariants+linkedrevision+verifiedexports; real generated Whisper transcript; Qwen4B image call;3baselineclips;2unscopedteamclips;1campaign-scopedcritic-passing captionedclip (unapproved).
 - Scoped run used validated same-source analysis fallback after rejected footage grounding. Its5.5sec introfragment is execution proof only; no editorial quality claim. Deliberate substantive480–570sec source test is separate followup.
 - Real authenticated local engine is running in a native window. HTTP health/system/campaign/clip/export readbacks200; frontend runtime guards accepted9actualcliprecords+3exportpublicrecords. Authenticated browser playback decoded1080x1920 withreadyState4, noerror; human acceptance stayedpending.
+
+## Final delivery evidence
+
+- Substantive480–570sec sample: actual Whisper18cues/308words, one119.2sec campaign-team run,15.1sec clip with complete stated point and clean word-aligned boundaries; fresh footage grounding, no fallback. Critic/technicalcheckspass; humanacceptancepending.
+- Macdevelopmentbundle:48MB, embeddedUI/workerassetsverified, ad-hocsignaturevalidated, isolatednativewindow/UI/authentication smokepassed. Publicnotarization/installerhardening remainslater.
+- Hostedreviewrefreshed: https://growth-factory-review-8090.vercel.app , fixturebuildSHA256exactlymatchedservedHTML,HTTP200.
+- DraftPR5 haspassingMac/Linux checks for code41dc2c8. Finaldocumentation-onlycommit recordsdelivery; no defaultbranchpushorPRmerge.
