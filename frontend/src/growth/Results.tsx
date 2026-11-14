@@ -209,6 +209,8 @@ export function Results({
     .find(
       (v) =>
         v.status === "proposed" &&
+        // Pre-workspace campaign drafts are history; only workspace drafts can be approved.
+        v.scope !== "campaign" &&
         v.base_version_id === active?.id &&
         v.changed_profile_ids.includes(w.profileId) &&
         !!v.hypothesis?.trim() &&
