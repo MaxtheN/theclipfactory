@@ -16,6 +16,7 @@ import { LaunchTransition, type LaunchPhase } from "./LaunchTransition";
 import { CloudAccountFields, useCloudAccount } from "./CloudSignIn";
 import type { CloudStatus } from "./cloudApi";
 import { WebsiteBrief } from "./WebsiteBrief";
+import { OnboardingIntro, introSeen } from "./OnboardingIntro";
 import { GOALS, type WebsiteBriefResult } from "./websiteBriefApi";
 
 const outcomes = [
@@ -163,6 +164,7 @@ export function Onboarding({
   active = true,
   askAccount = false,
   askWebsite = true,
+  intro = false,
 }: {
   w: Workspace;
   onComplete: () => void;
@@ -173,7 +175,10 @@ export function Onboarding({
   askAccount?: boolean;
   /** Start by offering to draft the brand from the creator's website (skippable). */
   askWebsite?: boolean;
+  /** First run only: open with the animated welcome (skippable, shown once per Mac). */
+  intro?: boolean;
 }) {
+  const [showIntro, setShowIntro] = useState(() => intro && !introSeen());
   const steps = askAccount
     ? [...baseSteps.slice(0, REVIEW), "Review", "Your account"]
     : baseSteps;
@@ -588,6 +593,12 @@ export function Onboarding({
     else void create();
   }
 
+  if (showIntro)
+    return (
+      <section className="gf-onboarding gf-onboarding-wizard" aria-label="Brand onboarding">
+        <OnboardingIntro onStart={() => setShowIntro(false)} />
+      </section>
+    );
   return (
     <section
       className={`gf-onboarding gf-onboarding-wizard${launchPhase ? " is-launching" : ""}`}
@@ -728,6 +739,10 @@ export function Onboarding({
                     your first brief.
                   </p>
                 )}
+                <div className={`gf-prefill${drafted?.name && name === drafted.name ? " is-from-site" : ""}`}>
+                {drafted?.name && name === drafted.name && (
+                  <span className="gf-from-site" aria-hidden="true">from your site</span>
+                )}
                 <Field label="Name your brand / podcast">
                   {(id) => (
                     <AutoTextarea
@@ -742,6 +757,11 @@ export function Onboarding({
                     />
                   )}
                 </Field>
+                </div>
+                <div className={`gf-prefill${drafted?.audience && audience === drafted.audience ? " is-from-site" : ""}`}>
+                {drafted?.audience && audience === drafted.audience && (
+                  <span className="gf-from-site" aria-hidden="true">from your site</span>
+                )}
                 <Field label="Who are we speaking to?">
                   {(id) => (
                     <AutoTextarea
@@ -756,6 +776,7 @@ export function Onboarding({
                     />
                   )}
                 </Field>
+                </div>
               </>
             )}
 
@@ -941,6 +962,20 @@ export function Onboarding({
 
             {step === 3 && (
               <>
+                <div className="gf-brand-ready" aria-label="Your brand is ready">
+                  <span className="gf-brand-ready-monogram" aria-hidden="true">
+                    {(name.trim()[0] || "G").toUpperCase()}
+                  </span>
+                  <div>
+                    <span className="gf-brand-ready-kicker">
+                      <Check size={13} strokeWidth={2} aria-hidden="true" />
+                      Your brand is ready
+                    </span>
+                    <strong>{name.trim() || "Your brand"}</strong>
+                    <p>Check the details below. Agents use them for every clip.</p>
+                  </div>
+                  {drafted && <span className="gf-from-site is-static">from your site</span>}
+                </div>
                 <dl className="gf-onboarding-summary">
                   <div className="gf-onboarding-summary-row">
                     <div className="gf-onboarding-summary-copy">

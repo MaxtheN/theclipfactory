@@ -596,6 +596,7 @@ export function GrowthApp() {
                   w={w}
                   active={onboarding && !tools}
                   askAccount={askAccount}
+                  intro={!w.loading && w.profiles.length === 0}
                   onBusyChange={setOnboardingBusy}
                   onCancel={usable ? () => setCreating(false) : undefined}
                   onComplete={() => {
