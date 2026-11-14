@@ -44,6 +44,13 @@ describe("PostToInstagram", () => {
     expect(screen.getByRole("button", { name: "Approve & post" })).toBeDisabled();
   });
 
+  it("offers sign in right where it is needed and says why", async () => {
+    api.targets.mockResolvedValue(targets({ signed_in: false }));
+    render(<PostToInstagram clip={clip} approve={vi.fn()} />);
+    expect(await screen.findByText(/so Instagram can fetch it/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+  });
+
   it("approves the exact revision then posts to each chosen account", async () => {
     const approve = vi.fn().mockResolvedValue({ ...clip, approved: true });
     api.post.mockResolvedValueOnce(attempt()).mockResolvedValueOnce(attempt({ id: "at-2", account_id: "acct-2", account_name: "second" }));

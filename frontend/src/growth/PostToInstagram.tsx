@@ -11,6 +11,7 @@ import {
   type QualityReport,
 } from "./publishApi";
 import { postCopyApi, type PostCopy } from "./referencesApi";
+import { CloudSignIn } from "./CloudSignIn";
 
 export interface PostableClip {
   id: string;
@@ -54,6 +55,7 @@ export function PostToInstagram({
   const [busy, setBusy] = useState(false);
   const [copy, setCopy] = useState<PostCopy | null>();
   const [writing, setWriting] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
   // Generated copy prefills the caption until the person edits it themselves.
   const edited = useRef(false), prefilled = useRef(false);
   const live = useRef(true);
@@ -160,7 +162,18 @@ export function PostToInstagram({
 
   return <section className="gf-form-fields gf-post-instagram" aria-label="Post to Instagram">
     <h3>Post to Instagram</h3>
-    {signInRequired && <p className="gf-help" role="status"><strong>Sign in required.</strong> Sign in to Growth Factory cloud to host the video for Instagram.</p>}
+    {signInRequired && <div className="gf-post-signin">
+      <div>
+        <p role="status"><strong>Sign in required.</strong> We host the approved video briefly so Instagram can fetch it.</p>
+        {targets?.cloud_configured && !signingIn && <button type="button" className="gf-button compact" onClick={() => setSigningIn(true)}>Sign in</button>}
+      </div>
+      {!targets?.cloud_configured && <p>Accounts aren't set up on this Mac yet, so posting is off. Everything else still works.</p>}
+      {signingIn && <CloudSignIn skipLabel="Cancel" onSkip={() => setSigningIn(false)} onDone={() => {
+        setSigningIn(false);
+        // Re-read targets so posting unlocks as soon as the session exists. The password is never kept here.
+        void publishApi.targets(clip.id).then(t => { if (live.current) { setTargets(t); setAttempts(t.attempts); } }).catch(e => live.current && setError(message(e)));
+      }} />}
+    </div>}
     {report ? <div aria-label="Quality gate">
       <Pill tone={held ? "quiet" : "mint"}>{held ? "Quality gate: hold" : "Quality gate: pass"}</Pill>
       <p className="gf-help">{rubricLabels.map(([key, label]) => `${label} ${report.rubric[key] ?? "–"}/5`).join(" · ")}</p>
