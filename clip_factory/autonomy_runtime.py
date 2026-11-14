@@ -9,6 +9,7 @@ import time
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from .brief import brief_block, must_avoid_hits, normalize_brief
 from .campaigns import Production, migrate_campaign
 from .jobs import WorkError
 from .learning import ANALYST_TIMEOUT_SECONDS, bound_digest
@@ -183,14 +184,28 @@ class AutonomyRuntime:
         evidence = {"snapshot": {k: context["snapshot"].get(k) for k in
                 ("id", "metrics", "units", "window_start", "window_end", "collected_at", "source", "cumulative")},
             "policy": {k: context["policy"].get(k) for k in ("allowed_changes", "cadence_days")},
-            # Workspace context plus THIS campaign's goal (goals are campaign-scoped).
-            "profile": {**{k: context["profile"].get(k) for k in
-                ("audience", "brand_context", "creative_preferences")}, **campaign_goal(
-                    self.store, context["policy"].get("campaign_id"), context["profile"])},
+            # THIS campaign's goal (goals are campaign-scoped); workspace text is in the brief block.
+            "profile": campaign_goal(self.store, context["policy"].get("campaign_id"), context["profile"]),
             "publication": {k: context["publication"].get(k) for k in ("media_id", "published_at", "mapping_source")},
             "parent_clip": {k: clip.get(k) for k in ("id", "start", "end", "hook", "caption")},
             "source": {"id": source["id"], "duration": source["duration"], "timed_cues": cues},
             "approved_direction": context["strategy"]["directions"][context["policy"]["profile_id"]]}
+
+        # Workspace voice/boundaries, approved rules and the campaign brief (the clip's own snapshot of
+        # it when saved, else the campaign's current brief), as the same bounded block every agent reads.
+        campaign = self.store.get("campaigns", context["policy"].get("campaign_id") or "")
+        brief = normalize_brief(clip.get("brief_snapshot") or (campaign or {}).get("brief"))
+        block = brief_block(
+            {
+                "profile_snapshot": {k: context["profile"].get(k) for k in
+                    ("audience", "brand_context", "creative_preferences")},
+                "strategy_snapshot": evidence["approved_direction"],
+                "goal": evidence["profile"],
+                "brief_snapshot": brief,
+            },
+            role="learning_analyst",
+            compact=True,
+        )
 
         def build(evidence):
             payload = json.dumps(evidence, allow_nan=False, ensure_ascii=False, separators=(",", ":"))
@@ -209,8 +224,8 @@ class AutonomyRuntime:
                 "If the objective cannot be measured, the evidence is missing, or the proposed "
                 "change is unsupported, return insufficient_evidence. Explain limits. Do not invent retention, "
                 "ROAS, conversions or comparison posts. A hook is source-faithful text; a duration must end at a "
-                "provided transcript cue boundary and preserve the point. Evidence:\n" +
-                payload
+                "provided transcript cue boundary and preserve the point.\n" + (block + "\n" if block else "") +
+                "Evidence:\n" + payload
             )
 
         def fits(text, reserve=0):
@@ -265,6 +280,8 @@ class AutonomyRuntime:
                             raise WorkError("Citations must reference the exact current snapshot.")
                         if result["variable"] == "hook" and result["proposed_hook"].strip() == (clip.get("hook") or "").strip():
                             raise WorkError("The proposed hook repeats the existing opening.")
+                        if result["variable"] == "hook" and must_avoid_hits(result["proposed_hook"], brief):
+                            raise WorkError("The proposed hook touches the campaign brief's must-avoid list.")
                         if result["variable"] == "duration" and result["proposed_duration_seconds"] == clip["end"] - clip["start"]:
                             raise WorkError("The proposed duration makes no change.")
                     return result

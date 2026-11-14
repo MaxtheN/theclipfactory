@@ -714,12 +714,21 @@ def test_goal_profiles_require_primary_metric_but_discovery_does_not(objective):
 
 def test_profile_and_brief_use_text_preferences_and_string_arrays():
     assert Profile(name="A", creative_preferences="Plain text").creative_preferences == "Plain text"
+    # The legacy brief shape stays valid; newer fields default.
     assert Brief(constraints=["No invented claims"], requested_outputs=["Vertical clip"]).model_dump() == {
         "audience": "",
+        "key_messages": [],
+        "cta": "",
+        "cta_link": None,
+        "must_include": [],
+        "must_avoid": [],
+        "tone": "",
+        "references": [],
+        "deliverables": {"clip_count": None, "max_duration_seconds": None, "platforms": ["instagram_reels"]},
+        "context": "",
+        "measurement_intent": "",
         "constraints": ["No invented claims"],
         "requested_outputs": ["Vertical clip"],
-        "measurement_intent": "",
-        "cta": "",
     }
     for invalid in ([], ["preference"], {"preference": "text"}):
         with pytest.raises(ValidationError):
@@ -878,3 +887,24 @@ def test_migration_skips_profiles_with_workspace_rules_or_no_approved_campaign_r
     store.put("campaigns", {**store.get("campaigns", "campaign-two"), "objective": "leads", "primary_metric": "signups"})
     assert service.require("campaigns", "campaign-two")["objective"] == "leads"
     assert "goal_provenance" not in store.get("campaigns", "campaign-two")
+
+
+def test_old_brief_reads_complete_survives_omitted_brief_and_reaches_snapshot(domain):
+    d = domain
+    approve_initial(d)
+    stored = d.store.get("campaigns", d.campaign["id"])
+    legacy = {"audience": "Builders", "constraints": ["No guest names"], "requested_outputs": [],
+              "measurement_intent": ""}
+    d.store.put("campaigns", {**stored, "brief": legacy})
+    read = d.service.require("campaigns", d.campaign["id"])
+    assert read["brief"]["constraints"] == ["No guest names"] and read["brief"]["key_messages"] == []
+    assert d.store.get("campaigns", d.campaign["id"])["brief"] == legacy  # reading does not rewrite
+    # An update that omits the brief keeps it; one that sends it replaces it exactly.
+    body = {k: read[k] for k in ("name", "profile_ids", "video_ids")}
+    kept = d.service.save_campaign(Campaign(**body), d.campaign["id"])
+    assert kept["brief"]["constraints"] == ["No guest names"] and kept["brief"]["cta"] == ""
+    full = Brief(key_messages=["Agents need review"], cta="Listen to the full episode", must_avoid=["predictions"])
+    saved = d.service.save_campaign(Campaign(**body, brief=full), d.campaign["id"])
+    assert saved["brief"] == full.model_dump()
+    snapshot = d.service.snapshot(d.campaign["id"], d.a["id"], d.videos[0]["id"])
+    assert snapshot["brief_snapshot"] == full.model_dump()

@@ -144,6 +144,38 @@ def test_runtime_model_receives_bounded_valid_evidence_with_snapshot(client):
     assert evidence["source"]["timed_cues"] == [{"start": 498, "end": 503, "text": "Opening thought."}, {"start": 503, "end": 515, "text": "Selected point."}]
 
 
+def test_learning_analyst_reads_the_brief_block_and_cannot_propose_a_must_avoid_hook(client):
+    session, _ = client
+    runtime, app = session.app.state.autonomy_runtime, session.app
+    app.state.store.put("campaigns", {"id": "c", "name": "C", "profile_ids": ["p"], "video_ids": [],
+        "objective": "traffic", "primary_metric": "episode_visits",
+        "brief": {"key_messages": ["Agents need review"], "must_avoid": ["market predictions"],
+                  "cta": "Listen to the full episode"}})
+    prompts = []
+    replies = [
+        {"status": "experiment", "variable": "hook", "proposed_hook": "Our market predictions for 2027",
+         "evidence_ids": ["snapshot"], "rationale": "Bolder.", "limitations": "Observational."},
+        {"status": "insufficient_evidence", "rationale": "No safe change.", "limitations": "Observational."},
+    ]
+    def infer(job, model, action, **payload):
+        prompts.append(payload["prompt"])
+        return {"output": json.dumps(replies.pop(0))}
+    app.state.models.run = infer
+    context = {"snapshot": {"id": "snapshot", "metrics": {"views": 3}}, "policy": {"profile_id": "p", "campaign_id": "c"},
+        "profile": {"id": "p", "audience": "Founders", "brand_context": "No financial advice."},
+        "publication": {"id": "post"}, "clip": {"id": "clip", "start": 0, "end": 5, "hook": "Old"},
+        "source": {"id": "source", "duration": 10, "transcript": {"segments": [{"start": 0, "end": 5, "text": "Point."}]}},
+        "strategy": {"directions": {"p": {"framing": "fit", "duration_seconds": 30}}}}
+    result = runtime.analyze(context)
+    assert result["status"] == "insufficient_evidence"
+    block = prompts[0].split("=== CAMPAIGN BRIEF", 1)[1].split("=== END CAMPAIGN BRIEF ===", 1)[0]
+    assert "A1 avoid: market predictions" in block and "Workspace voice & boundaries: No financial advice." in block
+    assert "Goal: traffic · metric: episode_visits" in block and "A proposed hook must stay within" in block
+    evidence = json.loads(prompts[0].split("Evidence:\n", 1)[1])
+    assert evidence["profile"] == {"objective": "traffic", "primary_metric": "episode_visits"}
+    assert "must-avoid" in prompts[1]  # the repair names the rejected hook's reason
+
+
 def _track_fixture(session):
     """A real domain policy/publication boundary, with provider IO replaced only at its seam."""
     app, store = session.app, session.app.state.store

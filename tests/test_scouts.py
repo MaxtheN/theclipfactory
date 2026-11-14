@@ -95,13 +95,43 @@ def test_selector_choice_is_used_and_bad_selector_falls_back_to_scores():
     assert [m["start"] for m in fallback["moments"]] == [2410, 3010]  # two highest scores, in time order
 
 
-def test_campaign_direction_and_brand_reach_scouts_as_data():
+SNAPSHOT = {
+    "profile_snapshot": {"audience": "Founders", "brand_context": "Dry and specific."},
+    "strategy_snapshot": {"duration_seconds": 30, "framing": "fit", "caption_style": "standard"},
+    "goal": {"objective": "traffic", "primary_metric": "episode_visits"},
+    "brief_snapshot": {"key_messages": ["Agents need review"], "must_avoid": ["market predictions"]},
+}
+
+
+def test_campaign_brief_and_run_direction_reach_scouts_as_one_block():
     fake = Fake()
     scouts.scout(
-        generate=fake, video=video(minutes=25), frames_for=frames, brand="Acme", direction={"tone": "dry"}
+        generate=fake, video=video(minutes=25), frames_for=frames, brand="Acme", direction=SNAPSHOT,
+        run_direction="the spiciest takes",
     )
-    assert '"approved_campaign_direction": {"tone": "dry"}' in fake.prompts[0][0]
-    assert "untrusted source data" in fake.prompts[0][0]
+    prompt = fake.prompts[0][0]
+    assert "=== CAMPAIGN BRIEF" in prompt and "=== END CAMPAIGN BRIEF ===" in prompt
+    assert "A1 avoid: market predictions" in prompt and "M1 key message: Agents need review" in prompt
+    assert "Run direction: «the spiciest takes»" in prompt
+    assert "approved_campaign_direction" not in prompt  # no raw snapshot JSON
+    assert '"serves"' in prompt and "untrusted source data" in prompt
+
+
+def test_scout_candidates_touching_must_avoid_are_rejected_and_serves_kept():
+    text = {"segments": [{"start": 10, "end": 30, "text": "my market prediction for next year"},
+                         {"start": 40, "end": 70, "text": "review every agent run"}]}
+    rows = scouts._rows({"transcript": text})
+    brief = scouts.normalize_brief(SNAPSHOT["brief_snapshot"])
+    rejected = []
+    raw = json.dumps([
+        {"start": 10, "end": 30, "hook": "Next year", "score": 9, "serves": ["M1"]},
+        {"start": 40, "end": 70, "hook": "Review it", "score": 8, "serves": ["M1", "M9"]},
+    ])
+    found = scouts.parse_scout(raw, rows, 0, 100, brief=brief, rejected=rejected)
+    assert [m["start"] for m in found] == [40] and found[0]["serves"] == ["M1"]
+    assert rejected == [{"start": 10.0, "end": 30.0, "avoid": ["A1"]}]
+    flagged = scouts.parse_scout(json.dumps([{"start": 40, "end": 70, "avoid": ["A1"]}]), rows, 0, 100, brief=brief)
+    assert flagged == []  # the scout's own flag rejects too
 
 
 def test_nested_selector_values_are_ignored_before_deduplication():

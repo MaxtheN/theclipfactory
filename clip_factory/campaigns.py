@@ -21,6 +21,7 @@ from typing import Annotated, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .brief import Brief, normalize_brief
 from .craft import BrandKit, CraftOptions
 from .ollama import LlmId
 from .store import Store, new_id, now
@@ -65,15 +66,6 @@ class Profile(Body):
         if self.objective != "discovery" and not (self.primary_metric or "").strip():
             raise ValueError("Select a primary metric for goal-directed work.")
         return self
-
-
-class Brief(Body):
-    audience: str = Field(default="", max_length=4000)
-    constraints: list[Text] = Field(default_factory=list, max_length=30)
-    requested_outputs: list[Text] = Field(default_factory=list, max_length=30)
-    measurement_intent: str = Field(default="", max_length=4000)
-    # Call to action for the closing card of every render in this campaign (empty: no end card).
-    cta: str = Field(default="", max_length=80)
 
 
 class Campaign(Body):
@@ -292,6 +284,16 @@ def migrate_workspace(store: Store, profile_id: str) -> dict | None:
 
 
 def migrate_campaign(store: Store, campaign: dict) -> dict:
+    """Read a campaign in today's shape: legacy goal adopted once, brief completed on read."""
+    adopted = _adopt_goal(store, campaign)
+    if not isinstance(adopted, dict):
+        return adopted
+    # Briefs saved before key messages, CTA and topics existed gain the new fields' defaults.
+    # Nothing is rewritten here; the next save stores the complete brief.
+    return {**adopted, "brief": normalize_brief(adopted.get("brief"))}
+
+
+def _adopt_goal(store: Store, campaign: dict) -> dict:
     """Give a pre-goal campaign its workspace's legacy goal once. Idempotent."""
     if not isinstance(campaign, dict) or "objective" in campaign:
         return campaign
@@ -545,7 +547,9 @@ class Campaigns:
                     409,
                     "Existing campaign membership is retained for provenance; create a new campaign to narrow scope.",
                 )
-            record = self._merge(existing, body, (*LEGACY_GOAL_KEYS, "notes"))
+            # Omitted goal, notes or brief keep their saved values (older clients send only some fields).
+            record = self._merge(existing, body, (*LEGACY_GOAL_KEYS, "notes", "brief"))
+            record["brief"] = normalize_brief(record.get("brief"))
             if record.get("objective") != "discovery" and not (record.get("primary_metric") or "").strip():
                 raise HTTPException(422, "Select a primary metric for goal-directed work.")
             if record.get("objective") == "discovery":
@@ -889,6 +893,6 @@ class Campaigns:
                 "profile_snapshot": {k: deepcopy(v) for k, v in profile.items() if k not in LEGACY_GOAL_KEYS},
                 "goal": {"objective": campaign["objective"], "primary_metric": campaign.get("primary_metric")},
                 "campaign_notes": campaign.get("notes") or "",
-                "brief_snapshot": deepcopy(campaign["brief"]),
+                "brief_snapshot": normalize_brief(campaign.get("brief")),
                 "captured_at": now(),
             }
