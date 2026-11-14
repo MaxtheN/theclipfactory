@@ -217,6 +217,53 @@ export function FactoryHome({
       ? id
       : undefined;
   }
+  /** The "Episode added" card follows the source's real job state, never what was hoped for. */
+  const added = (() => {
+    const status = lastAdded
+      ? factory.data.factory?.sources.find((s) => s.video_id === lastAdded.id)
+      : undefined;
+    const ready = lastAdded
+      ? reviewOrder(
+          [...clips, ...loose].filter(
+            (c) => c.video_id === lastAdded.id && !c.approved,
+          ),
+        ).above
+      : [];
+    if (status?.state === "queued" || status?.state === "working")
+      return {
+        state: "working" as const,
+        step: 1 as const,
+        current: true,
+        message: status.headline,
+        progress: status.progress,
+      };
+    if (ready.length)
+      return {
+        state: "review" as const,
+        step: 2 as const,
+        current: true,
+        message: `${ready.length} clip${ready.length === 1 ? "" : "s"} ready`,
+        review: ready[0],
+      };
+    if (status?.state === "failed" || status?.state === "cancelled")
+      return {
+        state: "error" as const,
+        step: 1 as const,
+        current: true,
+        message: status.error || status.headline,
+      };
+    const notStarted =
+      !!lastAdded && success.includes("did not start by itself") ? success : "";
+    return {
+      state: "ready" as const,
+      step: 1 as const,
+      current: false,
+      message:
+        notStarted ||
+        (status && !status.can_produce && status.blocked_reason) ||
+        "Ready. Press Find clips.",
+    };
+  })();
   const importing =
     phase === "uploading" || phase === "attaching" || phase === "refreshing";
   const recoveryBlocked =
@@ -303,7 +350,7 @@ export function FactoryHome({
       reloadRuns.current();
       void factory.refresh();
       setSuccess(
-        `${video.name} added. The factory is making clips from it now.`,
+        `${video.name} added and queued for production. Its progress shows below.`,
       );
     } catch (e) {
       setSuccess(
@@ -632,10 +679,12 @@ export function FactoryHome({
       {phase === "ready" && lastAdded && (
         <JourneyProgress
           label="Import"
-          state="ready"
-          step={1}
+          state={added.state}
+          step={added.step}
+          current={added.current}
           title="Episode added"
-          message={success}
+          message={added.message}
+          progress={added.progress}
           source={
             campaign?.video_ids.includes(lastAdded.id)
               ? sourceLabel(lastAdded.id, campaign.video_ids)
@@ -643,16 +692,24 @@ export function FactoryHome({
           }
           receipts={["Source saved", "Added to your brand"]}
           actions={
-            <>
+            added.review ? (
+              <button
+                className="gf-button primary"
+                onClick={() => openReview(added.review!)}
+              >
+                Review
+                <Icon name="arrow" size={15} />
+              </button>
+            ) : (
               <button
                 className="gf-button"
                 disabled={w.busy || w.loading}
                 onClick={() => onProduce(lastAdded.id, "agent")}
               >
-                Find clips
+                {added.state === "working" ? "View production" : "Find clips"}
                 <Icon name="arrow" size={15} />
               </button>
-            </>
+            )
           }
         />
       )}

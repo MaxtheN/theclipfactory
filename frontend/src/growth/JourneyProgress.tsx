@@ -14,6 +14,7 @@ export function JourneyProgress({
   actions,
   children,
   label = "Production journey",
+  current = true,
 }: {
   state:
     | "uploading"
@@ -33,6 +34,8 @@ export function JourneyProgress({
   actions?: ReactNode;
   children?: ReactNode;
   label?: string;
+  /** false: steps before `step` are complete and none is in progress (idle, waiting on the creator). */
+  current?: boolean;
 }) {
   const pending = ["uploading", "attaching", "refreshing", "working"].includes(
     state,
@@ -52,9 +55,13 @@ export function JourneyProgress({
           <li
             key={name}
             className={
-              index < step ? "is-complete" : index === step ? "is-current" : ""
+              index < step
+                ? "is-complete"
+                : index === step && current
+                  ? "is-current"
+                  : ""
             }
-            aria-current={index === step ? "step" : undefined}
+            aria-current={index === step && current ? "step" : undefined}
           >
             <span className="gf-production-journey-marker" aria-hidden="true">
               {index < step ? <Check size={12} /> : index + 1}

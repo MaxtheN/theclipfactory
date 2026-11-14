@@ -192,6 +192,54 @@ beforeEach(() => {
 });
 
 describe("Factory imports and scoped Library", () => {
+  it("keeps the Episode added card on the real job state: idle, working, then clips ready", async () => {
+    const current = { ...campaign, id: "episode-card-state" },
+      w = { ...workspace(), campaign: current };
+    vi.mocked(workspaceApi.campaigns).mockResolvedValue([current]);
+    const view = home(w);
+    refreshNextRun(view);
+    upload();
+    await screen.findByRole("heading", { name: "Episode added" });
+    const card = screen.getByRole("region", { name: "Import" });
+    expect(card).toHaveAttribute("data-state", "ready");
+    expect(within(card).getByText("Ready. Press Find clips.")).toBeInTheDocument();
+    expect(within(card).queryByText(/making clips from it now/)).not.toBeInTheDocument();
+    expect(card.querySelector('[aria-current="step"]')).toBeNull();
+    const again = () =>
+      view.rerender(
+        <FactoryHome w={view.w} factory={{ ...view.f }} onProduce={view.onProduce}
+          onReview={view.onReview} onLibrary={view.onLibrary} onDirection={view.onDirection} />,
+      );
+    view.f.data = {
+      ...view.f.data,
+      factory: {
+        autopilot: false, model_id: "qwen-small", ready: true, blockers: [],
+        sources: [{ video_id: "v2", state: "working", headline: "Watching the footage: scene 3 of 40",
+          progress: 30, stages: [], can_produce: false } as never],
+      },
+    };
+    again();
+    const working = screen.getByRole("region", { name: "Import" });
+    expect(working).toHaveAttribute("data-state", "working");
+    expect(within(working).getByText("Watching the footage: scene 3 of 40")).toBeInTheDocument();
+    expect(working.querySelector('[aria-current="step"]')).toHaveTextContent("Produce edits");
+    view.f.data = {
+      ...view.f.data,
+      factory: { ...view.f.data.factory!, sources: [{ video_id: "v2", state: "needs_review", headline: "",
+        progress: null, stages: [], can_produce: true } as never] },
+      clips: [
+        { ...clip, id: "n1", video_id: "v2", campaign_id: current.id },
+        { ...clip, id: "n2", video_id: "v2", campaign_id: current.id },
+      ],
+    };
+    again();
+    const done = screen.getByRole("region", { name: "Import" });
+    expect(done).toHaveAttribute("data-state", "review");
+    expect(within(done).getByText("2 clips ready")).toBeInTheDocument();
+    expect(done.querySelector('[aria-current="step"]')).toHaveTextContent("Review");
+    fireEvent.click(within(done).getByRole("button", { name: "Review" }));
+    expect(view.onReview).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
+  });
   it("waits for confirmed upload, attachment and workspace refresh before offering the new source for production", async () => {
     const current = {
       ...campaign,

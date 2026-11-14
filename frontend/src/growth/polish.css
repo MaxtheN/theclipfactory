@@ -547,14 +547,32 @@
   padding: 4px 28px 4px 12px;
   font-size: 12px;
 }
-.gf-wall-grid {
+/* Library grids (Episodes and the Review wall): 2 cards per row on normal widths, 1 under
+   720px, 3 on very wide windows; cards in a row share one height and the same gap. */
+.gf-wall-grid,
+.gf-episode-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
-  gap: var(--gf-s4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--gf-s5);
+}
+@media (min-width: 1600px) {
+  .gf-wall-grid,
+  .gf-episode-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .gf-wall-grid,
+  .gf-episode-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--gf-s4);
+  }
 }
 .gf-app .gf-wall-card {
   display: grid;
   grid-template-rows: auto 1fr;
+  height: 100%;
   gap: 0;
   padding: 0;
   min-width: 0;
@@ -585,6 +603,8 @@
 .gf-wall-media {
   position: relative;
   aspect-ratio: 9 / 16;
+  /* Wide cards keep a vertical frame without towering over the page; the video covers it. */
+  max-height: 480px;
   background: linear-gradient(160deg, #3b4853, #5b4436);
   overflow: hidden;
 }
@@ -674,14 +694,10 @@
   font-size: 11px;
 }
 
-.gf-episode-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--gf-s4);
-}
 .gf-app .gf-episode-card {
   display: grid;
   grid-template-rows: auto 1fr;
+  height: 100%;
   min-width: 0;
   background: var(--gf-card-fill);
   border: 1px solid var(--gf-card-line);
@@ -708,6 +724,8 @@
 }
 .gf-episode-body {
   display: grid;
+  /* Title, meta, then actions pinned to the bottom so equal-height cards line up. */
+  grid-template-rows: auto auto 1fr;
   gap: var(--gf-s3);
   padding: var(--gf-s4);
   min-width: 0;
@@ -734,6 +752,7 @@
 }
 .gf-episode-actions {
   display: flex;
+  align-self: end;
   align-items: center;
   justify-content: space-between;
   gap: var(--gf-s2);
@@ -1204,9 +1223,6 @@
 @media (max-width: 1100px) {
   .gf-app .gf-main {
     padding-inline: var(--gf-s5);
-  }
-  .gf-wall-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
 }
 @media (max-width: 720px) {

@@ -244,7 +244,7 @@ describe("production line on the Factory screen", () => {
       expect(productionApi.campaignProduce).toHaveBeenCalledWith("c1", { ...swarm, video_id: "v2" }),
     );
     expect(workspaceApi.save).toHaveBeenCalledTimes(1); // attached to the workspace first
-    expect(await screen.findByText(/The factory is making clips from it now/)).toBeInTheDocument();
+    expect(await screen.findByText(/added and queued for production/)).toBeInTheDocument();
   });
 
   it("leaves production to you after an upload when autopilot is off", async () => {
