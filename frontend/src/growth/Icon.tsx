@@ -18,6 +18,7 @@ const paths: Record<string, string> = {
   spark: "M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3z",
   lock: "M5 10h14v11H5z M8 10V6a4 4 0 0 1 8 0v4 M12 14v3",
   settings: "M4 7h16 M4 17h16 M8 4v6 M16 14v6",
+  menu: "M4 6h16 M4 12h16 M4 18h16",
   close: "M6 6l12 12 M18 6L6 18",
   info: "M12 11v6 M12 7h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
   clock: "M12 6v6l4 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",

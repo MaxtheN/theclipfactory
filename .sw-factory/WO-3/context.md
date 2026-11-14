@@ -50,7 +50,13 @@ Neutral solid surfaces, readable type/controls, forest-green navigation, concise
 
 Latest user branch instruction supersedes the brief frontend-only default-branch authorization: keep all changes on the dedicated feature branch. No default-branch push or merge occurred. At this earlier delivery the team repository permission was READ and delivery used the writable fork; see the updated team delivery below.
 
-## Current team delivery and glass refinement
+## Current reference and command navigation
+
+The supplied smoked-slate/copper desktop reference supersedes the earlier light surfaces described below. `desktop-glass.css`, `operational-glass.css` and `interactions.css` supply a coherent dark glass material across campaign, Tools and QuickActions. Hierarchy follows operation order with optional detail folded away; all original approval/state boundaries remain. Sidebar arrow controls are on the sidebar and retain 64px expand rails. Native HTML quick-actions dialog opens via click/Meta-K/Ctrl-K, filters actions and respects disabled/new-campaign gates; it navigates rather than approving or rendering. Global preview banner is removed at the user's direction; individual sample labels remain.
+
+154 frontend tests and TypeScript/Vite build passed; independent Round 8 is APPROVED after rounds 6–7 corrections. Browser checks cover all stages, modal, Tools, hover/focus, collapse, retained drafts and compact overflow. Screenshots: `/Users/kartikbihani/WIN/design/growth-factory/interface-smoked-desktop.jpg` and `quick-actions-smoked.jpg`. Reference copy: `reference-smoked-desktop.png` in the same folder. Existing live viewer and Vite processes remain running; native WebKit connectivity was confirmed. Native wallpaper-through vibrancy cannot be enabled through the current live helper without relaunch, which risks private-mode WebKit data. No restart/native mutation or packaged-app rebuild was performed. Deliver all changes on `origin/kartik/growth-factory-interface` in the team repo; master remains untouched.
+
+## Earlier team delivery and glass refinement
 
 Kartik accepted the team-repo invitation; `gh repo view` confirmed WRITE. Existing commit `0c7c207` was pushed to `origin/kartik/growth-factory-interface` in MaxtheN/theclipfactory and upstream changed to that team branch. Continue pushing there, never to master. Earlier fork/PR #3 remains historical context; the team feature branch is current delivery.
 

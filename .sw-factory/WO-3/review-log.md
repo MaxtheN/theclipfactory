@@ -138,3 +138,83 @@ Independently ran `npm test`: 9 files / 148 tests passed. Independently ran `npm
 ### Round 5 advisory resolution
 
 Re-inspected `PrimaryAction`: enabled buttons now expose the complete original action phrase followed by the celebratory phrase in one accessible name, stable across hover/focus. Disabled buttons expose only the original visible action, matching their non-swapping presentation. This includes either visible label in the accessible name and resolves the label-matching advisory without changing handlers or conditions. Existing journey tests now use anchored action-prefix matches with a word boundary; their approval/state assertions are unchanged. `git diff --check` passes. Primary agent is rerunning suite/build after this accessibility-only correction. Verdict remains **APPROVED**; no new blocking findings.
+
+## Round 6 — progressive hierarchy, grouped navigation and quick actions
+
+### Scope and requirements alignment
+
+Independent review of the current feature-branch delta: stage hierarchy/disclosures in Setup, Research, Studio and Results; compact grouped campaign navigation and topbar trigger in GrowthApp; operational Create/Review/Workspace navigation in App/styles; new QuickActions component and focused component/integration tests; and scoped whole-app frosting/dialog CSS. Reviewed all modified/new product paths and the updated implementation plan against the already-approved campaign architecture. No backend/media/service contracts changed. README files remain untouched.
+
+Setup now presents campaign essentials before source selection and a shared save footer. Optional brand/profile administration is folded while required profile selection remains visible. Research retains explicit creator-direction/inspection limitations and moves reference material into an inspectable disclosure. Studio retains source/range control, keeps required revision feedback and blocking warnings outside optional settings, and preserves exact-version approval/export behavior. Results keeps evidence before the next-test decision and retains receipts/details. The changes implement progressive hierarchy without silently approving, rendering, publishing or exporting.
+
+### Architecture, focus and command safety
+
+QuickActions is outside the hidden main workspace, so it remains available from operational tools. It uses a native modal dialog with an accessible title/description, searchable combobox/listbox, enabled-option keyboard navigation, native background isolation, Escape/backdrop/close dismissal, and explicit opener focus restoration. Execution closes and restores before invoking navigation, allowing destination heading/tool focus to win. Search and selection reset on each open. Current disabled commands are excluded from keyboard execution and checked again at the action boundary. GrowthApp command definitions reuse existing handlers and preserve busy/new-campaign navigation gates; no approval/render/export command was added. The hidden mounted campaign surfaces retain their draft states when commands navigate.
+
+The operational navigation maps all eight existing destinations exactly once across Create, Review and Workspace and expands the destination group when the active tab changes. Icons are decorative, labels remain available, and summaries expose collapsible sections. Whole-app glass selectors are scoped to their appropriate light/dark surfaces. Opaque unsupported-blur and reduced-transparency fallbacks cover both campaign/dialog and operational panels. Existing global reduced-motion rules cover the dialog and operational controls as well as campaign motion. No dependency, authentication, remote origin, credential or security-boundary change was found.
+
+### Tests and build health
+
+Independently ran `npm test`: 10 files / 153 tests passed. Independently ran `npm run build`: TypeScript and Vite single-file production build passed (358.13 kB native HTML). `git diff --check` passed; no README diff. New tests exercise filtering, disabled/missing commands, arrow/Enter execution, Escape/focus restoration, closing before destination navigation, Cmd/Ctrl+K integration, draft preservation through navigation, and unsaved-campaign command gating. Native dialog methods are shimmed in jsdom; real focus trapping/background isolation therefore still requires browser evidence.
+
+### User-facing evidence and limits
+
+Primary agent reports desktop Cmd+K opening, filter/Enter navigation to Studio with heading focus, Tab remaining inside the native modal, Escape returning focus to the trigger, and corrected light-modal input styling despite the existing global stylesheet order. Browser/compact/draft checks are owned by the primary agent and are credited as such; this delegate did not interact with the user's open app or drafts. Native viewer/server remain running. This review does not claim real model/media quality, a fresh packaged native smoke, live analytics or full product-demo acceptance.
+
+### Verdict
+
+**APPROVED** — no blocking or new unresolved advisory findings in the bounded hierarchy/navigation/quick-actions pass. Preserve the user's live viewer and saved/unsaved work. Deliver only on the existing team-repository feature branch; no default-branch push or merge is authorized by this review.
+
+## Round 7 — corrected material, sidebar toggle and light workspace tools
+
+### Scope and behavior preservation
+
+Independent re-review after the user's corrective design feedback. Inspected the updated GrowthApp/sidebar markup, shared collapse state and test, ambient/material CSS, new interactions.css and operational-glass.css, icon addition and stylesheet imports. Prior Round 6 continues to cover unchanged quick-action handlers, stage disclosures and command guards. Campaign navigation is now a static labeled section rather than a collapsible details element; optional Workspace navigation remains collapsible. The new hamburger hides/restores the sidebar in campaign and Tools surfaces without unmounting campaign screens. Accessible toggle name and expanded state follow the same shared state.
+
+No campaign, profile, strategy, approval, export, job, media, authentication or API handler changes were found. The global preview banner was removed at the user's explicit direction; per-source/media/evidence sample labeling remains. README files and the default branch remain untouched.
+
+### CSS, readability and fallbacks
+
+Main panels and modal use more transparent in-app material over static ambient shapes. This remains web-surface frosting; no desktop wallpaper transparency is implemented or claimed. Scoped summary hover/active/focus selectors override the legacy dark global rule, preserve visible labels and retain keyboard focus feedback. Inputs receive the requested soft border/ring treatment; button/link focus remains available. Operational tools now use a consistently scoped light palette for navigation, cards, primary/secondary/destructive/disabled controls, fields, banners, warnings and source/output surfaces. Existing eight grouped destinations and their handlers remain intact. Unsupported-blur and reduced-transparency rules restore opaque major surfaces; reduced-transparency also removes the ambient campaign shapes. Existing global reduced-motion rules cover both interfaces.
+
+### Verification and evidence limits
+
+Independently ran `npm test`: 10 files / 154 tests passed, including the new sidebar collapse/restore draft-preservation regression. Independently ran `npm run build`: TypeScript and Vite single-file production build passed (369.08 kB native HTML). `git diff --check` passed and no README diff was present. Primary agent owns final browser checks of light Tools screens, summary hover/focus, toggle, modal and compact layouts. Native viewer and WebKit networking connectivity to Vite were reported by the primary agent; no fresh native AX screenshot or packaged/media smoke is claimed by this reviewer.
+
+### Compact-layout advisory
+
+**Advisory — Tools return bar, user-facing verification:** verify the 390px Tools return bar after layout settles. Its existing single flex row combines hamburger, back button, metadata and the full Quick actions trigger, while the compact trigger rule targets the campaign shell. Wrapping the return bar, hiding nonessential metadata and applying compact trigger styling to Tools may be needed to keep all controls reachable at narrow widths. Also verify that decorative fixed ambient shapes do not increase document scroll width. These checks are delegated to the primary agent's ongoing compact browser pass; desktop/native minimum-width behavior has no blocking finding from this review.
+
+### Verdict
+
+**APPROVED** for the bounded correction, with the compact-layout advisory above pending primary-agent verification. No blocking behavior/security findings. All delivery remains on the existing team-repository feature branch; no default-branch push or merge is authorized.
+
+### Round 7 compact advisory resolution
+
+Re-inspected the responsive Tools return bar: metadata is hidden below 980px; below 520px the row wraps, gaps/padding shrink and the Quick actions trigger becomes compact. Inactive Tools navigation now explicitly has transparent borders while active selection and keyboard focus retain their indicators. Ambient shapes now render inside an aria-hidden, pointer-inert fixed-viewport `.gf-ambient` wrapper with overflow clipped; the reduced-transparency rule hides the wrapper. Appending this decorative sibling introduces no hooks, component-state or workflow change.
+
+Primary agent reports settled 390px browser measurements of `document.scrollWidth === innerWidth === 390` in both campaign and Tools surfaces after these changes; readable Campaigns, Dashboard, Models and Settings screens; a fully visible compact modal; readable summary hover/click and subtle input focus; and sidebar collapse/restore retaining the mounted workspace. These are primary-agent browser observations, not an independent native screenshot. `git diff --check` remains clean. Final build/check is owned by the primary agent after the last cosmetic/ambient-wrapper edits; the independently passing 154-test suite remains the behavior evidence. The compact advisory is **resolved**. Final Round 7 verdict: **APPROVED**, no new unresolved findings.
+
+## Round 8 — supplied desktop reference and retained sidebar rail
+
+### Reference, scope and alignment
+
+Inspected the user-supplied reference image at `/var/folders/sk/gxfp9ds92215j0q_dk52c6vm0000gn/T/codex-clipboard-b6f14a37-66dd-49cf-8cf3-663ba9c035ca.png`: smoked slate, warm copper/umber translucency, ivory text, fine pale borders and warm-white primary controls. This explicit reference supersedes the earlier light palette. Independently inspected desktop-glass.css, the dark-adapted interactions.css/operational-glass.css, import order, shared collapse state and rail markup, optional App props and retained stage/quick-command boundaries. Prior rounds cover unchanged production/approval/API behavior.
+
+### Architecture, interaction and safety
+
+The reference treatment is implemented as a scoped CSS skin over the existing workspace. Campaign, operational and command-modal controls use matching dark surfaces and readable ivory/warm feedback. Specific hover/active/focus rules outrank the legacy global summary hover rule; inputs, placeholders, selection chips, warnings, disabled controls, status labels and modal options receive the corresponding dark palette. Opaque unsupported-blur and reduced-transparency rules override the preceding light fallbacks. Global reduced-motion rules remain effective for rail icon rotation and decorative feedback.
+
+The collapse control now lives in the sidebar brand area. Main and Tools sidebars remain mounted as narrow 64px rails; brand, navigation and footer content use hidden attributes while the expand control stays available. The shared collapse state and accessible expanded/name state are unchanged. App's optional `sidebarToggle`/`sidebarCollapsed` props preserve standalone callers and introduce no new hooks or service behavior. Command guards, mounted campaign drafts, exact-version approvals, revision feedback and exports remain intact. No dependency, backend, native-window lifecycle, authentication, API or storage change was found. README files remain untouched.
+
+The existing private-mode native viewer must remain running. This pass implements the reference material through CSS only; it does not add or claim desktop wallpaper-through native vibrancy. The primary agent's read-only feasibility inspection is not a fresh native appearance or media-quality smoke.
+
+### Independent verification
+
+Ran `npm test`: 10 files / 154 tests passed. Ran `npm run build`: TypeScript and Vite single-file production build passed (385.29 kB native HTML). `git diff --check` passed and no README diff was present. The existing collapse/draft-preservation and command/approval tests remain green after the rail/prop changes. No additional cosmetic tests were needed.
+
+Primary agent reports a new main-workspace screenshot matching the supplied warm-glass direction with readable controls, and owns the final modal/rail/Tools/compact browser checks. Those visual observations are credited to the primary agent; this delegate did not interact with or restart the user's native app, reset drafts, or claim a fresh native AX screenshot.
+
+### Verdict
+
+**APPROVED** — no blocking or new unresolved advisory findings in the supplied-reference/rail pass. Preserve the current live viewer and Vite processes. Deliver all changes only on `origin/kartik/growth-factory-interface`; no default-branch push or merge is authorized.

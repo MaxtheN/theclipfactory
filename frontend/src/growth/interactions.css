@@ -1,0 +1,90 @@
+/* Explicit desktop-glass states keep disclosure text readable on every surface. */
+.gf-app .gf-nav-group > summary,
+.gf-app .gf-disclosure > summary,
+.gf-command-dialog summary {
+  color: #ddd8cf;
+  background: transparent;
+  border-radius: 6px;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.gf-app .gf-nav-group > summary:hover,
+.gf-app .gf-disclosure > summary:hover,
+.gf-command-dialog summary:hover {
+  color: #fff6e8;
+  background: rgba(255, 255, 255, 0.075);
+}
+
+.gf-app .gf-nav-group > summary:active,
+.gf-app .gf-disclosure > summary:active,
+.gf-command-dialog summary:active {
+  color: #fff6e8;
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.gf-app .gf-nav-group > summary:focus,
+.gf-app .gf-disclosure > summary:focus,
+.gf-command-dialog summary:focus {
+  outline: none;
+}
+
+.gf-app .gf-nav-group > summary:focus-visible,
+.gf-app .gf-disclosure > summary:focus-visible,
+.gf-command-dialog summary:focus-visible {
+  color: #fff6e8;
+  background: rgba(255, 255, 255, 0.09);
+  outline: 2px solid rgba(237, 221, 193, 0.56);
+  outline-offset: 2px;
+}
+
+.gf-app .gf-nav-group > summary > svg,
+.gf-app .gf-disclosure > summary > svg {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.gf-app :is(input:not([type="checkbox"]), select, textarea):focus,
+.gf-app :is(input:not([type="checkbox"]), select, textarea):focus-visible,
+.gf-command-dialog :is(input:not([type="checkbox"]), select, textarea):focus,
+.gf-command-dialog
+  :is(input:not([type="checkbox"]), select, textarea):focus-visible {
+  color: #f5f2ed;
+  border-color: #cfb897;
+  background: rgba(255, 255, 255, 0.09);
+  outline: none;
+  outline-offset: 0;
+  box-shadow: 0 0 0 2px rgba(225, 190, 145, 0.14);
+}
+
+.gf-app .gf-profile-options > label:has(input:focus-visible) {
+  border-color: #cfb897;
+  outline: none;
+  outline-offset: 0;
+  box-shadow: 0 0 0 2px rgba(225, 190, 145, 0.16);
+}
+
+.gf-app .gf-profile-options input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* The command search is one continuous header rather than a bordered field. */
+.gf-command-dialog .gf-command-search input:focus,
+.gf-command-dialog .gf-command-search input:focus-visible {
+  background: transparent;
+  border-color: transparent;
+  outline: none;
+  box-shadow: none;
+}
+
+.gf-command-dialog .gf-command-search:focus-within {
+  box-shadow: inset 0 -1px 0 rgba(225, 190, 145, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gf-command-dialog summary {
+    transition: none;
+  }
+}

@@ -1,4 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  beforeAll,
+  afterAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { previewRequest, resetPreview } from "./previewApi";
 import type { Campaign, Clip, Job, StrategyVersion } from "../types";
@@ -17,6 +25,20 @@ vi.mock("../api", async () => {
 });
 import { GrowthApp } from "./GrowthApp";
 const path = "/api/campaigns/preview-campaign";
+const originalShowModal = HTMLDialogElement.prototype.showModal;
+const originalClose = HTMLDialogElement.prototype.close;
+beforeAll(() => {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.removeAttribute("open");
+  };
+});
+afterAll(() => {
+  HTMLDialogElement.prototype.showModal = originalShowModal;
+  HTMLDialogElement.prototype.close = originalClose;
+});
 const send = <T,>(p: string, b: unknown = {}, method = "POST") =>
   previewRequest<T>(p, { method, body: JSON.stringify(b) });
 beforeEach(() => {
@@ -25,6 +47,84 @@ beforeEach(() => {
 });
 
 describe("Growth Factory interface", () => {
+  it("collapses and restores the sidebar without discarding the brief", async () => {
+    render(<GrowthApp />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+        "All-In clips",
+      ),
+    );
+    fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
+      target: { value: "A retained audience" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(
+      screen.queryByRole("navigation", { name: "Campaign stages" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Expand sidebar" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    expect(
+      screen.getByRole("navigation", { name: "Campaign stages" }),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
+      "A retained audience",
+    );
+  });
+  it("opens quick actions by keyboard or click and preserves drafts through navigation", async () => {
+    render(<GrowthApp />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+        "All-In clips",
+      ),
+    );
+    const audience = screen.getByLabelText("Who are we speaking to?");
+    fireEvent.change(audience, { target: { value: "My unsaved audience" } });
+    audience.focus();
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    const search = screen.getByRole("combobox", {
+      name: "Search quick actions",
+    });
+    expect(search).toHaveFocus();
+    fireEvent.keyDown(search, { key: "Escape" });
+    expect(audience).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Open quick actions" }));
+    fireEvent.change(search, { target: { value: "studio" } });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(
+      screen.getByRole("heading", { name: "Make the cut." }),
+    ).toHaveFocus();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    fireEvent.change(search, { target: { value: "setup" } });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
+      "My unsaved audience",
+    );
+  });
+  it("does not bypass unsaved-campaign navigation gates through quick actions", async () => {
+    render(<GrowthApp />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+        "All-In clips",
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New campaign" }));
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    const search = screen.getByRole("combobox", {
+      name: "Search quick actions",
+    });
+    fireEvent.change(search, { target: { value: "research" } });
+    expect(
+      screen.getByRole("option", { name: /^Go to Research/ }),
+    ).toBeDisabled();
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(screen.getByRole("dialog", { name: "Quick actions" })).toBeVisible();
+    fireEvent.keyDown(search, { key: "Escape" });
+    expect(screen.getByLabelText("Campaign name")).toHaveValue("");
+    expect(screen.getByRole("button", { name: /02 Research/ })).toBeDisabled();
+  });
   it("saves a campaign, requires explicit direction approval, then opens Studio", async () => {
     render(<GrowthApp />);
     await waitFor(() =>
@@ -40,7 +140,9 @@ describe("Growth Factory interface", () => {
     });
     const before = await previewRequest<Campaign>(path);
     expect(before.active_strategy_id).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^Approve direction\b/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Approve direction\b/ }),
+    );
     await screen.findByRole("heading", {
       name: "Make the cut.",
     });
@@ -84,6 +186,7 @@ describe("approval transition regressions", () => {
     expect(
       screen.getByRole("button", { name: /^Approve direction\b/ }),
     ).toBeEnabled();
+    fireEvent.click(screen.getByText("Reference & inspection details"));
     fireEvent.change(
       screen.getByLabelText("Reference link or source locator"),
       { target: { value: "Episode A, 00:18–00:25" } },
@@ -161,7 +264,9 @@ describe("approval transition regressions", () => {
     fireEvent.change(screen.getByLabelText("Proposed source-selection rule"), {
       target: { value: "A saved specific rule." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^Approve next test\b/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Approve next test\b/ }),
+    );
     await screen.findByRole("heading", {
       name: "Make the cut.",
     });

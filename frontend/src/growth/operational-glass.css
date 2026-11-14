@@ -1,0 +1,497 @@
+/* Workspace tools share the campaign shell's smoked-slate and warm glass. */
+.gf-operational {
+  --ink: #f5f2ed;
+  --bg: #303940;
+  --panel: rgba(255, 255, 255, 0.075);
+  --line: rgba(255, 255, 255, 0.17);
+  --border: rgba(255, 255, 255, 0.17);
+  --muted: #cbc9c4;
+  --accent: #f4f0e9;
+  --danger: #f2b9ab;
+  --radius: 12px;
+  color-scheme: dark;
+  color: var(--ink);
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 3% 15%, #304955a3 0, transparent 60%),
+    radial-gradient(ellipse at 92% 90%, #8e4f276b 0, transparent 58%),
+    linear-gradient(160deg, #303940 0%, #343a3c 38%, #59402e 100%);
+  background-attachment: fixed;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.gf-operational .app-shell,
+.gf-operational .workspace {
+  background: transparent;
+}
+.gf-operational select {
+  text-transform: none;
+}
+.gf-operational [hidden] {
+  display: none !important;
+}
+.gf-operational .tools-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 28px;
+}
+.gf-operational .tools-brand-row .brand {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  gap: 8px;
+  font-size: 16px;
+  line-height: 1.1;
+}
+.gf-operational .tools-brand-row .brand > div {
+  min-width: 0;
+}
+.gf-operational .tools-brand-row .brand small {
+  font-size: 8px;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+.gf-operational .tools-brand-row .brand-symbol {
+  width: 30px;
+  height: 32px;
+  flex-shrink: 0;
+  font-size: 20px;
+}
+.gf-operational .sidebar .gf-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f2ed;
+}
+.gf-operational .sidebar .gf-sidebar-toggle:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff9ef;
+}
+.gf-operational .sidebar .gf-sidebar-toggle svg {
+  transition: transform 160ms ease;
+}
+.gf-operational .sidebar .gf-sidebar-toggle[aria-expanded="false"] svg {
+  transform: rotate(180deg);
+}
+.gf-operational.is-sidebar-collapsed .app-shell {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+.gf-operational.is-sidebar-collapsed .sidebar {
+  width: 64px;
+  flex-basis: 64px;
+  flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  padding: 16px;
+  align-items: center;
+  border-right: 1px solid var(--line);
+  border-bottom: 0;
+}
+.gf-operational.is-sidebar-collapsed .tools-brand-row {
+  justify-content: center;
+  margin: 0;
+}
+.gf-operational .sidebar,
+.gf-operational .topbar,
+.gf-operational .gf-tools-return,
+.gf-operational .panel,
+.gf-operational .hero,
+.gf-operational .stat,
+.gf-operational .clip-card,
+.gf-operational .model-card,
+.gf-operational .analytics-card,
+.gf-operational .campaign-direction,
+.gf-operational .campaign-version,
+.gf-operational .campaign-observation,
+.gf-operational .ledger-task,
+.gf-operational .sticky-save {
+  background: var(--panel);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 10px 30px -22px #090b0e66,
+    inset 0 1px 0 #ffffff0d;
+  backdrop-filter: blur(28px) saturate(1.1);
+  -webkit-backdrop-filter: blur(28px) saturate(1.1);
+}
+.gf-operational .sidebar {
+  background: rgba(37, 43, 47, 0.28);
+  border-right-color: var(--line);
+}
+.gf-operational .topbar,
+.gf-operational .gf-tools-return {
+  background: rgba(64, 72, 79, 0.18);
+  border-bottom-color: var(--line);
+  color: var(--muted);
+}
+.gf-operational .gf-tools-return button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
+  color: #f5f2ed;
+}
+.gf-operational .gf-tools-return button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fffaf2;
+}
+.gf-operational .gf-tools-return .gf-command-trigger {
+  background: rgba(255, 255, 255, 0.065);
+  color: #e6e2da;
+  box-shadow: inset 0 1px 0 #ffffff0a;
+}
+.gf-operational .gf-tools-return kbd {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.17);
+  color: #d6d3cd;
+}
+.gf-operational .brand,
+.gf-operational h1,
+.gf-operational h2,
+.gf-operational h3 {
+  color: var(--ink);
+}
+.gf-operational .brand-symbol {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f1e7d8;
+}
+.gf-operational .sidebar .tools-nav-group > summary {
+  color: #d0ccc4;
+}
+.gf-operational .sidebar .tools-nav-group > summary:hover {
+  color: #fff7eb;
+  background: rgba(255, 255, 255, 0.055);
+  border-radius: 7px;
+}
+.gf-operational .sidebar .nav-item {
+  background: transparent;
+  color: #e1ddd5;
+  border-color: transparent;
+}
+.gf-operational .sidebar .nav-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.075);
+  color: #fff7eb;
+}
+.gf-operational .sidebar .nav-item.active,
+.gf-operational .sidebar .nav-item.active:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.13);
+  color: #fffaf2;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.gf-operational .nav-count {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f1e3cf;
+}
+.gf-operational .sidebar-footer strong {
+  color: #e5dfd4;
+}
+.gf-operational .sidebar-footer,
+.gf-operational .info-list > div,
+.gf-operational .workspace-footer {
+  border-color: var(--line);
+}
+.gf-operational .status-dot {
+  background: #dca675;
+}
+.gf-operational .workspace-footer {
+  background: rgba(255, 255, 255, 0.025);
+  color: #c0bab0;
+}
+.gf-operational .slash {
+  color: #a9aaa6;
+}
+.gf-operational .eyebrow {
+  color: #e2c4a0;
+}
+.gf-operational a {
+  color: #ecd4b2;
+}
+.gf-operational button,
+.gf-operational .button {
+  background: #f4f0e9;
+  color: #2c302e;
+  border-color: rgba(255, 255, 255, 0.62);
+}
+.gf-operational button:hover:not(:disabled),
+.gf-operational .button:hover:not([aria-disabled="true"]) {
+  background: #fff9f0;
+  color: #232a2b;
+}
+.gf-operational .secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f2ed;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.gf-operational .secondary:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff9ef;
+  border-color: rgba(255, 255, 255, 0.32);
+}
+.gf-operational .text-button {
+  background: transparent;
+  color: #ded7ca;
+  border-color: transparent;
+}
+.gf-operational .text-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff7e9;
+}
+.gf-operational .danger-button {
+  background: rgba(159, 75, 56, 0.14);
+  color: #ffd0c0;
+  border-color: rgba(219, 154, 134, 0.36);
+}
+.gf-operational .danger-button:hover:not(:disabled) {
+  background: rgba(170, 77, 56, 0.26);
+  color: #ffded1;
+  border-color: rgba(226, 167, 149, 0.52);
+}
+.gf-operational button:disabled,
+.gf-operational [aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.gf-operational button:disabled:hover {
+  background: #f4f0e9;
+  color: #2c302e;
+}
+.gf-operational .secondary:disabled:hover,
+.gf-operational .secondary[aria-disabled="true"]:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f2ed;
+}
+.gf-operational .danger-button:disabled:hover {
+  background: rgba(159, 75, 56, 0.14);
+  color: #ffd0c0;
+}
+.gf-operational .text-button:disabled:hover {
+  background: transparent;
+  color: #ded7ca;
+}
+.gf-operational input:not([type="checkbox"]),
+.gf-operational select,
+.gf-operational textarea {
+  background: rgba(255, 255, 255, 0.065);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #f5f2ed;
+  box-shadow: inset 0 1px 2px #1118200d;
+}
+.gf-operational input::placeholder,
+.gf-operational textarea::placeholder {
+  color: #bcbab5;
+}
+.gf-operational input:disabled,
+.gf-operational select:disabled,
+.gf-operational textarea:disabled {
+  background: rgba(255, 255, 255, 0.035);
+  color: #aaa69f;
+}
+.gf-operational input[type="checkbox"] {
+  accent-color: #e8ddcc;
+}
+.gf-operational .field > label,
+.gf-operational .check,
+.gf-operational .optin strong {
+  color: #e4ded3;
+}
+.gf-operational :is(button, a, summary):focus-visible,
+.gf-operational .gf-tools-return :is(button, a):focus-visible {
+  outline: 0;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 2px #d5b288;
+}
+.gf-operational
+  button:not(.secondary):not(.text-button):not(.danger-button):not(
+    .nav-item
+  ):not(.source-item):not(.candidate):not(.gf-sidebar-toggle):focus-visible {
+  box-shadow: inset 0 0 0 2px #5f4b3a;
+}
+.gf-operational .gf-tools-return button:focus-visible {
+  box-shadow: inset 0 0 0 2px #d5b288;
+}
+.gf-operational :is(input, select, textarea):focus-visible,
+.gf-operational :is(input, select, textarea):focus {
+  outline: 0;
+  outline-offset: 0;
+  border-color: rgba(238, 219, 191, 0.66);
+  box-shadow: inset 0 0 0 1px rgba(238, 219, 191, 0.28);
+}
+.gf-operational .badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e1dcd2;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.gf-operational .badge.success {
+  background: rgba(84, 128, 108, 0.2);
+  color: #caedd9;
+  border-color: rgba(152, 197, 173, 0.36);
+}
+.gf-operational .badge.danger {
+  background: rgba(159, 75, 56, 0.18);
+  color: #ffd0c0;
+  border-color: rgba(219, 154, 134, 0.38);
+}
+.gf-operational .banner {
+  background: rgba(255, 255, 255, 0.065);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #e6dfd4;
+}
+.gf-operational .banner strong {
+  color: #f3e7d4;
+}
+.gf-operational .banner.success {
+  background: rgba(81, 121, 97, 0.18);
+  border-color: rgba(152, 197, 164, 0.32);
+  color: #d5ebd7;
+}
+.gf-operational .banner.success strong {
+  color: #e0f0dd;
+}
+.gf-operational .banner.error {
+  background: rgba(153, 66, 46, 0.2);
+  border-color: rgba(221, 155, 133, 0.42);
+  color: #ffd1bf;
+}
+.gf-operational .banner.error strong {
+  color: #ffdfd1;
+}
+.gf-operational .gate-list,
+.gf-operational .render-warning {
+  background: rgba(159, 108, 54, 0.2);
+  color: #f4d5aa;
+  border-color: rgba(206, 171, 120, 0.4);
+}
+.gf-operational .requirements {
+  color: #d4cec4;
+}
+.gf-operational .hero {
+  background: linear-gradient(115deg, #81939e1f, #ffffff0f 60%, #b3703e21);
+}
+.gf-operational .hero p:not(.eyebrow),
+.gf-operational .stat > span,
+.gf-operational .pipeline small,
+.gf-operational .dropzone small,
+.gf-operational .candidate > span:last-child {
+  color: #cbc9c4;
+}
+.gf-operational .pipeline > div,
+.gf-operational .empty,
+.gf-operational .source-item,
+.gf-operational .dropzone,
+.gf-operational .candidate {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--ink);
+}
+.gf-operational .empty-mark,
+.gf-operational .upload-symbol,
+.gf-operational .source-thumbnail {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ecd7b9;
+}
+.gf-operational .source-item:hover:not(:disabled),
+.gf-operational .candidate:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.115);
+  color: var(--ink);
+}
+.gf-operational .source-item.selected,
+.gf-operational .source-item.selected:hover:not(:disabled),
+.gf-operational .dropzone.dragging {
+  background: rgba(223, 195, 155, 0.13);
+  border-color: rgba(232, 208, 175, 0.44);
+  color: #fff2df;
+}
+.gf-operational .read-only,
+.gf-operational .transcript,
+.gf-operational .artifact-data {
+  background: rgba(17, 24, 29, 0.3);
+  color: #e1ddd5;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.gf-operational .source-player,
+.gf-operational .clip-player,
+.gf-operational .cover-preview {
+  background: rgba(16, 20, 23, 0.55);
+}
+.gf-operational .sticky-save > span {
+  color: #e4d8c5;
+}
+.gf-operational .job progress {
+  accent-color: #d6a26f;
+}
+.gf-operational summary:hover {
+  color: #f6dfbc;
+}
+.gf-operational .skip-link {
+  background: #f4f0e9;
+  color: #2c302e;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-operational .sidebar .gf-sidebar-toggle svg {
+    transition: none;
+  }
+}
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .gf-operational .sidebar,
+  .gf-operational .topbar,
+  .gf-operational .gf-tools-return,
+  .gf-operational .panel,
+  .gf-operational .hero,
+  .gf-operational .stat,
+  .gf-operational .clip-card,
+  .gf-operational .model-card,
+  .gf-operational .analytics-card,
+  .gf-operational .campaign-direction,
+  .gf-operational .campaign-version,
+  .gf-operational .campaign-observation,
+  .gf-operational .ledger-task,
+  .gf-operational .sticky-save {
+    background: #444846;
+  }
+  .gf-operational .sidebar {
+    background: #303940;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .gf-operational {
+    background: #3c3d3b;
+    --panel: #444846;
+  }
+  .gf-operational .sidebar,
+  .gf-operational .topbar,
+  .gf-operational .gf-tools-return,
+  .gf-operational .panel,
+  .gf-operational .hero,
+  .gf-operational .stat,
+  .gf-operational .clip-card,
+  .gf-operational .model-card,
+  .gf-operational .analytics-card,
+  .gf-operational .campaign-direction,
+  .gf-operational .campaign-version,
+  .gf-operational .campaign-observation,
+  .gf-operational .ledger-task,
+  .gf-operational .sticky-save {
+    background: #444846;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .gf-operational .sidebar {
+    background: #303940;
+  }
+}

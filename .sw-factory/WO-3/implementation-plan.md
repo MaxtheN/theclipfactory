@@ -34,6 +34,20 @@ Introduce a layered in-app backdrop, translucent shell/panels with blur, legible
 
 Verify existing frontend journey tests and TypeScript/Vite build, plus focused component checks for stable accessible names and disabled behavior. Visually inspect grouping, hover/focus, compact layouts, glass contrast and motion/transparency fallbacks. Keep native viewer/Vite running; all code stays on the feature branch. Independent review precedes commit/push.
 
+## Progressive hierarchy and quick actions — November 14
+
+Arrange each stage in operation order and collapse supporting content: Setup starts with brief, then sources, then optional brand/profile administration; Research presents the editable direction and opening experiment before reference detail; Studio starts with source/range and keeps optional treatment/technical details folded; Results retains observations before next-test decisions and folds receipts. Preserve required profile context, warnings, exact-version approval and all mounted draft state.
+
+Simplify sidebar to a compact icon-led campaign group and a collapsed workspace/help group; remove descriptive sidebar marketing and repeated stage subtitles. Keep current campaign/profile in the topbar. Add a small search-style Quick actions button with ⌘K; a new QuickActions component supplies a real native HTML dialog, searchable navigation commands, arrow/Enter navigation, Escape dismissal, modal focus isolation and focus restoration. Commands reuse existing handlers, preserve disabled/busy/new-campaign rules, and do not approve/render/export automatically. Keyboard shortcut works from workspace and tools, without allowing background page actions. No backend, dependencies or README changes.
+
+Verify existing journey suite plus meaningful dialog integration tests for keyboard opening, filtering/action execution, Escape/focus restoration and blocked commands. Browser-check operation order, collapsed details retaining drafts, compact navigation and dialog at desktop/narrow widths. Keep the native viewer and Vite processes running; independent review and checks precede feature-branch commit/push to MaxtheN/theclipfactory.
+
+## Reference material and sidebar control — November 14
+
+The user's supplied desktop screenshot supersedes the earlier light palette: match smoked slate/charcoal glass, warm copper/amber undertones, ivory type, thin translucent borders and warm-white primary actions. A scoped desktop skin and matching operational stylesheet retain the current operation order, accordions, shortcuts and action gates. Focus/hover overrides adapt to the dark material. Sidebar collapse becomes an arrow control inside the sidebar/brand area; a narrow retained rail lets users expand it. Both main workspace and operational Tools retain their mounted content/drafts.
+
+Read-only native feasibility inspection confirmed installed pywebview only applies transparent/vibrancy flags at window creation, with no current live-update hook. The existing private-mode window must stay running because relaunch can clear WebKit storage. Deliver the reference material through CSS in the current live viewer, without claiming desktop-through native vibrancy. Keep all changes on the team feature branch. Validate the supplied reference visually, real command keyboard behavior, hover/focus contrast, collapse/expand, representative Tools pages, responsive overflow, existing 154 tests/build and independent final review.
+
 ## Delivered additions and handoff
 
 The user additionally requested a native live development window. `scripts/preview-interface.py` and `npm run dev:review` / `desktop:review` supply this on loopback without changing the packaged API boundary. The viewer is open and receiving Vite updates. The installable bundle and ZIP were built and passed packaged assets plus native authenticated window/reopen verification. Shared Vercel preview bytes match the review bundle. Draft PR: https://github.com/MaxtheN/theclipfactory/pull/3 . Full design continuation context is in docs/design-handoff.md.

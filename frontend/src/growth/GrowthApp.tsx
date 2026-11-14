@@ -8,7 +8,11 @@ import { Setup } from "./Setup";
 import { Research } from "./Research";
 import { Studio } from "./Studio";
 import { Results } from "./Results";
+import { Disclosure } from "./parts";
+import { QuickActions, type QuickAction } from "./QuickActions";
 import "./growth.css";
+import "./desktop-glass.css";
+import "./interactions.css";
 
 const steps = [
   {
@@ -57,9 +61,34 @@ export function GrowthApp() {
     [creating, setCreating] = useState(false);
   const [preferredSource, setPreferredSource] = useState<string>();
   const [help, setHelp] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const toolsReturn = useRef<HTMLButtonElement>(null);
+  const previousTools = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null),
     previous = useRef(stage);
   const current = steps.find((s) => s.id === stage)!;
+  useEffect(() => {
+    function shortcut(event: KeyboardEvent) {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        event.key.toLowerCase() === "k" &&
+        !event.repeat &&
+        !event.isComposing
+      ) {
+        event.preventDefault();
+        setQuickOpen((open) => !open);
+      }
+    }
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, []);
+  useEffect(() => {
+    if (tools) toolsReturn.current?.focus();
+    else if (previousTools.current) heading.current?.focus();
+    previousTools.current = tools;
+  }, [tools]);
   useEffect(() => {
     try {
       localStorage.setItem("growth-stage", stage);
@@ -88,89 +117,198 @@ export function GrowthApp() {
     !!active && active.version > 1,
   ];
   const contextKey = `${creating ? "new" : w.campaign?.id || "empty"}-${w.profileId}`;
+  function goToStage(next: Stage) {
+    setTools(false);
+    setStage(next);
+  }
+  function newCampaign() {
+    setTools(false);
+    setCreating(true);
+    setStage("setup");
+  }
+  function refreshWorkspace() {
+    void w.load().catch(() => {});
+    void factory.refresh();
+  }
+  const quickActions: QuickAction[] = [
+    ...steps.map((s) => ({
+      id: s.id,
+      label: `Go to ${s.label}`,
+      icon: s.id,
+      group: "Campaign" as const,
+      keywords: s.detail,
+      disabled: w.busy || (creating && s.id !== "setup"),
+      hint:
+        creating && s.id !== "setup" ? "Save the new campaign first" : s.detail,
+      run: () => goToStage(s.id),
+    })),
+    {
+      id: "new",
+      label: "New campaign",
+      icon: "plus",
+      group: "Campaign",
+      keywords: "create brief",
+      disabled: w.busy,
+      run: newCampaign,
+    },
+    {
+      id: "tools",
+      label: "Workspace tools",
+      icon: "settings",
+      group: "Workspace",
+      keywords: "models runtime integrations settings",
+      run: () => setTools(true),
+    },
+    {
+      id: "guide",
+      label: "The way it works",
+      icon: "info",
+      group: "Workspace",
+      keywords: "help guide",
+      run: () => {
+        setTools(false);
+        setHelp(true);
+      },
+    },
+    {
+      id: "refresh",
+      label: "Refresh workspace",
+      icon: "refresh",
+      group: "Workspace",
+      keywords: "reload reconnect",
+      disabled: w.busy || w.loading,
+      run: refreshWorkspace,
+    },
+  ];
+  const commandTrigger = (
+    <button
+      type="button"
+      className="gf-command-trigger"
+      aria-label="Open quick actions"
+      aria-haspopup="dialog"
+      aria-keyshortcuts="Meta+K Control+K"
+      onClick={() => setQuickOpen(true)}
+    >
+      <Icon name="research" size={16} />
+      <span>Quick actions</span>
+      <kbd>⌘K</kbd>
+    </button>
+  );
+  const sidebarToggle = (
+    <button
+      type="button"
+      className="gf-sidebar-toggle"
+      aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      aria-expanded={!sidebarCollapsed}
+      title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+    >
+      <Icon name="back" size={17} />
+    </button>
+  );
   return (
     <>
       {tools && (
-        <div className="gf-operational">
+        <div
+          className={`gf-operational${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
+        >
           <div className="gf-tools-return">
-            <button onClick={() => setTools(false)}>
+            <button ref={toolsReturn} onClick={() => setTools(false)}>
               <Icon name="back" size={16} />
               Back to Growth Factory
             </button>
             <span>Workspace tools · existing local capabilities</span>
+            {commandTrigger}
           </div>
-          <App />
+          <App
+            sidebarToggle={sidebarToggle}
+            sidebarCollapsed={sidebarCollapsed}
+          />
         </div>
       )}
-      <div className="gf-app" hidden={tools}>
+      <div
+        className={`gf-app${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
+        hidden={tools}
+      >
         <a className="gf-skip" href="#growth-main">
           Skip to content
         </a>
         <div className="gf-window">
           <aside className="gf-sidebar">
-            <a
-              className="gf-brand"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                setStage("setup");
-              }}
-              aria-label="Growth Factory home"
-            >
-              <span className="gf-brand-mark" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-              <span>
-                Growth
-                <br />
-                Factory<span className="gf-brand-period">.</span>
-              </span>
-            </a>
-            <div className="gf-nav-caption">CAMPAIGN WORKSPACE</div>
-            <nav aria-label="Campaign stages">
-              {steps.map((s, i) => (
-                <button
-                  aria-label={`${String(i + 1).padStart(2, "0")} ${s.label} ${s.detail}`}
-                  disabled={w.busy || (creating && s.id !== "setup")}
-                  className={`gf-nav-item ${stage === s.id ? "active" : ""}`}
-                  aria-current={stage === s.id ? "step" : undefined}
-                  key={s.id}
-                  onClick={() => setStage(s.id)}
-                >
-                  <span className="gf-nav-number">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span>
-                    <strong>{s.label}</strong>
-                    <small>{s.detail}</small>
-                  </span>
-                  {stage === s.id && <span className="gf-active-dot" />}
-                </button>
-              ))}
-            </nav>
-            <div className="gf-sidebar-note">
-              <Icon name="lock" size={16} />
-              <strong>Your creative loop.</strong>
-              <p>
-                From source footage to a reviewed edit. Your approval at every
-                step.
-              </p>
+            <div className="gf-brand-row">
+              <a
+                className="gf-brand"
+                hidden={sidebarCollapsed}
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setStage("setup");
+                }}
+                aria-label="Growth Factory home"
+              >
+                <span className="gf-brand-mark" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span>
+                  Growth
+                  <br />
+                  Factory<span className="gf-brand-period">.</span>
+                </span>
+              </a>
+              {sidebarToggle}
             </div>
-            <div className="gf-sidebar-bottom">
-              <button onClick={() => setTools(true)}>
-                <Icon name="settings" size={17} />
-                Workspace tools
-                <Icon name="arrow" size={14} />
-              </button>
-              <button onClick={() => setHelp((v) => !v)}>
-                <Icon name="info" size={17} />
-                The way it works
-              </button>
+            <section
+              className="gf-nav-group"
+              aria-label="Campaign navigation"
+              hidden={sidebarCollapsed}
+            >
+              <div className="gf-nav-group-label">
+                <Icon name="folder" size={16} />
+                <span>Campaign</span>
+              </div>
+              <nav aria-label="Campaign stages">
+                {steps.map((s, i) => (
+                  <button
+                    aria-label={`${String(i + 1).padStart(2, "0")} ${s.label} ${s.detail}`}
+                    disabled={w.busy || (creating && s.id !== "setup")}
+                    className={`gf-nav-item ${stage === s.id ? "active" : ""}`}
+                    aria-current={stage === s.id ? "step" : undefined}
+                    key={s.id}
+                    onClick={() => setStage(s.id)}
+                  >
+                    <Icon name={s.id} size={18} />
+                    <span>
+                      <strong>{s.label}</strong>
+                    </span>
+                    {stage === s.id && <span className="gf-active-dot" />}
+                  </button>
+                ))}
+              </nav>
+            </section>
+            <div className="gf-sidebar-bottom" hidden={sidebarCollapsed}>
+              <details className="gf-nav-group gf-workspace-menu">
+                <summary aria-label="Workspace menu">
+                  <Icon name="settings" size={16} />
+                  <span>Workspace</span>
+                  <Icon name="down" size={13} />
+                </summary>
+                <nav aria-label="Workspace navigation">
+                  <button onClick={() => setTools(true)}>
+                    <Icon name="settings" size={17} />
+                    Workspace tools
+                    <Icon name="arrow" size={14} />
+                  </button>
+                  <button onClick={() => setHelp((v) => !v)}>
+                    <Icon name="info" size={17} />
+                    The way it works
+                  </button>
+                </nav>
+              </details>
               <div className="gf-local-status">
                 <span />
-                {reviewPreview ? "INTERACTIVE PREVIEW" : "LOCAL-FIRST DESKTOP"}
+                {reviewPreview ? "PREVIEW" : "ON THIS MAC"}
                 <span>v0.1</span>
               </div>
             </div>
@@ -199,12 +337,9 @@ export function GrowthApp() {
                     </option>
                   ))}
                 </select>
-                <span className="gf-top-divider" />
-                <span className="gf-workspace-label">
-                  {reviewPreview ? "Review workspace" : "On this Mac"}
-                </span>
               </div>
               <div className="gf-top-right">
+                {commandTrigger}
                 {w.campaign && !creating && (
                   <select
                     aria-label="Active account profile"
@@ -221,32 +356,8 @@ export function GrowthApp() {
                       ))}
                   </select>
                 )}
-                <button
-                  className="gf-icon-button"
-                  title="Refresh workspace"
-                  aria-label="Refresh workspace"
-                  disabled={w.busy || w.loading}
-                  onClick={() => {
-                    void w.load().catch(() => {});
-                    void factory.refresh();
-                  }}
-                >
-                  <Icon name="refresh" size={16} />
-                </button>
-                <span className="gf-avatar">K</span>
               </div>
             </header>
-            {reviewPreview && (
-              <div className="gf-preview-bar">
-                <span className="gf-preview-dot" />
-                <strong>Design preview</strong>
-                <span>
-                  Sample content. Local to this browser. No rendering or live
-                  analytics.
-                </span>
-                <span className="gf-preview-tag">ALL-IN EXAMPLE</span>
-              </div>
-            )}
             <main id="growth-main" className="gf-main">
               <header className="gf-page-heading">
                 <div>
@@ -262,10 +373,7 @@ export function GrowthApp() {
                 <button
                   className="gf-button secondary compact gf-new"
                   disabled={w.busy}
-                  onClick={() => {
-                    setCreating(true);
-                    setStage("setup");
-                  }}
+                  onClick={newCampaign}
                 >
                   <Icon name="plus" size={15} />
                   New campaign
@@ -374,42 +482,59 @@ export function GrowthApp() {
                   }}
                 />
               </div>
-              <footer className="gf-bottom-line">
-                <span>
-                  <Icon name="lock" size={12} />
-                  {reviewPreview
-                    ? "Your feedback shapes the next version."
-                    : "Local footage. Human decisions. Better creative work."}
-                </span>
-                <span>
-                  {active ? (
-                    <>
-                      <span className="gf-tiny-dot" />
-                      Strategy v{active.version} approved
-                    </>
-                  ) : (
-                    "Your next great edit is waiting."
-                  )}
-                </span>
-              </footer>
-            </main>
-            <div className="gf-journey" aria-label="Production journey">
-              {["Brief", "Direction", "Create", "Review", "Learn"].map(
-                (label, i) => (
-                  <div className={completed[i] ? "reached" : ""} key={label}>
+              <div className="gf-campaign-details">
+                <Disclosure title="Campaign progress & details" icon="results">
+                  <footer className="gf-bottom-line">
                     <span>
-                      {completed[i] ? <Icon name="check" size={10} /> : i + 1}
+                      <Icon name="lock" size={12} />
+                      {reviewPreview
+                        ? "Your feedback shapes the next version."
+                        : "Local footage. Human decisions. Better creative work."}
                     </span>
-                    <strong>{label}</strong>
-                    {i < 4 && <i />}
+                    <span>
+                      {active ? (
+                        <>
+                          <span className="gf-tiny-dot" />
+                          Strategy v{active.version} approved
+                        </>
+                      ) : (
+                        "Your next great edit is waiting."
+                      )}
+                    </span>
+                  </footer>
+                  <div className="gf-journey" aria-label="Production journey">
+                    {["Brief", "Direction", "Create", "Review", "Learn"].map(
+                      (label, i) => (
+                        <div
+                          className={completed[i] ? "reached" : ""}
+                          key={label}
+                        >
+                          <span>
+                            {completed[i] ? (
+                              <Icon name="check" size={10} />
+                            ) : (
+                              i + 1
+                            )}
+                          </span>
+                          <strong>{label}</strong>
+                          {i < 4 && <i />}
+                        </div>
+                      ),
+                    )}
+                    <Icon name="refresh" size={16} />
                   </div>
-                ),
-              )}
-              <Icon name="refresh" size={16} />
-            </div>
+                </Disclosure>
+              </div>
+            </main>
           </div>
         </div>
+        <div className="gf-ambient" aria-hidden="true" />
       </div>
+      <QuickActions
+        open={quickOpen}
+        onDismiss={() => setQuickOpen(false)}
+        actions={quickActions}
+      />
     </>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
 import { reviewPreview, workspaceApi } from "./workspaceApi";
-import { Disclosure, Empty, Field, Pill, Poster, PrimaryAction } from "./parts";
+import { Disclosure, Empty, Field, Pill, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
 
 export function Results({
@@ -147,7 +147,7 @@ export function Results({
       <section className="gf-card gf-evidence">
         <div className="gf-card-header">
           <div>
-            <span className="gf-overline">WHAT WE ACTUALLY KNOW</span>
+            <span className="gf-overline">01 / REVIEW EVIDENCE</span>
             <h2>Evidence, before instinct.</h2>
           </div>
           <Icon name="results" />
@@ -293,7 +293,7 @@ export function Results({
       <section className="gf-card gf-next-test">
         <div className="gf-card-header">
           <div>
-            <span className="gf-overline">THE NEXT CREATIVE DECISION</span>
+            <span className="gf-overline">02 / PLAN THE NEXT TEST</span>
             <h2>Give the next edit a reason.</h2>
           </div>
           <Pill tone="quiet">
@@ -358,7 +358,7 @@ export function Results({
         )}
         <div className="gf-next-source">
           <div className="gf-next-source-art">
-            <Poster compact variant={1} />
+            <Icon name="file" size={24} />
           </div>
           <div>
             <span className="gf-overline">UP NEXT</span>

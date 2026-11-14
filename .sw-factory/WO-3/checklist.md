@@ -83,3 +83,16 @@
 - [x] Independent review Round 5 APPROVED; label-in-name advisory resolved. Screenshot: `/Users/kartikbihani/WIN/design/growth-factory/interface-frosted-hierarchy.jpg`.
 - [x] Existing native viewer and Vite processes preserved; no user draft reset, README change or default-branch push.
 - [x] Team WRITE permission verified after invitation acceptance; existing delivery pushed to `MaxtheN/theclipfactory:kartik/growth-factory-interface`, which is now upstream. Work order returned to In Review for this pass.
+
+## Progressive desktop workspace and supplied reference
+
+- [x] Recorded evolving hierarchy, accordion, command-modal, interaction and reference scope before implementation. Final supplied reference supersedes the earlier light palette.
+- [x] Brief → footage → shared primary action; optional settings/references/checks/receipts folded; mandatory feedback, errors and approval blockers visible. Stage drafts remain mounted.
+- [x] Compact labeled SVG navigation in campaign and Tools. Arrow control lives inside both sidebars, rotates and retains a 64px expand rail; static Campaign label cannot accidentally hide primary stages.
+- [x] Compact ⌘K trigger opens real searchable native HTML dialog; keyboard/filter/Enter/Escape, focus isolation/restoration and disabled/new-campaign guards verified. No approval/render/publish commands added.
+- [x] Smoked slate/copper glass, ivory type, warm-white primary actions and dark fallbacks applied across main screens, Tools and modal; readable summary hover/focus and subtle input focus verified. Preview banner removed by request; individual sample labels retained.
+- [x] 154 frontend tests passed, including dialog/integration and sidebar-draft regressions. TypeScript/Vite build passed; diff checks clean. No redundant cosmetic tests added.
+- [x] Browser reviewed all four campaign stages, modal, Tools/Settings and compact 390px rails without horizontal overflow; checked readable summary hover, no oversized input outline, command navigation/focus and retained draft. Console errors absent.
+- [x] Independent review rounds 6, 7 and final reference Round 8 APPROVED; compact advisory resolved. Current screenshots: `/Users/kartikbihani/WIN/design/growth-factory/interface-smoked-desktop.jpg` and `quick-actions-smoked.jpg`.
+- [x] Native feasibility read-only: no live vibrancy setter; private-mode relaunch risks WebKit data. Existing viewer/Vite/WebKit connection preserved without restart or storage reset. No desktop-through vibrancy or rebuilt packaged-app claim.
+- [x] Documentation reflects final reference and team-feature-branch delivery; no README/default-branch/backend/native-launcher changes. Work order returned to In Review.

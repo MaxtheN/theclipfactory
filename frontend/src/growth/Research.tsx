@@ -81,43 +81,6 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
     );
   return (
     <div className="gf-research-grid">
-      <section className="gf-card gf-reference">
-        <div className="gf-card-header">
-          <div>
-            <span className="gf-overline">THE INSPIRATION</span>
-            <h2>A place to start.</h2>
-          </div>
-          <Icon name="link" />
-        </div>
-        <div className="gf-reference-art">
-          <Poster compact />
-        </div>
-        <Pill tone="quiet">
-          {reviewPreview
-            ? "Illustrative reference"
-            : "Creator-supplied material"}
-        </Pill>
-        <p className="gf-body-copy">
-          A good reference suggests an experiment. It doesn't predict a result.
-        </p>
-        <Field label="Reference link or source locator">
-          {(id) => (
-            <input
-              id={id}
-              placeholder="URL, episode and timestamp"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-            />
-          )}
-        </Field>
-        <Disclosure title="What has been inspected?" icon="research">
-          <p>
-            This screen saves your supplied rationale. Automated reference
-            inspection is not connected yet. A link alone is not evidence that
-            its contents were analyzed.
-          </p>
-        </Disclosure>
-      </section>
       <section className="gf-card gf-hypothesis">
         <div className="gf-card-header">
           <div>
@@ -132,8 +95,44 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
                 : "Draft"}
           </Pill>
         </div>
+        <div className="gf-research-reference">
+          <Disclosure title="Reference & inspection details" icon="link">
+            <div className="gf-reference-art">
+              <Poster compact />
+            </div>
+            <Pill tone="quiet">
+              {reviewPreview
+                ? "Illustrative reference"
+                : "Creator-supplied material"}
+            </Pill>
+            <p className="gf-body-copy">
+              A good reference suggests an experiment. It doesn't predict a
+              result.
+            </p>
+            <Field label="Reference link or source locator">
+              {(id) => (
+                <input
+                  id={id}
+                  placeholder="URL, episode and timestamp"
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                />
+              )}
+            </Field>
+
+            <p>
+              This screen saves your supplied rationale. Automated reference
+              inspection is not connected yet. A link alone is not evidence that
+              its contents were analyzed.
+            </p>
+          </Disclosure>
+          <p className="gf-research-note">
+            Creator-provided direction. Automated reference inspection is not
+            connected.
+          </p>
+        </div>
         <FieldGroup
-          title="The idea & source moment"
+          title="01 / The idea & source moment"
           className="gf-direction-group"
         >
           <Field label="The idea worth testing">
@@ -159,7 +158,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
           </Field>
         </FieldGroup>
         <FieldGroup
-          title="The opening experiment"
+          title="02 / The opening experiment"
           className="gf-experiment-group"
         >
           <div className="gf-variant-pair">

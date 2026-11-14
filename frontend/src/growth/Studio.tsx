@@ -333,7 +333,7 @@ export function Studio({
             </h2>
             <p>
               {selected && !revision
-                ? "The agent can make it. You decide if it's ready."
+                ? "Review this version before approving or exporting."
                 : "A clear moment, with its meaning intact."}
             </p>
           </div>
@@ -391,7 +391,7 @@ export function Studio({
                 </Field>
               </div>
             </FieldGroup>
-            <FieldGroup title="Edit treatment">
+            <Disclosure title="Opening & output settings" icon="settings">
               <Field label="Opening treatment">
                 {(id) => (
                   <select
@@ -410,26 +410,27 @@ export function Studio({
                   </select>
                 )}
               </Field>
-              {revision && (
-                <Field label="What would make it better?">
-                  {(id) => (
-                    <textarea
-                      id={id}
-                      value={feedback}
-                      onChange={(e) => setFeedback(e.target.value)}
-                      placeholder="Start two seconds later. Keep captions static."
-                      rows={3}
-                    />
-                  )}
-                </Field>
-              )}
               <div className="gf-spec-row">
                 <span>FORMAT</span>
                 <strong>Vertical · 9:16</strong>
                 <span>CAPTIONS</span>
                 <strong>Source subtitles</strong>
               </div>
-            </FieldGroup>
+            </Disclosure>
+            {revision && (
+              <Field label="What would make it better?">
+                {(id) => (
+                  <textarea
+                    id={id}
+                    value={feedback}
+                    onChange={(e) => setFeedback(e.target.value)}
+                    placeholder="Start two seconds later. Keep captions static."
+                    rows={3}
+                  />
+                )}
+              </Field>
+            )}
+
             {!renderReady && (
               <p className="gf-help">
                 {!direction
@@ -477,44 +478,47 @@ export function Studio({
           </div>
         ) : (
           <>
-            <div className="gf-review-checks">
-              <div>
-                <Icon name="check" />
-                <span>
-                  Source linked
-                  <strong>
-                    {factory.data.videos.find((s) => s.id === selected.video_id)
-                      ?.name || selected.video_id}
-                  </strong>
-                </span>
+            <Disclosure title="Source & technical checks" icon="check">
+              <div className="gf-review-checks">
+                <div>
+                  <Icon name="check" />
+                  <span>
+                    Source linked
+                    <strong>
+                      {factory.data.videos.find(
+                        (s) => s.id === selected.video_id,
+                      )?.name || selected.video_id}
+                    </strong>
+                  </span>
+                </div>
+                <div>
+                  <Icon name={selected.subtitles_burned ? "check" : "info"} />
+                  <span>
+                    Caption processing
+                    <strong>
+                      {reviewPreview
+                        ? "Simulated check"
+                        : selected.subtitles_burned
+                          ? "Subtitles included"
+                          : "Not confirmed"}
+                    </strong>
+                  </span>
+                </div>
+                <div>
+                  <Icon name={teamPass ? "check" : "info"} />
+                  <span>
+                    Technical critique
+                    <strong>
+                      {reviewPreview
+                        ? "Simulated check"
+                        : selected.team_run_id
+                          ? selected.team_review_status || "Unknown"
+                          : "Human review required"}
+                    </strong>
+                  </span>
+                </div>
               </div>
-              <div>
-                <Icon name={selected.subtitles_burned ? "check" : "info"} />
-                <span>
-                  Caption processing
-                  <strong>
-                    {reviewPreview
-                      ? "Simulated check"
-                      : selected.subtitles_burned
-                        ? "Subtitles included"
-                        : "Not confirmed"}
-                  </strong>
-                </span>
-              </div>
-              <div>
-                <Icon name={teamPass ? "check" : "info"} />
-                <span>
-                  Technical critique
-                  <strong>
-                    {reviewPreview
-                      ? "Simulated check"
-                      : selected.team_run_id
-                        ? selected.team_review_status || "Unknown"
-                        : "Human review required"}
-                  </strong>
-                </span>
-              </div>
-            </div>
+            </Disclosure>
             {!teamPass && (
               <p className="gf-help">
                 Unresolved team critique blocks approval. Inspect or recheck it
