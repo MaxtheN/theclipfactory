@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import platform
@@ -100,7 +101,14 @@ def validate_manifest(target: Path, manifest: dict, repo: str, identifier: str, 
     required = {"config.json"}
     if identifier == "kokoro":
         required |= {"kokoro-v1_0.pth", "voices/af_heart.pt"}
-    if not required <= names or not any(n.endswith((".safetensors", ".pth", ".npz")) for n in names):
+    if identifier == "whisper-turbo":
+        required.add("weights.npz")
+    has_weights = (
+        any(n.endswith(".safetensors") for n in names)
+        if identifier.startswith("qwen-")
+        else bool(names & {"weights.npz", "kokoro-v1_0.pth"})
+    )
+    if not required <= names or not has_weights:
         raise ValueError("Required config or weights missing")
     if verify:
         if not isinstance(json.loads((target / "config.json").read_text()), dict):
@@ -297,6 +305,11 @@ class Models:
         from huggingface_hub import HfApi, constants, hf_hub_download
         from tqdm.auto import tqdm
 
+        if "tqdm_class" not in inspect.signature(hf_hub_download).parameters:
+            raise WorkError(
+                "This Hugging Face client cannot provide cancellable HTTP downloads. "
+                "Upgrade huggingface-hub to a version supporting hf_hub_download(tqdm_class=...)."
+            )
         # Also handle another module having imported the hub before this module.
         constants.HF_HUB_DISABLE_XET = True
         item = self.item(identifier)
@@ -328,6 +341,7 @@ class Models:
                     selected = name in {"config.json", "kokoro-v1_0.pth", "voices/af_heart.pt"}
                 if selected:
                     files.append({"name": name, "size": sibling.size})
+            files.sort(key=lambda entry: entry["name"])
             manifest = {"repo": item["repo"], "revision": info.sha, "files": files}
             validate_manifest(target, manifest, item["repo"], identifier, verify=False)
             if revision and manifest != previous:
@@ -342,17 +356,22 @@ class Models:
                     jobs.check(job_id)
                     kwargs["disable"] = True
                     super().__init__(*args, **kwargs)
+                    bar.last_progress = -1
 
                 def update(bar, n=1):
                     jobs.check(job_id)
                     result = super().update(n)
                     # tqdm disable skips n accounting, so account explicitly.
                     bar.n += n
-                    jobs.update(
-                        job_id,
-                        progress=min(95, round((completed + bar.n) / total * 95)),
-                        message="Downloading model weights (bytes)",
-                    )
+                    downloaded = min(total, completed + bar.n)
+                    progress = min(95, round(downloaded / total * 95))
+                    if progress != bar.last_progress:
+                        jobs.update(
+                            job_id,
+                            progress=progress,
+                            message=f"Downloading model weights ({downloaded:,}/{total:,} bytes)",
+                        )
+                        bar.last_progress = progress
                     return result
 
             for entry in files:
@@ -419,6 +438,11 @@ class Models:
         except (ValueError, TypeError, KeyError) as exc:
             raise WorkError("Inference input exceeds limits or is invalid.") from exc
         self.require(identifier, {"generate": "llm", "transcribe": "asr", "narrate": "tts"}[action])
+        worker = Path(__file__).with_name("inference_worker.py")
+        if not worker.is_file():
+            raise WorkError(
+                "Packaged inference worker is missing. Rebuild the Mac app with its worker data file."
+            )
         scratch = self.root / "work" / job_id
         scratch.mkdir(parents=True, exist_ok=True)
         request = scratch / "request.json"
@@ -429,11 +453,6 @@ class Models:
             encoding="utf-8",
         )
         request.chmod(0o600)
-        worker = Path(__file__).with_name("inference_worker.py")
-        if not worker.is_file():
-            raise WorkError(
-                "Packaged inference worker is missing. Rebuild the Mac app with its worker data file."
-            )
         env = child_env()
         self.jobs.update(
             job_id, progress=35, message=f"Running {identifier} locally; model unloads after this task"
@@ -467,5 +486,3 @@ class Models:
             return result
         except (OSError, ValueError, TypeError) as exc:
             raise WorkError("Inference worker returned an invalid result.") from exc
-        finally:
-            request.unlink(missing_ok=True)

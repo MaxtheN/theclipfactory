@@ -1,7 +1,10 @@
 """Truthful inference prerequisites, without model downloads or runtime installation."""
 
+import inspect
 import json
+import struct
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -33,7 +36,12 @@ def manifest(models, identifier, files):
 def installed(models, identifier):
     directory = models.model_dir / identifier
     directory.mkdir(exist_ok=True)
-    files = {"config.json": b"{}", "weights.npz": b"tiny mock weights"}
+    header = b'{"w":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}'
+    header += b" " * (-len(header) % 8)
+    tiny_weights = struct.pack("<Q", len(header)) + header + struct.pack("<f", 0.0)
+    files = {"config.json": b"{}", "model.safetensors": tiny_weights}
+    if identifier == "whisper-turbo":
+        files = {"config.json": b"{}", "weights.npz": b"mock whisper weights"}
     if identifier == "kokoro":
         files = {"config.json": b"{}", "kokoro-v1_0.pth": b"weights", "voices/af_heart.pt": b"voice"}
     for name, data in files.items():
@@ -150,11 +158,11 @@ def test_installed_rejects_unsafe_or_incomplete_manifests(models, tmp_path, dama
     elif damage == "size":
         data["files"][0]["size"] += 1
     elif damage == "missing":
-        (directory / "weights.npz").unlink()
+        (directory / "model.safetensors").unlink()
     elif damage in {"traversal", "reserved"}:
         data["files"].append({"name": "../escape" if damage == "traversal" else ".complete", "size": 1})
     elif damage == "symlink":
-        weight = directory / "weights.npz"
+        weight = directory / "model.safetensors"
         other = tmp_path / "elsewhere"
         other.write_bytes(weight.read_bytes())
         weight.unlink()
@@ -189,6 +197,7 @@ def hub(models, monkeypatch):
         (local_dir / name).write_bytes(files[name])
 
     transfer = Mock(side_effect=download)
+    transfer.__signature__ = inspect.signature(huggingface_hub.hf_hub_download)
     monkeypatch.setattr(huggingface_hub, "hf_hub_download", transfer)
     return api, transfer, info
 
@@ -207,7 +216,7 @@ def test_download_uses_immutable_metadata_and_atomic_manifest(models, hub):
     assert transfer.call_count == 2
     assert not (target / ".download.json").exists()
     assert any(
-        c.kwargs.get("message") == "Downloading model weights (bytes)"
+        c.kwargs.get("message", "").startswith("Downloading model weights (")
         for c in models.jobs.update.call_args_list
     )
 
@@ -279,7 +288,7 @@ def test_run_sequential_tasks_never_reuse_response(models, monkeypatch):
     results = iter([{"output": "first"}, {"output": "second"}, None])
 
     def process(job, command, **kwargs):
-        request, response = map(__import__("pathlib").Path, command[-2:])
+        request, response = map(Path, command[-2:])
         assert not response.exists()
         assert json.loads(request.read_text())["model"] == str(models.model_dir / "qwen-small")
         assert Path(command[1]).is_file()
@@ -289,8 +298,6 @@ def test_run_sequential_tasks_never_reuse_response(models, monkeypatch):
         result = next(results)
         if result:
             response.write_text(json.dumps(result))
-
-    from pathlib import Path
 
     models.jobs.process.side_effect = process
     assert models.run("samejob", "qwen-small", "generate", prompt="first")["output"] == "first"
@@ -319,3 +326,115 @@ def test_child_env_removes_credentials_but_keeps_runtime_settings(monkeypatch):
         env.get(k)
         for k in ("HF_TOKEN", "API_KEY", "CLIP_META_APP_SECRET", "AWS_ACCESS_KEY_ID", "SERVICE_PASSWORD")
     )
+
+
+@pytest.mark.parametrize("probe", ["Darwin x86_64 (3, 12)", "Darwin arm64 (3, 11)", "Linux arm64 (3, 12)"])
+def test_setup_rejects_non_native_or_wrong_python(models, monkeypatch, probe):
+    monkeypatch.setattr("clip_factory.models.apple_silicon", lambda: True)
+    monkeypatch.setattr("clip_factory.models.shutil.which", lambda name: "/candidate/python")
+    monkeypatch.setattr(
+        "clip_factory.models.subprocess.run", Mock(return_value=SimpleNamespace(stdout=probe))
+    )
+    with pytest.raises(WorkError, match="native Python 3.12"):
+        models.setup("job")
+    models.jobs.process.assert_not_called()
+
+
+def test_setup_rebuilds_runtime_and_pins_speech_assets(models, monkeypatch):
+    monkeypatch.setattr("clip_factory.models.apple_silicon", lambda: True)
+    monkeypatch.setattr("clip_factory.models.shutil.which", lambda name: "/candidate/python")
+    marker = {"python": [3, 12], "machine": "arm64", "packages": RUNTIME_VERSIONS}
+    monkeypatch.setattr(
+        "clip_factory.models.subprocess.run",
+        Mock(
+            side_effect=[
+                SimpleNamespace(stdout="Darwin arm64 (3, 12)"),
+                SimpleNamespace(stdout=json.dumps({**marker, "system": "Darwin"})),
+            ]
+        ),
+    )
+    models.runtime.mkdir()
+    old = models.runtime / "old-venv-data"
+    old.touch()
+
+    def process(job, command, **kwargs):
+        if "venv" in command:
+            assert not old.exists()
+            models.python.parent.mkdir(parents=True)
+            models.python.touch()
+        return "verified"
+
+    models.jobs.process.side_effect = process
+    assert models.setup("job")["runtime"] == "ready"
+    assert json.loads((models.runtime / ".ready").read_text()) == marker
+    install = models.jobs.process.call_args_list[1].args[1]
+    assert "mlx-vlm==0.7.12" in install
+    assert "mlx-whisper==0.4.3" in install
+    assert "kokoro==0.9.4" in install
+    assert any("en_core_web_sm-3.8.0" in argument for argument in install)
+
+
+def test_failed_setup_has_no_ready_marker(models, monkeypatch):
+    monkeypatch.setattr("clip_factory.models.apple_silicon", lambda: True)
+    monkeypatch.setattr("clip_factory.models.shutil.which", lambda name: "/candidate/python")
+    monkeypatch.setattr(
+        "clip_factory.models.subprocess.run",
+        Mock(return_value=SimpleNamespace(stdout="Darwin arm64 (3, 12)")),
+    )
+    models.runtime.mkdir()
+    (models.runtime / ".ready").write_text("old")
+    models.jobs.process.side_effect = WorkError("installation failed")
+    with pytest.raises(WorkError, match="installation failed"):
+        models.setup("job")
+    assert not (models.runtime / ".ready").exists()
+
+
+def test_corrupt_downloaded_file_never_marks_complete(models, hub):
+    _, transfer, _ = hub
+    original = transfer.side_effect
+
+    def corrupt(*args, **kwargs):
+        original(*args, **kwargs)
+        if args[1] == "model.safetensors":
+            (kwargs["local_dir"] / args[1]).write_bytes(b"short")
+
+    transfer.side_effect = corrupt
+    with pytest.raises(WorkError, match="verification failed"):
+        models.download("job", "qwen-small")
+    assert not (models.model_dir / "qwen-small" / ".complete").exists()
+
+
+def test_manifest_checks_every_indexed_shard(models):
+    installed(models, "qwen-small")
+    directory = models.model_dir / "qwen-small"
+    index = directory / "model.safetensors.index.json"
+    index.write_text(json.dumps({"weight_map": {"w": "model.safetensors"}}))
+    marker = directory / ".complete"
+    data = json.loads(marker.read_text())
+    data["files"].append({"name": index.name, "size": index.stat().st_size})
+    marker.write_text(json.dumps(data))
+    assert models.item("qwen-small")["installed"]
+    (directory / "model.safetensors").unlink()
+    assert not models.item("qwen-small")["installed"]
+
+
+def test_old_hub_api_cannot_silently_drop_cancellation(models, monkeypatch):
+    import huggingface_hub
+
+    def unsupported(repo, filename):
+        raise AssertionError("Must not download without cancellation hook")
+
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", unsupported)
+    with pytest.raises(WorkError, match="cannot provide cancellable HTTP downloads"):
+        models.download("job", "qwen-small")
+
+
+def test_runtime_probe_must_report_matching_architecture_and_versions(models, monkeypatch):
+    runtime_ready(models, monkeypatch)
+    marker = {"python": [3, 12], "machine": "arm64", "packages": RUNTIME_VERSIONS, "system": "Darwin"}
+    for mismatch in ({"machine": "x86_64"}, {"python": [3, 11]}, {"packages": {"mlx-vlm": "wrong"}}):
+        monkeypatch.setattr(
+            "clip_factory.models.subprocess.run",
+            Mock(return_value=SimpleNamespace(stdout=json.dumps({**marker, **mismatch}))),
+        )
+        assert not models.ready()
