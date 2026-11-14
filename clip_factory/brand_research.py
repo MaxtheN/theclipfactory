@@ -14,6 +14,9 @@ Two halves:
   gets exactly one repair attempt, otherwise the run abstains. Every kept field must be backed by a
   quote that is verified, deterministically, to occur in the fetched text; unsupported fields are
   dropped rather than guessed. Brand colours, logo and CTA link come only from page markup.
+  Separately, the model may offer ``suggestions`` (boundaries, a clean CTA, a goal with a reason). They
+  are never quote-checked, never counted as evidence, and are returned under ``suggested`` with the
+  provenance ``suggested_by_model`` for the creator to accept one by one.
 """
 
 from __future__ import annotations
@@ -48,11 +51,14 @@ HTML_TYPES = ("text/html", "application/xhtml+xml")
 
 # Model budget: ~4 characters a token. 8,192-token context = ~6k prompt + 1.2k reply + slack.
 CONTEXT_TOKENS = 8192
-MAX_OUTPUT_TOKENS = 1200
+MAX_OUTPUT_TOKENS = 1500
 PROMPT_CHAR_BUDGET = 22_000
 DATA_CHAR_BUDGET = 15_500
 MIN_QUOTE_CHARS = 12
 MAX_QUOTE_CHARS = 160
+MIN_GOAL_QUOTE_CHARS = 24  # a goal needs a real sentence, not a button label
+MAX_SUGGESTED_AVOID = 5
+NAV_SEPARATORS = re.compile(r"\s[|·•/]\s|\s?\|\s?")
 
 Objective = Literal["discovery", "awareness", "engagement", "followers", "traffic", "leads", "sales", "custom"]
 
@@ -478,11 +484,16 @@ def social_links(pages: list[Page]) -> list[dict]:
     return found
 
 
-def choose_pages(home: Page, site_host: str, limit: int = MAX_PAGES - 1) -> list[tuple[str, str]]:
-    """Same-site links whose text or path suggests they describe the brand, best first."""
+def choose_pages(home: Page, site_host: str, limit: int = MAX_PAGES - 1,
+                 more: tuple[Page, ...] = ()) -> list[tuple[str, str]]:
+    """Same-site links whose text or path suggests they describe the brand, best first.
+
+    ``more`` pools links from other pages already read (the site home when the creator gave a deep URL
+    such as /about), so episode and show pages linked only from the home page are still found."""
     scored: list[tuple[int, int, str, str]] = []
-    seen = {_key(home.url)}
-    for order, (href, text) in enumerate(home.links):
+    seen = {_key(home.url), *(_key(p.url) for p in more)}
+    pooled = [link for page in (home, *more) for link in page.links]
+    for order, (href, text) in enumerate(pooled):
         parts = urlsplit(href)
         if parts.scheme not in {"http", "https"} or not same_site(parts.hostname or "", site_host):
             continue
@@ -513,6 +524,15 @@ def choose_pages(home: Page, site_host: str, limit: int = MAX_PAGES - 1) -> list
             chosen.append((href, label))
     ranked = {(href, label): i for i, (_, _, href, label) in enumerate(scored)}
     return sorted(chosen, key=ranked.__getitem__)
+
+
+def label_for(url: str) -> str:
+    """Chip label for a page from its path: '/about' -> 'About', '/' -> 'Home'."""
+    path = urlsplit(url).path.strip("/")
+    if not path:
+        return "Home"
+    words = set(re.findall(r"[a-z]+", path.lower()))
+    return next((label for hint, label in PAGE_HINTS if hint in words), "Page")
 
 
 def _key(url: str) -> str:
@@ -551,31 +571,49 @@ def read_site(url: str, reader: SiteReader, emit: Callable[..., None] = lambda *
         raise FetchError("That address isn't a web page we can read (no HTML).")
     final_url = first.url
     site_host = urlsplit(final_url).hostname or host
-    home = extract(final_url, decode(first), truncated=first.truncated)
-    emit("reading", f"Reading {_quote_title(home.title or site_host)}", page=_page_info(home))
+    home = extract(final_url, decode(first), label=label_for(final_url), truncated=first.truncated)
+    shown_name = home.label if home.label not in ("Home", "Page") else home.title or site_host
+    emit("reading", f"Reading {_quote_title(shown_name)}", page=_page_info(home))
     pages = [home]
-    candidates = choose_pages(home, site_host)
+    root = _site_root(final_url)
+    if _key(root) != _key(final_url):
+        # A deep URL such as /about: the home page is the best second source and links to episodes/shows.
+        landing = _read_page(reader, root, "Home", site_host)
+        if landing is not None:
+            pages.append(landing)
+            emit("reading", f"Reading {_quote_title(landing.title or site_host)}", page=_page_info(landing))
+    candidates = choose_pages(home, site_host, MAX_PAGES - len(pages), more=tuple(pages[1:]))
     names = [label for _, label in candidates]
-    total = 1 + len(candidates)
+    total = len(pages) + len(candidates)
     shown = ", ".join(dict.fromkeys(names)) if names else "just the home page"
     emit("found", f"Found {total} page{'s' if total != 1 else ''} ({shown})", count=total, labels=names)
     for href, label in candidates:
-        try:
-            fetched = reader.get(href)
-        except FetchError:
-            continue  # one unreadable sub-page never sinks the run
-        if fetched.status >= 400 or fetched.content_type not in HTML_TYPES:
-            continue
-        if not same_site(urlsplit(fetched.url).hostname or "", site_host):
-            continue  # redirected off-site: not this brand's page
-        page = extract(fetched.url, decode(fetched), label=label, truncated=fetched.truncated)
-        if not page.text:
+        page = _read_page(reader, href, label, site_host)
+        if page is None or any(_key(p.url) == _key(page.url) for p in pages):
             continue
         pages.append(page)
         emit("reading", f"Reading {_quote_title(label)}", page=_page_info(page))
     if not any(p.text for p in pages):
         raise FetchError("We couldn't find readable text on that site. It may need JavaScript to show its words.")
     return Site(url=final_url, host=site_host, pages=pages, social=social_links(pages))
+
+
+def _site_root(url: str) -> str:
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc, "/", "", ""))
+
+
+def _read_page(reader: SiteReader, href: str, label: str, site_host: str) -> Page | None:
+    try:
+        fetched = reader.get(href)
+    except FetchError:
+        return None  # one unreadable sub-page never sinks the run
+    if fetched.status >= 400 or fetched.content_type not in HTML_TYPES:
+        return None
+    if not same_site(urlsplit(fetched.url).hostname or "", site_host):
+        return None  # redirected off-site: not this brand's page
+    page = extract(fetched.url, decode(fetched), label=label, truncated=fetched.truncated)
+    return page if page.text else None
 
 
 def _quote_title(value: str) -> str:
@@ -613,6 +651,44 @@ class CtaDraft(_Lenient):
     link: str = Field(default="", max_length=500)
 
 
+def nav_like(text: str) -> bool:
+    """'Watch | Listen | Subscribe' is a menu, not a message or a call to action."""
+    return bool(NAV_SEPARATORS.search(text or ""))
+
+
+def _suggested_text(value: Any, low: int, high: int, words: int) -> str:
+    if not isinstance(value, str):
+        return ""
+    text = " ".join(clean_text(value).split()).strip(" .")
+    if not low <= len(text) <= high or len(text.split()) > words or nav_like(text):
+        return ""
+    return text
+
+
+def clean_suggestions(value: Any) -> dict | None:
+    """Shape/length check for model suggestions. Bad items are dropped, never repaired or guessed."""
+    if not isinstance(value, dict):
+        return None
+    avoid: list[str] = []
+    raw = value.get("must_avoid")
+    for item in raw if isinstance(raw, list) else []:
+        text = _suggested_text(item, 3, 90, 14)
+        if text and text.casefold() not in {a.casefold() for a in avoid}:
+            avoid.append(text)
+        if len(avoid) == MAX_SUGGESTED_AVOID:
+            break
+    cta = _suggested_text(value.get("cta"), 3, 60, 8)
+    goal = value.get("goal")
+    clean_goal = None
+    if isinstance(goal, dict) and goal.get("objective") in GOAL_METRICS:
+        reason = _suggested_text(goal.get("reason"), 8, 160, 30)
+        if reason:
+            clean_goal = {"objective": goal["objective"], "reason": reason}
+    if not (avoid or cta or clean_goal):
+        return None
+    return {"must_avoid": avoid, "cta": cta, "goal": clean_goal}
+
+
 class ModelDraft(_Lenient):
     brand_name: str = Field(default="", max_length=200)
     one_liner: str = Field(default="", max_length=300)
@@ -625,6 +701,13 @@ class ModelDraft(_Lenient):
     metric: str = Field(default="", max_length=200)
     cta: CtaDraft | None = None
     evidence: list[EvidenceItem] = Field(default_factory=list, max_length=40)
+    # Inferred, not quoted: validated for shape only and kept apart from every evidence-backed field.
+    suggestions: dict[str, Any] | None = None
+
+    @field_validator("suggestions", mode="before")
+    @classmethod
+    def shape_suggestions(cls, value):
+        return clean_suggestions(value)
 
     @field_validator("must_avoid", "key_messages", "topics", mode="before")
     @classmethod
@@ -654,9 +737,17 @@ DRAFT_SCHEMA: dict[str, Any] = {
         "evidence": {"type": "array", "items": {"type": "object", "properties": {
             "field": {"type": "string"}, "quote": {"type": "string"}, "page_url": {"type": "string"}},
             "required": ["field", "quote", "page_url"]}},
+        "suggestions": {"type": "object", "properties": {
+            "must_avoid": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_SUGGESTED_AVOID},
+            "cta": {"type": "string"},
+            "goal": {"type": "object", "properties": {
+                "objective": {"type": "string", "enum": ["awareness", "traffic", "leads", "engagement",
+                                                         "followers", "sales"]},
+                "reason": {"type": "string"}}, "required": ["objective", "reason"]}},
+            "required": ["must_avoid", "cta", "goal"]},
     },
     "required": ["brand_name", "one_liner", "audience", "voice", "must_avoid", "key_messages", "topics",
-                 "suggested_goal", "metric", "cta", "evidence"],
+                 "suggested_goal", "metric", "cta", "evidence", "suggestions"],
 }
 
 GOAL_METRICS = {
@@ -675,20 +766,31 @@ Return ONE JSON object with these keys:
 - audience: who the site is written for (1-2 sentences).
 - voice: {"adjectives": 3-5 single words for the tone, "do": one line on how clips should sound,
   "dont": one line on what clips should avoid sounding like}.
-- must_avoid: topics or claims the site signals the brand stays away from; [] if none are stated.
-- key_messages: up to 5 short messages the site repeats.
+- must_avoid: topics or claims the site itself says the brand stays away from; [] if none are stated.
+- key_messages: up to 5 ideas the site keeps making about why the brand matters, as short messages a
+  clip could carry. Not slogans, page headings or menu labels copied as-is.
 - topics: up to 8 subjects the brand covers.
-- suggested_goal: one of awareness, traffic, leads, engagement, followers, sales, discovery.
-  Use discovery when the site gives no clear goal.
+- suggested_goal: one of awareness, traffic, leads, engagement, followers, sales, discovery, only when a
+  full sentence on the site states what the brand wants people to do. Otherwise discovery.
 - metric: for the goal: awareness=reach, traffic=full_episode_visits, leads=qualified_leads,
   engagement=engagement_rate, followers=follower_growth, sales=sales, discovery="".
-- cta: {"text": the main call to action written on the site (max 80 characters), "link": its URL or ""}.
+- cta: {"text": the main call to action sentence written on the site (max 80 characters), "link": its
+  URL or ""}. A menu or navigation label such as "Watch | Listen | Subscribe" is not a call to action;
+  use {"text": "", "link": ""} when there is none.
 - evidence: for EVERY non-empty field above, at least one item {"field": the key name,
   "quote": an exact sentence fragment copied character-for-character from the website text (12-160
   characters), "page_url": the PAGE url it came from}.
+- suggestions: your own recommendations, which the creator accepts or ignores one by one. They are
+  shown as suggestions, never as facts from the site, need no quote and must NOT appear in evidence.
+  {"must_avoid": up to 5 short boundaries clips from a brand like this should keep, even if the site
+   does not state them (for a news, opinion or finance show, for example "Don't state allegations as
+   fact" or "No financial advice"); "cta": one clean call to action for a clip in plain words, max 8
+   words, for example "Watch the full episode"; "goal": {"objective": one of awareness, traffic,
+   leads, engagement, followers, sales, "reason": one line, max 20 words, on why this goal fits}}.
 
 Rules: copy quotes exactly; do not invent facts, numbers, names or links; leave a field empty ("" or [])
-when the text does not support it. Fields without a real quote are deleted."""
+when the text does not support it. Fields without a real quote are deleted. Only "suggestions" may go
+beyond the text."""
 
 
 def _shorten(text: str, limit: int) -> str:
@@ -817,8 +919,10 @@ def verify(draft: ModelDraft, site: Site) -> dict:
     for item in draft.evidence:
         name = _field_name(item.field)
         if name not in FIELDS:
-            continue
+            continue  # includes anything the model tried to cite for "suggestions": never evidence
         hit = find_quote(item.quote, site.pages, item.page_url)
+        if hit and name == "suggested_goal" and (len(hit[0]) < MIN_GOAL_QUOTE_CHARS or nav_like(hit[0])):
+            continue  # a goal backed only by a button label or menu is too thin to call "from your site"
         if hit and len(verified.setdefault(name, [])) < 3 and all(e["quote"] != hit[0] for e in verified[name]):
             verified[name].append({"field": name, "quote": hit[0], "page_url": hit[1]})
     values: dict[str, Any] = {
@@ -829,6 +933,13 @@ def verify(draft: ModelDraft, site: Site) -> dict:
         "suggested_goal": draft.suggested_goal if draft.suggested_goal not in (None, "discovery", "custom") else None,
         "cta": draft.cta.model_dump() if draft.cta and draft.cta.text else None,
     }
+    labels = {_norm(v).casefold() for p in site.pages for v in (p.title, p.og.get("og:title", ""),
+                                                                p.og.get("og:site_name", "")) if v}
+    values["key_messages"] = [m for m in values["key_messages"]
+                              if not nav_like(m) and _norm(m).casefold() not in labels]
+    menu_cta = values["cta"] if values["cta"] and nav_like(values["cta"]["text"]) else None
+    if menu_cta:
+        values["cta"] = None  # a nav label is not a call to action; a suggestion may replace it
     dropped: list[str] = []
     for name in FIELDS:
         empty = values[name] in (None, "", [])
@@ -839,14 +950,16 @@ def verify(draft: ModelDraft, site: Site) -> dict:
     goal = values["suggested_goal"]
     metric = (draft.metric or "").strip() or GOAL_METRICS.get(goal or "", "")
     links = {_key(href): href for page in site.pages for href, _ in page.links}
+
+    def site_link(link: str) -> str | None:
+        found = links.get(_key(urljoin(site.url, link))) if link else None
+        return found if found and urlsplit(found).scheme in {"http", "https"} else None
+
     cta = values["cta"]
     if cta:
-        link = cta.get("link") or ""
-        cta["link"] = links.get(_key(urljoin(site.url, link))) if link else None
-        if cta["link"] and urlsplit(cta["link"]).scheme not in {"http", "https"}:
-            cta["link"] = None
+        cta["link"] = site_link(cta.get("link") or "")
     kept = [n for n in FIELDS if values[n] not in (None, "", [])]
-    if not kept:
+    if not kept:  # suggestions never count: they are not evidence-backed
         raise Abstain("We read your site but couldn't confirm any brand details from its text.")
     return {
         **{k: values[k] for k in ("brand_name", "one_liner", "audience", "voice", "must_avoid", "key_messages",
@@ -859,7 +972,24 @@ def verify(draft: ModelDraft, site: Site) -> dict:
         "dropped": dropped,
         "pages": [_page_info(p) for p in site.pages],
         "source_url": site.url,
+        "provenance": {name: "from_site" for name in kept},
+        "suggested": suggested(draft.suggestions, values, goal, site_link(menu_cta["link"]) if menu_cta else None),
     }
+
+
+def suggested(raw: dict | None, values: dict, goal: str | None, link: str | None) -> dict:
+    """Model suggestions not already covered by an evidence-backed value. Never quote-checked."""
+    raw = raw or {}
+    taken = {v.casefold() for v in values["must_avoid"]}
+    avoid = [v for v in raw.get("must_avoid", []) if v.casefold() not in taken]
+    site_cta = (values["cta"] or {}).get("text", "")
+    text = raw.get("cta") or ""
+    cta = {"text": text, "link": link} if text and text.casefold() != site_cta.casefold() else None
+    pick = raw.get("goal")
+    suggested_goal = None
+    if pick and pick["objective"] != goal:
+        suggested_goal = {**pick, "metric": GOAL_METRICS[pick["objective"]]}
+    return {"must_avoid": avoid, "cta": cta, "goal": suggested_goal, "provenance": "suggested_by_model"}
 
 
 def brand_kit(site: Site) -> dict:

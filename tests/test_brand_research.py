@@ -498,3 +498,107 @@ def test_app_installs_authenticated_brand_research_routes(tmp_path):
         assert session.post("/api/brand-research", json={"url": "ftp://allin.com"}).status_code == 422
         assert session.get("/api/brand-research/missing").status_code == 404
         assert isinstance(app.state.brand_research, BrandResearchService)
+
+
+# ------------------------------------------------------------------- deep URLs and model suggestions
+
+
+def test_deep_url_also_reads_site_home_and_its_episode_pages():
+    events = []
+    site = br.read_site("signal.example.com/about", Web().reader(),
+                        emit=lambda stage, label, **d: events.append((stage, label)))
+    assert [(p.url, p.label) for p in site.pages] == [
+        ("https://signal.example.com/about", "About"), ("https://signal.example.com/", "Home"),
+        ("https://signal.example.com/team", "Team"), ("https://signal.example.com/episodes", "Episodes")]
+    assert events[1:3] == [("reading", "Reading 'About'"), ("reading", "Reading 'Signal Hour Podcast'")]
+    assert events[3] == ("found", "Found 4 pages (Team, Episodes)")
+    assert len({br._key(p.url) for p in site.pages}) == len(site.pages)  # nothing read twice
+
+
+def test_deep_url_page_choice_stays_same_site_and_capped():
+    links = "".join(f'<a href="/episodes/{i}">Episode {i}</a>' for i in range(8))
+    home = br.extract("https://signal.example.com/", f"<main>{links}<a href='https://evil.example.net/shows'>"
+                      "Shows</a><a href='/about'>About</a></main>")
+    about = br.extract("https://signal.example.com/about", "<p>About words.</p>", label="About")
+    chosen = br.choose_pages(about, "signal.example.com", br.MAX_PAGES - 2, more=(home,))
+    assert len(chosen) == 4 and all(url.startswith("https://signal.example.com/episodes/") for url, _ in chosen)
+    assert br.label_for("https://allin.com/about") == "About" and br.label_for("https://allin.com/") == "Home"
+
+
+SUGGESTIONS = {
+    "must_avoid": ["Don't state allegations as fact.", "No financial advice", "Financial advice",
+                   "x" * 120, "Watch | Listen", 7],
+    "cta": "Watch the full episode",
+    "goal": {"objective": "traffic", "reason": "Every page points listeners to full episodes."},
+}
+
+
+def test_suggestions_are_kept_apart_and_never_counted_as_evidence():
+    reply = json.loads(good_reply(suggestions=SUGGESTIONS))
+    reply["evidence"].append({"field": "suggestions.must_avoid", "quote": "Honest conversations with founders",
+                              "page_url": ""})
+    model = Model([json.dumps(reply)])
+    draft = br.draft_brief(site(), admit=model.admit, generate=model.generate)
+    assert draft["suggested"] == {
+        "must_avoid": ["Don't state allegations as fact", "No financial advice"],  # site already has the third
+        "cta": {"text": "Watch the full episode", "link": None},
+        "goal": {"objective": "traffic", "metric": "full_episode_visits",
+                 "reason": "Every page points listeners to full episodes"},
+        "provenance": "suggested_by_model",
+    }
+    assert draft["must_avoid"] == ["financial advice", "sponsored hype"]  # site-backed list untouched
+    assert {e["field"] for e in draft["evidence"]} <= set(br.FIELDS)
+    assert set(draft["provenance"].values()) == {"from_site"}
+    assert "No financial advice" not in json.dumps(draft["evidence"])
+    assert len(model.prompts) == 1
+
+
+def test_suggestions_alone_never_rescue_an_unverifiable_draft():
+    reply = json.loads(good_reply(suggestions=SUGGESTIONS))
+    reply["evidence"] = [{"field": "suggestions", "quote": "A weekly show for first-time founders", "page_url": ""}]
+    with pytest.raises(br.Abstain):
+        br.draft_brief(site(), admit=list, generate=lambda p: json.dumps(reply))
+
+
+def test_suggestion_shapes_and_lengths_are_validated_without_a_repair():
+    assert br.clean_suggestions("No financial advice") is None
+    assert br.clean_suggestions({"must_avoid": "x", "cta": 5, "goal": {"objective": "discovery", "reason": "x" * 20}}) is None
+    cleaned = br.clean_suggestions({"must_avoid": [f"Boundary number {i}" for i in range(9)],
+                                    "cta": "Click here to watch every single episode of the show today",
+                                    "goal": {"objective": "sales"}})
+    assert cleaned == {"must_avoid": [f"Boundary number {i}" for i in range(5)], "cta": "", "goal": None}
+    model = Model([good_reply(suggestions=["not", "an", "object"])])
+    draft = br.draft_brief(site(), admit=model.admit, generate=model.generate)
+    assert draft["suggested"] == {"must_avoid": [], "cta": None, "goal": None, "provenance": "suggested_by_model"}
+    assert len(model.prompts) == 1
+
+
+def test_menu_cta_thin_goal_and_tagline_messages_are_not_presented_as_from_the_site():
+    menu = HOME.replace("<h1>Signal Hour</h1>", "<h1>Signal Hour</h1><p>Watch | Listen | Subscribe</p>")
+    data = br.read_site("signal.example.com", Web(pages={("signal.example.com", "/"): (200, "text/html", menu)}).reader())
+    reply = json.loads(good_reply(
+        cta={"text": "Watch | Listen | Subscribe", "link": "/episodes"},
+        key_messages=["Signal Hour Podcast", "Building a company is messy and that's normal"],
+        suggestions={"cta": "Watch the full episode", "must_avoid": [],
+                     "goal": {"objective": "awareness", "reason": "A weekly show for new founders grows by reach."}},
+    ))
+    reply["evidence"] = [e for e in reply["evidence"] if e["field"] not in ("cta", "suggested_goal", "key_messages[0]")]
+    reply["evidence"] += [
+        {"field": "cta", "quote": "Watch | Listen | Subscribe", "page_url": ""},
+        {"field": "suggested_goal", "quote": "Subscribe to the show", "page_url": ""},  # a button: too thin
+        {"field": "key_messages", "quote": "the messy middle of building a company", "page_url": ""},
+    ]
+    draft = br.draft_brief(data, admit=list, generate=lambda p: json.dumps(reply))
+    assert draft["cta"] is None and "cta" not in draft["provenance"]
+    assert draft["suggested"]["cta"] == {"text": "Watch the full episode", "link": "https://signal.example.com/episodes"}
+    assert draft["suggested_goal"] is None and draft["dropped"] == ["suggested_goal"]
+    assert draft["suggested"]["goal"] == {"objective": "awareness", "metric": "reach",
+                                          "reason": "A weekly show for new founders grows by reach"}
+    assert draft["key_messages"] == ["Building a company is messy and that's normal"]
+
+
+def test_prompt_and_schema_describe_suggestions_apart_from_evidence():
+    prompt = br.build_prompt(site())
+    assert "must NOT appear in evidence" in prompt and "Watch | Listen | Subscribe" in prompt
+    assert "suggestions" in br.DRAFT_SCHEMA["required"]
+    assert len(prompt) <= br.PROMPT_CHAR_BUDGET
