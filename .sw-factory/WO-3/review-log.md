@@ -268,3 +268,21 @@ Primary agent reports real browser support for interpolation, discrete transitio
 ### Verdict
 
 **APPROVED** — no blocking or new unresolved advisory findings in the final controls/action/motion pass. Preserve user drafts and the running native session. Deliver only on the existing team-repository feature branch; no default-branch push or merge is authorized.
+
+## Round 11 — account chrome and utility/icon sizing
+
+### Scope
+
+Reviewed only the new follow-up against HEAD: GrowthApp account-selector markup/footer removal, account-chrome.css, and the bounded plan addition. Prior approved interface/motion/state implementation was not re-audited. The change removes the decorative Preview/version footer while retaining bottom Workspace utilities, adds a standard decorative profile icon beside the existing native campaign profile selector, and normalizes navigation/utility/header sizing with compact width bounds.
+
+### Scope finding resolved during review
+
+The first draft also rendered the campaign profile selector in Tools. This selector updated GrowthApp's campaign workspace profile, while operational Campaigns owns independent profile-selection state. Presenting it there as an editable active profile could imply it scoped operational actions. The implementation agent removed that Tools instance and unused wrapper styles. Re-inspected the resolution: Tools retains its own operational controls, and the campaign profile selector is rendered only in the visible main workspace. No implicit global operational scope or new authentication/settings action remains.
+
+### Accessibility, state and responsive review
+
+The main selector retains its accessible name, options restricted to the current campaign, value/change handler and busy/loading/new-campaign guards. The profile icon is decorative. A focus-visible label outline and explicit select chevron preserve keyboard/discoverability cues. Conditional rendering prevents a duplicate hidden account control while Tools is visible; the campaign state owner remains mounted. The existing utility menu remains at the bottom. Header/icon sizes and 160px/100px selector bounds are scoped without altering handlers or product state. `git diff --check` passes; no README diff or default-branch change is present.
+
+### Verdict and verification boundary
+
+**APPROVED** — the scope finding is resolved and no new blocking or unresolved advisory findings remain in this small follow-up. Primary agent owns the ongoing existing-suite/build and desktop/compact browser verification before delivery; this reviewer makes no new independent native/UI-test claim for the cosmetic follow-up. Preserve the live viewer and drafts, and deliver only on the existing team-repository feature branch.

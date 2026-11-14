@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { PanelLeft } from "lucide-react";
+import { CircleUserRound, PanelLeft } from "lucide-react";
 import { App } from "../App";
 import { useFactory } from "../useFactory";
 import { useCampaignWorkspace } from "./useCampaignWorkspace";
@@ -18,6 +18,7 @@ import "./interactions.css";
 import "./action-craft.css";
 import "./writing-fields.css";
 import "./workspace-motion.css";
+import "./account-chrome.css";
 
 const steps = [
   {
@@ -199,6 +200,23 @@ export function GrowthApp() {
       <kbd>⌘K</kbd>
     </button>
   );
+  const profileControl = w.campaign && !creating ? (
+    <label className="gf-profile-selector">
+      <CircleUserRound size={20} strokeWidth={1.5} aria-hidden="true" />
+      <select
+        aria-label="Active account profile"
+        value={w.profileId}
+        disabled={w.busy || w.loading}
+        onChange={(e) => w.setProfileId(e.target.value)}
+      >
+        {w.profiles
+          .filter((p) => w.campaign?.profile_ids.includes(p.id))
+          .map((p) => (
+            <option value={p.id} key={p.id}>{p.name}</option>
+          ))}
+      </select>
+    </label>
+  ) : null;
   const sidebarToggle = (
     <button
       type="button"
@@ -311,11 +329,6 @@ export function GrowthApp() {
                   </button>
                 </nav>
               </details>
-              <div className="gf-local-status">
-                <span />
-                {reviewPreview ? "PREVIEW" : "ON THIS MAC"}
-                <span>v0.1</span>
-              </div>
             </div>
           </aside>
           <div className="gf-workspace">
@@ -344,22 +357,7 @@ export function GrowthApp() {
               </div>
               <div className="gf-top-right">
                 {commandTrigger}
-                {w.campaign && !creating && (
-                  <select
-                    aria-label="Active account profile"
-                    value={w.profileId}
-                    disabled={w.busy || w.loading}
-                    onChange={(e) => w.setProfileId(e.target.value)}
-                  >
-                    {w.profiles
-                      .filter((p) => w.campaign?.profile_ids.includes(p.id))
-                      .map((p) => (
-                        <option value={p.id} key={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                  </select>
-                )}
+                {!tools && profileControl}
               </div>
             </header>
             <main id="growth-main" className="gf-main">

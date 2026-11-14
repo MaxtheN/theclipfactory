@@ -109,3 +109,9 @@
 - [x] Dialog filter/Enter navigation, Escape exit settles display:none and destination focus; compact modal356px wide/bottom678<844; checkbox checked/unchecked/disabled and matching Tools typography visually inspected; no console errors.
 - [x] Current screenshots: `/Users/kartikbihani/WIN/design/growth-factory/interface-luminous-glass.jpg` and `quick-actions-luminous-glass.jpg`. Temporary browser viewport reset; existing native viewer/Vite processes retained without storage reset or restart. No desktop-through-vibrancy or packaged-app update claim.
 - [x] Updated architecture/context and returned work order to In Review; delivery remains exclusively on the team feature branch.
+
+## Account chrome follow-up
+
+- [x] Removed bottom-left preview/version decoration; retained bottom utility navigation. Standard 20px profile icon accompanies the native top-right campaign account selector, 13px text/36px control; 18px navigation/16px utility icons retain hierarchy.
+- [x] Review caught and resolved an initial Tools-header scope ambiguity: campaign selector stays in campaign workspace; Tools retains its own operational profile controls. No handlers, profile IDs or authentication operations changed.
+- [x] 158 tests and TypeScript/Vite build passed; desktop/390px profile fit verified with page width390/no overflow, explicit chevron/focus treatment and preserved CmdK theme. No browser console errors; viewport reset, viewer/drafts retained. Independent Round11 review recorded before delivery.
