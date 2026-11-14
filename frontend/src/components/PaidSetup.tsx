@@ -1,3 +1,4 @@
+import { AutoTextarea } from "./AutoTextarea";
 import { useEffect, useState } from "react";
 import { api, post } from "../api";
 import type {
@@ -394,7 +395,8 @@ export function PaidSetup({ state }: { state: FactoryState }) {
               </select>
             </Field>
             <Field label="Preflight name">
-              <input
+              <AutoTextarea
+                rows={1}
                 required
                 maxLength={200}
                 value={name}

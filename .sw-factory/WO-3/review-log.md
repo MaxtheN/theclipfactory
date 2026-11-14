@@ -218,3 +218,53 @@ Primary agent reports a new main-workspace screenshot matching the supplied warm
 ### Verdict
 
 **APPROVED** — no blocking or new unresolved advisory findings in the supplied-reference/rail pass. Preserve the current live viewer and Vite processes. Deliver all changes only on `origin/kartik/growth-factory-interface`; no default-branch push or merge is authorized.
+
+## Round 9 — North Star restraint, growing fields and stable actions
+
+### Scope and design alignment
+
+Read the user's attached Product Design North Star and reviewed the complete current delta: shared material tokens and campaign/Tools/dialog cascade, writing-fields/action-craft styles, AutoTextarea implementation/tests and all field migrations, quieter headings, stable primary-action markup/intent cues, and the standard Lucide PanelLeft control/dependency. The user's subsequent steering restored luminous slate/copper transmission after the first token pass felt too dark/flat. The delivered direction keeps that accepted material while removing nested glass, repeated shadows/borders, celebratory label swapping and perpetual plane motion. Prior workflow boundaries remain intact.
+
+Independently viewed `design/growth-factory/interface-luminous-glass.jpg` and `quick-actions-luminous-glass.jpg`. The shared slate-to-copper environment, readable ivory text, quieter section hierarchy, grouped writing fields, warm-white action and cohesive command surface are visibly present. Sample source/preview claims remain explicit; screenshots are interface evidence, not real rendered-media or audience-performance evidence.
+
+### Functional, accessibility and state review
+
+AutoTextarea measures a hidden body-mounted mirror rather than collapsing or rewriting the visible control. It preserves controlled values, native input/change handling, labels/IDs, required/disabled/maxLength semantics and forwarded refs. The mirror has no form name/ID, is hidden from accessibility/focus, and is removed on cleanup. Measurement copies font/wrapping/inset metrics, retains hidden controls' height until reveal, responds to ResizeObserver width changes, disclosure toggle, window resize and font readiness, shrinks after deletion and scrolls internally above the default 240px cap. Only height/overflow styles change on the visible field; caret/selection/value are not rewritten. Observers/listeners/frames/mirrors are cleaned up. Field migrations preserve existing state handlers and keep numeric/date/enum/search/URL/identifier/secret controls in their appropriate native forms.
+
+PrimaryAction now exposes its actual stable visible action label and a decorative intent-specific icon. Short, single-play advance/approve/produce/iterate cues replace the perpetual hover loop; disabled states and reduced motion remain effective. The plain PanelLeft control retains the accessible name/expanded state and shared 64px sidebar rail behavior. No API, storage, approval/render/export, job, backend or native-window lifecycle change was found. README files remain untouched.
+
+### Cascade and contrast review
+
+The three surfaces share one scoped material contract. Main and Tools retain blur at actual shell/work-pane boundaries; nested experiment/content groups are transparent or quiet washes. Summary hover/focus selectors continue to outrank the legacy global rule. Inputs grow without a conflicting visible min-height, and reduced-motion styling disables their brief height transition. Unsupported blur and reduced transparency use dark opaque fallbacks.
+
+A targeted hover-contrast advisory was resolved before approval: source-row metadata/pills, clip metadata and command hints switch to primary ink for selected/hover states; operational Library duration/size is targeted directly through `.source-item small`, and candidate metadata is also covered. Nested variant fill is removed, avoiding another lightness layer behind writing fields. Warning ink is #F9E1BF. Spot-checked the five declared canvas stops with the 22% pane composite; primary/secondary pane contrast is comfortably above normal-text thresholds. Palette audit reports CSS-composite estimates: pane primary 5.62–6.89, secondary 5.00–6.13, metadata 4.59–5.62; field primary 5.15–6.27 and placeholders 4.59–5.58; nested selected/hover primary 4.57–5.48; command primary 6.84–8.52 and selected/hover 5.44–6.65. These bounds assume the declared canvas knots and stated alpha layers, not screenshot-pixel certification over arbitrary media. The accepted screenshots provide the complementary visual check.
+
+### Verification and verdict
+
+Independently ran `npm test`: 11 files / 158 tests passed, including four meaningful grow/cap/shrink/ref/caret/reveal/mirror-lifecycle cases and existing campaign/approval/quick-action regressions. Independently ran TypeScript/Vite production build before final palette-only refinements: passed, single-file native HTML 395.89 kB. Final `git diff --check` passes; no README diff. Primary agent owns the final build after the last CSS-only contrast correction and reports real browser growth to 83px, cap at 240px, shrink to 41px, hidden reveal at 188px, no 390px overflow, keyboard filter/Enter/heading focus, retained sidebar rail and no console errors. Browser edits were restored and viewport reset. No native restart, fresh native AX screenshot, desktop-through vibrancy or real render-quality smoke is claimed.
+
+**APPROVED** — no blocking or new unresolved advisory findings in the North Star/growing-fields/action pass. Preserve the current live native viewer, Vite and user drafts. Complete the final build/check, then deliver only on the existing team-repository feature branch; no default-branch push or merge is authorized.
+
+## Round 10 — unified controls, bounded action cues and native-surface motion
+
+### Scope and behavior preservation
+
+Independent review of the final craft delta: workspace-motion.css, stronger single-play action-craft cues and intent mapping, campaign-selector icon removal, shared font/control tokens, custom native checkbox/radio rendering, review/profile check styling, and matching Tools title/type rules. The action labels, button dimensions, disabled conditions, native details/dialog elements and existing click/key/focus handlers remain unchanged. No backend, API, storage, approval/render/export or native-window lifecycle changes were introduced. README files remain untouched.
+
+### Interaction, accessibility and clipping
+
+Setup's plane and Research's direction arrow leave/re-enter once and return to their original positions; approval check draw/settle is bounded. Labels remain visible and form the accessible names, decorative icons remain hidden from accessibility, and disabled controls do not trigger cues. Reduced-motion rules disable all these effects.
+
+Dialog motion uses starting-style plus opacity/transform and discrete display/overlay transitions; it adds no JavaScript wait or delayed command execution. Disclosure motion progressively enhances native details-content block-size/opacity where supported and retains native behavior/fallback reveal otherwise. Reduced motion removes the added transitions/transforms. Overflow clipping is confined to animated disclosure content and decorative icon slots; actual textarea content retains its existing auto-grow/scroll behavior.
+
+Checkboxes/radios remain real native inputs with their labels, checked/disabled/indeterminate state and keyboard semantics. The scoped 16px treatment gives unchecked controls a visible warm edge and checked controls a cream fill/dark tick or dot, with distinct disabled opacity. Focus outlines remain visible. Visually hidden profile inputs remain hidden and use the existing label focus treatment. Forced-colors restores automatic native appearance and removes image-based marks. Font tokens now cover campaign, Tools and command surfaces; Tools uses the same restrained title scale. Hover/selection text remains readable under the scoped cascade.
+
+### Independent verification and browser evidence
+
+Independently ran `npm test`: 11 files / 158 tests passed. Independently ran `npm run build`: TypeScript/Vite single-file production build passed (404.38 kB native HTML). `git diff --check` passed, with no README diff. These are presentation changes over the already-tested state/approval/quick-action and growing-field paths; no redundant cosmetic tests were added.
+
+Primary agent reports real browser support for interpolation, discrete transitions and details-content; settled modal close with open=false/display=none/opacity=0; immediate destination heading focus after command navigation; disclosure close/reopen retaining long guardrail text at 167px with 165px scroll content and no overflow; progress expansion/collapse reaching content height 106.69px/0; and the expected unchecked/checked custom-control states. Temporary sample edits were restored and no save/render/approval action was persisted during these checks. This evidence is credited to the primary agent, not an independent fresh native screenshot. The live native viewer/Vite session remains preserved.
+
+### Verdict
+
+**APPROVED** — no blocking or new unresolved advisory findings in the final controls/action/motion pass. Preserve user drafts and the running native session. Deliver only on the existing team-repository feature branch; no default-branch push or merge is authorized.

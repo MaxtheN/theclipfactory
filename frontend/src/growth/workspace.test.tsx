@@ -93,7 +93,7 @@ describe("Growth Factory interface", () => {
     fireEvent.change(search, { target: { value: "studio" } });
     fireEvent.keyDown(search, { key: "Enter" });
     expect(
-      screen.getByRole("heading", { name: "Make the cut." }),
+      screen.getByRole("heading", { name: "Clip studio" }),
     ).toHaveFocus();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
@@ -136,7 +136,7 @@ describe("Growth Factory interface", () => {
       screen.getByRole("button", { name: /^Save & find direction\b/ }),
     );
     await screen.findByRole("heading", {
-      name: "Choose a creative direction.",
+      name: "Creative direction",
     });
     const before = await previewRequest<Campaign>(path);
     expect(before.active_strategy_id).toBeNull();
@@ -144,7 +144,7 @@ describe("Growth Factory interface", () => {
       screen.getByRole("button", { name: /^Approve direction\b/ }),
     );
     await screen.findByRole("heading", {
-      name: "Make the cut.",
+      name: "Clip studio",
     });
     expect((await previewRequest<Campaign>(path)).active_strategy_id).toBe(
       "preview-strategy-v1",
@@ -268,7 +268,7 @@ describe("approval transition regressions", () => {
       screen.getByRole("button", { name: /^Approve next test\b/ }),
     );
     await screen.findByRole("heading", {
-      name: "Make the cut.",
+      name: "Clip studio",
     });
     await waitFor(() =>
       expect(screen.getByLabelText("Source footage")).toHaveValue(

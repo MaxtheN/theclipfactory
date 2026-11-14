@@ -1,3 +1,4 @@
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useRef, useState, type DragEvent } from "react";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -106,15 +107,15 @@ export function Setup({
         <div className="gf-card-header">
           <div>
             <span className="gf-overline">01 / CAMPAIGN BRIEF</span>
-            <h2>Give it direction</h2>
-            <p>A clear brief makes every edit more intentional.</p>
+            <h2>Campaign brief</h2>
           </div>
         </div>
         <div className="gf-form-fields">
           <FieldGroup title="Campaign essentials">
             <Field label="Campaign name">
               {(id) => (
-                <input
+                <AutoTextarea
+                  rows={1}
                   id={id}
                   maxLength={200}
                   placeholder="e.g. Founder stories · November"
@@ -125,7 +126,8 @@ export function Setup({
             </Field>
             <Field label="Who are we speaking to?">
               {(id) => (
-                <input
+                <AutoTextarea
+                  rows={1}
                   id={id}
                   placeholder="Builders, founders and curious minds"
                   value={audience}
@@ -154,11 +156,8 @@ export function Setup({
               )}
             </Field>
           </FieldGroup>
-          <FieldGroup title="Account profiles">
+          <FieldGroup title="Local profiles">
             <div className="gf-field">
-              <span className="gf-label">
-                Account context <span>local profiles</span>
-              </span>
               <div className="gf-profile-options">
                 {w.profiles.map((p) => (
                   <label
@@ -187,7 +186,8 @@ export function Setup({
             <Disclosure title="Brand & profile settings" icon="settings">
               <Field label="Profile name">
                 {(id) => (
-                  <input
+                  <AutoTextarea
+                    rows={1}
                     id={id}
                     placeholder="e.g. Founder stories"
                     value={profileName}
@@ -219,7 +219,7 @@ export function Setup({
 
               <Field label="What should every edit respect?">
                 {(id) => (
-                  <textarea
+                  <AutoTextarea
                     id={id}
                     value={constraints}
                     onChange={(e) => setConstraints(e.target.value)}
@@ -339,7 +339,7 @@ export function Setup({
         </span>
         <PrimaryAction
           label={w.busy ? "Saving…" : "Save & find direction"}
-          hoverLabel="Let’s make this one count"
+          intent="advance"
           disabled={blocked || !name.trim() || !selected.length}
           onClick={() => void save()}
         />

@@ -1,3 +1,4 @@
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useState } from "react";
 import { workspaceApi, initialDirection, reviewPreview } from "./workspaceApi";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -85,7 +86,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
         <div className="gf-card-header">
           <div>
             <span className="gf-overline">THE CREATIVE DIRECTION</span>
-            <h2>One idea. Two ways in.</h2>
+            <h2>Proposed test</h2>
           </div>
           <Pill tone={active ? "mint" : "quiet"}>
             {pending
@@ -137,7 +138,8 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
         >
           <Field label="The idea worth testing">
             {(id) => (
-              <input
+              <AutoTextarea
+                rows={1}
                 className="gf-idea-input"
                 id={id}
                 value={angle}
@@ -148,7 +150,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
           </Field>
           <Field label="What should the source moment do?">
             {(id) => (
-              <textarea
+              <AutoTextarea
                 id={id}
                 value={selection}
                 onChange={(e) => setSelection(e.target.value)}
@@ -167,7 +169,8 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
               <span className="gf-overline">FIRST APPROACH</span>
               <Field label="Opening A">
                 {(id) => (
-                  <input
+                  <AutoTextarea
+                    rows={1}
                     id={id}
                     value={hookA}
                     onChange={(e) => setHookA(e.target.value)}
@@ -181,7 +184,8 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
               <span className="gf-overline">THE ALTERNATIVE</span>
               <Field label="Opening B">
                 {(id) => (
-                  <input
+                  <AutoTextarea
+                    rows={1}
                     id={id}
                     value={hookB}
                     onChange={(e) => setHookB(e.target.value)}
@@ -202,7 +206,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
         <Disclosure title="Reasoning & limits" icon="info">
           <Field label="Why try this?">
             {(id) => (
-              <textarea
+              <AutoTextarea
                 id={id}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -230,11 +234,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
                   ? "Approve direction"
                   : "Save direction draft"
             }
-            hoverLabel={
-              canApprove
-                ? "Approve & bring it to life"
-                : "Save a little brilliance"
-            }
+            intent={canApprove ? "approve" : "direction"}
             disabled={
               blocked ||
               !angle.trim() ||

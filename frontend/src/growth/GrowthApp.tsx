@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { PanelLeft } from "lucide-react";
 import { App } from "../App";
 import { useFactory } from "../useFactory";
 import { useCampaignWorkspace } from "./useCampaignWorkspace";
@@ -11,36 +12,40 @@ import { Results } from "./Results";
 import { Disclosure } from "./parts";
 import { QuickActions, type QuickAction } from "./QuickActions";
 import "./growth.css";
+import "./material-tokens.css";
 import "./desktop-glass.css";
 import "./interactions.css";
+import "./action-craft.css";
+import "./writing-fields.css";
+import "./workspace-motion.css";
 
 const steps = [
   {
     id: "setup",
     label: "Setup",
-    detail: "Set the intention",
-    title: "Set up your campaign.",
-    sub: "Bring your footage, define your audience, and give the next edit a purpose.",
+    detail: "Brief & sources",
+    title: "Campaign setup",
+    sub: "Define the brief, then choose your footage.",
   },
   {
     id: "research",
     label: "Research",
-    detail: "Find your direction",
-    title: "Choose a creative direction.",
-    sub: "Turn a useful reference into one clear idea and two openings to test.",
+    detail: "Hypothesis & openings",
+    title: "Creative direction",
+    sub: "Set one hypothesis and compare two openings.",
   },
   {
     id: "studio",
     label: "Studio",
     detail: "Make & refine",
-    title: "Make the cut.",
+    title: "Clip studio",
     sub: "Choose a moment, refine the edit, and approve the exact version you want.",
   },
   {
     id: "results",
     label: "Results",
-    detail: "Learn & repeat",
-    title: "Learn from every edit.",
+    detail: "Evidence & next test",
+    title: "Results & next test",
     sub: "Review the evidence and decide what to try in the next production.",
   },
 ] as const;
@@ -203,7 +208,7 @@ export function GrowthApp() {
       title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
     >
-      <Icon name="back" size={17} />
+      <PanelLeft size={17} strokeWidth={1.6} aria-hidden="true" />
     </button>
   );
   return (
@@ -316,7 +321,6 @@ export function GrowthApp() {
           <div className="gf-workspace">
             <header className="gf-topbar">
               <div className="gf-breadcrumb">
-                <Icon name="folder" size={17} />
                 <select
                   aria-label="Current campaign"
                   value={creating ? "new" : w.selected}

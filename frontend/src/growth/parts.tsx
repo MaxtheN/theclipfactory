@@ -3,31 +3,35 @@ import { Icon } from "./Icon";
 import { reviewPreview } from "./workspaceApi";
 export function PrimaryAction({
   label,
-  hoverLabel,
   disabled,
   onClick,
   full = false,
+  intent = "advance",
 }: {
   label: string;
-  hoverLabel: string;
   disabled?: boolean;
   onClick: () => void;
   full?: boolean;
+  intent?: "advance" | "direction" | "approve" | "produce" | "iterate";
 }) {
+  const icon = {
+    advance: "send",
+    direction: "arrow",
+    approve: "check",
+    produce: "play",
+    iterate: "refresh",
+  }[intent];
   return (
     <button
       type="button"
       className={`gf-button gf-primary-action${full ? " full" : ""}`}
-      aria-label={disabled ? label : `${label}. ${hoverLabel}`}
+      data-intent={intent}
       disabled={disabled}
       onClick={onClick}
     >
-      <span className="gf-action-copy" aria-hidden="true">
-        <span className="gf-action-default">{label}</span>
-        <span className="gf-action-win">{hoverLabel}</span>
-      </span>
-      <span className="gf-plane-slot" aria-hidden="true">
-        <Icon name="send" size={18} />
+      <span className="gf-action-text">{label}</span>
+      <span className="gf-action-icon" aria-hidden="true">
+        <Icon name={icon} size={17} />
       </span>
     </button>
   );

@@ -1,3 +1,4 @@
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useState } from "react";
 import { endpoint, post } from "../api";
 import type { Candidate, Video, Job, TeamRun } from "../types";
@@ -338,14 +339,15 @@ function Editor({
             </Field>
           </div>
           <Field label="Hook">
-            <input
+            <AutoTextarea
+              rows={1}
               value={hook}
               onChange={(e) => setHook(e.target.value)}
               placeholder="The reason to keep watching"
             />
           </Field>
           <Field label="Caption">
-            <textarea
+            <AutoTextarea
               rows={4}
               value={caption}
               onChange={(e) => setCaption(e.target.value)}

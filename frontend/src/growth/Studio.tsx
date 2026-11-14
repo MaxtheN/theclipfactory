@@ -1,3 +1,4 @@
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useEffect, useRef, useState } from "react";
 import { endpoint, put } from "../api";
 import { activeJob, sourceHasActiveJob } from "../productionPreflight";
@@ -163,8 +164,8 @@ export function Studio({
             <span className="gf-overline">YOUR CREATIVE WORKBENCH</span>
             <h2>
               {selected
-                ? "See it. Feel it. Refine it."
-                : "Let's make the first cut."}
+                ? "Current version"
+                : "Output preview"}
             </h2>
           </div>
           <Pill tone={selected?.approved ? "mint" : "quiet"}>
@@ -326,10 +327,10 @@ export function Studio({
             </span>
             <h2>
               {selected && !revision
-                ? "Make the call."
+                ? "Review this version"
                 : revision
-                  ? "A little closer."
-                  : "Shape the first cut."}
+                  ? "Revise the edit"
+                  : "Select a moment"}
             </h2>
             <p>
               {selected && !revision
@@ -420,7 +421,7 @@ export function Studio({
             {revision && (
               <Field label="What would make it better?">
                 {(id) => (
-                  <textarea
+                  <AutoTextarea
                     id={id}
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
@@ -457,11 +458,7 @@ export function Studio({
                     ? "Render a new revision"
                     : "Make the first cut"
               }
-              hoverLabel={
-                revision
-                  ? "Make the next version shine"
-                  : "Let’s make a great cut"
-              }
+              intent="produce"
               disabled={
                 !renderReady || !rangeReady || (revision && !feedback.trim())
               }
@@ -589,7 +586,7 @@ export function Studio({
                 <PrimaryAction
                   full
                   label="Approve this clip"
-                  hoverLabel="Approve a keeper"
+                  intent="approve"
                   disabled={!canReview || !!playbackError}
                   onClick={() =>
                     void w.run(

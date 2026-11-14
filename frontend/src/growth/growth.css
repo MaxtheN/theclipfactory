@@ -528,63 +528,6 @@
   white-space: normal;
   overflow: hidden;
 }
-.gf-action-copy {
-  display: grid;
-  min-width: 0;
-  text-align: center;
-}
-.gf-action-copy > span {
-  grid-area: 1 / 1;
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease;
-}
-.gf-action-win {
-  opacity: 0;
-  transform: translateY(6px);
-}
-.gf-plane-slot {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-.gf-primary-action:is(:hover, :focus-visible):not(:disabled)
-  .gf-action-default {
-  opacity: 0;
-  transform: translateY(-6px);
-}
-.gf-primary-action:is(:hover, :focus-visible):not(:disabled) .gf-action-win {
-  opacity: 1;
-  transform: translateY(0);
-}
-.gf-primary-action:is(:hover, :focus-visible):not(:disabled)
-  .gf-plane-slot
-  svg {
-  animation: gf-send-flight 1.8s ease-in-out infinite;
-}
-@keyframes gf-send-flight {
-  0%,
-  12% {
-    transform: translate(0, 0);
-    opacity: 1;
-  }
-  42% {
-    transform: translate(25px, -25px);
-    opacity: 0;
-  }
-  43% {
-    transform: translate(-21px, 21px);
-    opacity: 0;
-  }
-  72%,
-  100% {
-    transform: translate(0, 0);
-    opacity: 1;
-  }
-}
 .gf-field-group {
   min-width: 0;
   border: 0;

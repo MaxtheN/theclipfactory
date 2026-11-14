@@ -1,3 +1,4 @@
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useState } from "react";
 import type { FactoryState } from "../useFactory";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -148,7 +149,7 @@ export function Results({
         <div className="gf-card-header">
           <div>
             <span className="gf-overline">01 / REVIEW EVIDENCE</span>
-            <h2>Evidence, before instinct.</h2>
+            <h2>Evidence</h2>
           </div>
           <Icon name="results" />
         </div>
@@ -294,7 +295,7 @@ export function Results({
         <div className="gf-card-header">
           <div>
             <span className="gf-overline">02 / PLAN THE NEXT TEST</span>
-            <h2>Give the next edit a reason.</h2>
+            <h2>Next test</h2>
           </div>
           <Pill tone="quiet">
             {active
@@ -321,7 +322,7 @@ export function Results({
               <strong>Question</strong>
               <Field label="What would we like to learn?">
                 {(id) => (
-                  <textarea
+                  <AutoTextarea
                     id={id}
                     rows={2}
                     value={hypothesis}
@@ -338,7 +339,7 @@ export function Results({
               <strong>Change one thing</strong>
               <Field label="Proposed source-selection rule">
                 {(id) => (
-                  <textarea
+                  <AutoTextarea
                     id={id}
                     rows={2}
                     value={rule}
@@ -384,13 +385,7 @@ export function Results({
                     ? "Save next test draft"
                     : "Propose next test"
             }
-            hoverLabel={
-              canApprove
-                ? "Approve & keep growing"
-                : pending
-                  ? "Save the next good idea"
-                  : "Find your next good idea"
-            }
+            intent={canApprove ? "approve" : "iterate"}
             disabled={
               blocked ||
               !active ||

@@ -1,50 +1,38 @@
-/* Smoked desktop glass: cool slate above, quiet copper warmth underneath. */
+/* Luminous smoked glass: spatial slate light with transmitted umber warmth. */
 .gf-app {
-  --ink: #f5f2ed;
-  --muted: #cbc9c4;
-  --line: rgba(255, 255, 255, 0.15);
-  --glass: rgba(50, 56, 61, 0.45);
+  --ink: var(--material-ink);
+  --muted: var(--material-secondary);
+  --line: var(--material-divider);
+  --glass: var(--material-pane);
   --mint: #d8dfd6;
-  --accent: #f3eee5;
-  --danger: #f0b9ac;
+  --accent: var(--material-button);
+  --danger: var(--material-danger);
   color-scheme: dark;
+  font-family: var(--material-font);
   color: var(--ink);
-  background:
-    radial-gradient(
-      ellipse at 16% 57%,
-      rgba(156, 79, 35, 0.32),
-      transparent 52%
-    ),
-    radial-gradient(
-      ellipse at 90% 0%,
-      rgba(119, 145, 159, 0.2),
-      transparent 54%
-    ),
-    radial-gradient(
-      ellipse at 75% 100%,
-      rgba(156, 95, 55, 0.24),
-      transparent 60%
-    ),
-    linear-gradient(170deg, #303940 0%, #343b40 30%, #494039 65%, #59402e 100%);
+  background: var(--material-canvas);
   background-attachment: fixed;
 }
+/* Explicit select rendering avoids WebKit's compact native menu height. */
 .gf-app select {
+  appearance: none;
+  -webkit-appearance: none;
   text-transform: none;
+  min-height: 40px;
+  padding: 9px 34px 9px 12px;
+  line-height: 1.4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='m3 4.5 3 3 3-3' stroke='%23F3F1EC' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 12px;
 }
 
-.gf-app .gf-ambient:before {
-  background: linear-gradient(135deg, #8298a324, #a4765429 58%, #c59b6d1f);
-  box-shadow: inset 0 0 110px #d7b28d12;
-  filter: blur(20px);
-}
-
-.gf-app .gf-ambient:after {
-  background: linear-gradient(35deg, #b274493d, #8e66552e 58%, #cba77512);
-  filter: blur(24px);
+.gf-app .gf-ambient {
+  display: none;
 }
 
 .gf-app .gf-window {
-  background: rgba(26, 30, 34, 0.1);
+  background: transparent;
 }
 
 .gf-app .gf-main {
@@ -86,31 +74,28 @@
 
 .gf-app .gf-sidebar {
   color: var(--ink);
-  background: linear-gradient(180deg, #26323c45, #3d332b38);
+  background: var(--material-shell);
   border-right-color: var(--line);
-  backdrop-filter: blur(30px) saturate(1.18);
-  -webkit-backdrop-filter: blur(30px) saturate(1.18);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
 }
 
-.gf-app .gf-topbar,
-.gf-app .gf-journey {
+.gf-app .gf-topbar {
   color: var(--muted);
-  background: rgba(43, 51, 58, 0.25);
+  background: var(--material-shell);
   border-color: var(--line);
-  backdrop-filter: blur(26px) saturate(1.18);
-  -webkit-backdrop-filter: blur(26px) saturate(1.18);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
 .gf-app .gf-card,
 .gf-app .gf-stage-action {
   color: var(--ink);
-  background: linear-gradient(145deg, #ffffff0b, #ffffff03), var(--glass);
-  border-color: rgba(255, 255, 255, 0.19);
-  box-shadow:
-    0 12px 36px -24px #080b104d,
-    inset 0 1px 0 #ffffff0d;
-  backdrop-filter: blur(26px) saturate(1.2);
-  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  background: var(--glass);
+  border-color: var(--material-line);
+  box-shadow: none;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
 .gf-app h1,
@@ -128,7 +113,7 @@
 }
 
 .gf-app .gf-brand-period {
-  color: #dfc5a3;
+  color: var(--material-focus);
 }
 .gf-app .gf-brand-mark i {
   background: #bc9877;
@@ -189,7 +174,7 @@
 .gf-app .gf-media-context > strong,
 .gf-app .gf-test-variable strong,
 .gf-app .gf-spec-row strong {
-  color: #e0dcd5;
+  color: var(--material-ink);
 }
 
 .gf-app .gf-eyebrow > span,
@@ -208,22 +193,22 @@
 .gf-app .gf-nav-item:hover:not(:disabled),
 .gf-app .gf-workspace-menu nav > button:hover,
 .gf-app .gf-sidebar-bottom > button:hover {
-  color: #fffaf1;
-  background: rgba(255, 255, 255, 0.075);
+  color: var(--material-ink);
+  background: var(--material-hover);
 }
 
 .gf-app .gf-nav-item.active {
-  color: #fffaf2;
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 1px 0 #ffffff0d;
+  color: var(--material-ink);
+  background: var(--material-selected);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .gf-app .gf-active-dot {
   background: #e7cfaa;
 }
 .gf-app .gf-top-right select {
-  color: #e0dcd5 !important;
+  color: var(--material-ink) !important;
 }
 .gf-app .gf-topbar select {
   color: var(--ink);
@@ -236,13 +221,13 @@
 
 .gf-app .gf-icon-button,
 .gf-app .gf-sidebar-toggle {
-  color: #e0dcd5;
+  color: var(--material-ink);
   background: transparent;
 }
 
 .gf-app .gf-icon-button:hover,
 .gf-app .gf-sidebar-toggle:hover {
-  color: #fffaf1;
+  color: var(--material-ink);
   background: #ffffff12;
 }
 
@@ -255,47 +240,45 @@
   color: #e6e2db;
 }
 .gf-app .gf-preview-tag {
-  color: #cbc9c4;
+  color: var(--material-secondary);
 }
 .gf-app .gf-preview-dot {
   background: #c6baa9;
 }
 
 .gf-app .gf-button {
-  color: #302d29;
-  background: #f3eee5;
-  border-color: #fffaf0;
-  box-shadow:
-    0 2px 7px #10100e20,
-    inset 0 1px 0 #ffffffb3;
+  color: var(--material-button-ink);
+  background: var(--material-button);
+  border-color: transparent;
+  box-shadow: none;
 }
 .gf-app .gf-button:hover:not(:disabled) {
-  color: #282620;
-  background: #fff9ed;
-  border-color: #fffaf0;
-  box-shadow: 0 3px 12px #10100e2e;
+  color: var(--material-button-ink);
+  background: #f7f4ee;
+  border-color: transparent;
+  box-shadow: none;
 }
 .gf-app .gf-button.secondary,
 .gf-app .gf-command-trigger {
-  color: #f1ece4;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 1px 0 #ffffff09;
+  color: var(--material-ink);
+  background: var(--material-hover);
+  border-color: var(--material-line);
+  box-shadow: none;
 }
 .gf-app .gf-button.secondary:hover:not(:disabled),
 .gf-app .gf-command-trigger:hover {
-  color: #fffaf1;
-  background: rgba(255, 255, 255, 0.13);
-  border-color: rgba(255, 255, 255, 0.27);
+  color: var(--material-ink);
+  background: var(--material-selected);
+  border-color: var(--material-field-line);
 }
 .gf-app .gf-button.ghost {
-  color: #e0dcd5;
+  color: var(--material-ink);
   background: transparent;
   border-color: transparent;
   box-shadow: none;
 }
 .gf-app .gf-button.ghost:hover:not(:disabled) {
-  color: #fffaf1;
+  color: var(--material-ink);
   background: #ffffff10;
   border-color: transparent;
   box-shadow: none;
@@ -304,7 +287,7 @@
   color: inherit;
 }
 .gf-app .gf-command-trigger kbd {
-  color: #d6d3cc;
+  color: var(--material-secondary);
   background: #ffffff0b;
   border-color: #ffffff26;
 }
@@ -313,10 +296,10 @@
 .gf-app select,
 .gf-app textarea,
 .gf-app .gf-hypothesis .gf-idea-input {
-  color: #f5f2ed;
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: inset 0 1px 2px #10151b12;
+  color: var(--material-ink);
+  background: var(--material-field);
+  border-color: var(--material-field-line);
+  box-shadow: none;
   color-scheme: dark;
 }
 .gf-app input:not([type="checkbox"]),
@@ -325,17 +308,29 @@
   padding-top: 9px;
   padding-bottom: 9px;
 }
+.gf-app select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='m3 4.5 3 3 3-3' stroke='%23F3F1EC' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 12px;
+}
+.gf-app .gf-topbar select {
+  min-height: 34px;
+  padding: 6px 26px 6px 8px;
+  background-color: transparent;
+  background-position: right 7px center;
+}
 .gf-app select option {
-  color: #f5f2ed;
-  background: #303940;
+  color: var(--material-ink);
+  background: var(--material-canvas-top);
 }
 .gf-app input::placeholder,
 .gf-app textarea::placeholder {
-  color: #bfc1bf;
+  color: var(--material-secondary);
   opacity: 1;
 }
 .gf-app input[type="checkbox"] {
-  accent-color: #e7d8c3;
+  accent-color: var(--material-button);
 }
 
 .gf-app .gf-source,
@@ -343,21 +338,28 @@
 .gf-app .gf-variant-pair > div,
 .gf-app .gf-next-source,
 .gf-app .gf-clip-strip > button {
-  color: #e3dfd7;
-  background: rgba(255, 255, 255, 0.045);
-  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--material-ink);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .gf-app .gf-source.selected,
+.gf-app .gf-source.selected:hover,
 .gf-app .gf-profile-options > label.selected,
-.gf-app .gf-clip-strip > button.selected {
-  color: #fff6e8;
-  background: rgba(235, 216, 188, 0.11);
-  border-color: rgba(235, 216, 188, 0.4);
+.gf-app .gf-profile-options > label.selected:hover,
+.gf-app .gf-clip-strip > button.selected,
+.gf-app .gf-clip-strip > button.selected:hover {
+  color: var(--material-ink);
+  background: var(--material-selected);
+  border-color: transparent;
+  box-shadow: inset 2px 0 0 var(--material-focus);
 }
 .gf-app .gf-source:hover,
 .gf-app .gf-profile-options > label:hover,
 .gf-app .gf-clip-strip > button:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--material-hover);
 }
 .gf-app .gf-source-cover,
 .gf-app .gf-next-source-art {
@@ -368,15 +370,15 @@
   color: #c8b9a4;
 }
 .gf-app .gf-upload {
-  color: #e5dfd3;
-  background: rgba(255, 255, 255, 0.035);
-  border-color: rgba(255, 255, 255, 0.27);
+  color: var(--material-ink);
+  background: var(--material-field);
+  border-color: var(--material-field-line);
 }
 .gf-app .gf-upload:hover,
 .gf-app .gf-upload.dragging {
-  color: #fff5e6;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(236, 208, 169, 0.62);
+  color: var(--material-ink);
+  background: var(--material-hover);
+  border-color: var(--material-focus);
 }
 .gf-app .gf-upload-icon,
 .gf-app .gf-upload u {
@@ -389,7 +391,7 @@
   color: inherit;
 }
 .gf-app .gf-disclosure-body {
-  color: #d4d0c8;
+  color: var(--material-secondary);
 }
 .gf-app .gf-card-action,
 .gf-app .gf-spec-row,
@@ -412,12 +414,12 @@
   background: #a0c5a01c;
 }
 .gf-app .gf-pill.sand {
-  color: #f0d4ae;
-  background: #c89b5c24;
+  color: var(--material-warning);
+  background: var(--material-warning-fill);
 }
 .gf-app .gf-review-checks svg {
-  color: #d0ddc8;
-  background: #a9b99b1a;
+  color: var(--material-focus);
+  background: var(--material-field);
 }
 .gf-app .gf-studio-media {
   background: rgba(22, 29, 34, 0.24);
@@ -496,9 +498,9 @@
   border-color: #ffffff29;
 }
 .gf-app .gf-help {
-  color: #f0d4ae !important;
-  background: #b9853921;
-  border-color: #d7ae6b3d;
+  color: var(--material-warning) !important;
+  background: var(--material-warning-fill);
+  border-color: transparent;
 }
 .gf-app .gf-message.error,
 .gf-app .gf-inline-error {
@@ -510,6 +512,14 @@
   color: #d7e6ce;
   background: #7d9b6e21;
   border-color: #c0d0b33b;
+}
+.gf-app .gf-journey {
+  color: var(--material-secondary);
+  background: transparent;
+  border-color: var(--material-divider);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .gf-app .gf-journey > div > span {
   color: #dfd7ca;
@@ -537,7 +547,7 @@
 .gf-app button:focus-visible,
 .gf-app a:focus-visible,
 .gf-command-dialog button:focus-visible {
-  outline: 2px solid #edddc19c;
+  outline: 2px solid var(--material-focus);
   outline-offset: 3px;
 }
 .gf-app h1:focus {
@@ -559,12 +569,6 @@
 .gf-app .gf-brand-row .gf-sidebar-toggle {
   margin-left: auto;
 }
-.gf-app .gf-sidebar-toggle > svg {
-  transition: transform 180ms ease;
-}
-.gf-app .gf-sidebar-toggle[aria-expanded="false"] > svg {
-  transform: rotate(180deg);
-}
 .gf-app.is-sidebar-collapsed .gf-window {
   grid-template-columns: 64px minmax(0, 1fr);
 }
@@ -585,66 +589,106 @@
 
 /* The command surface uses the same material, with denser contrast. */
 .gf-command-dialog {
+  font-family: var(--material-font);
   color-scheme: dark;
-  color: #f5f2ed;
-  background:
-    linear-gradient(145deg, #ffffff0a, #ffffff03), rgba(43, 48, 53, 0.89);
-  border-color: #ffffff30;
-  box-shadow:
-    0 32px 100px -24px #090e17a3,
-    inset 0 1px 0 #ffffff14;
-  backdrop-filter: blur(32px) saturate(1.2);
-  -webkit-backdrop-filter: blur(32px) saturate(1.2);
+  color: var(--material-ink);
+  background: var(--material-command);
+  border-color: var(--material-line);
+  box-shadow: 0 24px 72px -24px rgba(9, 14, 23, 0.5);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
 }
 .gf-command-dialog::backdrop {
-  background: rgba(11, 15, 21, 0.38);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(20, 27, 33, 0.14);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 .gf-command-dialog .gf-command-search {
-  color: #d6c8b3;
-  border-color: #ffffff20;
+  color: var(--material-ink);
+  background: transparent;
+  border-color: var(--material-divider);
 }
 .gf-command-dialog .gf-command-search input {
-  color: #f5f2ed;
+  color: var(--material-ink);
   background: transparent;
 }
 .gf-command-dialog .gf-command-search input::placeholder {
-  color: #bfc1bf;
+  color: var(--material-secondary);
   opacity: 1;
 }
 .gf-command-dialog .gf-command-close {
-  color: #e2d9ca;
-  background: #ffffff0d;
-  border-color: #ffffff24;
+  color: var(--material-ink);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 .gf-command-dialog .gf-command-close:hover {
-  color: #fff7ea;
-  background: #ffffff1a;
+  color: var(--material-ink);
+  background: var(--material-hover);
 }
 .gf-command-dialog .gf-command-group-label,
 .gf-command-dialog .gf-command-option-copy > small,
 .gf-command-dialog .gf-command-empty,
 .gf-command-dialog .gf-command-footer {
-  color: #cbc9c4;
+  color: var(--material-secondary);
 }
 .gf-command-dialog .gf-command-option {
-  color: #e7e1d7;
+  color: var(--material-ink);
   background: transparent;
 }
 .gf-command-dialog .gf-command-option:hover:not(:disabled),
 .gf-command-dialog .gf-command-option.selected {
-  color: #fff6e8;
-  background: #ffffff15;
-  border-color: #ffffff24;
+  color: var(--material-ink);
+  background: var(--material-selected);
+  border-color: transparent;
+  box-shadow: none;
 }
 .gf-command-dialog .gf-command-enter {
-  color: #e3cba4;
+  color: var(--material-secondary);
 }
 .gf-command-dialog .gf-command-footer {
-  border-color: #ffffff20;
+  background: transparent;
+  border-color: var(--material-divider);
 }
 
+.gf-app .gf-source.selected .gf-source-copy > span,
+.gf-app .gf-source:hover .gf-source-copy > span,
+.gf-app .gf-clip-strip > button.selected small,
+.gf-app .gf-clip-strip > button:hover small,
+.gf-command-dialog .gf-command-option.selected .gf-command-option-copy > small,
+.gf-command-dialog .gf-command-option:hover:not(:disabled) .gf-command-option-copy > small {
+  color: var(--material-ink);
+}
+
+.gf-app .gf-source .gf-pill {
+  color: var(--material-ink);
+  background: var(--material-field);
+}
+.gf-app .gf-source.selected .gf-pill,
+.gf-app .gf-source:hover .gf-pill {
+  background: transparent;
+}
+
+.gf-app .gf-profile-options > label.selected > svg:last-child {
+  color: var(--material-focus);
+}
+
+/* Nested content uses spacing and quiet washes rather than more glass. */
+.gf-app .gf-variant-pair > div {
+  background: transparent;
+  border-color: transparent;
+}
+.gf-app .gf-nav-item.active:hover:not(:disabled) {
+  color: var(--material-ink);
+  background: var(--material-selected);
+  border-color: transparent;
+}
+.gf-app .gf-nav-group-label,
+.gf-app .gf-local-status,
+.gf-app .gf-source-footnote,
+.gf-app .gf-bottom-line {
+  color: var(--material-metadata);
+}
 @media (max-width: 760px) {
   .gf-app .gf-main {
     padding: 24px 18px 20px;
@@ -700,12 +744,12 @@
   .gf-app .gf-journey,
   .gf-app .gf-stage-action,
   .gf-command-dialog {
-    background: #343b40;
+    background: var(--material-pane-solid);
   }
 }
 @media (prefers-reduced-transparency: reduce) {
   .gf-app {
-    background: linear-gradient(170deg, #303940, #493c33);
+    background: var(--material-canvas-top);
   }
   .gf-app .gf-ambient {
     display: none;
@@ -716,7 +760,7 @@
   .gf-app .gf-journey,
   .gf-app .gf-stage-action,
   .gf-command-dialog {
-    background: #343b40;
+    background: var(--material-pane-solid);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

@@ -96,3 +96,16 @@
 - [x] Independent review rounds 6, 7 and final reference Round 8 APPROVED; compact advisory resolved. Current screenshots: `/Users/kartikbihani/WIN/design/growth-factory/interface-smoked-desktop.jpg` and `quick-actions-smoked.jpg`.
 - [x] Native feasibility read-only: no live vibrancy setter; private-mode relaunch risks WebKit data. Existing viewer/Vite/WebKit connection preserved without restart or storage reset. No desktop-through vibrancy or rebuilt packaged-app claim.
 - [x] Documentation reflects final reference and team-feature-branch delivery; no README/default-branch/backend/native-launcher changes. Work order returned to In Review.
+
+## North Star, material correction and final craft
+
+- [x] Recorded restraint/growing-field plan and evolving user material/motion corrections before implementation; adopted attached North Star without changing workflow boundaries.
+- [x] Final luminous slate/copper canvas transmits through 22% panel tint; shared token contract across campaign, Tools and CmdK. Removed opaque-charcoal regression, ambient ornaments and nested glass; exact palette and compositing assumptions documented.
+- [x] Shared controlled AutoTextarea migrated 37 free-form controls; hidden mirror preserves focus/caret/handlers. Rows minimum, 240px cap/internal scroll, grow/shrink, width/font/disclosure remeasurement; appropriate structured controls retained.
+- [x] Standard Lucide PanelLeft inside sidebar; decorative topbar folder removed. Shared type/title contract and ivory native checkbox/radio states with visible unchecked/disabled, indeterminate, focus and forced-color fallback.
+- [x] Stable action labels with distinct bounded flight/sweep/check/produce/iterate cues; reduced motion respected. Full native disclosure height/opacity and CmdK scale/fade/exit animations preserve immediate commands/focus.
+- [x] 158 tests across 11 files passed, including four meaningful AutoTextarea regressions; final TypeScript/Vite build passed. Diff checks clean; independent Rounds 9 and 10 APPROVED, final hover advisories resolved.
+- [x] Browser verified grow83px/cap240/shrink41, hidden reveal188, compact cap/no390px overflow; animated disclosure collapse/reopen retains long draft. Original text restored and no save/render/approval performed in visual checks.
+- [x] Dialog filter/Enter navigation, Escape exit settles display:none and destination focus; compact modal356px wide/bottom678<844; checkbox checked/unchecked/disabled and matching Tools typography visually inspected; no console errors.
+- [x] Current screenshots: `/Users/kartikbihani/WIN/design/growth-factory/interface-luminous-glass.jpg` and `quick-actions-luminous-glass.jpg`. Temporary browser viewport reset; existing native viewer/Vite processes retained without storage reset or restart. No desktop-through-vibrancy or packaged-app update claim.
+- [x] Updated architecture/context and returned work order to In Review; delivery remains exclusively on the team feature branch.
