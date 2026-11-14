@@ -9,6 +9,7 @@ coding benchmark is claimed as marketing evidence.
 
 - Producer, footage analyst, creative strategist, editor, critic, and performance
   analyst are distinct fresh-context calls against a shared local model.
+- Three model-download workers run independently of the heavy lane.
 - A single heavy worker serializes inference/rendering on the target Mac. Logical
   collaboration does not mean six loaded models or parallel GPU inference.
 - A durable local production ledger preserves context snapshots, tasks, evidence

@@ -1,4 +1,5 @@
-"""Real single-worker tests; all waits are bounded and teardown always stops it."""
+"""Real bounded job-lane tests; waits are bounded and teardown stops every worker."""
+
 import sys
 import threading
 import time
@@ -27,7 +28,7 @@ def worker(tmp_path):
         yield jobs, store
     finally:
         jobs.close()
-    assert not jobs.thread.is_alive()
+    assert not any(t.is_alive() for t in [jobs.thread, *jobs.download_threads])
 
 
 def test_serial_worker_queued_cancel_and_reuse(worker):
@@ -118,18 +119,34 @@ def test_durable_interrupted_jobs_fail_without_reexecution(tmp_path):
 
 def test_subprocess_output_failure_timeout_and_recovery(worker):
     jobs, store = worker
-    result = wait_job(store, jobs.submit("output", lambda identifier: jobs.process(
-        identifier, [sys.executable, "-c", "print('x' * 100000)"]
-    ))["id"])
+    result = wait_job(
+        store,
+        jobs.submit(
+            "output",
+            lambda identifier: jobs.process(identifier, [sys.executable, "-c", "print('x' * 100000)"]),
+        )["id"],
+    )
     assert result["status"] == "completed"
     assert len(result["result"]) == 65536
-    failure = wait_job(store, jobs.submit("exit", lambda identifier: jobs.process(
-        identifier, [sys.executable, "-c", "raise SystemExit(2)"], failure="Tool exited."
-    ))["id"])
+    failure = wait_job(
+        store,
+        jobs.submit(
+            "exit",
+            lambda identifier: jobs.process(
+                identifier, [sys.executable, "-c", "raise SystemExit(2)"], failure="Tool exited."
+            ),
+        )["id"],
+    )
     assert failure["error"] == "Tool exited."
-    timed = wait_job(store, jobs.submit("timeout", lambda identifier: jobs.process(
-        identifier, [sys.executable, "-c", "import time; time.sleep(30)"], timeout=0.1
-    ))["id"])
+    timed = wait_job(
+        store,
+        jobs.submit(
+            "timeout",
+            lambda identifier: jobs.process(
+                identifier, [sys.executable, "-c", "import time; time.sleep(30)"], timeout=0.1
+            ),
+        )["id"],
+    )
     assert timed["status"] == "failed"
     assert "timed out" in timed["error"]
     assert wait_job(store, jobs.submit("after", lambda _: True)["id"])["result"] is True
@@ -147,3 +164,97 @@ def test_cancel_running_child_process(worker):
     assert entered.wait(2)
     jobs.cancel(job["id"])
     assert wait_job(store, job["id"])["status"] == "cancelled"
+
+
+def test_downloads_overlap_heavy_work_with_bounded_concurrency(worker):
+    jobs, store = worker
+    heavy_entered, heavy_release = threading.Event(), threading.Event()
+    download_release = threading.Event()
+    entered = [threading.Event() for _ in range(4)]
+
+    def heavy(identifier):
+        heavy_entered.set()
+        assert heavy_release.wait(5)
+        jobs.check(identifier)
+        return "heavy"
+
+    def transfer(index):
+        def run(identifier):
+            entered[index].set()
+            assert download_release.wait(5)
+            jobs.check(identifier)
+            return index
+
+        return run
+
+    heavy_job = jobs.submit("render", heavy)
+    downloads = []
+    try:
+        assert heavy_entered.wait(2)
+        downloads = [jobs.submit("download", transfer(i), model_id=str(i)) for i in range(4)]
+        assert all(event.wait(2) for event in entered[:3])
+        assert not entered[3].is_set()
+        assert store.get("jobs", downloads[3]["id"])["status"] == "queued"
+        assert heavy_job["lane"] == "heavy"
+        assert all(job["lane"] == "download" for job in downloads)
+        assert sum(store.get("jobs", j["id"])["status"] == "running" for j in downloads) == 3
+        jobs.cancel(downloads[3]["id"])
+    finally:
+        download_release.set()
+        heavy_release.set()
+    assert wait_job(store, heavy_job["id"])["result"] == "heavy"
+    assert all(wait_job(store, job["id"])["status"] == "completed" for job in downloads[:3])
+    assert wait_job(store, downloads[3]["id"])["status"] == "cancelled"
+    assert not entered[3].is_set()
+
+
+def test_cancelling_one_download_does_not_cancel_another(worker):
+    jobs, store = worker
+    entered = [threading.Event(), threading.Event()]
+    release = threading.Event()
+
+    def run(index):
+        def operation(identifier):
+            entered[index].set()
+            deadline = time.monotonic() + 5
+            while not release.is_set() and time.monotonic() < deadline:
+                jobs.check(identifier)
+                time.sleep(0.01)
+            jobs.check(identifier)
+            return index
+
+        return operation
+
+    jobs_list = [jobs.submit("download", run(i), model_id=str(i)) for i in range(2)]
+    try:
+        assert all(event.wait(2) for event in entered)
+        jobs.cancel(jobs_list[0]["id"])
+        assert wait_job(store, jobs_list[0]["id"])["status"] == "cancelled"
+        assert store.get("jobs", jobs_list[1]["id"])["status"] == "running"
+    finally:
+        release.set()
+    assert wait_job(store, jobs_list[1]["id"])["result"] == 1
+
+
+def test_shutdown_stops_every_lane_and_cancels_pending_downloads(worker):
+    jobs, store = worker
+    entered = [threading.Event() for _ in range(4)]
+
+    def run(index):
+        def operation(identifier):
+            entered[index].set()
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                jobs.check(identifier)
+                time.sleep(0.01)
+            pytest.fail("Shutdown did not cancel running work")
+
+        return operation
+
+    active = [jobs.submit("render", run(0))]
+    active += [jobs.submit("download", run(i)) for i in range(1, 4)]
+    assert all(event.wait(2) for event in entered)
+    queued = jobs.submit("download", lambda _: pytest.fail("Queued transfer ran during shutdown"))
+    jobs.close()
+    assert not any(thread.is_alive() for thread in [jobs.thread, *jobs.download_threads])
+    assert all(store.get("jobs", j["id"])["status"] == "cancelled" for j in [*active, queued])

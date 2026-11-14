@@ -70,3 +70,18 @@ describe("honest fallback UI", () => {
     consoleError.mockRestore();
   });
 });
+
+describe("parallel job lanes", () => {
+  it("reports bounded downloads and the lane of each real job", () => {
+    const state = testState();
+    state.data.jobs = [
+      { id: "d1", kind: "download", lane: "download", status: "running" },
+      { id: "h1", kind: "render", lane: "heavy", status: "running" },
+    ];
+    render(<Jobs state={state} />);
+    expect(screen.getByText(/Up to 3 parallel model downloads/)).toBeInTheDocument();
+    expect(screen.getByText(/Download lane/)).toBeInTheDocument();
+    expect(screen.getByText(/Heavy lane/)).toBeInTheDocument();
+    expect(screen.getAllByRole("progressbar")).toHaveLength(2);
+  });
+});

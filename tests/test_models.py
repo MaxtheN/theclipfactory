@@ -441,3 +441,16 @@ def test_runtime_probe_must_report_matching_architecture_and_versions(models, mo
             Mock(return_value=SimpleNamespace(stdout=json.dumps({**marker, **mismatch}))),
         )
         assert not models.ready()
+
+
+def test_parallel_download_disk_reservations_prevent_overcommit(models, monkeypatch):
+    mb = 1024**2
+    monkeypatch.setattr("clip_factory.models.shutil.disk_usage", lambda _: SimpleNamespace(free=96 * mb))
+    with models._download_space("first", models.model_dir, 20 * mb):
+        with pytest.raises(WorkError, match="concurrent"), models._download_space("second", models.model_dir, 20 * mb):
+            pytest.fail("Overcommitted download started")
+        assert models._download_reservations == {"first": 20 * mb}
+    assert models._download_reservations == {}
+    with pytest.raises(WorkError, match="transfer failed"), models._download_space("second", models.model_dir, 20 * mb):
+        raise WorkError("transfer failed")
+    assert models._download_reservations == {}

@@ -480,3 +480,36 @@ def test_candidate_parser_grounds_ranges_and_objective():
     for bad in ('{"candidates": []}', '{"candidates":[{"start":NaN,"end":1}]}', 'not json'):
         with pytest.raises(WorkError, match="no valid clip ranges"):
             parse_candidates(bad, 5, "discovery")
+
+
+def test_parallel_model_downloads_do_not_block_runtime_and_keep_model_locks(client, monkeypatch):
+    release = threading.Event()
+    identifiers = ["qwen-small", "qwen-large", "whisper-turbo"]
+    entered = {identifier: threading.Event() for identifier in identifiers}
+
+    def transfer(self, job_id, identifier):
+        entered[identifier].set()
+        assert release.wait(5)
+        self.jobs.check(job_id)
+        return {"model_id": identifier}
+
+    monkeypatch.setattr("clip_factory.models.Models.download", transfer)
+    monkeypatch.setattr("clip_factory.models.Models.setup", lambda *_: {"runtime": "test-only"})
+    monkeypatch.setattr("clip_factory.app.shutil.disk_usage", lambda _: type("Disk", (), {"free": 10**12})())
+    jobs = []
+    try:
+        for identifier in identifiers:
+            response = client.post(f"/api/models/{identifier}/download", json={"accept_license": True})
+            assert response.status_code == 202
+            jobs.append(response.json())
+        assert all(event.wait(2) for event in entered.values())
+        assert all(job["lane"] == "download" for job in jobs)
+        assert client.post("/api/models/qwen-small/download", json={"accept_license": True}).status_code == 409
+        assert client.delete("/api/models/qwen-small").status_code == 409
+        runtime = client.post("/api/runtime/setup")
+        assert runtime.status_code == 202
+        assert runtime.json()["lane"] == "heavy"
+        assert wait_job(client, runtime.json()["id"])["status"] == "completed"
+    finally:
+        release.set()
+    assert all(wait_job(client, job["id"])["status"] == "completed" for job in jobs)

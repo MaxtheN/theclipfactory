@@ -12,7 +12,7 @@ export function Jobs({
   return (
     <Section
       title="Production queue"
-      detail="One heavy worker · updates every 4 seconds"
+      detail="Up to 3 parallel model downloads · 1 heavy job · updates every 4 seconds"
     >
       {!jobs.length ? (
         <Empty
@@ -45,6 +45,7 @@ export function Jobs({
                 </Badge>
               </div>
               <small className="muted">
+                {job.lane === "download" ? "Download lane · " : job.lane === "heavy" ? "Heavy lane · " : ""}
                 {date(job.created_at)} · {job.id}
               </small>
               {["queued", "running"].includes(job.status) && (

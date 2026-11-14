@@ -24,7 +24,7 @@ export function Models({ state }: { state: FactoryState }) {
     <>
       <Section
         title="Local runtime"
-        detail="Downloads and heavy inference run in the serialized worker"
+        detail="Up to 3 model downloads run in parallel; runtime setup and inference use the heavy lane"
       >
         <div className="runtime-row">
           <div>

@@ -2,7 +2,7 @@
 
 An Apple Silicon desktop workspace for turning video into Instagram clips. The
 native application uses **pywebview + FastAPI**, a built React/Vite UI, a local
-SQLite-backed data directory, and a serial media/model worker. A Mac with an M5
+SQLite-backed data directory, one heavy media/model worker, and three parallel model-download workers. A Mac with an M5
 Pro and 48 GB unified memory is a target machine, **not a guarantee that every
 model fits or every pipeline has been hardware-validated**. See
 [API_CONTRACT.md](API_CONTRACT.md) for the current integration contract and
@@ -111,8 +111,14 @@ This is **not** a supported Linux MLX/native desktop installation claim.
   prerequisites.
 - Missing runtime/models/ffmpeg must show an unavailable state or a real failed
   job, never simulated model output. Manual editing does not require a language
-  model; actual export still requires media tools. A serial worker limits heavy
-  jobs to one at a time. Failed/interrupted jobs need inspection before retry.
+  model; actual export still requires media tools. Model-weight downloads use a
+  separate pool of **three parallel workers**, so downloads do not block runtime
+  setup or production. Duplicate downloads of the same model are blocked, and
+  conservative per-file disk reservations protect concurrent transfers. Each job
+  has independent progress/cancellation. **One heavy job at a time** still limits
+  inference, transcription, rendering, and runtime installation to protect memory
+  and avoid modifying an in-use runtime. Shutdown cancels both lanes;
+  failed/interrupted jobs need inspection before retry.
 
 ## Instagram, analytics, and paid controls
 

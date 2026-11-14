@@ -45,6 +45,7 @@ export interface Model {
   status?: string;
 }
 export interface Job {
+  lane?: "download" | "heavy";
   context?: unknown;
   id: string;
   kind: string;
