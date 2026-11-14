@@ -64,8 +64,10 @@ USE = {
     "selector": "Prefer candidates that serve a key message (M#) or include-topic (T#); never pick one that "
     "touches a must-avoid item.",
     "swarm": "Prefer ideas that serve a key message (M#) or include-topic (T#). Set serves to the tags an idea "
-    "genuinely serves, or [\"none\"]; set avoid to any A# it touches. Ideas touching a must-avoid item are "
-    "rejected.",
+    "genuinely serves, or [\"none\"]; set avoid to any A# the clip would break: a topic it touches, or a way "
+    "of speaking it does (for 'stating X as fact', a speaker asserting X as settled; a speaker questioning, "
+    "speculating about or attributing X, with a hook and caption that attribute it, does not). Ideas "
+    "flagged with an A# are rejected.",
     "performance_analyst": "Relate each recommendation to the campaign goal and metric; never suggest crossing a "
     "hard limit.",
     "creative_strategist": "Each angle should advance a key message when the moment supports it; say which in "

@@ -1315,12 +1315,17 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         if metadata.pop("burn_hook", False) and body.hook.strip():
             body.hook_overlay = True
         report = not metadata.pop("parallel", False)
+        # A swarm range was already sized on whole sentences to the target band (moments.shape_range),
+        # measured after jump cuts: it is not cut again at the raw duration, which would end mid-sentence.
+        sizing = (metadata.get("swarm") or {}).get("duration") or {}
+        band_high = (sizing.get("band") or [None, None])[1] if sizing.get("ends_on_sentence") else None
         if metadata.get("strategy_snapshot"):
             direction = metadata["strategy_snapshot"]
             body.framing = direction["framing"]
             body.caption_style = direction["caption_style"]
             body.hook_overlay = True
-            body.end = min(body.end, body.start + direction["duration_seconds"])
+            if not band_high:
+                body.end = min(body.end, body.start + direction["duration_seconds"])
             metadata["provenance_mode"] = "strategy"
             # "fit" asks for the whole picture, not for black bars: on landscape footage it is kept
             # over a blurred backdrop, moved in on the action only when nothing is lost.
@@ -1349,6 +1354,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             # Nothing meaningful is said in this range: a clean picture, no captions to check.
             body.subtitles = False
         limit = (metadata.get("strategy_snapshot") or {}).get("duration_seconds")
+        if band_high:
+            # The finished clip (teaser + kept speech) may use the top of the band plus the teaser.
+            limit = max(float(limit or 0), float(band_high) + craft.TEASER_MAX)
         # Under a direction, a hook-first teaser must still fit the approved duration.
         return render_task(
             job_id,

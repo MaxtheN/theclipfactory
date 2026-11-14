@@ -3,9 +3,13 @@
 Swarm runs make as many clips as the source supports (coverage, not a cap). This pass turns
 that volume into a review list that is best first:
 
-* every clip gets a 0-100 score from signals the factory already recorded (the storyboard's
-  interest in the clip's scenes, whether it serves the campaign brief, the critic's verdict,
-  technical checks or a cached quality rubric, and the hook);
+* every clip gets a 0-100 score from signals the factory already recorded: the scout's honest
+  strength rating (is it funny, sharp, quotable?), a verified payoff line teased first, completeness
+  (whole sentences, finished length inside the target band), whether it serves the campaign brief,
+  the storyboard's interest in the clip's scenes, the critic's verdict, technical checks or a cached
+  quality rubric, and a short hook;
+* on a speech source a clip without burned captions, or without speech, is below the bar
+  whatever its score (speechless clips also lose most of their score);
 * near-duplicates (ranges overlapping by more than half of the shorter clip, or the same
   payoff sentence) are merged by keeping the better-scored clip;
 * clips under the floor, and merged duplicates, are marked ``below_bar``. Nothing is deleted;
@@ -21,11 +25,17 @@ import re
 
 from .brief import normalize_brief
 
-RANK_VERSION = 1
+RANK_VERSION = 2
 FLOOR = 50
 DUPLICATE_OVERLAP = 0.5
 DEFAULT_TOP_PICKS = 5
-WEIGHTS = {"moment": 0.40, "brief": 0.20, "critic": 0.15, "technical": 0.15, "hook": 0.10}
+WEIGHTS = {
+    "strength": 0.25, "payoff": 0.15, "complete": 0.15, "brief": 0.15,
+    "moment": 0.10, "technical": 0.10, "critic": 0.05, "hook": 0.05,
+}
+NO_SPEECH_FACTOR = 0.4
+NO_CAPTIONS_REASON = "No captions on a speech source"
+NO_SPEECH_REASON = "No speech in this clip"
 CRITIC = {"pass": 1.0, "not_applicable": 0.6, None: 0.6, "unknown": 0.4, "fail": 0.1}
 
 
@@ -74,20 +84,78 @@ def technical_signal(clip: dict, report: dict | None) -> float:
 
 def hook_signal(clip: dict) -> float:
     words = len(str(clip.get("hook") or "").split())
-    return 0.0 if not words else 1.0 if words <= 10 else 0.5
+    return 0.0 if not words else 1.0 if words <= 8 else 0.7 if words <= 10 else 0.3
 
 
-def score(clip: dict, board: dict | None, brief: dict | None, report: dict | None = None) -> tuple[int, dict]:
+def strength_signal(clip: dict) -> float:
+    """The scout's own 0-10 rating of how funny/sharp/quotable the moment is (neutral when unknown)."""
+    value = (clip.get("swarm") or {}).get("strength")
+    return max(0.0, min(1.0, value / 10)) if isinstance(value, (int, float)) else 0.5
+
+
+def payoff_signal(clip: dict) -> float:
+    """A payoff line actually said (located in the words) and teased first scores highest."""
+    record = clip.get("swarm") or {}
+    hook_first = ((clip.get("craft") or {}).get("structure") or {}).get("resolved") == "hook_first"
+    if "payoff_verified" not in record:
+        return 1.0 if hook_first else 0.5
+    if not record["payoff_verified"]:
+        return 0.0 if record.get("speech_source") else 0.5
+    return 1.0 if hook_first else 0.6
+
+
+def complete_signal(clip: dict) -> float:
+    """Whole sentences and a finished length inside the target band (a reasoned short clip: partial)."""
+    sizing = (clip.get("swarm") or {}).get("duration")
+    if not isinstance(sizing, dict):
+        return 0.5
+    value = 0.4 if sizing.get("ends_on_sentence") else 0.0
+    low, high = (sizing.get("band") or [None, None])[:2]
+    length = clip.get("duration")
+    if isinstance(length, (int, float)) and isinstance(low, (int, float)) and isinstance(high, (int, float)):
+        if low <= length <= high + 0.5:
+            value += 0.6
+        elif length < low and str(sizing.get("note") or "").startswith("Kept short by the scout"):
+            value += 0.35
+        elif length > high:
+            value += 0.3
+    return value
+
+
+def speechless_clip(clip: dict, speech_source: bool) -> bool:
+    """A clip from a talk in which nothing is said."""
+    record = clip.get("swarm") or {}
+    return bool(speech_source) and record.get("spoken") is False
+
+
+def score(clip: dict, board: dict | None, brief: dict | None, report: dict | None = None,
+          speech_source: bool = False) -> tuple[int, dict]:
     moment = moment_signal(clip, board)
     signals = {
-        "moment": 0.5 if moment is None else moment,
+        "strength": strength_signal(clip),
+        "payoff": payoff_signal(clip),
+        "complete": complete_signal(clip),
         "brief": brief_signal(clip, brief),
-        "critic": critic_signal(clip),
+        "moment": 0.5 if moment is None else moment,
         "technical": technical_signal(clip, report),
+        "critic": critic_signal(clip),
         "hook": hook_signal(clip),
     }
     total = sum(WEIGHTS[k] * v for k, v in signals.items())
+    if speechless_clip(clip, speech_source):
+        total *= NO_SPEECH_FACTOR
     return round(100 * total), {k: round(v, 3) for k, v in signals.items()}
+
+
+def bar_reason(clip: dict, speech_source: bool) -> str | None:
+    """A hard rule that puts a clip under the bar whatever its score, or None."""
+    if not speech_source:
+        return None
+    if speechless_clip(clip, speech_source):
+        return NO_SPEECH_REASON
+    if clip.get("subtitles_burned") is not True:
+        return NO_CAPTIONS_REASON
+    return None
 
 
 def payoff_key(clip: dict) -> str | None:
@@ -112,18 +180,25 @@ def why(clip: dict, brief: dict | None) -> str:
             index = int(match.group(2)) - 1
             if 0 <= index < len(items) and str(items[index]).strip():
                 return f"Says: {str(items[index]).strip()}"[:160]
+    reason = str((clip.get("swarm") or {}).get("why") or "").strip()
+    if reason:
+        return reason[:160]
     hook = str(clip.get("hook") or "").strip()
     return f"Hook: {hook}"[:160] if hook else "No hook"
 
 
 def rank(clips: list[dict], *, board: dict | None = None, brief: dict | None = None,
-         reports: dict | None = None, top_picks: int | None = None, floor: int = FLOOR) -> dict[str, dict]:
-    """A rank record per clip id. Pure: callers store the records; no clip is removed."""
+         reports: dict | None = None, top_picks: int | None = None, floor: int = FLOOR,
+         speech_source: bool = False) -> dict[str, dict]:
+    """A rank record per clip id. Pure: callers store the records; no clip is removed.
+
+    speech_source: the clips come from footage with speech, so captions and speech are required.
+    """
     reports = reports or {}
     picks = top_picks if isinstance(top_picks, int) and top_picks > 0 else DEFAULT_TOP_PICKS
     scored = []
     for clip in clips:
-        value, signals = score(clip, board, brief, reports.get(clip["id"]))
+        value, signals = score(clip, board, brief, reports.get(clip["id"]), speech_source)
         scored.append((value, clip, signals))
     # Best first; ties by earlier start, then id, so the order never depends on render timing.
     scored.sort(key=lambda row: (-row[0], float(row[1].get("start") or 0), str(row[1]["id"])))
@@ -132,25 +207,28 @@ def rank(clips: list[dict], *, board: dict | None = None, brief: dict | None = N
     for value, clip, signals in scored:
         key = payoff_key(clip)
         twin = next((k for k in kept if overlaps(clip, k) or (key and key == payoff_key(k))), None)
+        rule = bar_reason(clip, speech_source)
         record = {
             "version": RANK_VERSION,
             "score": value,
             "signals": signals,
             "why": why(clip, brief),
             "duplicate_of": twin["id"] if twin else None,
-            "below_bar": bool(twin) or value < floor or bool(clip.get("made_without_speech")),
+            "below_bar": bool(twin) or value < floor or bool(clip.get("made_without_speech")) or bool(rule),
             "reason": (
                 "Similar to a better clip"
                 if twin
                 else SPEECHLESS_REASON
                 if clip.get("made_without_speech")
+                else rule
+                if rule
                 else f"Score under {floor}"
                 if value < floor
                 else None
             ),
             "floor": floor,
         }
-        if not twin and not clip.get("made_without_speech"):
+        if not twin and not clip.get("made_without_speech") and not rule:
             kept.append(clip)
         records[clip["id"]] = record
     position = 0

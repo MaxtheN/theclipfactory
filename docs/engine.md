@@ -41,19 +41,23 @@ Factory screen all default to swarm; team stays selectable in Studio → Fine-tu
 
 | Mode | Agents and flow | Output |
 | --- | --- | --- |
-| **Swarm** | Each scene gets one short prompt and proposes up to 3 `Idea`s. Each idea has a *hypothesis* (bold_claim, question, story, lesson, contrast, emotion, humor or spectacle), a 15–40 s range, a hook of 10 words or fewer, and a caption. Hypotheses rotate per scene so the set stays varied. Ranges are fitted and snapped to sentence edges, and overlaps of more than 70% are dropped. Renders run in parallel. | ~1.2 clips per usable minute (raised to the brief's clip count when that is higher), max 150, then a ranking pass (below) (`team.py:_swarm`, `swarm_quotas`, `fit_range`, `snap_to_speech`, `rank_clips`) |
+| **Swarm** | **Talks** (a transcript with speech): usable scenes are merged into stretches of at least 60 s (or two target lengths) so each scout reads whole thoughts, with ±25 s of marked context. Each stretch proposes up to 3 `Idea`s, best first, and must name a *hypothesis*, a range, a **verbatim `payoff_quote`** (the line that lands it), `why` it is funny/sharp, an honest `strength` 0–10, a hook of ≤8 words and a caption; `keep_short` only when a moment is complete under the target. The prompt asks for strong/contrarian claims, banter with a punchline, a story with a payoff, a surprising fact or a quotable line, and to drop filler, crosstalk, setup without payoff and visual-only moments (speech is the evidence). Code then: drops strength ≤3, locates the quote in the measured words (`moments.locate_quote`), shapes the range on **whole sentences** to the approved `duration_seconds` ±25% measured *after* jump cuts plus the teaser, extending across neighbouring scenes and keeping ≥4 s of setup before the payoff (`moments.shape_range`; a shorter clip records why), tees up the end of the payoff line as the hook-first teaser (`moments.punch_span`), keeps the scout's hook only when it is ≤8 words, grounded in the speech and not a picture description (else one cut from the quote, `moments.tidy_hook`), drops clips without speech and duplicates (>50% overlap or the same teaser), strongest first. Every talk clip gets word-by-word captions. **Footage without speech**: per scene, rotating visual hypotheses, ranges fitted inside the scene (`fit_range`, `snap_to_speech`). Renders run in parallel. | ~1.2 clips per usable minute for silent footage; talks over-propose (3 per stretch) and the ranking keeps the best (`team.py:_swarm`, `swarm_stretches`, `moments.py`, `rank_clips`). Each clip stores `swarm = {payoff_quote, payoff_verified, teaser_span, why, strength, hook_source, spoken, duration}` |
 | **Team** | **Producer** (`Plan`) → **Footage analyst** (`Footage`: moments that cite scene IDs; code computes the times) → **Close-up** (frames around each peak: `happens`, `peak_frame`, `strength`) → **Performance analyst** (cites past feedback or experiments) → **Creative strategist** (`Angle`: hook + rationale) → **Editor** (`Candidate`: range, hook, caption, refs) → **Critic**. | 1–6 clips, default 3 (`team.py:TeamEngine.execute`, `_moments`, `_closeups`) |
 | **Scouts** (long talks over 20 min, inside team or baseline) | One scout per 10-minute window reads the full transcript and 4 frames, and proposes up to 2 scored candidates. A diversity-first shortlist of 8 follows, then a selector model picks N. | `scouts.py:scout`, `shortlist`, `CRITERIA` |
 | **Baseline** | One analysis pass, then a render. | `app.py:pipeline_task`, `analyze_task` |
 
 **Ranking, dedupe and quality floor (swarm)** (`ranking.py`, `team.py:rank_clips`). After the
-renders, every clip gets a deterministic 0–100 score: 40% storyboard interest of its scenes
-(`storyboard.score`), 20% brief fit (serves an `M#`/`T#`; serving nothing is 0 with a brief and
-neutral without one), 15% critic (`team_review_status`, error findings score 0), 15% technical (a
-cached `quality_reports` rubric for the exact file when one exists, else playback checks and burned
-captions), 10% hook. Near-duplicates (overlap above half of the shorter clip, or the same
-payoff sentence) are merged by keeping the better clip. Duplicates and clips under the floor (50)
-are marked `rank.below_bar` and kept, never deleted. Each clip stores `rank = {score, position,
+renders, every clip gets a deterministic 0–100 score: 25% the scout's strength rating, 15% payoff (a
+quoted line found in the words and teased first; an unfound quote on a talk scores 0), 15% completeness
+(ends on a sentence; finished length inside the target band, partial credit for a reasoned short clip),
+15% brief fit (serves an `M#`/`T#`; serving nothing is 0 with a brief and neutral without one), 10%
+storyboard interest of its scenes (`storyboard.score`), 10% technical (a cached `quality_reports` rubric
+for the exact file when one exists, else playback checks and burned captions), 5% critic
+(`team_review_status`), 5% hook (≤8 words). On a speech source two hard rules apply whatever the
+score: a clip **without burned captions** is below the bar ("No captions on a speech source"), and a clip
+**without speech** loses 60% of its score and is below the bar. Near-duplicates (overlap above half of
+the shorter clip, or the same payoff sentence) are merged by keeping the better clip. Duplicates, rule
+failures and clips under the floor (50) are marked `rank.below_bar` and kept, never deleted. Each clip stores `rank = {score, position,
 top_pick, why, below_bar, reason, duplicate_of, signals}` and the run stores a `ranking` summary.
 The brief's `clip_count` only sets how many clips are marked `top_pick` (default 5): it is a soft
 review target, not a generation cap. Must-avoid ideas are rejected before rendering, as before.
@@ -136,7 +140,11 @@ request; each resolved decision is stored in the clip's `craft` record and rende
 
 Only duration, framing and caption style are *enforced* in the render
 (`app.py:render_team`, `pipeline_task`). Pacing and editing_preferences reach the agents
-only as text.
+only as text. Duration: team and baseline cuts are trimmed to `duration_seconds`; a swarm clip
+from a talk was already sized on whole sentences to `duration_seconds` ±25% of finished length
+(after jump cuts, plus the teaser), so it is not trimmed again (that cut mid-sentence) and its
+render limit is the top of the band plus the teaser. Speech in a swarm clip is always captioned
+word by word, a recorded departure from a saved `standard`/`high_contrast` style.
 
 **How the brief is used.** One block (`brief.py:brief_block`) sits after each role's
 instruction with an explicit precedence: [1] hard limits (workspace voice and boundaries,

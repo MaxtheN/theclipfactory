@@ -98,3 +98,51 @@ def test_score_uses_critic_findings_and_a_cached_quality_rubric_when_available()
     assert weak_file[1]["technical"] == 0.2 and weak_file[0] < ranking.score(good, BOARD, BRIEF)[0]
     # No brief at all: serving nothing is neutral, not a penalty.
     assert ranking.score({**good, "brief_serves": []}, BOARD, None)[1]["brief"] == 0.5
+
+
+def swarm_clip(identifier, start, end, **swarm):
+    record = {"payoff_verified": True, "spoken": True, "speech_source": True, "strength": 8,
+              "duration": {"band": [22.5, 37.5], "ends_on_sentence": True, "note": None}, **swarm}
+    return clip(identifier, start, end, 0, brief_serves=["M1"], duration=end - start, swarm=record,
+                craft={"structure": {"resolved": "hook_first"}})
+
+
+def test_a_speech_source_clip_without_captions_is_below_the_bar_whatever_its_score():
+    good = swarm_clip("good", 0, 30)
+    bare = {**swarm_clip("bare", 100, 130), "subtitles_burned": False}
+    records = ranking.rank([good, bare], board=BOARD, brief=BRIEF, speech_source=True)
+    assert records["bare"]["score"] >= ranking.FLOOR  # a strong moment...
+    assert records["bare"]["below_bar"] and records["bare"]["reason"] == ranking.NO_CAPTIONS_REASON
+    assert not records["good"]["below_bar"]
+    # Footage without speech is not held to the caption rule.
+    assert not ranking.rank([bare], board=BOARD, brief=BRIEF)["bare"]["below_bar"]
+
+
+def test_speechless_clips_from_a_talk_lose_most_of_their_score_and_the_bar():
+    silent = swarm_clip("silent", 0, 30, spoken=False, payoff_verified=False)
+    value, _ = ranking.score(silent, BOARD, BRIEF, speech_source=True)
+    assert value < 0.5 * ranking.score(swarm_clip("s", 0, 30), BOARD, BRIEF, speech_source=True)[0]
+    record = ranking.rank([silent], board=BOARD, brief=BRIEF, speech_source=True)["silent"]
+    assert record["below_bar"] and record["reason"] == ranking.NO_SPEECH_REASON
+
+
+def test_strength_payoff_and_completeness_order_the_clips():
+    best = swarm_clip("best", 0, 30)
+    weak = swarm_clip("weak", 200, 230, strength=4)
+    no_payoff = swarm_clip("nopay", 300, 330, payoff_verified=False)
+    clipped = swarm_clip("short", 400, 412)  # 12 s against a 22.5-37.5 s band, no reason given
+    excused = swarm_clip("excused", 500, 512,
+                         duration={"band": [22.5, 37.5], "ends_on_sentence": True, "note": "Kept short by the scout: x"})
+    scores = {c["id"]: ranking.score(c, BOARD, BRIEF, speech_source=True)[0]
+              for c in (best, weak, no_payoff, clipped, excused)}
+    assert scores["best"] > scores["excused"] > scores["short"]
+    assert scores["best"] > scores["weak"] and scores["best"] > scores["nopay"]
+    assert ranking.score(no_payoff, BOARD, BRIEF, speech_source=True)[1]["payoff"] == 0.0
+    # The scout's reason is the review line when no brief message is named.
+    assert ranking.why({**best, "brief_serves": [], "swarm": {"why": "Sharp reversal"}}, BRIEF) == "Sharp reversal"
+
+
+def test_hooks_over_eight_words_score_lower():
+    short = ranking.hook_signal({"hook": "Who pulled the pin?"})
+    long = ranking.hook_signal({"hook": "This is the story of who pulled the pin on it all"})
+    assert short == 1.0 and long < short

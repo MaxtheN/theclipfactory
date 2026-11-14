@@ -17,6 +17,7 @@ from clip_factory.models import Models
 from clip_factory.store import Store
 from clip_factory.team import (
     ROLES,
+    SPOKEN_HYPOTHESES,
     Critique,
     Edits,
     Footage,
@@ -1509,11 +1510,9 @@ def test_swarm_makes_about_a_clip_a_minute_each_on_its_own_hypothesis(harness):
     first = harness.rendered[0]
     assert (first["start"], first["end"], first["hook"]) == (0.0, 15.0, "spectacle at 0")
     assert first["_team"]["hypothesis"] == "spectacle" and first["_team"]["team_review_status"] == "not_applicable"
-    # Presentation rotates across clips: four treatments, each recorded with its clip.
+    # Presentation rotates across clips, each treatment recorded with its clip.
     looks = [(c["_team"]["treatment"]["captions"], c["_team"]["treatment"]["motion"]) for c in harness.rendered]
-    assert looks[:5] == [
-        ("pop", "push_in"), ("standard", "static"), ("pop", "static"), ("standard", "push_in"), ("pop", "push_in"),
-    ]
+    assert looks[:3] == [("pop", "push_in"), ("standard", "static"), ("pop", "push_in")]
     assert first["_team"]["reason"] == "Hypothesis: spectacle. Treatment: word-by-word captions, slow push-in."
     assert first["_team"]["scene_refs"] == ["scene:0"] and first["_team"]["team_run_id"] == run["id"]
     # No committee: the only model work is one short prompt per stretch.
@@ -1530,12 +1529,18 @@ def test_swarm_cuts_a_talk_from_its_words_without_first_watching_every_scene(har
     run, _ = harness.execute(mode="swarm")
     assert harness.watched == [("job", "source", None)]  # measured signals only: clips start sooner
     prompt = harness.models.batches[0][0]["prompt"]
-    assert "[0.0-8.0] Six words are spoken right here." in prompt and "[60.0-" not in prompt
-    # A talk is offered spoken hypotheses; "spectacle" is for footage you look at.
-    spoken = harness.models.batches[0][0]["schema"]["$defs"]["Idea"]["properties"]["hypothesis"]["enum"]
-    assert spoken == ["bold_claim", "question", "story", "lesson"]
-    # Cuts land on sentence boundaries: 0-15s becomes 0-18.2s (the sentence ending at 18s, plus air).
-    assert (harness.rendered[0]["start"], harness.rendered[0]["end"]) == (0.0, 18.2)
+    # The stretch's own speech, plus a little marked context just past its edge to complete a thought.
+    assert "[0.0-8.0] Six words are spoken right here." in prompt
+    assert "[60.0-68.0] (context) Six words" in prompt and "[90.0-" not in prompt
+    # A talk is offered every spoken hypothesis; "spectacle" is for footage you look at.
+    idea = harness.models.batches[0][0]["schema"]["$defs"]["Idea"]
+    assert idea["properties"]["hypothesis"]["enum"] == SPOKEN_HYPOTHESES
+    assert {"payoff_quote", "why", "strength"} <= set(idea["required"])
+    # Cuts land on whole sentences and grow to the default ~30s target: 0-15s becomes 0-28.18s
+    # (three sentences, the last ending at 28s, plus air).
+    first = harness.rendered[0]
+    assert (first["start"], first["end"]) == (0.0, 28.18)
+    assert first["_team"]["swarm"]["duration"]["ends_on_sentence"] is True
     assert run["status"] == "needs_review"
 
 
@@ -1878,7 +1883,7 @@ def test_swarm_prompts_carry_compact_brief_and_drop_must_avoid_ideas(harness):
     harness.models = harness.engine.models = Flagging()
     run, result = harness.execute(mode="swarm")
     request = harness.models.batches[0][0]
-    assert_brief_block(request["prompt"], "Ideas touching a must-avoid item are rejected")
+    assert_brief_block(request["prompt"], "Ideas flagged with an A# are rejected")
     block = request["prompt"].split("=== CAMPAIGN BRIEF", 1)[1].split("=== END CAMPAIGN BRIEF ===", 1)[0]
     assert len(block) <= 1400
     assert request["schema"]["$defs"]["Idea"]["properties"]["serves"]["items"]["enum"] == ["M1", "T1", "none"]
@@ -1925,7 +1930,7 @@ def test_editor_payoff_and_emphasis_reach_the_render_and_invalid_hints_are_dropp
 
 
 def test_swarm_ideas_carry_checked_payoff_and_emphasis_to_the_render(harness):
-    segments = [{"start": float(t), "end": float(t + 4), "text": f"point number {t} lands"} for t in range(0, 360, 5)]
+    segments = [{"start": float(t), "end": float(t + 4), "text": f"Point number {t} lands."} for t in range(0, 360, 5)]
     swarm_source(harness, transcript={"segments": segments, "speech": "throughout"})
     harness.use([])
 
@@ -1933,13 +1938,21 @@ def test_swarm_ideas_carry_checked_payoff_and_emphasis_to_the_render(harness):
         def run_batch(self, job_id, model_id, requests):
             replies = super().run_batch(job_id, model_id, requests)
             first = json.loads(replies[0]["output"])
-            first["ideas"][0].update(payoff_start=10.0, payoff_end=14.0, emphasis_words=["lands", "never"])
+            # Timestamps from the model are ignored: the payoff is the quoted line, found in the words.
+            first["ideas"][0].update(payoff_quote="point number 10 lands", payoff_start=40.0, payoff_end=44.0,
+                                     emphasis_words=["lands", "never"], strength=8, why="It lands")
             replies[0] = {"output": json.dumps(first)}
             return replies
 
     harness.models = harness.engine.models = Hinting()
     harness.execute(mode="swarm")
-    assert "payoff_start/payoff_end" in harness.models.batches[0][0]["prompt"]
+    assert "payoff_quote: the single line that lands" in harness.models.batches[0][0]["prompt"]
     first = harness.rendered[0]
     assert first["emphasis_words"] == ["lands"]
-    assert (first["start"], first["end"], first["payoff_start"], first["payoff_end"]) == (0.0, 24.2, 10.0, 14.0)
+    # The teaser is the end of the quoted line (where it lands), with setup before it.
+    assert (first["payoff_start"], first["payoff_end"]) == (12.0, 13.98)
+    assert first["start"] <= first["payoff_start"] - 4 and first["end"] >= 13.98
+    record = first["_team"]["swarm"]
+    assert record["payoff_verified"] and record["payoff_quote"] == "Point number 10 lands."
+    assert record["strength"] == 8 and record["why"] == "It lands"
+    assert 22.5 <= record["duration"]["estimated_seconds"] <= 37.5
