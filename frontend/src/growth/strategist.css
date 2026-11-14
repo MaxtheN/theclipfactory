@@ -4,9 +4,9 @@
   --st-muted: var(--material-metadata, #616A6E);
   --st-line: var(--material-divider, #DAD6CE);
   --st-glass: #FCFBF7;
-  --st-craft: #8B6946;
-  --st-selection: #8B6946;
-  --st-campaign: #8B6946;
+  --st-craft: #C2410C;
+  --st-selection: #C2410C;
+  --st-campaign: #C2410C;
   --st-good: #4B6656;
   --st-bad: #925446;
   margin-top: 22px;
@@ -93,7 +93,7 @@
   cursor: not-allowed;
 }
 .gf-strategist :focus-visible {
-  outline: 2px solid var(--material-focus, #8B6946);
+  outline: 2px solid var(--material-focus, #C2410C);
   outline-offset: 3px;
 }
 .gf-strategist-lanes {

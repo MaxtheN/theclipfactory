@@ -1,34 +1,65 @@
-/* Pearl Studio: warm paper, graphite typography and restrained bronze. */
+/* Growth Factory identity on Pearl Studio's structure: warm white surfaces
+   on a soft Bloom Field canvas (the landing page's gradient, quieter), warm
+   near-black type, Signal orange for actions and Ember for small accents. */
 .gf-app,
 .gf-command-dialog {
-  --material-font: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
-  --material-canvas-top: #F2F0EB;
-  --material-canvas-bottom: #F2F0EB;
-  --material-canvas: #F2F0EB;
-  --material-pane: #FCFBF7;
-  --material-pane-solid: #FCFBF7;
-  --material-shell: rgba(234, 231, 224, .86);
-  --material-ink: #293237;
-  --material-secondary: #616A6E;
-  --material-metadata: #616A6E;
-  --material-line: #DAD6CE;
-  --material-divider: #DEDAD2;
-  --material-field-line: #90928A;
-  --material-field: #FFFEFB;
-  --material-hover: #ECE8E0;
-  --material-selected: #E8E1D6;
-  --material-button: #8B6946;
-  --material-button-ink: #FFFDF8;
-  --material-focus: #8B6946;
-  --material-focus-ring: rgba(139, 105, 70, .15);
-  --material-choice-fill: #FFFEFB;
-  --material-choice-line: #90928A;
-  --material-choice-disabled-line: #C7C3BA;
-  --material-success: #496552;
-  --material-success-fill: #E8EFE7;
-  --material-warning: #876136;
-  --material-warning-fill: #F2E9DA;
-  --material-danger: #994F42;
-  --material-danger-fill: #F4E6E0;
-  --material-command: rgba(252, 251, 247, .96);
+  --material-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
+  --material-display: "Bricolage Grotesque Variable", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+
+  /* Palette */
+  --signal: #ff5a1f;
+  --signal-soft: #ff8a5c;
+  --ember: #c2410c;
+  --ember-deep: #9a3412;
+  --peach: #ffe9dd;
+  --field-tone: #f2eeea;
+
+  /* Canvas: the Bloom Field gradient with its film grain. */
+  --material-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  --material-canvas-top: #f2eeea;
+  --material-canvas-bottom: #f2eeea;
+  --material-canvas:
+    var(--material-noise) 0 0 / 120px 120px,
+    radial-gradient(circle at 62% 40%, rgba(242, 238, 234, 1) 0%, rgba(242, 238, 234, 0.844) 19%, rgba(242, 238, 234, 0.5) 38%, rgba(242, 238, 234, 0.156) 57%, rgba(242, 238, 234, 0) 76%),
+    radial-gradient(circle at 96% 8%, rgba(255, 138, 92, 0.42) 0%, rgba(255, 138, 92, 0.3) 14%, rgba(255, 138, 92, 0.14) 28%, rgba(255, 138, 92, 0) 50%),
+    radial-gradient(circle at 18% 104%, rgba(255, 90, 31, 0.32) 0%, rgba(255, 90, 31, 0.22) 13%, rgba(255, 90, 31, 0.1) 26%, rgba(255, 90, 31, 0) 46%),
+    radial-gradient(circle at 88% 96%, rgba(255, 196, 160, 0.5) 0%, rgba(255, 196, 160, 0.3) 12%, rgba(255, 196, 160, 0) 36%),
+    #f2eeea;
+
+  /* Surfaces */
+  --material-pane: rgba(255, 255, 255, 0.9);
+  --material-pane-solid: #ffffff;
+  --material-shell: rgba(255, 255, 255, 0.66);
+  --material-command: rgba(255, 255, 255, 0.96);
+
+  /* Type */
+  --material-ink: #17120e;
+  --material-secondary: #57524c;
+  --material-metadata: #6b6660;
+
+  /* Lines and fields */
+  --material-line: #e7e2db;
+  --material-divider: #ebe6df;
+  --material-field-line: #b9b2a9;
+  --material-field: #ffffff;
+  --material-hover: rgba(23, 18, 14, 0.045);
+  --material-selected: #ffe9dd;
+
+  /* Actions and accents */
+  --material-button: #ff5a1f;
+  --material-button-ink: #17120e;
+  --material-accent: #c2410c;
+  --material-focus: #c2410c;
+  --material-focus-ring: rgba(255, 90, 31, 0.22);
+  --material-choice-fill: #ffffff;
+  --material-choice-line: #b9b2a9;
+  --material-choice-disabled-line: #d6d0c8;
+
+  /* States */
+  --material-success: #1e4d43;
+  --material-success-fill: #e3efea;
+  --material-warning: #9a3412;
+  --material-warning-fill: #ffe9dd;
+  --material-danger: #b42318;
+  --material-danger-fill: #fdecea;
 }
