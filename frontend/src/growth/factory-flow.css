@@ -1305,6 +1305,7 @@
   .gf-onboarding-launch-screen[data-stage="ready"] .gf-launch-check {
     opacity: 1;
   }
+}
 
 /* Production line inside the footage list: stage tracker, status and storyboard per source. */
 .gf-footage-item {
