@@ -64,7 +64,9 @@ measured-signal shortlist (`_shortlist`). Prompts are capped at 96,000 character
 ## 4. Edit operations the renderer can apply today
 
 Output is 1080×1920, 30 fps, H.264 CRF 22 with AAC 128k and faststart
-(`media.py:ENCODER`, `render`).
+(`media.py:ENCODER`, `render`). Craft options are `craft.CraftOptions` fields on every render
+request; each resolved decision is stored in the clip's `craft` record and render receipt, and
+`structure`, `hook_format` and `jump_cuts` are Strategist craft tags.
 
 | Operation | Status | Detail / code |
 | --- | --- | --- |
@@ -73,20 +75,24 @@ Output is 1080×1920, 30 fps, H.264 CRF 22 with AAC 128k and faststart
 | Framing `fit` (whole picture on black) / `blur` (whole picture over a blurred copy) / `fill` (9:16 crop) | ✅ | `render.layout_for` |
 | Crop position | ⚠️ | Fixed horizontal `focus_x`, set manually or chosen automatically from **motion energy** (`media.py:action_window`, `app.py:frame_action`). It applies only to landscape sources, does not follow the subject over time, and has no face or speaker detection. |
 | Static zoom (`crop_width` 0.2–1) | ✅ | `render` `zoom` |
-| Slow push-in (+7% over the clip) | ⚠️ | `motion="push_in"`, single segment only. No emphasis-timed punch-ins. |
+| Slow push-in (+7% over the clip) | ✅ | `motion="push_in"` |
+| Punch-in zooms on emphasised words (1.0→1.08 over 0.3 s, ≤3 per clip) | ✅ | `punch_in=emphasis` (default off); `craft.punch_times`, `zoom_expression` |
 | Burned captions: `standard`, `high_contrast` | ✅ | SRT + `force_style`, Arial 52/60 |
 | Word-by-word `pop` captions (the spoken word turns yellow at 112% size) | ✅ | `media.py:pop_captions` → `.pop.ass` |
 | Captions only where real speech happens | ✅ | `media.py:foreground`, `caption_entries` |
-| Emphasis keywords / emoji / animated caption styles | ❌ | Every word is treated the same way. |
-| Hook text overlay (top, first 3 s) | ✅ | `.hook.ass` in `render` |
-| Title card / designed hook graphic | ❌ | The overlay is plain text on a box. |
+| Keyword-emphasis captions (accent colour, 115%) | ✅ | `caption_emphasis=keywords` (default): planner `emphasis_words`, else numbers, names and long key-phrase words, one per cue; `craft.choose_emphasis`, `caption_ass` |
+| Hook text overlay (top, first 3 s) | ✅ | `hook_format=overlay` |
+| Hook title card (big boxed text, first 2 s, 9:16 safe area, brand colours) | ✅ | `hook_format=title_card` (default); `craft.overlay_ass`; hook grounding recorded |
+| Hook-first structure (≤3 s word-aligned payoff teaser → setup → full payoff) | ✅ | `structure=auto` (default; hook_first when a payoff sentence exists) / `linear` / `hook_first`; planner `payoff_start/end` or deterministic pick from storyboard loudness/highlight + emphasis; `transition` cut/zoom/flash; `craft.plan_structure` |
 | HDR → SDR tone mapping | ✅ | `media.py:TONEMAP` |
-| Cover image | ⚠️ | Always the **first frame** at 540×960 (`app.py:render_task`). The engine does not pick a frame. |
-| Silence / filler removal (jump cuts) | ❌ | Only cold open + main segments exist. |
-| Loudness normalization | ❌ | `peak_level` / "Audible audio" only *check* the level. |
+| Cover image | ✅ | `cover=best_frame` (default): sharpest, stillest well-lit frame at 2 fps, avoiding end card and teaser cut; `media.write_cover` |
+| Silence / filler removal (jump cuts) | ✅ | `jump_cuts=silences` (default) / `silences_and_fillers` / `off`; cuts only between measured words, ≥0.8 s pieces, ≤35% removed, skipped on sparse speech; captions re-timed; `craft.plan_jump_cuts`, `media.render_crafted` |
+| Loudness normalization | ✅ | `loudness=normalize` (default): two-pass EBU R128 loudnorm to −14 LUFS / −1.5 dBTP, verified by an ebur128 check |
 | Music, SFX, voice-over mix | ❌ | Kokoro TTS exists only as a standalone `/api/narrations` WAV. |
 | B-roll, split screen, graphics | ❌ | The strategist prompt explicitly forbids them. |
-| Progress bar, logo, brand fonts and colors, CTA end card | ❌ | Arial is hard-coded and there are no brand assets. |
+| Brand kit, CTA end card | ✅ | `Profile.brand_kit` (font family/file, colours, PNG logo), `Brief.cta` or `end_card=cta` + `cta_text`; last 1.6 s dimmed with CTA and logo |
+| A/B variants of one moment | ✅ | `variants={variable, values}` (2–3; hook, opening_treatment, caption_style, hook_format or structure): separate versions sharing `variant_group` |
+| Progress bar | ❌ | |
 
 ## 5. Review and critic
 
