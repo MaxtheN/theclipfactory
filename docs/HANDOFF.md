@@ -147,6 +147,16 @@ human approve → post to Instagram → measure → learn → better next clips.
 ## 6. Status of the last wave (updated after master `e869666`)
 
 Landed and pushed to master:
+- **Learning-loop demo + minimal UI** (2026-11-14, `a34536d`…`f54017a`): one
+  "Run the learning loop" button (Factory + Results) animates the full station map with
+  real clips, simulated results, real belief math and a real unapproved length re-cut
+  (see closed-loop-demo.md). Root causes of the founder's test: Run strategist completed
+  in ms with 0 measured posts and showed nothing (now explains + offers the demo);
+  Rehearse the loop needed a supported hook-shortening rubric edit, which ~30 s hook-first
+  clips rarely have, so it abstained silently; Demo replay was a small replay of
+  timestamps. Results is now Posted/Measuring/Learned + learnings + one Instagram chip,
+  the rest under "Strategist and tools"; the Factory map is a 5-phase strip with "Open full
+  map"; Library Clips tab is the 2-up 9:16 grid.
 - **Never run speechless** (`5db5fcf`, `ad385ac`): `clip_factory/speech.py`;
   `asr_missing`/`asr_damaged` blockers (409) before any work; one-click
   `POST /api/speech/setup` (runtime + Whisper, single progress bar);

@@ -24,14 +24,24 @@ The failed attempt exposed an existing destructive replacement policy: it delete
 
 The actual isolated Haiku check found the bad negation hook, scored source faithfulness2/5 and proposed preserving the negation. One call cost$0.000598. Its55/100 AI editorial score and the old72 production score use different rubrics; do not describe that difference as improvement.
 
-## Live walkthrough (about two minutes)
+## Live walkthrough: one button, about 60 seconds
 
-- In Results → Insights, open the creative-learning panel. Inspect a real clip's scorecard, evidence quotes and recorded judge cost. Open the actual video in Library too.
-- Open “Rehearse the loop” to enter Factory's native Demo rehearsal mode. Five compact stages summarize the experiment; Engine details reveals the underlying stations. Evidence and before/after videos stay inline rather than opening a separate website or rehearsal sidebar.
-- Follow rubric → simulated publication → measurement → strategy → next draft. Inspect the weighted rubric, source quote, one changed variable, observation IDs and proposal lineage. “Run demo experiment — creates one draft” can advance one supported experiment through an actual local render. It cannot publish to Instagram.
-- Switch to “Variant underperforms”: a higher editorial score can accompany worse engagement, and the system retains the parent. Switch to “Measurement still pending”: missing evidence produces a wait, not a winner. These are essential parts of the demonstration, not failures to hide.
-- For a real selected clip, “Render rehearsal draft” is a separate explicit action: simulated observations may support a rubric-guided, actual unapproved revision. The receipt/draft retains synthetic-evidence provenance; no synthetic metrics enter real account history, no approved strategy is promoted, and nothing is posted. If no safe supported rubric edit exists, explain the abstention instead of forcing a changed video.
-- Inspect the actual new MP4 and exact parent/edit/job/hash lineage. Score the new draft under the same rubric and configured judge; show the outcome even if it does not improve.
+Factory (next to Episodes | Factory map) and Results both have **▶ Run the learning loop**
+("Simulated results · real agents · real re-edit"). It opens a full-screen Factory map and
+runs across all stations: Footage → Listen/Watch → Scouts → Brief/Editor → Critic (top 3 real
+clips, scores) → Approve/Post (simulated) → Measure (bar race vs your typical, SIMULATED,
+deterministic) → Strategist (beliefs from production `evaluate_belief` over those simulated
+observations, in memory) → Style rules (return arc lights) → Editor re-cut: a **real,
+unapproved** render of the underperformer changing one variable (length, e.g. 31s → 27s),
+before/after playable. Next / Pause / Skip to re-edit / Esc; reduced motion is static.
+
+Honesty: one persistent "Simulated" pill; nothing posts; no synthetic metric is stored;
+the draft is unapproved. Code: `clip_factory/learning_demo.py`,
+`POST /api/demo-loop/{profile}/learning-loop` (+ `/recut`, `GET /api/demo-loop/loops/{id}`),
+`GrowthLoop.demo_recut`, `frontend/src/growth/LearningLoopDemo.tsx`, `FactoryStage` in
+`FactoryMap.tsx`. The recut request id is stable per clip/length, so a replay reuses the
+existing draft instantly; the first render took ~28 s on the founder-data copy.
+The old Demo rehearsal mode, Demo replay button and Strategist simulation drawer are removed.
 
 ## Real production controls
 
