@@ -508,7 +508,7 @@ export function Setup({
           )}
         </Field>
         <div className="gf-website-row">
-          <Field label="Website" hint="Optional. We read public pages to draft your brand.">
+          <Field label="Website">
             {(id) => (
               <input
                 id={id}
@@ -534,6 +534,9 @@ export function Setup({
             <Icon name="refresh" size={14} />
             {reading ? "Reading…" : "Re-read website"}
           </button>
+          <small className="gf-website-hint">
+            Optional. We read public pages and show changes before anything is used.
+          </small>
         </div>
         {reading && (
           <p className="gf-website-progress" role="status">

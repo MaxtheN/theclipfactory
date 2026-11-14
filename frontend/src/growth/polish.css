@@ -393,13 +393,17 @@
 .gf-app .gf-website-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--gf-s2);
+  align-items: end;
+  gap: 6px var(--gf-s2);
   margin-bottom: var(--gf-s4);
 }
 .gf-app .gf-website-row > .gf-button {
-  margin-top: 23px;
   min-height: 40px;
+}
+.gf-app .gf-website-hint {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--material-metadata);
 }
 .gf-app .gf-website-row > .gf-field {
   margin: 0;

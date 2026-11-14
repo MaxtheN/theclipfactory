@@ -187,7 +187,7 @@ export function QuickActions({
           Quick actions
         </h2>
         <p id={descriptionId} className="gf-command-sr-only">
-          Search for a workspace view or action. Use arrow keys to
+          Search for a page or action. Use arrow keys to
           choose and Enter to open.
         </p>
         <div className="gf-command-search">
