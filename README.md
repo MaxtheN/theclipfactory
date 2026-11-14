@@ -10,9 +10,16 @@ model fits or every pipeline has been hardware-validated**. See
 
 ## How the factory works
 
-Open the app on **Factory**, drop footage in, and review what comes out. With
-**Autopilot** on (the default), imported footage goes into production by itself
-as soon as a model is ready; clips always wait for your approval.
+The app opens in the **Growth Factory** shell. Create a workspace (who the
+clips are for and what they should achieve), approve its creative direction,
+then drop footage on **Factory**. Each source shows where it is on the line
+(Import, Listen, Watch, Pick moments, Write and check, Render), a **Make clips**
+button that starts a swarm under the approved direction, and *What the factory
+saw*. With **Autopilot** on (the default) and a direction approved, attaching
+new footage starts production by itself; clips always wait for your approval.
+**Library → Review wall** shows every edit side by side with bulk approval.
+**Advanced tools** (quick actions, ⌘K) holds the un-scoped tools: all footage
+and clips, Studio, Models and Settings.
 
 1. **Listen.** Speech is transcribed locally. Recognizer output over noise is
    filtered (looping phrases, impossible timing, low confidence), and the source
