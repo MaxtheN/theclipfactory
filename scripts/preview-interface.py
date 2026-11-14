@@ -16,6 +16,7 @@ import urllib.request
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://127.0.0.1:5178/")
+    parser.add_argument("--title", default="Growth Factory — Live Interface")
     args = parser.parse_args()
     url = urllib.parse.urlsplit(args.url)
     if (
@@ -37,7 +38,7 @@ def main():
     import webview
 
     window = webview.create_window(
-        "Growth Factory — Live Interface",
+        args.title,
         args.url,
         width=1440,
         height=960,

@@ -5,9 +5,11 @@ import type {
   Job,
   Observation,
   Profile,
+  TeamRun,
   StrategyVersion,
   Video,
 } from "../types";
+import { validRuns } from "../components/TeamLedger";
 
 export const reviewPreview = import.meta.env.VITE_REVIEW_PREVIEW === "true";
 export const campaignUrl = (id: string, action = "") =>
@@ -53,6 +55,16 @@ export const workspaceApi = {
   observations: (id: string) =>
     checkedList<Observation>(campaignUrl(id, "observations")),
   profile: (body: ProfileInput) => post<Profile>("/api/profiles", body),
+  updateProfile: (id: string, body: ProfileInput) =>
+    put<Profile>(`/api/profiles/${encodeURIComponent(id)}`, body),
+  teamRuns: async (): Promise<TeamRun[]> => {
+    const result = await api<unknown>("/api/team/runs");
+    if (!validRuns(result))
+      throw new Error(
+        "The local service returned an invalid team ledger. Refresh before using recommendations.",
+      );
+    return result;
+  },
   save: (body: CampaignInput, id?: string) =>
     id
       ? put<Campaign>(campaignUrl(id), body)

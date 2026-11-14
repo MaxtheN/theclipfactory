@@ -44,42 +44,49 @@ const send = <T,>(p: string, b: unknown = {}, method = "POST") =>
 beforeEach(() => {
   localStorage.clear();
   resetPreview();
+  // These regressions exercise editable workspace settings; the new daily
+  // Factory/default/onboarding flow has separate coverage.
+  localStorage.setItem("growth-view-v2", "setup");
 });
 
 describe("Growth Factory interface", () => {
   it("collapses and restores the sidebar without discarding the brief", async () => {
     render(<GrowthApp />);
+    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    menu?.setAttribute("open", "");
     await waitFor(() =>
       expect(screen.getByLabelText("Campaign name")).toHaveValue(
         "All-In clips",
       ),
     );
-    fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Who are we speaking to?" }), {
       target: { value: "A retained audience" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     expect(
-      screen.queryByRole("navigation", { name: "Campaign stages" }),
+      screen.queryByRole("navigation", { name: "Main navigation" }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Expand sidebar" }),
     ).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
     expect(
-      screen.getByRole("navigation", { name: "Campaign stages" }),
+      screen.getByRole("navigation", { name: "Main navigation" }),
     ).toBeVisible();
-    expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
+    expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
       "A retained audience",
     );
   });
   it("opens quick actions by keyboard or click and preserves drafts through navigation", async () => {
     render(<GrowthApp />);
+    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    menu?.setAttribute("open", "");
     await waitFor(() =>
       expect(screen.getByLabelText("Campaign name")).toHaveValue(
         "All-In clips",
       ),
     );
-    const audience = screen.getByLabelText("Who are we speaking to?");
+    const audience = screen.getByRole("textbox", { name: "Who are we speaking to?" });
     fireEvent.change(audience, { target: { value: "My unsaved audience" } });
     audience.focus();
     fireEvent.keyDown(window, { key: "k", metaKey: true });
@@ -90,43 +97,47 @@ describe("Growth Factory interface", () => {
     fireEvent.keyDown(search, { key: "Escape" });
     expect(audience).toHaveFocus();
     fireEvent.click(screen.getByRole("button", { name: "Open quick actions" }));
-    fireEvent.change(search, { target: { value: "studio" } });
+    fireEvent.change(search, { target: { value: "library" } });
     fireEvent.keyDown(search, { key: "Enter" });
     expect(
-      screen.getByRole("heading", { name: "Clip studio" }),
+      screen.getByRole("heading", { name: "Library" }),
     ).toHaveFocus();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     fireEvent.change(search, { target: { value: "setup" } });
     fireEvent.keyDown(search, { key: "Enter" });
-    expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
+    expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
       "My unsaved audience",
     );
   });
   it("does not bypass unsaved-campaign navigation gates through quick actions", async () => {
     render(<GrowthApp />);
+    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    menu?.setAttribute("open", "");
     await waitFor(() =>
       expect(screen.getByLabelText("Campaign name")).toHaveValue(
         "All-In clips",
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "New campaign" }));
+    fireEvent.click(screen.getByRole("button", { name: "New workspace" }));
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     const search = screen.getByRole("combobox", {
       name: "Search quick actions",
     });
     fireEvent.change(search, { target: { value: "research" } });
     expect(
-      screen.getByRole("option", { name: /^Go to Research/ }),
+      screen.getByRole("option", { name: /^Go to Creative direction/ }),
     ).toBeDisabled();
     fireEvent.keyDown(search, { key: "Enter" });
     expect(screen.getByRole("dialog", { name: "Quick actions" })).toBeVisible();
     fireEvent.keyDown(search, { key: "Escape" });
-    expect(screen.getByLabelText("Campaign name")).toHaveValue("");
-    expect(screen.getByRole("button", { name: /02 Research/ })).toBeDisabled();
+    expect(screen.getByLabelText("Podcast or workspace name")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Creative direction" })).toBeDisabled();
   });
   it("saves a campaign, requires explicit direction approval, then opens Studio", async () => {
     render(<GrowthApp />);
+    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    menu?.setAttribute("open", "");
     await waitFor(() =>
       expect(screen.getByLabelText("Campaign name")).toHaveValue(
         "All-In clips",
@@ -144,31 +155,33 @@ describe("Growth Factory interface", () => {
       screen.getByRole("button", { name: /^Approve direction\b/ }),
     );
     await screen.findByRole("heading", {
-      name: "Clip studio",
+      name: "Production & review",
     });
     expect((await previewRequest<Campaign>(path)).active_strategy_id).toBe(
       "preview-strategy-v1",
     );
     expect(
-      screen.getByRole("button", { name: /^Make the first cut\b/ }),
-    ).toBeEnabled();
+      screen.getByLabelText("Production mode"),
+    ).toHaveValue("agent");
     expect(
       screen.queryByRole("link", { name: /Export/ }),
     ).not.toBeInTheDocument();
   });
   it("preserves an unsaved brief when moving between stages", async () => {
     render(<GrowthApp />);
+    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    menu?.setAttribute("open", "");
     await waitFor(() =>
       expect(screen.getByLabelText("Campaign name")).toHaveValue(
         "All-In clips",
       ),
     );
-    fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Who are we speaking to?" }), {
       target: { value: "A very specific audience" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /02 Research/ }));
-    fireEvent.click(screen.getByRole("button", { name: /01 Setup/ }));
-    expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
+    fireEvent.click(screen.getByRole("button", { name: "Creative direction" }));
+    fireEvent.click(screen.getByRole("button", { name: "Workspace settings" }));
+    expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
       "A very specific audience",
     );
   });
@@ -177,12 +190,14 @@ describe("Growth Factory interface", () => {
 describe("approval transition regressions", () => {
   it("saves edited reference text before allowing direction approval", async () => {
     render(<GrowthApp />);
+    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    menu?.setAttribute("open", "");
     await waitFor(() =>
       expect(screen.getByLabelText("Campaign name")).toHaveValue(
         "All-In clips",
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: /02 Research/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Creative direction" }));
     expect(
       screen.getByRole("button", { name: /^Approve direction\b/ }),
     ).toBeEnabled();
@@ -249,8 +264,10 @@ describe("approval transition regressions", () => {
         moment_selection: "A saved specific rule.",
       },
     });
-    localStorage.setItem("growth-stage", "results");
+    localStorage.setItem("growth-view-v2", "results");
     render(<GrowthApp />);
+    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    menu?.setAttribute("open", "");
     await screen.findByRole("button", { name: /^Approve next test\b/ });
     fireEvent.change(screen.getByLabelText("Proposed source-selection rule"), {
       target: { value: "An unsaved different rule." },
@@ -268,7 +285,7 @@ describe("approval transition regressions", () => {
       screen.getByRole("button", { name: /^Approve next test\b/ }),
     );
     await screen.findByRole("heading", {
-      name: "Clip studio",
+      name: "Production & review",
     });
     await waitFor(() =>
       expect(screen.getByLabelText("Source footage")).toHaveValue(
@@ -276,8 +293,8 @@ describe("approval transition regressions", () => {
       ),
     );
     expect(
-      screen.getByRole("button", { name: /^Make the first cut\b/ }),
-    ).toBeEnabled();
+      screen.getByLabelText("Production mode"),
+    ).toHaveValue("agent");
     expect(
       screen.queryByRole("button", { name: /^Approve this clip\b/ }),
     ).not.toBeInTheDocument();
@@ -285,15 +302,17 @@ describe("approval transition regressions", () => {
   });
   it("does not operate on the old campaign while a new campaign is unsaved", async () => {
     render(<GrowthApp />);
+    const menu = screen.getByLabelText("Workspace menu").closest("details");
+    menu?.setAttribute("open", "");
     await waitFor(() =>
       expect(screen.getByLabelText("Campaign name")).toHaveValue(
         "All-In clips",
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "New campaign" }));
-    expect(screen.getByLabelText("Campaign name")).toHaveValue("");
-    expect(screen.getByRole("button", { name: /02 Research/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /03 Studio/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "New workspace" }));
+    expect(screen.getByLabelText("Podcast or workspace name")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Creative direction" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Library" })).toBeDisabled();
   });
 });
 

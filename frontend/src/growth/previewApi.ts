@@ -10,10 +10,12 @@ import type {
   Video,
 } from "../types";
 
+import type { ProductionClip } from "./productionContracts";
+
 /** Explicit review-only transport. Never calls fetch or the desktop service. */
 const STORAGE_KEY = "growth-factory-preview-v1";
 type PreviewObservation = Observation & { campaign_id: string };
-type PendingRender = { job_id: string; due_at: number; clip: Clip };
+type PendingRender = { job_id: string; due_at: number; clip: ProductionClip };
 interface PreviewState {
   schema: 1;
   sequence: number;
@@ -22,7 +24,7 @@ interface PreviewState {
   strategies: StrategyVersion[];
   observations: PreviewObservation[];
   videos: Video[];
-  clips: Clip[];
+  clips: ProductionClip[];
   jobs: Job[];
   pending: PendingRender[];
   settings: Settings;
@@ -357,6 +359,9 @@ function route(
       ],
     };
   if (method === "GET" && path === "/api/team/runs") return [];
+  if (method === "GET" && resource === "exports") return [];
+  if (method === "POST" && resource === "clips" && action === "export")
+    fail("Illustrative clips have no native media. No export was created.");
   if (resource === "settings" && method === "PUT")
     return Object.assign(s.settings, body, {
       publishing_enabled: false,
@@ -432,7 +437,10 @@ function route(
       clip.caption = body.caption;
       clip.approved = false;
     }
-    if (typeof body.approved === "boolean") clip.approved = body.approved;
+    if (typeof body.approved === "boolean") {
+      clip.approved = body.approved;
+      clip.approved_at = body.approved ? stamp() : null;
+    }
     return clip;
   }
   if (
@@ -646,7 +654,7 @@ function route(
         )
       )
         fail("A preview job is already active for this source.");
-      const clip: Clip = {
+      const clip: ProductionClip = {
         id: id(s, "clip"),
         video_id: videoId,
         name: "Preview clip · simulated output",
@@ -665,11 +673,25 @@ function route(
         edit_plan: {
           start,
           end,
-          hook: body.hook ?? d.hooks[0],
-          preview_fixture: true,
+          hook: text(body.hook, d.hooks[0] ?? ""),
+          caption: text(body.caption),
+          subtitles: body.subtitles === true,
+          format: "vertical",
+          framing: d.framing,
+          caption_style: d.caption_style,
+          hook_overlay: body.opening_treatment !== "cold_open",
+          opening_treatment: body.opening_treatment === "cold_open" ? "cold_open" : "text_overlay",
+          cold_open_start: typeof body.cold_open_start === "number" ? body.cold_open_start : null,
+          cold_open_end: typeof body.cold_open_end === "number" ? body.cold_open_end : null,
+          focus_x: typeof body.focus_x === "number" ? body.focus_x : .5,
+          changed_variable: text(body.changed_variable),
         },
         provenance_mode: "preview_fixture",
         creator_instructions: text(body.instructions),
+        parent_clip_id: typeof body.parent_clip_id === "string" ? body.parent_clip_id : null,
+        root_clip_id: typeof body.parent_clip_id === "string" ? (s.clips.find(c => c.id === body.parent_clip_id)?.root_clip_id || body.parent_clip_id) : null,
+        revision_number: typeof body.parent_clip_id === "string" ? 1 + (s.clips.find(c => c.id === body.parent_clip_id)?.revision_number || 1) : 1,
+        change_reason: text(body.change_reason),
         hook_rendered: true,
         team_review_status: "not_applicable",
         subtitles_burned: null,
@@ -689,6 +711,11 @@ function route(
         context: {
           video_id: videoId,
           campaign_id: campaign.id,
+          profile_id: profileId,
+          plan: copy(clip.edit_plan),
+          attempt: 1,
+          parent_clip_id: clip.parent_clip_id,
+          retry_of_job_id: null,
           preview_fixture: true,
         },
         created_at: stamp(),

@@ -14,6 +14,113 @@ import {
   formatTime,
 } from "./parts";
 import { Icon } from "./Icon";
+import { objectives, type Profile } from "../types";
+import { profileGoalBody } from "./learningState";
+
+function ProfileGoalEditor({
+  profile,
+  w,
+  blocked,
+}: {
+  profile: Profile;
+  w: Workspace;
+  blocked: boolean;
+}) {
+  const [objective, setObjective] = useState(profile.objective);
+  const [primaryMetric, setPrimaryMetric] = useState(
+    profile.primary_metric || "",
+  );
+  const [validation, setValidation] = useState("");
+  const changed =
+    objective !== profile.objective ||
+    (objective === "discovery" ? null : primaryMetric.trim()) !==
+      profile.primary_metric;
+  async function saveGoal() {
+    if (blocked || !changed) return;
+    try {
+      const body = profileGoalBody(profile, objective, primaryMetric);
+      setValidation("");
+      await w.run(
+        () => workspaceApi.updateProfile(profile.id, body),
+        `Production goal saved for ${profile.name}. Earlier clip snapshots stay unchanged.`,
+      );
+    } catch (error) {
+      setValidation(
+        error instanceof Error ? error.message : "Check the profile goal.",
+      );
+    }
+  }
+  return (
+    <Disclosure title={`Production goal · ${profile.name}`} icon="results">
+      <p>
+        This selected profile's saved goal guides future production. Campaign
+        brief intent is separate.
+      </p>
+      <Field label="Production objective">
+        {(id) => (
+          <select
+            id={id}
+            value={objective}
+            disabled={blocked}
+            onChange={(event) => {
+              setObjective(event.target.value);
+              setValidation("");
+            }}
+          >
+            {objectives.map((value) => (
+              <option key={value} value={value}>
+                {value === "discovery"
+                  ? "Discovery · explore without a primary outcome"
+                  : value.charAt(0).toUpperCase() + value.slice(1)}
+              </option>
+            ))}
+          </select>
+        )}
+      </Field>
+      <Field
+        label="Primary production metric"
+        hint={
+          objective === "discovery"
+            ? "Discovery keeps this metric unset; it does not select a winner."
+            : "Required for this profile's goal-directed work. No measured improvement is implied."
+        }
+      >
+        {(id) => (
+          <AutoTextarea
+            id={id}
+            rows={1}
+            maxLength={200}
+            value={primaryMetric}
+            disabled={blocked || objective === "discovery"}
+            placeholder="e.g. full_episode_visits"
+            onChange={(event) => {
+              setPrimaryMetric(event.target.value);
+              setValidation("");
+            }}
+          />
+        )}
+      </Field>
+      {validation && (
+        <p className="gf-help" role="alert">
+          {validation}
+        </p>
+      )}
+      <button
+        type="button"
+        className="gf-button secondary compact"
+        disabled={
+          blocked ||
+          !changed ||
+          (objective !== "discovery" && !primaryMetric.trim())
+        }
+        onClick={() => void saveGoal()}
+      >
+        Save profile goal
+        <Icon name="check" size={14} />
+      </button>
+    </Disclosure>
+  );
+}
 
 export function Setup({
   w,
@@ -135,7 +242,10 @@ export function Setup({
                 />
               )}
             </Field>
-            <Field label="What are we working toward?">
+            <Field
+              label="Campaign brief intent"
+              hint="Describes this campaign. The selected profile's production goal is saved separately below."
+            >
               {(id) => (
                 <select
                   id={id}
@@ -183,6 +293,19 @@ export function Setup({
                 ))}
               </div>
             </div>
+            {(() => {
+              const profile =
+                w.profiles.find((p) => p.id === w.profileId) ||
+                w.profiles.find((p) => selected.includes(p.id));
+              return profile ? (
+                <ProfileGoalEditor
+                  key={profile.id}
+                  profile={profile}
+                  w={w}
+                  blocked={blocked}
+                />
+              ) : null;
+            })()}
             <Disclosure title="Brand & profile settings" icon="settings">
               <Field label="Profile name">
                 {(id) => (
