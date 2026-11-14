@@ -24,6 +24,7 @@ class WorkError(RuntimeError):
 
 
 DOWNLOAD_WORKERS = 3
+TERMINAL = {"completed", "failed", "cancelled"}
 
 
 class Jobs:
@@ -43,6 +44,7 @@ class Jobs:
                     error="Interrupted by app shutdown. Review before retrying.",
                     message="Interrupted",
                     updated_at=now(),
+                    finished_at=now(),
                 )
         self.thread = threading.Thread(
             target=self._run, args=(self.pending,), name="factory-heavy-worker", daemon=True
@@ -84,7 +86,10 @@ class Jobs:
             return item
 
     def update(self, identifier: str, **changes):
-        return self.store.patch("jobs", identifier, updated_at=now(), **changes)
+        stamp = now()
+        if changes.get("status") in TERMINAL:
+            changes.setdefault("finished_at", stamp)
+        return self.store.patch("jobs", identifier, updated_at=stamp, **changes)
 
     def cancelled(self, identifier: str) -> bool:
         return self.stopping.is_set() or self.cancellations.get(identifier, threading.Event()).is_set()
@@ -122,7 +127,7 @@ class Jobs:
             try:
                 with self.lock:
                     self.check(identifier)
-                    self.update(identifier, status="running", message="Starting")
+                    self.update(identifier, status="running", message="Starting", started_at=now())
                 result = operation(identifier)
                 # Do not erase an external success with a late cancellation. Operations check before writes.
                 self.update(identifier, status="completed", progress=100, message="Completed", result=result)

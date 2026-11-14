@@ -12,6 +12,7 @@ import re
 import secrets
 import shutil
 import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -70,6 +71,34 @@ class Render(Body):
     framing: Literal["fit", "fill"] = "fit"
     caption_style: Literal["standard", "high_contrast"] = "standard"
     hook_overlay: bool = False
+    # Opening treatment: None keeps the legacy rule (text overlay when hook_overlay and a hook exist).
+    opening_treatment: Literal["text_overlay", "cold_open", "none"] | None = None
+    cold_open_start: float | None = Field(default=None, ge=0)
+    cold_open_end: float | None = Field(default=None, gt=0)
+    focus_x: float = Field(default=0.5, ge=0, le=1)
+    changed_variable: str = Field(default="", max_length=120)
+    # Lineage and retry context; not edit decisions, so excluded from the stored edit plan.
+    parent_clip_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    change_reason: str = Field(default="", max_length=2000)
+    retry_of_job_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
+PLAN_CONTEXT = {"parent_clip_id", "change_reason", "retry_of_job_id"}
+PLAN_EXTRAS = {
+    "opening_treatment",
+    "cold_open_start",
+    "cold_open_end",
+    "focus_x",
+    "changed_variable",
+    *PLAN_CONTEXT,
+}
+MAX_RENDER_ATTEMPTS = 3
+
+
+class TranscriptImport(Body):
+    format: Literal["srt", "vtt", "json"]
+    content: str = Field(min_length=1, max_length=2_000_000)
+    language: str | None = Field(default=None, min_length=2, max_length=12, pattern=r"^[A-Za-z-]+$")
 
 
 class Analysis(Body):
@@ -163,7 +192,7 @@ def parse_candidates(output: str, duration: float, objective: str) -> list[dict]
                 item.objective = objective
             valid.append(
                 {
-                    **item.model_dump(exclude={"subtitles", "format"}),
+                    **item.model_dump(exclude={"subtitles", "format", *PLAN_EXTRAS}),
                     "reason": str(candidate.get("reason", "Local model suggestion"))[:1000],
                 }
             )
@@ -180,7 +209,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     root = Path(data_dir or user_data_path("Clip Factory", appauthor=False)).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     root.chmod(0o700)
-    for name in ["videos", "clips", "work", "narrations"]:
+    for name in ["videos", "clips", "work", "narrations", "exports"]:
         (root / name).mkdir(exist_ok=True)
     store = Store(root)
     campaigns = Campaigns(store)
@@ -456,7 +485,15 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 audio=str(audio),
                 language=language or settings()["language"],
             )
-            store.patch("videos", video["id"], transcript=result, status="transcribed")
+            store.patch(
+                "videos",
+                video["id"],
+                transcript=result,
+                transcript_origin="generated",
+                transcript_model="whisper-turbo",
+                transcript_updated_at=now(),
+                status="transcribed",
+            )
             return {"video_id": video["id"], **result}
         finally:
             audio.unlink(missing_ok=True)
@@ -531,9 +568,146 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         store.patch("videos", video["id"], analysis=result, status="analyzed")
         return result
 
-    def render_task(job_id: str, video: dict, body: Render, team_metadata: dict | None = None) -> dict:
+    def plan_of(body: Render) -> dict:
+        """The edit decisions that define a version (lineage/retry context excluded)."""
+        return body.model_dump(exclude=PLAN_CONTEXT)
+
+    def stored_plan(clip: dict) -> dict:
+        raw = clip.get("edit_plan") or {
+            key: clip.get(key) for key in ["start", "end", "hook", "caption", "objective"]
+        }
+        try:
+            return plan_of(Render.model_validate({k: v for k, v in raw.items() if k in Render.model_fields}))
+        except ValueError:
+            return dict(raw)
+
+    def opening_of(body: Render) -> str:
+        if body.opening_treatment:
+            return body.opening_treatment
+        return "text_overlay" if body.hook_overlay and body.hook.strip() else "none"
+
+    def validate_opening(body: Render, video: dict):
+        """Explicit opening treatments are enforced; omitted ones keep the legacy hook_overlay rule."""
+        has_cold_times = body.cold_open_start is not None or body.cold_open_end is not None
+        if body.opening_treatment == "cold_open":
+            if body.cold_open_start is None or body.cold_open_end is None:
+                raise HTTPException(422, "A cold open needs cold_open_start and cold_open_end source times.")
+            if body.cold_open_end <= body.cold_open_start or body.cold_open_end > video["duration"] + 0.1:
+                raise HTTPException(422, "The cold open must be a range inside the source video.")
+            body.cold_open_end = min(body.cold_open_end, video["duration"])
+            low, high = media.COLD_OPEN_LIMITS
+            length = body.cold_open_end - body.cold_open_start
+            if not low <= length <= high:
+                raise HTTPException(422, f"Keep the cold open between {low:g} and {high:g} seconds.")
+            if length + body.end - body.start > 180:
+                raise HTTPException(422, "The cold open and main range together must be at most 180 seconds.")
+            body.hook_overlay = False
+        elif has_cold_times:
+            raise HTTPException(422, "Cold-open times are only used with the cold_open opening treatment.")
+        elif body.opening_treatment == "text_overlay":
+            if not body.hook.strip():
+                raise HTTPException(422, "A text-overlay opening needs hook text.")
+            body.hook_overlay = True
+        elif body.opening_treatment == "none":
+            body.hook_overlay = False
+
+    def require_transcript(body: Render, video: dict):
+        if body.subtitles and video.get("has_audio") and video.get("transcript") is None:
+            raise HTTPException(
+                409,
+                "Captions need a transcript of this source. Transcribe it locally, import a transcript, "
+                "or render without captions.",
+            )
+
+    def revision_fields(body: Render, video: dict, campaign: dict | None = None) -> dict:
+        if not body.parent_clip_id:
+            if body.change_reason.strip():
+                raise HTTPException(422, "A change reason needs the parent clip being revised.")
+            return {
+                "parent_clip_id": None,
+                "root_clip_id": None,
+                "revision_number": 1,
+                "change_reason": "",
+                "plan_changes": [],
+            }
+        parent = store.get("clips", body.parent_clip_id)
+        if not parent:
+            raise HTTPException(422, "The parent clip for this revision was not found.")
+        if parent["video_id"] != video["id"]:
+            raise HTTPException(422, "A revision must use its parent's source video.")
+        scope = (campaign or {}).get("campaign_id"), (campaign or {}).get("profile_id")
+        if (parent.get("campaign_id"), parent.get("profile_id")) != scope:
+            raise HTTPException(422, "A revision must stay in its parent's campaign and profile.")
+        if not body.change_reason.strip():
+            raise HTTPException(422, "Describe the requested change for this revision.")
+        before, after = stored_plan(parent), plan_of(body)
+        changes = [
+            {"field": key, "before": before.get(key), "after": value}
+            for key, value in after.items()
+            if key != "changed_variable" and before.get(key) != value
+        ]
+        if not changes:
+            raise HTTPException(
+                422, "This revision changes no edit decision. Change the plan or keep the parent version."
+            )
+        return {
+            "parent_clip_id": parent["id"],
+            "root_clip_id": parent.get("root_clip_id") or parent["id"],
+            "revision_number": int(parent.get("revision_number") or 1) + 1,
+            "change_reason": body.change_reason.strip(),
+            "plan_changes": changes,
+        }
+
+    def retry_fields(body: Render, video: dict) -> dict:
+        if not body.retry_of_job_id:
+            return {"retry_of_job_id": None, "attempt": 1}
+        failed = store.get("jobs", body.retry_of_job_id)
+        if (
+            not failed
+            or failed["kind"] != "render"
+            or failed.get("context", {}).get("video_id") != video["id"]
+        ):
+            raise HTTPException(422, "A retry must reference an earlier render of this source.")
+        if failed["status"] not in {"failed", "cancelled"}:
+            raise HTTPException(409, "Only a failed or cancelled render can be retried.")
+        if any(j.get("context", {}).get("retry_of_job_id") == failed["id"] for j in store.all("jobs")):
+            raise HTTPException(409, "This render was already retried. Retry its latest attempt instead.")
+        attempt = int(failed["context"].get("attempt") or 1) + 1
+        if attempt > MAX_RENDER_ATTEMPTS:
+            raise HTTPException(
+                409,
+                f"This render already failed {attempt - 1} times. Change the plan or check the source "
+                "before rendering again.",
+            )
+        return {"retry_of_job_id": failed["id"], "attempt": attempt}
+
+    def render_task(
+        job_id: str,
+        video: dict,
+        body: Render,
+        team_metadata: dict | None = None,
+        lineage: dict | None = None,
+    ) -> dict:
         identifier = new_id()
         target = root / "clips" / f"{identifier}.mp4"
+        lineage = lineage or {}
+        started_at, clock = now(), time.monotonic()
+        if lineage.get("parent_clip_id") and not store.get("clips", lineage["parent_clip_id"]):
+            raise WorkError("The parent clip was removed before this revision started.")
+        options = (
+            {
+                "framing": body.framing,
+                "caption_style": body.caption_style,
+                "hook": body.hook if body.hook_overlay else "",
+            }
+            if body.framing != "fit" or body.caption_style != "standard" or body.hook_overlay
+            else {}
+        )
+        if body.focus_x != 0.5:
+            options["focus_x"] = body.focus_x
+        if body.cold_open_start is not None and body.cold_open_end is not None:
+            options["cold_open"] = (body.cold_open_start, body.cold_open_end)
+            options["has_audio"] = bool(video.get("has_audio"))
         result = media.render(
             jobs(),
             job_id,
@@ -543,15 +717,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             end=body.end,
             transcript=video.get("transcript"),
             burn_subtitles=body.subtitles,
-            **(
-                {
-                    "framing": body.framing,
-                    "caption_style": body.caption_style,
-                    "hook": body.hook if body.hook_overlay else "",
-                }
-                if body.framing != "fit" or body.caption_style != "standard" or body.hook_overlay
-                else {}
-            ),
+            **options,
         )
         cover = target.with_suffix(".jpg")
         try:
@@ -580,6 +746,33 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             target.unlink(missing_ok=True)
             target.with_suffix(".srt").unlink(missing_ok=True)
             raise
+        try:
+            # A saved version is immutable: later edits produce new linked revisions instead.
+            checksum, size = media.sha256_file(target), target.stat().st_size
+            target.chmod(0o444)
+        except OSError:
+            target.unlink(missing_ok=True)
+            cover.unlink(missing_ok=True)
+            target.with_suffix(".srt").unlink(missing_ok=True)
+            raise WorkError("The rendered clip could not be finalized. Check disk permissions.") from None
+        version, encoder = result.pop("ffmpeg_version", None), result.pop("encoder", None)
+        receipt = {
+            "job_id": job_id,
+            "started_at": started_at,
+            "finished_at": now(),
+            "elapsed_seconds": round(time.monotonic() - clock, 3),
+            "attempt": lineage.get("attempt", 1),
+            "retry_of_job_id": lineage.get("retry_of_job_id"),
+            "ffmpeg_version": version,
+            "encoder": encoder,
+            "cost": {
+                "status": "known",
+                "amount": 0.0,
+                "currency": "USD",
+                "basis": "Rendered locally with FFmpeg; no paid or external service was called.",
+                "excluded": ["hardware", "electricity", "human time"],
+            },
+        }
         clip = {
             "id": identifier,
             "video_id": video["id"],
@@ -595,19 +788,36 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "instagram_media_id": None,
             "published_at": None,
             "path": str(target.relative_to(root)),
+            "edit_plan": plan_of(body),
+            "opening_treatment": opening_of(body),
+            "changed_variable": body.changed_variable.strip() or None,
+            "source_segments": [{"role": "main", "start": body.start, "end": body.end}],
+            "transcript_origin": video.get("transcript_origin")
+            or ("generated" if video.get("transcript") is not None else None),
+            "sha256": checksum,
+            "bytes": size,
+            "render_receipt": receipt,
+            "parent_clip_id": lineage.get("parent_clip_id"),
+            "root_clip_id": lineage.get("root_clip_id"),
+            "revision_number": lineage.get("revision_number", 1),
+            "change_reason": lineage.get("change_reason", ""),
+            "plan_changes": lineage.get("plan_changes", []),
             **result,
             **(team_metadata or {}),
         }
         try:
             with operations_lock:
+                if clip["parent_clip_id"] and not store.get("clips", clip["parent_clip_id"]):
+                    raise WorkError("The parent clip was removed while this revision rendered.")
                 store.put("clips", clip)
                 if clip.get("team_run_id"):
                     app.state.team.record_clip(clip["team_run_id"], identifier)
         except Exception:
             target.unlink(missing_ok=True)
             cover.unlink(missing_ok=True)
+            target.with_suffix(".srt").unlink(missing_ok=True)
             raise
-        return {"clip_id": identifier, **result}
+        return {"clip_id": identifier, "sha256": checksum, **result}
 
     def render_team(job_id: str, video: dict, candidate: dict) -> dict:
         body = Render.model_validate(
@@ -620,7 +830,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             body.caption_style = direction["caption_style"]
             body.hook_overlay = True
             body.end = min(body.end, body.start + direction["duration_seconds"])
-            metadata["edit_plan"] = body.model_dump()
+            metadata["edit_plan"] = plan_of(body)
             metadata["provenance_mode"] = "strategy"
         return render_task(job_id, video, body, team_metadata=metadata)
 
@@ -655,7 +865,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                     **snapshot,
                     "provenance_mode": "strategy",
                     "creator_instructions": "",
-                    "edit_plan": body.model_dump(),
+                    "edit_plan": plan_of(body),
                 }
             output.append(render_task(job_id, video, body, team_metadata=metadata))
         return {"video_id": video["id"], "clips": output, "requires_review": True}
@@ -733,6 +943,32 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def transcribe_video(identifier: str):
         models().require("whisper-turbo", "asr")
         return submit_source(identifier, "transcribe", transcribe_task, model_id="whisper-turbo")
+
+    @app.put("/api/videos/{identifier}/transcript")
+    def import_transcript(identifier: str, body: TranscriptImport):
+        """Fallback/correction path when local transcription is unavailable or wrong; text is not invented."""
+        with operations_lock:
+            video = require("videos", identifier)
+            if jobs().busy("video_id", identifier):
+                raise HTTPException(
+                    409, "Finish or cancel this source's current task before replacing its transcript."
+                )
+            try:
+                transcript = media.parse_transcript(body.format, body.content, video["duration"])
+            except WorkError as exc:
+                raise HTTPException(422, str(exc)) from None
+            transcript["language"] = body.language or transcript["language"] or settings()["language"]
+            updated = store.patch(
+                "videos",
+                identifier,
+                transcript=transcript,
+                transcript_origin="imported",
+                transcript_model=None,
+                transcript_format=body.format,
+                transcript_updated_at=now(),
+                status="transcribed",
+            )
+            return public(updated)
 
     @app.post("/api/videos/{identifier}/analyze", status_code=202)
     def analyze_video(identifier: str, body: Analysis):
@@ -828,7 +1064,24 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 422, "Clip must be within source duration, end after start, and no longer than 180 seconds."
             )
         body.end = min(body.end, video["duration"])
-        return submit_source(identifier, "render", lambda job, item: render_task(job, item, body))
+        with operations_lock:
+            validate_opening(body, video)
+            require_transcript(body, video)
+            parent = store.get("clips", body.parent_clip_id) if body.parent_clip_id else None
+            if parent and parent.get("campaign_id"):
+                raise HTTPException(
+                    422, "Revise campaign clips through their campaign so strategy provenance stays intact."
+                )
+            lineage = {**revision_fields(body, video), **retry_fields(body, video)}
+            return submit_source(
+                identifier,
+                "render",
+                lambda job, item: render_task(job, item, body, lineage=lineage),
+                plan=plan_of(body),
+                attempt=lineage["attempt"],
+                retry_of_job_id=lineage["retry_of_job_id"],
+                parent_clip_id=lineage["parent_clip_id"],
+            )
 
     @app.get("/api/clips")
     def get_clips():
@@ -857,8 +1110,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                     409, "Changed or unresolved team content must be saved and rechecked before approval."
                 )
             changes = body.model_dump(exclude_none=True)
+            if body.approved is not None and body.approved != bool(clip.get("approved")):
+                changes["approved_at"] = now() if body.approved else None
             if changed:
                 changes["approved"] = False
+                changes["approved_at"] = None
                 if team_content:
                     changes.update(
                         team_review_status="unknown",
@@ -905,6 +1161,145 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         clip = require("clips", identifier)
         return FileResponse(source_path(clip), media_type="video/mp4", filename=f"clip-{identifier[:8]}.mp4")
 
+    def export_public(item: dict) -> dict:
+        return {
+            **{k: v for k, v in item.items() if k not in {"path", "folder"}},
+            "location": str(root / item["folder"]),
+        }
+
+    def export_path(item: dict, name: str) -> Path:
+        path = (root / item["folder"] / name).resolve()
+        if not path.is_relative_to(root / "exports") or not path.exists():
+            raise HTTPException(404, "Export file no longer exists in the local library.")
+        return path
+
+    @app.post("/api/clips/{identifier}/export", status_code=201)
+    def export_clip(identifier: str):
+        """Copy the approved version, byte-for-byte, with a manifest that ties it to plan and review."""
+        with operations_lock:
+            clip = require("clips", identifier)
+            if not clip.get("approved"):
+                raise HTTPException(409, "Approve this version before exporting it.")
+            if jobs().busy("clip_id", identifier):
+                raise HTTPException(409, "Finish this clip's current task before exporting.")
+            source = source_path(clip)
+            checksum = media.sha256_file(source)
+            recorded = clip.get("sha256")
+            if recorded and checksum != recorded:
+                raise HTTPException(
+                    409,
+                    "This clip's file changed after it was rendered. Render a new version and review it again.",
+                )
+            video = store.get("videos", clip["video_id"]) or {}
+            export_id = new_id()
+            folder = root / "exports" / export_id
+            slug = (
+                re.sub(r"[^a-z0-9]+", "-", str(clip.get("name") or "clip").lower()).strip("-")[:40] or "clip"
+            )
+            filename = f"{slug}-r{int(clip.get('revision_number') or 1)}-{identifier[:8]}.mp4"
+            try:
+                folder.mkdir(parents=True)
+                target = folder / filename
+                shutil.copyfile(source, target)
+                exported = media.sha256_file(target)
+                if exported != checksum:
+                    raise WorkError("The exported copy does not match the approved version.")
+                target.chmod(0o444)
+                captions = source.with_suffix(".srt")
+                if captions.exists():
+                    shutil.copyfile(captions, folder / "captions.srt")
+                manifest = {
+                    "schema": "clip-factory/export-manifest@1",
+                    "export_id": export_id,
+                    "exported_at": now(),
+                    "video": {
+                        "file": filename,
+                        "sha256": exported,
+                        "bytes": target.stat().st_size,
+                        "width": clip.get("width"),
+                        "height": clip.get("height"),
+                        "duration": clip.get("duration"),
+                        "captions_file": "captions.srt" if captions.exists() else None,
+                    },
+                    "clip": {
+                        "id": identifier,
+                        "name": clip.get("name"),
+                        "revision_number": clip.get("revision_number") or 1,
+                        "parent_clip_id": clip.get("parent_clip_id"),
+                        "root_clip_id": clip.get("root_clip_id"),
+                        "change_reason": clip.get("change_reason") or "",
+                        "plan_changes": clip.get("plan_changes") or [],
+                        "checksum_recorded_at_render": bool(recorded),
+                    },
+                    "review": {"state": "approved", "approved_at": clip.get("approved_at")},
+                    "source": {
+                        "video_id": clip["video_id"],
+                        "name": video.get("name"),
+                        "duration": video.get("duration"),
+                        "transcript_origin": clip.get("transcript_origin"),
+                    },
+                    "source_segments": clip.get("source_segments")
+                    or [{"role": "main", "start": clip.get("start"), "end": clip.get("end")}],
+                    "edit_plan": clip.get("edit_plan"),
+                    "opening_treatment": clip.get("opening_treatment"),
+                    "changed_variable": clip.get("changed_variable"),
+                    "strategy": {
+                        key: clip.get(key)
+                        for key in [
+                            "campaign_id",
+                            "profile_id",
+                            "strategy_version_id",
+                            "strategy_version",
+                            "provenance_mode",
+                            "strategy_departures",
+                        ]
+                    },
+                    "technical_checks": clip.get("technical_checks"),
+                    "render_receipt": clip.get("render_receipt"),
+                    "post_copy": {"hook": clip.get("hook"), "caption": clip.get("caption")},
+                }
+                (folder / "manifest.json").write_text(
+                    json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
+            except (OSError, WorkError) as exc:
+                shutil.rmtree(folder, ignore_errors=True)
+                raise HTTPException(
+                    507 if isinstance(exc, OSError) else 409,
+                    str(exc) if isinstance(exc, WorkError) else "Export failed. Check free disk space.",
+                ) from None
+            record = store.put(
+                "exports",
+                {
+                    "id": export_id,
+                    "clip_id": identifier,
+                    "video_id": clip["video_id"],
+                    "campaign_id": clip.get("campaign_id"),
+                    "profile_id": clip.get("profile_id"),
+                    "revision_number": clip.get("revision_number") or 1,
+                    "sha256": exported,
+                    "bytes": manifest["video"]["bytes"],
+                    "file": filename,
+                    "folder": str(folder.relative_to(root)),
+                    "checksum_recorded_at_render": bool(recorded),
+                    "created_at": manifest["exported_at"],
+                },
+            )
+            return {**export_public(record), "manifest": manifest}
+
+    @app.get("/api/exports")
+    def get_exports(clip_id: str | None = None):
+        return [export_public(e) for e in store.all("exports") if not clip_id or e["clip_id"] == clip_id]
+
+    @app.get("/api/exports/{identifier}/manifest")
+    def export_manifest(identifier: str):
+        item = require("exports", identifier)
+        return json.loads(export_path(item, "manifest.json").read_text(encoding="utf-8"))
+
+    @app.get("/api/exports/{identifier}/download")
+    def export_download(identifier: str):
+        item = require("exports", identifier)
+        return FileResponse(export_path(item, item["file"]), media_type="video/mp4", filename=item["file"])
+
     @app.get("/api/clips/{identifier}/cover")
     @app.get("/api/clips/{identifier}/cover/download")
     def clip_cover(identifier: str, request: Request):
@@ -925,9 +1320,21 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 clip.get("team_run_id") and jobs().busy("team_run_id", clip["team_run_id"])
             ):
                 raise HTTPException(409, "Cancel or finish clip/team tasks before deleting.")
+            if jobs().busy("parent_clip_id", identifier) or any(
+                c.get("parent_clip_id") == identifier for c in store.all("clips")
+            ):
+                raise HTTPException(
+                    409,
+                    "Later revisions build on this version. It is kept so revision history stays inspectable.",
+                )
+            if any(e["clip_id"] == identifier for e in store.all("exports")):
+                raise HTTPException(
+                    409,
+                    "This exact version was exported. It is kept so the export can be verified against it.",
+                )
             source_path(clip).unlink()
-            (root / clip["path"]).with_suffix(".srt").unlink(missing_ok=True)
-            (root / clip["path"]).with_suffix(".jpg").unlink(missing_ok=True)
+            for suffix in [".srt", ".jpg", ".hook.ass"]:
+                (root / clip["path"]).with_suffix(suffix).unlink(missing_ok=True)
             store.delete("clips", identifier)
             for kind in ["events", "feedback"]:
                 for entry in store.all(kind):
@@ -1422,8 +1829,19 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 subtitles=body.subtitles,
                 framing=direction["framing"],
                 caption_style=direction["caption_style"],
-                hook_overlay=True,
+                hook_overlay=body.opening_treatment in {None, "text_overlay"},
+                opening_treatment=body.opening_treatment,
+                cold_open_start=body.cold_open_start,
+                cold_open_end=body.cold_open_end,
+                focus_x=body.focus_x,
+                changed_variable=body.changed_variable,
+                parent_clip_id=body.parent_clip_id,
+                change_reason=body.change_reason,
+                retry_of_job_id=body.retry_of_job_id,
             )
+            validate_opening(render, video)
+            require_transcript(render, video)
+            lineage = {**revision_fields(render, video, snapshot), **retry_fields(render, video)}
             deviations = []
             if body.end is not None and end - body.start != direction["duration_seconds"]:
                 deviations.append(
@@ -1436,13 +1854,21 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 "provenance_mode": body.mode,
                 "creator_instructions": body.instructions,
                 "strategy_departures": deviations,
-                "edit_plan": render.model_dump(),
+                "edit_plan": plan_of(render),
                 "selection_rationale": "Creator-selected source range."
                 if body.mode == "direct"
                 else "Deterministic range with approved duration and editing direction; not a claim of visual moment analysis.",
             }
             return submit_source(
-                body.video_id, "render", lambda job, item: render_task(job, item, render, metadata)
+                body.video_id,
+                "render",
+                lambda job, item: render_task(job, item, render, metadata, lineage=lineage),
+                plan=plan_of(render),
+                attempt=lineage["attempt"],
+                retry_of_job_id=lineage["retry_of_job_id"],
+                parent_clip_id=lineage["parent_clip_id"],
+                campaign_id=snapshot["campaign_id"],
+                profile_id=snapshot["profile_id"],
             )
 
     def campaign_produce(identifier, body):
