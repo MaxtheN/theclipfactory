@@ -60,7 +60,7 @@ def test_post_then_reconcile_and_quality_hold_detail(api):
     publisher.storage_factory = lambda: fakes["storage"]
     publisher.gate = holding_gate
     held = session.post("/api/clips/clip-1/post", json={"account_id": "acct-1", "caption": "Hi", "sha256": sha})
-    assert held.status_code == 409 and held.json()["detail"]["code"] == "quality_hold"
+    assert held.status_code == 409 and held.json()["detail"].startswith("Quality gate is on hold")
     assert session.get("/api/clips/clip-1/quality?refresh=true").json()["verdict"] == "hold"
     publisher.gate = passing_gate
     assert session.get("/api/clips/clip-1/quality?refresh=true").json()["verdict"] == "pass"

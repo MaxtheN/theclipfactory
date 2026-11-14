@@ -13,6 +13,7 @@ import { SourceTranscript } from "./SourceTranscript";
 import { JourneyProgress } from "./JourneyProgress";
 import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
+import { PostToInstagram } from "./PostToInstagram";
 import { parseProductionClip, type CampaignRenderRequest, type ExportRecord, type ProductionClip } from "./productionContracts";
 import { changedEditFields, clipInScope, editErrors, jobInScope, object, readiness, retryBlocker, reviewBlocker } from "./productionState";
 
@@ -296,6 +297,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
             {selected.approved ? <button className="gf-button full" disabled={!reviewReady || reviewPreview || uncertainExports.has(selected.id)} onClick={() => void exportClip(selected)}><Icon name="download" size={16} />{reviewPreview ? "Export · Mac app only" : "Export approved MP4"}</button> : <PrimaryAction full label="Approve this clip" intent="approve" disabled={!reviewReady} onClick={() => void perform(() => productionApi.review(selected, true), reviewPreview ? "Sample accepted; no real approval recorded." : "Approved. You can export it now.")} />}
             <button className="gf-button secondary full" disabled={busy} onClick={() => revise(selected)}>Request a change<Icon name="settings" size={15} /></button>
           </div>
+          {!reviewPreview && !illustrativeSelected && <PostToInstagram clip={selected} disabled={!reviewReady} approve={async () => { const box: { clip?: ProductionClip } = {}; const ok = await perform(async () => { box.clip = await productionApi.review(selected, true); }, "Approved this exact revision."); return ok ? box.clip : false; }} />}
         </div>
         <div className="gf-review-details">
           <Disclosure title="Details" icon="info">

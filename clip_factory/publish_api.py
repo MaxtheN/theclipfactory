@@ -29,9 +29,10 @@ class BatchRequest(BaseModel):
 
 
 def _http(error: PublishError) -> HTTPException:
-    detail = error.message if not error.details else {"message": error.message, "code": error.code,
-                                                      **error.details}
-    return HTTPException(error.status, detail)
+    # Plain-text detail for the UI; only batch validation returns its per-item problems.
+    if error.code == "batch_invalid":
+        return HTTPException(error.status, {"message": error.message, "code": error.code, **error.details})
+    return HTTPException(error.status, error.message)
 
 
 def install(app, runtime, engine, campaigns, *, publisher: Publisher | None = None):
