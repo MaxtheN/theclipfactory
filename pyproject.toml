@@ -26,4 +26,4 @@ testpaths = ["tests"]
 line-length = 110
 
 [tool.setuptools.package-data]
-clip_factory = ["ui/*", "inference_worker.py"]
+clip_factory = ["ui/*", "inference_worker.py", "cloud_config.json"]

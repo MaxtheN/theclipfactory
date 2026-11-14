@@ -2542,4 +2542,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     app.state.learning = engine
     install_learning_api(app, runtime, engine)
 
+    from .cloud import default_account
+    from .cloud_api import install as install_cloud_api
+
+    install_cloud_api(app, lambda: default_account(store))
+
     return app

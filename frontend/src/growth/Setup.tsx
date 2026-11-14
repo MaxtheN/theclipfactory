@@ -13,6 +13,7 @@ import {
   formatTime,
 } from "./parts";
 import { Icon } from "./Icon";
+import { CloudAccountRow } from "./CloudSignIn";
 import { objectives, type Campaign, type Profile } from "../types";
 import { profileGoalBody } from "./learningState";
 
@@ -29,7 +30,11 @@ export const objectiveLabels: Record<(typeof objectives)[number], string> = {
 };
 
 type ProfileBody = ReturnType<typeof profileGoalBody>;
-type Attempt = { profileId: string; profile: ProfileBody; campaign: CampaignInput };
+type Attempt = {
+  profileId: string;
+  profile: ProfileBody;
+  campaign: CampaignInput;
+};
 type SaveState =
   | { kind: "idle" }
   | { kind: "saved"; message: string }
@@ -46,7 +51,10 @@ const lines = (text: string) =>
 /** A definite 4xx rejection means nothing was written by that request. A lost
  * connection, server error or unreadable success body leaves it unknown. */
 const uncertain = (error: unknown) =>
-  !(error instanceof ApiError) || error.status === 0 || error.status >= 500 || error.status < 400;
+  !(error instanceof ApiError) ||
+  error.status === 0 ||
+  error.status >= 500 ||
+  error.status < 400;
 const message = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 function profileMatches(saved: Profile | undefined, body: ProfileBody) {
@@ -104,9 +112,7 @@ export function Setup({
       campaign?.brief.constraints.join("\n") ||
       "Preserve the speaker's meaning. Keep captions readable.",
   );
-  const [creative, setCreative] = useState(
-    profile?.creative_preferences || "",
-  );
+  const [creative, setCreative] = useState(profile?.creative_preferences || "");
   const [linkProfiles, setLinkProfiles] = useState<string[]>([]);
   const [attachSources, setAttachSources] = useState<string[]>([]);
   const [profileName, setProfileName] = useState("");
@@ -132,7 +138,9 @@ export function Setup({
     if (constraints.length > 30)
       throw new Error("Use up to 30 voice and boundary lines.");
     if (constraints.some((line) => line.length > 1200))
-      throw new Error("Keep each voice or boundary line within 1,200 characters.");
+      throw new Error(
+        "Keep each voice or boundary line within 1,200 characters.",
+      );
     // Only writable fields; read-only production_history is never sent.
     const profileBody: ProfileBody = {
       ...goal,
@@ -148,7 +156,9 @@ export function Setup({
         constraints,
         requested_outputs: latestCampaign.brief.requested_outputs,
         measurement_intent:
-          objective === "discovery" ? "Discovery" : `${label}: ${goal.primary_metric}`,
+          objective === "discovery"
+            ? "Discovery"
+            : `${label}: ${goal.primary_metric}`,
       },
       // Membership is a union with the latest saved record, so footage or
       // profiles attached elsewhere since this screen loaded are retained.
@@ -186,8 +196,15 @@ export function Setup({
             "The selected profile is no longer linked to this channel. Refresh and choose a profile.",
           );
         // 3. Strict writable bodies.
-        const { profileBody, campaignBody } = bodies(latestCampaign, latestProfile);
-        attempt.current = { profileId, profile: profileBody, campaign: campaignBody };
+        const { profileBody, campaignBody } = bodies(
+          latestCampaign,
+          latestProfile,
+        );
+        attempt.current = {
+          profileId,
+          profile: profileBody,
+          campaign: campaignBody,
+        };
         // 4. Exact selected profile by ID.
         stage = "profile";
         await workspaceApi.updateProfile(profileId, profileBody);
@@ -201,8 +218,14 @@ export function Setup({
           workspaceApi.profiles(),
         ]);
         if (
-          !profileMatches(savedProfiles.find((p) => p.id === profileId), profileBody) ||
-          !campaignMatches(savedCampaigns.find((c) => c.id === campaignId), campaignBody)
+          !profileMatches(
+            savedProfiles.find((p) => p.id === profileId),
+            profileBody,
+          ) ||
+          !campaignMatches(
+            savedCampaigns.find((c) => c.id === campaignId),
+            campaignBody,
+          )
         )
           throw new Error("Saved state did not match your edits.");
       } catch (error) {
@@ -224,26 +247,45 @@ export function Setup({
       // Writes were confirmed by readback, but the workspace refresh failed.
       setState({
         kind: "unknown",
-        message: "Your changes were confirmed, but the workspace could not refresh. Check saved state before saving again.",
+        message:
+          "Your changes were confirmed, but the workspace could not refresh. Check saved state before saving again.",
       });
       return;
     }
     if (stage === "read")
-      setState({ kind: "failed", message: `${failure} Nothing was saved; your edits are still here.` });
+      setState({
+        kind: "failed",
+        message: `${failure} Nothing was saved; your edits are still here.`,
+      });
     else if (stage === "profile")
       setState(
         unknownOutcome
-          ? { kind: "unknown", message: `${failure} The profile save was not confirmed and may or may not have been written. Check saved state before saving again.` }
-          : { kind: "failed", message: `${failure} The profile was not saved, so nothing changed. Your edits are still here.` },
+          ? {
+              kind: "unknown",
+              message: `${failure} The profile save was not confirmed and may or may not have been written. Check saved state before saving again.`,
+            }
+          : {
+              kind: "failed",
+              message: `${failure} The profile was not saved, so nothing changed. Your edits are still here.`,
+            },
       );
     else if (stage === "campaign")
       setState(
         unknownOutcome
-          ? { kind: "unknown", message: `${failure} Profile settings saved; the channel details save was not confirmed. Check saved state before saving again.` }
-          : { kind: "partial", message: `${failure} Partially saved: profile settings saved, channel details were not. Check saved state before saving again.` },
+          ? {
+              kind: "unknown",
+              message: `${failure} Profile settings saved; the channel details save was not confirmed. Check saved state before saving again.`,
+            }
+          : {
+              kind: "partial",
+              message: `${failure} Partially saved: profile settings saved, channel details were not. Check saved state before saving again.`,
+            },
       );
     else
-      setState({ kind: "unknown", message: `${failure} Your changes were sent but could not be confirmed. Check saved state before saving again.` });
+      setState({
+        kind: "unknown",
+        message: `${failure} Your changes were sent but could not be confirmed. Check saved state before saving again.`,
+      });
   }
 
   async function checkSaved() {
@@ -265,7 +307,10 @@ export function Setup({
       );
       setState(
         profileOk && campaignOk
-          ? { kind: "saved", message: "Readback confirms every change is saved." }
+          ? {
+              kind: "saved",
+              message: "Readback confirms every change is saved.",
+            }
           : {
               kind: "failed",
               message: `Readback: profile settings ${profileOk ? "saved" : "not saved"}; channel details ${campaignOk ? "saved" : "not saved"}. Your edits are still here; saving again is now safe.`,
@@ -328,6 +373,7 @@ export function Setup({
     <div className="gf-setup-grid gf-channel-settings-grid">
       <section className="gf-card gf-brief" aria-label="Channel settings form">
         <div className="gf-form-fields">
+          <CloudAccountRow />
           <FieldGroup title="Your channel">
             <Field label="Channel name">
               {(id) => (
@@ -395,7 +441,11 @@ export function Setup({
                   maxLength={200}
                   value={metricNeeded ? metric : ""}
                   disabled={!metricNeeded}
-                  placeholder={metricNeeded ? "e.g. full_episode_visits" : "Not needed for discovery"}
+                  placeholder={
+                    metricNeeded
+                      ? "e.g. full_episode_visits"
+                      : "Not needed for discovery"
+                  }
                   onChange={(e) => {
                     setMetric(e.target.value);
                     edited();
@@ -533,19 +583,30 @@ export function Setup({
                 <Icon name="plus" size={14} />
               </button>
             </Disclosure>
-            <Disclosure title="Editing rules and technical tools" icon="settings">
+            <Disclosure
+              title="Editing rules and technical tools"
+              icon="settings"
+            >
               <p>
-                Editing rules are versioned. Use Editing rules below to
-                propose a version and approve it explicitly; saving channel
-                settings never changes or approves them. Models and local
-                capabilities live under Advanced → Advanced tools.
+                Editing rules are versioned. Use Editing rules below to propose
+                a version and approve it explicitly; saving channel settings
+                never changes or approves them. Models and local capabilities
+                live under Advanced → Advanced tools.
               </p>
             </Disclosure>
           </FieldGroup>
         </div>
       </section>
       <div className="gf-stage-action">
-        <span role={state.kind === "idle" ? undefined : state.kind === "saved" ? "status" : "alert"}>
+        <span
+          role={
+            state.kind === "idle"
+              ? undefined
+              : state.kind === "saved"
+                ? "status"
+                : "alert"
+          }
+        >
           {state.kind === "idle"
             ? "Saving updates this channel only. It does not start production or publish anything."
             : state.message}

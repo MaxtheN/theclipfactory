@@ -680,17 +680,34 @@ function route(
           framing: d.framing,
           caption_style: d.caption_style,
           hook_overlay: body.opening_treatment !== "cold_open",
-          opening_treatment: body.opening_treatment === "cold_open" ? "cold_open" : "text_overlay",
-          cold_open_start: typeof body.cold_open_start === "number" ? body.cold_open_start : null,
-          cold_open_end: typeof body.cold_open_end === "number" ? body.cold_open_end : null,
-          focus_x: typeof body.focus_x === "number" ? body.focus_x : .5,
+          opening_treatment:
+            body.opening_treatment === "cold_open"
+              ? "cold_open"
+              : "text_overlay",
+          cold_open_start:
+            typeof body.cold_open_start === "number"
+              ? body.cold_open_start
+              : null,
+          cold_open_end:
+            typeof body.cold_open_end === "number" ? body.cold_open_end : null,
+          focus_x: typeof body.focus_x === "number" ? body.focus_x : 0.5,
           changed_variable: text(body.changed_variable),
         },
         provenance_mode: "preview_fixture",
         creator_instructions: text(body.instructions),
-        parent_clip_id: typeof body.parent_clip_id === "string" ? body.parent_clip_id : null,
-        root_clip_id: typeof body.parent_clip_id === "string" ? (s.clips.find(c => c.id === body.parent_clip_id)?.root_clip_id || body.parent_clip_id) : null,
-        revision_number: typeof body.parent_clip_id === "string" ? 1 + (s.clips.find(c => c.id === body.parent_clip_id)?.revision_number || 1) : 1,
+        parent_clip_id:
+          typeof body.parent_clip_id === "string" ? body.parent_clip_id : null,
+        root_clip_id:
+          typeof body.parent_clip_id === "string"
+            ? s.clips.find((c) => c.id === body.parent_clip_id)?.root_clip_id ||
+              body.parent_clip_id
+            : null,
+        revision_number:
+          typeof body.parent_clip_id === "string"
+            ? 1 +
+              (s.clips.find((c) => c.id === body.parent_clip_id)
+                ?.revision_number || 1)
+            : 1,
         change_reason: text(body.change_reason),
         hook_rendered: true,
         team_review_status: "not_applicable",
@@ -734,6 +751,27 @@ export async function previewRequest<T>(
   options: RequestInit = {},
 ): Promise<T> {
   if (!path.startsWith("/api/")) fail("Only preview API routes are supported.");
+  if (path === "/api/factory")
+    return {
+      autopilot: false,
+      model_id: null,
+      ready: false,
+      blockers: [
+        {
+          code: "preview",
+          message: "Review preview: production runs only in the Mac app.",
+          tab: null,
+        },
+      ],
+      sources: [],
+    } as T;
+  if (path === "/api/cloud/status")
+    return {
+      configured: false,
+      signed_in: false,
+      email: null,
+      workspace_id: null,
+    } as T;
   const s = state();
   advance(s);
   let body: Record<string, unknown> = {};

@@ -28,6 +28,7 @@ import "./factory-flow.css";
 import "./landing.css";
 import "./desktop-shell.css";
 import "./navigation.css";
+import { CloudSignIn } from "./CloudSignIn";
 
 const views = {
   factory: {
@@ -83,6 +84,15 @@ export function GrowthApp() {
   const w = useCampaignWorkspace(factory.refresh);
   const [stage, setStage] = useState<Stage>(storedView);
   const [tools, setTools] = useState(false);
+  const [cloudGate, setCloudGate] = useState<"pending" | "done">(() => {
+    try {
+      return localStorage.getItem("gf.cloud.offline") === "1"
+        ? "done"
+        : "pending";
+    } catch {
+      return "pending";
+    }
+  });
   const [creating, setCreating] = useState(
     () => reviewPreview && window.location.hash === "#onboarding",
   );
@@ -445,7 +455,10 @@ export function GrowthApp() {
               </div>
             </header>
             <main id="growth-main" className="gf-main" tabIndex={-1}>
-              <header className={`gf-page-heading${stage === "factory" ? " gf-landing-heading" : ""}`} hidden={onboarding}>
+              <header
+                className={`gf-page-heading${stage === "factory" ? " gf-landing-heading" : ""}`}
+                hidden={onboarding}
+              >
                 <div>
                   <div className="gf-eyebrow">
                     {onboarding
@@ -550,20 +563,34 @@ export function GrowthApp() {
                 </div>
               )}
               <div className="gf-stage" hidden={!onboarding}>
-                <Onboarding
-                  key={onboardingSession}
-                  w={w}
-                  active={onboarding && !tools}
-                  onBusyChange={setOnboardingBusy}
-                  onCancel={usable ? () => setCreating(false) : undefined}
-                  onComplete={() => {
-                    setCreating(false);
-                    setPreferredSource(undefined);
-                    setPreferredClip(undefined);
-                    setPreferredMode(undefined);
-                    go("factory");
-                  }}
-                />
+                {cloudGate === "pending" && !usable && !creating ? (
+                  <CloudSignIn
+                    onDone={() => setCloudGate("done")}
+                    onSkip={() => {
+                      try {
+                        localStorage.setItem("gf.cloud.offline", "1");
+                      } catch {
+                        /* preference only */
+                      }
+                      setCloudGate("done");
+                    }}
+                  />
+                ) : (
+                  <Onboarding
+                    key={onboardingSession}
+                    w={w}
+                    active={onboarding && !tools}
+                    onBusyChange={setOnboardingBusy}
+                    onCancel={usable ? () => setCreating(false) : undefined}
+                    onComplete={() => {
+                      setCreating(false);
+                      setPreferredSource(undefined);
+                      setPreferredClip(undefined);
+                      setPreferredMode(undefined);
+                      go("factory");
+                    }}
+                  />
+                )}
               </div>
               <div
                 className="gf-stage"

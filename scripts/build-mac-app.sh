@@ -19,6 +19,7 @@ cp -R frontend/dist/. clip_factory/ui/
   --osx-bundle-identifier ai.clipfactory.desktop \
   --add-data "$ROOT/clip_factory/ui:clip_factory/ui" \
   --add-data "$ROOT/clip_factory/inference_worker.py:clip_factory" \
+  --add-data "$ROOT/clip_factory/cloud_config.json:clip_factory" \
   --collect-all webview --collect-all keyring --collect-all uvicorn \
   --collect-submodules clip_factory --collect-submodules platformdirs \
   --hidden-import clip_factory.app --hidden-import clip_factory.main \
