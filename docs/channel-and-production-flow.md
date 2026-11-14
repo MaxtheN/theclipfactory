@@ -4,7 +4,7 @@
 
 1. Set up the workspace once: name, audience, voice and boundaries. Each campaign then sets its own outcome.
 2. Add footage in Factory. The import surface confirms storage and attachment separately; no guessed upload percentage.
-3. Start agent production, or choose a moment manually. The existing team engine transcribes, scouts, plans and renders using the selected source/model and approved editing rules.
+3. Start agent production, or choose a moment manually. By default the swarm covers the whole episode (about a clip a minute), then ranks the clips best first with a quality floor; similar clips are merged and weaker ones wait under "Below the bar" (kept, not deleted). Studio → Fine-tune → "Deep edit" runs the slower team engine for a few self-checked clips.
 4. Review the exact generated clip. Technical checks and version history are available in the inspector. Approve and export that exact revision.
 5. Results connects an exact Instagram account and tracks a real post only after the creator confirms its matching approved clip. Three-/six-day measurements inform a bounded next draft; they do not establish causal lift.
 

@@ -1040,7 +1040,8 @@ def test_campaign_swarm_makes_many_clips_under_the_approved_direction(client, mo
         return replies
 
     monkeypatch.setattr(client.app.state.models, "run_batch", ideas)
-    body = {"video_id": video["id"], "profile_id": profiles[0]["id"], "strategy": "swarm"}
+    # No strategy named: campaigns make clips with the swarm by default.
+    body = {"video_id": video["id"], "profile_id": profiles[0]["id"]}
     response = client.post(path + "/produce", json=body)
     assert response.status_code == 202, response.text
     submission = response.json()
@@ -1055,5 +1056,7 @@ def test_campaign_swarm_makes_many_clips_under_the_approved_direction(client, mo
     assert all(c["strategy_version_id"] == version["id"] for c in clips)
     assert {c["hypothesis"] for c in clips} == {"question", "story"}
     assert all(c["team_review_status"] == "not_applicable" for c in clips)
+    # Every clip is ranked; none is deleted, and the ones under the bar are only marked.
+    assert all(isinstance(c["rank"]["score"], int) for c in clips) and run["ranking"]["ranked"] == 4
     assert client.post(path + "/produce", json={**body, "strategy": "committee"}).status_code == 422
     assert not scripted.calls

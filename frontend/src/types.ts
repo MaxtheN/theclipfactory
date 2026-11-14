@@ -115,6 +115,10 @@ export interface Clip {
   hypothesis?: string | null;
   scene_refs?: string[];
   approval_override?: { at: string; review_status: string } | null;
+  /** Swarm ranking: score 0-100, review position, and whether it fell under the quality floor. */
+  rank?: ClipRank | null;
+  /** Brief tags (M1, T1 …) the clip serves, or ["none"]. */
+  brief_serves?: string[] | null;
   id: string;
   video_id: string;
   name: string;
@@ -132,6 +136,15 @@ export interface Clip {
   publish_attempt?: string | null;
   warning?: string | null;
   subtitles_burned?: boolean | null;
+}
+export interface ClipRank {
+  score: number;
+  position: number | null;
+  below_bar: boolean;
+  top_pick?: boolean;
+  why?: string;
+  reason?: string | null;
+  duplicate_of?: string | null;
 }
 export interface InstagramStatus {
   connected?: boolean;

@@ -26,7 +26,7 @@ from typing import Literal
 import psutil
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_serializer, model_validator
 
-from . import craft, media, scouts
+from . import craft, media, ranking, scouts
 from . import storyboard as boards
 from .brief import (
     avoid_label,
@@ -584,6 +584,11 @@ class TeamEngine:
                         ),
                     ),
                 ),
+                # How many clips to put at the top of the review list (the brief's clip count).
+                # A soft target: the swarm still covers the whole source.
+                "review_target": normalize_brief((snapshot or {}).get("brief_snapshot"))["deliverables"]["clip_count"]
+                or config.get("clip_count")
+                or None,
                 "revision_count": 0,
                 "stop_reason": None,
                 "created_at": now(),
@@ -1237,7 +1242,9 @@ class TeamEngine:
         if not scenes:
             raise WorkError("No usable footage was found in this source. Open its storyboard to see what was skipped.")
         usable = sum(scene["end"] - scene["start"] for scene in scenes.values())
-        target = max(3, min(SWARM_MAX_CLIPS, round(usable / 60 * SWARM_CLIPS_PER_MINUTE)))
+        # Coverage of the whole source, not a cap: a brief's clip count only raises the floor.
+        wanted = run.get("review_target") or 0
+        target = max(3, min(SWARM_MAX_CLIPS, max(round(usable / 60 * SWARM_CLIPS_PER_MINUTE), wanted)))
         # Ask for a little more than wanted: some stretches have nothing worth cutting.
         quotas = self.swarm_quotas(board, min(SWARM_MAX_CLIPS, math.ceil(target * 1.15)))
         order = sorted(quotas)
@@ -1385,7 +1392,7 @@ class TeamEngine:
                     self.jobs.update(
                         job_id,
                         progress=round(PROGRESS["swarm"] + span * offset / len(order)),
-                        message=f"Swarm: stretch {offset + 1} of {len(order)} · {state['rendered']} clips ready",
+                        message=f"Finding clips: part {offset + 1} of {len(order)} · {state['rendered']} clips ready",
                     )
                     outputs = self.models.run_batch(job_id, model_id, [request(scene) for scene in group])
                     for scene, output in zip(group, outputs):
@@ -1450,7 +1457,10 @@ class TeamEngine:
             raise WorkError(
                 failures[0] if failures else "The swarm proposed no clip ideas for this source. Try the team mode."
             )
+        self.jobs.update(job_id, message=f"Ranking {len(clip_ids)} clips best first")
+        ranked = self.rank_clips(run_id, clip_ids, board, brief)
         return {
+            "ranking": ranked,
             "clips": len(clip_ids),
             "target": target,
             "ideas": ideas_found,
@@ -1458,6 +1468,24 @@ class TeamEngine:
             "failed_renders": len(failures),
             "hypotheses": sorted({self.store.get("clips", c).get("hypothesis") for c in clip_ids} - {None}),
         }
+
+    def rank_clips(self, run_id: str, clip_ids: list[str], board: dict | None, brief: dict | None) -> dict:
+        """Score, merge near-duplicates and mark clips under the floor. Nothing is deleted."""
+        run = self.store.get("team_runs", run_id) or {}
+        clips = [c for c in (self.store.get("clips", i) for i in clip_ids) if c]
+        reports = {}
+        for clip in clips:
+            # A quality rubric is used when one was already computed for this exact file.
+            cached = self.store.get("quality_reports", f"{clip['id']}:{(clip.get('sha256') or '').lower()}")
+            if cached:
+                reports[clip["id"]] = cached
+        records = ranking.rank(clips, board=board, brief=brief, reports=reports, top_picks=run.get("review_target"))
+        with self.store.lock:
+            for identifier, record in records.items():
+                self.store.patch("clips", identifier, rank=record)
+        result = ranking.summary(records, run.get("review_target"))
+        self.store.patch("team_runs", run_id, ranking=result)
+        return result
 
     def execute(self, run_id: str, job_id: str) -> dict:
         run = self.store.get("team_runs", run_id)

@@ -28,7 +28,9 @@ coding benchmark is claimed as marketing evidence.
 
 Authenticated same-origin API, existing session/error conventions:
 
-- Settings gain `production_strategy: "team" | "baseline"`, default `"team"`.
+- Settings carry `production_strategy: "swarm" | "team" | "baseline"`, default `"swarm"`.
+  Campaign production (`POST /api/campaigns/{id}/produce`) also defaults to `strategy: "swarm"`;
+  team mode is requested explicitly (`strategy: "team"`, UI "Deep edit").
 - `POST /api/videos/{video_id}/team {model_id:"qwen-small", revision_budget:2}`
   -> `{job: Job, run: TeamRun}` (202). Budget integer 0..2.
 - `GET /api/team/runs` -> TeamRun[] (newest first).

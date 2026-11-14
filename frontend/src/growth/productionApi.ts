@@ -290,7 +290,7 @@ export const productionApi = {
     const result = parseAgentProductionResponse(
       await post<unknown>(campaignPath(campaignId, "produce"), body),
       scopeOfRequest(campaignId, body),
-      body.strategy ?? "team",
+      body.strategy ?? "swarm",
     );
     if (result.run.model_id !== body.model_id)
       throw new ProductionResponseError(

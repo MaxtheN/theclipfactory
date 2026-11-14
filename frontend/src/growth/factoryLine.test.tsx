@@ -192,6 +192,22 @@ describe("production line on the Factory screen", () => {
     expect(f.refresh).toHaveBeenCalled();
   });
 
+  it("counts only clips above the bar and opens the best one first", () => {
+    const made = (id: string, score: number, position: number | null): Clip => ({
+      id, video_id: "v1", campaign_id: "c1", profile_id: "p1", name: id, start: 0, end: 20, hook: "", caption: "",
+      objective: "discovery", approved: false,
+      rank: { score, position, below_bar: position === null, why: "Hook" },
+    });
+    const clips = [made("low", 30, null), made("second", 70, 2), made("best", 90, 1)];
+    const onReview = vi.fn();
+    render(
+      <FactoryHome w={workspace()} factory={factory({ state: "needs_review" }, { clips })} onProduce={vi.fn()} onReview={onReview} onLibrary={vi.fn()} onDirection={vi.fn()} />,
+    );
+    expect(screen.getByText("2 clips ready for review · 1 below the bar")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Review 2 clips/ }));
+    expect(onReview).toHaveBeenCalledWith(clips[2]);
+  });
+
   it("loads the storyboard only when it is opened", async () => {
     home(
       workspace(),
@@ -301,10 +317,11 @@ describe("production response contract", () => {
     },
   });
 
-  it("accepts a swarm run only when a swarm was requested", () => {
+  it("accepts the run kind that was requested, with the swarm as the default", () => {
     expect(parseAgentProductionResponse(envelope("swarm"), {}, "swarm").run.id).toBe("run-1");
-    expect(parseAgentProductionResponse(envelope("team")).run.id).toBe("run-1");
-    expect(() => parseAgentProductionResponse(envelope("swarm"))).toThrow();
-    expect(() => parseAgentProductionResponse(envelope("team"), {}, "swarm")).toThrow();
+    expect(parseAgentProductionResponse(envelope("swarm")).run.id).toBe("run-1");
+    expect(parseAgentProductionResponse(envelope("team"), {}, "team").run.id).toBe("run-1");
+    expect(() => parseAgentProductionResponse(envelope("team"))).toThrow();
+    expect(() => parseAgentProductionResponse(envelope("swarm"), {}, "team")).toThrow();
   });
 });

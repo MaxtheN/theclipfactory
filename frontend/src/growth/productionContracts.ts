@@ -45,7 +45,7 @@ export interface AgentProductionRequest {
   // IDs are dynamic: installed Ollama models use ollama:<name>:<tag>.
   model_id: string;
   revision_budget?: number;
-  /** team (default): a few self-checked clips. swarm: many clips, one hypothesis each. */
+  /** swarm (default): covers the whole episode, ranked best first. team: "Deep edit", a few self-checked clips. */
   strategy?: "team" | "swarm";
   /** Optional creator guidance for this run ("what to look for"). */
   direction?: string;
@@ -623,7 +623,7 @@ function captionStyle(value: unknown) {
 export function parseAgentProductionResponse(
   value: unknown,
   scope: ProductionScope = {},
-  strategy: "team" | "swarm" = "team",
+  strategy: "team" | "swarm" = "swarm",
 ): AgentProductionResponse {
   requireShape(object(value), "Agent production requires a job/run envelope.");
   const job = parseProductionJob(value.job, undefined, strategy);

@@ -107,10 +107,23 @@ describe("Studio production integration", () => {
     render(<Studio w={workspace()} factory={factory()} next={() => {}} preferredMode="agent" />);
     expect(screen.queryByRole("option", { name: "Text only" })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByLabelText("Installed vision model")).toHaveValue("ollama:vision:latest"));
+    // Whole episode, best first (the swarm) is the default; corrections only apply to Deep edit.
+    expect(screen.getByLabelText("How to find clips")).toHaveValue("swarm");
+    expect(screen.queryByLabelText("Correction budget")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Let agents find clips" }));
+    await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("camp", { expected_strategy_version_id: "strategy", video_id: "v1", profile_id: "profile", model_id: "ollama:vision:latest", strategy: "swarm" }));
+    expect(productionApi.campaignRender).not.toHaveBeenCalled();
+  });
+  it("keeps Deep edit (team mode) selectable under Fine-tune with its correction budget", async () => {
+    const run = { id: "run-1", tasks: [], job_id: "agent-1" } as unknown as TeamRun;
+    vi.mocked(productionApi.campaignProduce).mockResolvedValue({ job: { ...queued("agent-1"), kind: "team" } as never, run });
+    render(<Studio w={workspace()} factory={factory()} next={() => {}} preferredMode="agent" />);
+    await waitFor(() => expect(screen.getByLabelText("Installed vision model")).toHaveValue("ollama:vision:latest"));
+    expect(screen.getByRole("option", { name: "Deep edit (fewer clips, more review)" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("How to find clips"), { target: { value: "team" } });
     fireEvent.change(screen.getByLabelText("Correction budget"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Let agents find clips" }));
-    await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("camp", { expected_strategy_version_id: "strategy", video_id: "v1", profile_id: "profile", model_id: "ollama:vision:latest", revision_budget: 2 }));
-    expect(productionApi.campaignRender).not.toHaveBeenCalled();
+    await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("camp", { expected_strategy_version_id: "strategy", video_id: "v1", profile_id: "profile", model_id: "ollama:vision:latest", strategy: "team", revision_budget: 2 }));
   });
   it("sends the optional 'what to look for' text with this agent run only", async () => {
     const run = { id: "run-1", tasks: [], job_id: "agent-1" } as unknown as TeamRun;
@@ -194,6 +207,31 @@ describe("Studio production integration", () => {
     expect(productionApi.review).not.toHaveBeenCalled();
   });
 
+});
+
+describe("ranked review list", () => {
+  const ranked = (id: string, score: number, position: number | null, extra: Partial<ProductionClip["rank"] & object> = {}): ProductionClip => ({
+    ...clip, id, name: `Clip ${id}`,
+    rank: { score, position, below_bar: position === null, top_pick: position === 1, why: `Says: message ${id}`, reason: position === null ? "Score under 50" : null, ...extra },
+  });
+  it("lists clips best first with a score and a reason, and keeps clips below the bar collapsed", () => {
+    const clips = [ranked("low", 31, null), ranked("second", 72, 2), ranked("best", 88, 1)];
+    render(<Studio w={workspace()} factory={factory(clips)} next={() => {}} />);
+    expect(screen.getByText("Review 2 clips · best first")).toBeInTheDocument();
+    const strip = document.querySelector(".gf-clip-strip")!;
+    const names = [...strip.querySelectorAll("strong")].map(n => n.textContent);
+    expect(names).toEqual(["Find more", "Clip best", "Clip second"]);
+    expect(screen.getByLabelText("Score 88 out of 100")).toBeInTheDocument();
+    expect(screen.getByText("Says: message best")).toBeInTheDocument();
+    // The best clip opens first for review.
+    expect(screen.getByLabelText("Review Clip best")).toBeInTheDocument();
+    // Below the bar: still there, hidden by default, never deleted.
+    const below = screen.getByText("Below the bar (1)").closest("details")!;
+    expect(below.open).toBe(false);
+    expect(below).toHaveTextContent("Clip low");
+    // Approval stays one clip at a time: no bulk approve.
+    expect(screen.queryByRole("button", { name: /Approve top/ })).not.toBeInTheDocument();
+  });
 });
 
 describe("failed agent runs", () => {

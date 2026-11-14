@@ -12,6 +12,7 @@ import { activeJob } from "../productionPreflight";
 import { Icon } from "./Icon";
 import { Pill, formatTime } from "./parts";
 import { JourneyProgress } from "./JourneyProgress";
+import { reviewOrder } from "./clipRanking";
 import { sourceLabel, SourceDetails } from "./sourcePresentation";
 
 export type OpenProduction = (
@@ -832,7 +833,10 @@ export function FactoryHome({
                 !w.loading;
               // Counts are for this workspace: clips made elsewhere from the same file do not belong here.
               const own = clips.filter((c) => c.video_id === source.id);
-              const unreviewed = own.filter((c) => !c.approved);
+              // Best first; clips under the quality floor stay saved but are not counted here.
+              const ordered = reviewOrder(own.filter((c) => !c.approved));
+              const unreviewed = ordered.above;
+              const lowCount = ordered.below.length;
               const illustrative = unreviewed.some(
                 (c) => reviewPreview || c.provenance_mode === "preview_fixture",
               );
@@ -844,8 +848,10 @@ export function FactoryHome({
                 status.state === "cancelled"
                   ? status?.error || status?.headline
                   : unreviewed.length
-                    ? `${unreviewed.length} clip${unreviewed.length === 1 ? "" : "s"} ready for review`
-                    : own.length
+                    ? `${unreviewed.length} clip${unreviewed.length === 1 ? "" : "s"} ready for review${lowCount ? ` · ${lowCount} below the bar` : ""}`
+                    : lowCount
+                      ? `${lowCount} clip${lowCount === 1 ? "" : "s"} below the bar`
+                      : own.length
                       ? `${own.length} clip${own.length === 1 ? "" : "s"} approved`
                       : "Ready to make clips";
               let action;

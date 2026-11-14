@@ -35,14 +35,31 @@ through Ollama (`docs/local-model-setup.md`). The catalog also lists Qwen3.5 9B 
 ## 3. Moment finding
 
 Three modes are available: `production_strategy` = swarm (the default), team or baseline
-(`app.py:Settings`).
+(`app.py:Settings`). Campaign production (`AgentProduction.strategy`), Studio's agent mode and the
+Factory screen all default to swarm; team stays selectable in Studio → Fine-tune as "Deep edit
+(fewer clips, more review)".
 
 | Mode | Agents and flow | Output |
 | --- | --- | --- |
-| **Swarm** | Each scene gets one short prompt and proposes up to 3 `Idea`s. Each idea has a *hypothesis* (bold_claim, question, story, lesson, contrast, emotion, humor or spectacle), a 15–40 s range, a hook of 10 words or fewer, and a caption. Hypotheses rotate per scene so the set stays varied. Ranges are fitted and snapped to sentence edges, and overlaps of more than 70% are dropped. Renders run in parallel. | ~1.2 clips per usable minute, max 150 (`team.py:_swarm`, `swarm_quotas`, `fit_range`, `snap_to_speech`) |
+| **Swarm** | Each scene gets one short prompt and proposes up to 3 `Idea`s. Each idea has a *hypothesis* (bold_claim, question, story, lesson, contrast, emotion, humor or spectacle), a 15–40 s range, a hook of 10 words or fewer, and a caption. Hypotheses rotate per scene so the set stays varied. Ranges are fitted and snapped to sentence edges, and overlaps of more than 70% are dropped. Renders run in parallel. | ~1.2 clips per usable minute (raised to the brief's clip count when that is higher), max 150, then a ranking pass (below) (`team.py:_swarm`, `swarm_quotas`, `fit_range`, `snap_to_speech`, `rank_clips`) |
 | **Team** | **Producer** (`Plan`) → **Footage analyst** (`Footage`: moments that cite scene IDs; code computes the times) → **Close-up** (frames around each peak: `happens`, `peak_frame`, `strength`) → **Performance analyst** (cites past feedback or experiments) → **Creative strategist** (`Angle`: hook + rationale) → **Editor** (`Candidate`: range, hook, caption, refs) → **Critic**. | 1–6 clips, default 3 (`team.py:TeamEngine.execute`, `_moments`, `_closeups`) |
 | **Scouts** (long talks over 20 min, inside team or baseline) | One scout per 10-minute window reads the full transcript and 4 frames, and proposes up to 2 scored candidates. A diversity-first shortlist of 8 follows, then a selector model picks N. | `scouts.py:scout`, `shortlist`, `CRITERIA` |
 | **Baseline** | One analysis pass, then a render. | `app.py:pipeline_task`, `analyze_task` |
+
+**Ranking, dedupe and quality floor (swarm)** (`ranking.py`, `team.py:rank_clips`). After the
+renders, every clip gets a deterministic 0–100 score: 40% storyboard interest of its scenes
+(`storyboard.score`), 20% brief fit (serves an `M#`/`T#`; serving nothing is 0 with a brief and
+neutral without one), 15% critic (`team_review_status`, error findings score 0), 15% technical (a
+cached `quality_reports` rubric for the exact file when one exists, else playback checks and burned
+captions), 10% hook. Near-duplicates (overlap above half of the shorter clip, or the same
+payoff sentence) are merged by keeping the better clip. Duplicates and clips under the floor (50)
+are marked `rank.below_bar` and kept, never deleted. Each clip stores `rank = {score, position,
+top_pick, why, below_bar, reason, duplicate_of, signals}` and the run stores a `ranking` summary.
+The brief's `clip_count` only sets how many clips are marked `top_pick` (default 5): it is a soft
+review target, not a generation cap. Must-avoid ideas are rejected before rendering, as before.
+Renders keep the existing worker limit; progress reads "Finding clips: part X of Y · N clips ready",
+then "Ranking N clips best first". Review screens list above-the-bar clips best first with the score
+and a one-line why; "Below the bar (K)" is collapsed. Approval stays per clip.
 
 **What goes into prompts** (`team.py:TeamEngine.create`, `_agent`, `_swarm`):
 
@@ -112,7 +129,7 @@ request; each resolved decision is stored in the clip's `craft` record and rende
 | Onboarding / workspace (`campaigns.py:Profile`) | name, audience, brand_context, creative_preferences (UI: "Your creative direction", "What should every edit respect?") |
 | Campaign (`campaigns.py:Campaign`) | objective, primary_metric, notes (≤2,000), **brief** (`brief.py:Brief`): target audience (refines the workspace's), key_messages (≤5 × 160), cta (≤80, also the end card) + cta_link, must_include / must_avoid (≤8 × 120), tone (≤300), references (≤5 URLs + note; display-only, untrusted, never fetched), deliverables (clip_count 1–50, max_duration_seconds 5–180, platforms: Instagram Reels), context (≤1,500); legacy constraints[], requested_outputs[], measurement_intent kept. Old briefs read complete (`normalize_brief`); a PUT that omits the brief keeps it. UI: `CampaignBrief.tsx` in New campaign and Workspace settings → Campaign (Save brief), summary line on Find clips |
 | Style rules (`campaigns.py:Direction`) | angles[], moment_selection, hooks[], pacing, duration_seconds (1–180), framing (`fit`/`fill`), caption_style (`standard`/`high_contrast`), editing_preferences, measurement_questions[], next_experiments[], evidence_refs, limitations, confidence |
-| Fine-tune (`frontend/src/growth/Studio.tsx`) | mode (agents or manual start/end), model, correction budget, opening (text overlay or cold open + times), hook text, crop focus, captions on/off |
+| Fine-tune (`frontend/src/growth/Studio.tsx`) | mode (agents or manual start/end), how to find clips (whole episode best first = swarm, or Deep edit = team), model, correction budget (Deep edit only), opening (text overlay or cold open + times), hook text, crop focus, captions on/off |
 | Per-run direction | "What should the agents look for?" (≤500, `AgentProduction.direction`). Reaches every agent inside the brief block's section [4] as untrusted data, a preference only |
 | Direct render (`campaigns.py:Production`) | `instructions` (≤4,000). Stored as `creator_instructions` but **not** fed to any model. |
 
@@ -135,7 +152,8 @@ Enforced in code, not only by text:
   recheck after a manual edit), and the learning analyst cannot propose such a hook.
 - **Serves**: moments, angles and swarm ideas must name the `M#`/`T#` they serve or
   `none` (grammar-required with a brief); clips record it as `brief_serves`.
-- **Deliverables**: `clip_count` sets the team run's clip count (capped at 6);
+- **Deliverables**: `clip_count` sets the team run's clip count (capped at 6) and, for the swarm,
+  how many ranked clips are marked as top picks (a soft target, never a cap);
   `max_duration_seconds` caps editor and swarm ranges below the Style-rules duration.
 - **CTA**: `Brief.cta` turns on the CTA end card (`app.py:render_team`).
 

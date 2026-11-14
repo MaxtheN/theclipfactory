@@ -1575,15 +1575,17 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         run = runs[0] if runs else None
         tasks = (run or {}).get("tasks", [])
         live = bool(active) and bool(run) and run.get("job_id") == active["id"]
-        unreviewed = sum(1 for c in clips if not c.get("approved"))
-        approved = len(clips) - unreviewed
+        # Ranked clips under the quality floor stay saved but are not counted as waiting for review.
+        below_bar = sum(1 for c in clips if not c.get("approved") and (c.get("rank") or {}).get("below_bar"))
+        unreviewed = sum(1 for c in clips if not c.get("approved")) - below_bar
+        approved = sum(1 for c in clips if c.get("approved"))
         if active:
             state = "queued" if active["status"] == "queued" else "working"
         elif run and run["status"] in {"failed", "interrupted"}:
             state = "failed"
         elif run and run["status"] == "cancelled":
             state = "cancelled"
-        elif unreviewed:
+        elif unreviewed or below_bar:
             state = "needs_review"
         elif clips:
             state = "done"
@@ -1662,7 +1664,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "working": (active or {}).get("message") or "Working",
             "failed": "Stopped before finishing",
             "cancelled": "Cancelled",
-            "needs_review": f"{unreviewed} clip{'s' if unreviewed != 1 else ''} ready for review",
+            "needs_review": (
+                f"{unreviewed} clip{'s' if unreviewed != 1 else ''} ready for review"
+                if unreviewed
+                else f"{below_bar} clip{'s' if below_bar != 1 else ''} below the bar"
+            ),
             "done": f"{approved} clip{'s' if approved != 1 else ''} approved",
             "idle": "Ready to make clips" if not ready else "Waiting on setup",
         }[state]
@@ -1682,6 +1688,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "run_id": run["id"] if run else None,
             "clip_ids": [c["id"] for c in clips],
             "unreviewed": unreviewed,
+            "below_bar": below_bar,
             "approved": approved,
             "error": error,
             "can_produce": blocked is None,

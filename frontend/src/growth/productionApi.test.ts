@@ -90,16 +90,16 @@ const exportRecord = (changes: Record<string, unknown> = {}) => ({
   },
   ...changes,
 });
-const agentEnvelope = () => ({
+const agentEnvelope = (mode: "swarm" | "team" = "swarm") => ({
   job: job({
-    kind: "team",
+    kind: mode,
     context: { video_id: "video-1", team_run_id: "run-1" },
   }),
   run: {
     id: "run-1",
     video_id: "video-1",
     job_id: "job-1",
-    mode: "team",
+    mode,
     model_id: "ollama:qwen3-vl:8b",
     objective: "discovery",
     status: "queued",
@@ -258,8 +258,21 @@ describe("production request boundary", () => {
       }),
     ).rejects.toThrow("production-job");
   });
+  it("defaults agent production to the swarm and still accepts a Deep edit (team) run", async () => {
+    const base = {
+      expected_strategy_version_id: "strategy-1",
+      video_id: "video-1",
+      profile_id: "profile-1",
+      model_id: "ollama:qwen3-vl:8b",
+    };
+    respond(agentEnvelope());
+    expect((await productionApi.campaignProduce("campaign-1", base)).run.mode).toBe("swarm");
+    // A team run returned for a request that did not ask for one is not accepted as the swarm.
+    respond(agentEnvelope("team"));
+    await expect(productionApi.campaignProduce("campaign-1", base)).rejects.toThrow("unexpected job kind");
+  });
   it("accepts dynamic Ollama IDs and checks job/run identity plus returned model", async () => {
-    const value = agentEnvelope();
+    const value = agentEnvelope("team");
     const fetch = respond(value);
     const body = {
       expected_strategy_version_id: "strategy-1",
@@ -267,6 +280,7 @@ describe("production request boundary", () => {
       profile_id: "profile-1",
       model_id: "ollama:qwen3-vl:8b",
       revision_budget: 2,
+      strategy: "team" as const,
     };
     expect(
       (await productionApi.campaignProduce("campaign-1", body)).run.id,

@@ -16,6 +16,7 @@ import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
 import { PostToInstagram } from "./PostToInstagram";
 import { briefSummary } from "./briefModel";
+import { rankOf, reviewOrder } from "./clipRanking";
 import "./campaign-brief.css";
 import { DIRECTION_MAX, parseProductionClip, type CampaignRenderRequest, type ExportRecord, type ProductionClip } from "./productionContracts";
 import { changedEditFields, clipInScope, editErrors, jobInScope, object, readiness, retryBlocker, reviewBlocker } from "./productionState";
@@ -44,6 +45,8 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const [craft, setCraft] = useState(freshCraft);
   const [feedback, setFeedback] = useState(""), [revisionParent, setRevisionParent] = useState<ProductionClip>();
   const [modelId, setModelId] = useState(""), [budget, setBudget] = useState(1);
+  // Many clips covering the whole episode, ranked best first; "Deep edit" is the slower team mode.
+  const [strategy, setStrategy] = useState<"swarm" | "team">("swarm");
   // Optional per-run guidance for the agents ("what to look for"), sent with this run only.
   const [lookFor, setLookFor] = useState("");
   const [runs, setRuns] = useState<TeamRun[]>([]), [ledgerError, setLedgerError] = useState("");
@@ -62,7 +65,8 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     try { return [parseProductionClip(c, c.id, { campaign_id: scope.campaignId, profile_id: scope.profileId, video_id: c.video_id })]; }
     catch (e) { clipErrors.push(`${c.id}: ${message(e)}`); return []; }
   });
-  const selected = freshProduction ? undefined : clips.find(c => c.id === selectedId) || clips[0];
+  const ordered = reviewOrder(clips);
+  const selected = freshProduction ? undefined : clips.find(c => c.id === selectedId) || ordered.above[0] || clips[0];
   const jobs = factory.data.jobs.filter(j => jobInScope(j, scope, runs));
   const models = installedLlms(factory.data.models, { needsVision: true });
   const stale = factory.loading || !!factory.errors.videos || !!factory.errors.jobs || !!factory.errors.clips || w.loading || !!w.error;
@@ -178,7 +182,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     if (mode === "agent") {
       if (!ready.canProduce || reviewPreview || ledgerError) return;
       await perform(async () => {
-        const result = await productionApi.campaignProduce(w.campaign!.id, { expected_strategy_version_id: active.id, video_id: source.id, profile_id: w.profileId, model_id: modelId, revision_budget: budget, ...(lookFor.trim() ? { direction: lookFor.trim() } : {}) });
+        const result = await productionApi.campaignProduce(w.campaign!.id, { expected_strategy_version_id: active.id, video_id: source.id, profile_id: w.profileId, model_id: modelId, strategy, ...(strategy === "team" ? { revision_budget: budget } : {}), ...(lookFor.trim() ? { direction: lookFor.trim() } : {}) });
         setRuns(old => [result.run, ...old.filter(r => r.id !== result.run.id)]);
         setSubmitted({ id: result.job.id, scope: scopeKey, source: source.id }); setFreshProduction(true);
       }, "Agent production queued. Follow the real tasks and inspect the resulting version before approval.");
@@ -243,13 +247,24 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const exportRows = exportsState.clipId === selected?.id ? exportsState.rows : [];
   const making = !selected || !!revisionParent;
   const visibleLabel = sourceLabel(visibleSourceId, w.campaign.video_ids);
+  const clipButton = (c: ProductionClip, i: number) => {
+    const rank = rankOf(c);
+    const status = reviewPreview || c.provenance_mode === "preview_fixture" ? "Illustrative edit" : c.approved ? "Approved" : "Needs review";
+    return <button className={selected?.id === c.id ? "selected" : ""} key={c.id} onClick={() => { setSelectedId(c.id); setRevisionParent(undefined); setFreshProduction(false); }}>
+      <span>{String(i + 1).padStart(2, "0")}</span>
+      <div><strong>{c.name}</strong><small title={rank?.why || undefined}>{rank?.why || status}</small>{rank?.why && <small>{rank.top_pick ? "Top pick · " : ""}{rank.below_bar && rank.reason ? `${rank.reason} · ` : ""}{status}</small>}</div>
+      {rank && <span className={`gf-score-chip${rank.below_bar ? " is-low" : ""}`} title="Score out of 100" aria-label={`Score ${rank.score} out of 100`}>{rank.score}</span>}
+      <Icon name={c.approved ? "check" : "play"} size={15} />
+    </button>;
+  };
   const fineTune = <Disclosure title="Fine-tune" icon="settings" open={!!revisionParent}>
     {!revisionParent && <Field label="Production mode">{id => <select id={id} value={mode} onChange={e => setMode(e.target.value as Mode)}><option value="agent">Let agents choose</option><option value="manual">Choose the moment myself</option></select>}</Field>}
     {mode === "manual" && <div className="gf-form-pair"><Field label="Start (seconds)">{id => <input id={id} type="number" min="0" step="0.1" value={start} onChange={e => setStart(e.target.value)} />}</Field><Field label="End (seconds)">{id => <input id={id} type="number" min="0" step="0.1" value={end} onChange={e => setEnd(e.target.value)} />}</Field></div>}
     {source && <SourceTranscript source={source} factory={factory} run={w.run} disabled={busy} />}
     {mode === "agent" ? <>
       <Field label="Installed vision model">{id => <select id={id} value={modelId} onChange={e => setModelId(e.target.value)}><option value="" disabled>Choose a model</option>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>}</Field>
-      <Field label="Correction budget">{id => <select id={id} value={budget} onChange={e => setBudget(+e.target.value)}>{[0, 1, 2].map(n => <option value={n} key={n}>{n} corrections</option>)}</select>}</Field>
+      <Field label="How to find clips">{id => <select id={id} value={strategy} onChange={e => setStrategy(e.target.value as typeof strategy)}><option value="swarm">Whole episode, best first</option><option value="team">Deep edit (fewer clips, more review)</option></select>}</Field>
+      {strategy === "team" && <Field label="Correction budget">{id => <select id={id} value={budget} onChange={e => setBudget(+e.target.value)}>{[0, 1, 2].map(n => <option value={n} key={n}>{n} corrections</option>)}</select>}</Field>}
     </> : <>
       <Field label="Opening treatment">{id => <select id={id} value={opening} onChange={e => setOpening(e.target.value as typeof opening)}><option value="text_overlay">Opening text overlay</option><option value="cold_open">Cold open from source</option></select>}</Field>
       <Field label={opening === "text_overlay" ? "Opening text" : "Post hook (not burned in)"}>{id => <AutoTextarea id={id} value={hook} onChange={e => setHook(e.target.value)} rows={2} />}</Field>
@@ -272,7 +287,11 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
       </div>
       {(playbackError || actionError) && <div className="gf-inline-error" role="alert">{playbackError || actionError}</div>}
       {!!clipErrors.length && <div className="gf-inline-error" role="alert">Some versions could not be verified: {clipErrors.join(" ")}</div>}
-      {clips.length > 0 && <div className="gf-clip-strip"><button onClick={newCut}><Icon name="plus" size={14} /><strong>Find more</strong></button>{clips.map((c, i) => <button className={selected?.id === c.id ? "selected" : ""} key={c.id} onClick={() => { setSelectedId(c.id); setRevisionParent(undefined); setFreshProduction(false); }}><span>{String(i + 1).padStart(2, "0")}</span><div><strong>{c.name}</strong><small>{reviewPreview || c.provenance_mode === "preview_fixture" ? "Illustrative edit" : c.approved ? "Approved" : "Needs review"}</small></div><Icon name={c.approved ? "check" : "play"} size={15} /></button>)}</div>}
+      {clips.length > 0 && <>
+        {ordered.above.some(c => rankOf(c)) && <p className="gf-clip-strip-title">Review {ordered.above.filter(c => !c.approved).length} clips · best first</p>}
+        <div className="gf-clip-strip"><button onClick={newCut}><Icon name="plus" size={14} /><strong>Find more</strong></button>{ordered.above.map((c, i) => clipButton(c, i))}</div>
+        {ordered.below.length > 0 && <details className="gf-disclosure gf-below-bar"><summary>Below the bar ({ordered.below.length})<Icon name="down" size={15} /></summary><p className="gf-help">Kept, not deleted. Lower scores or similar to a better clip.</p><div className="gf-clip-strip">{ordered.below.map((c, i) => clipButton(c, ordered.above.length + i))}</div></details>}
+      </>}
       {ledgerError && <p className="gf-inline-error" role="alert">Agent status: {ledgerError}</p>}
       {jobs.length > 0 && <Disclosure title="Production log" icon="clock">
         {jobs.map(job => {

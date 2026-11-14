@@ -11,6 +11,7 @@ from unittest.mock import Mock
 import pytest
 from conftest import board
 
+from clip_factory import ranking
 from clip_factory.jobs import JobCancelled, WorkError
 from clip_factory.models import Models
 from clip_factory.store import Store
@@ -1776,7 +1777,32 @@ def test_brief_clip_target_and_max_duration_shape_the_run(harness):
     harness.config["_campaign_snapshot"] = snapshot
     assert harness.create()["clip_count"] == 2
     snapshot["brief_snapshot"]["deliverables"] = {"clip_count": 40}
-    assert harness.create()["clip_count"] == 6  # team runs stay within their own cap
+    run = harness.create()
+    assert run["clip_count"] == 6  # team runs stay within their own cap
+    # For the default swarm the count is how many clips go at the top for review, never a cap.
+    assert run["review_target"] == 40
+
+
+def test_swarm_ranks_every_clip_and_keeps_the_ones_below_the_bar(harness):
+    swarm_source(harness)
+    snapshot = copy.deepcopy(BRIEF_SNAPSHOT)
+    snapshot["brief_snapshot"]["deliverables"] = {"clip_count": 2}
+    harness.config["_campaign_snapshot"] = snapshot
+    harness.models = harness.engine.models = SwarmModels()
+    for scene, score in zip(harness.board["scenes"], [0.9, 0.8, 0.7, 0.0, 0.0, 0.0]):
+        scene["score"] = score
+    run, result = harness.execute(mode="swarm")
+    clips = [harness.store.get("clips", identifier) for identifier in run["clip_ids"]]
+    # Volume is not capped by the brief's clip count: every idea was rendered and is still stored.
+    assert result["clips"] == len(clips) == 9 and all(c["rank"]["version"] == ranking.RANK_VERSION for c in clips)
+    above = sorted((c for c in clips if not c["rank"]["below_bar"]), key=lambda c: c["rank"]["position"])
+    below = [c for c in clips if c["rank"]["below_bar"]]
+    assert above and below and len(above) + len(below) == 9
+    assert [c["rank"]["position"] for c in above] == list(range(1, len(above) + 1))
+    assert [c["rank"]["score"] for c in above] == sorted((c["rank"]["score"] for c in above), reverse=True)
+    assert sum(c["rank"]["top_pick"] for c in clips) == 2
+    assert result["ranking"] == run["ranking"] and run["ranking"]["review_target"] == 2
+    assert run["ranking"]["below_bar"] == len(below)
 
 
 def test_must_avoid_moments_and_edits_are_rejected_and_retried(harness):

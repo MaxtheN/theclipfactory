@@ -195,9 +195,10 @@ class AgentProduction(Body):
     profile_id: Identifier
     model_id: LlmId = "qwen-small"
     revision_budget: int = Field(default=2, ge=0, le=2, strict=True)
-    # team: a few clips with planning, self-check and revisions. swarm: many clips, one hypothesis
-    # each, under the same approved direction.
-    strategy: Literal["team", "swarm"] = "team"
+    # swarm (default): covers the whole source, one hypothesis per clip, then ranks the clips best
+    # first with a quality floor. team ("Deep edit"): a few clips with planning, self-check and
+    # revisions. Both work under the same approved direction.
+    strategy: Literal["team", "swarm"] = "swarm"
     # Optional creator note for this run only ("what to look for"). Passed to the planner and scouts
     # as delimited guidance inside the approved Style rules; never a rule change or an instruction.
     direction: str = Field(default="", max_length=500)

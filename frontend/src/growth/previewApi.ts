@@ -158,7 +158,7 @@ function seed(): PreviewState {
       daily_budget: 0,
       total_budget: 0,
       graph_version: "preview",
-      production_strategy: "team",
+      production_strategy: "swarm",
     },
   };
 }
