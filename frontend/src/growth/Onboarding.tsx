@@ -15,6 +15,8 @@ import { BrandMark } from "./BrandMark";
 import { LaunchTransition, type LaunchPhase } from "./LaunchTransition";
 import { CloudAccountFields, useCloudAccount } from "./CloudSignIn";
 import type { CloudStatus } from "./cloudApi";
+import { WebsiteBrief } from "./WebsiteBrief";
+import { GOALS, type WebsiteBriefResult } from "./websiteBriefApi";
 
 const outcomes = [
   {
@@ -92,6 +94,8 @@ export function onboardingBodies(input: {
   guardrails: string;
   creativePreference?: string;
   outcomeLabel?: string;
+  /** Key messages, topics, must-avoid and CTA drafted from the creator's website (edited). */
+  brief?: Partial<CampaignInput["brief"]>;
 }) {
   const name = input.name.trim(),
     audience = input.audience.trim(),
@@ -137,6 +141,7 @@ export function onboardingBodies(input: {
     primary_metric: input.objective === "discovery" ? null : metric,
   };
   const brief: CampaignInput["brief"] = {
+    ...input.brief,
     audience,
     constraints,
     requested_outputs: ["Vertical clips"],
@@ -157,6 +162,7 @@ export function Onboarding({
   onBusyChange,
   active = true,
   askAccount = false,
+  askWebsite = true,
 }: {
   w: Workspace;
   onComplete: () => void;
@@ -165,6 +171,8 @@ export function Onboarding({
   active?: boolean;
   /** Cloud is configured and nobody is signed in: end with an account step. */
   askAccount?: boolean;
+  /** Start by offering to draft the brand from the creator's website (skippable). */
+  askWebsite?: boolean;
 }) {
   const steps = askAccount
     ? [...baseSteps.slice(0, REVIEW), "Review", "Your account"]
@@ -183,6 +191,9 @@ export function Onboarding({
   const [voice, setVoice] = useState<Voice>("insight");
   const [customVoice, setCustomVoice] = useState("");
   const [step, setStep] = useState(0);
+  // Step 1: "Got a website?" Its draft prefills the steps below; nothing is saved until launch.
+  const [website, setWebsite] = useState(askWebsite);
+  const [drafted, setDrafted] = useState<WebsiteBriefResult | null>(null);
   const [furthest, setFurthest] = useState(0);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [editingReview, setEditingReview] = useState(false);
@@ -231,12 +242,13 @@ export function Onboarding({
     if (
       active &&
       !launchPhase &&
+      !website &&
       (previousStep.current !== step ||
         document.activeElement !== heading.current)
     )
       heading.current?.focus();
     previousStep.current = step;
-  }, [step, active, launchPhase]);
+  }, [step, active, launchPhase, website]);
   useEffect(() => {
     if (active && error && !launchPhase) recovery.current?.focus();
   }, [active, error, launchPhase]);
@@ -295,6 +307,33 @@ export function Onboarding({
       }
     }
     return "";
+  }
+  function applyWebsite(result: WebsiteBriefResult) {
+    if (result.name) setName(result.name);
+    if (result.audience) setAudience(result.audience);
+    const known = outcomes.find(
+      (o) => o.objective === result.objective && o.metric === result.metric,
+    );
+    if (known) setOutcome(known.id);
+    else if (result.objective !== "discovery" && result.metric) {
+      setOutcome("other");
+      setCustomOutcome(
+        GOALS.find((g) => g.objective === result.objective)?.label ||
+          result.objective,
+      );
+      setCustomMetric(result.metric);
+    }
+    if (result.voice) {
+      setVoice("other");
+      setCustomVoice(result.voice);
+    }
+    if (result.boundaries.length)
+      setGuardrails((current) =>
+        [current.trim(), ...result.boundaries].filter(Boolean).join("\n"),
+      );
+    setDrafted(result);
+    setWebsite(false);
+    move(0);
   }
   function animateClick() {
     setFlight((n) => n + 1);
@@ -403,6 +442,7 @@ export function Onboarding({
         guardrails,
         creativePreference,
         outcomeLabel,
+        brief: drafted?.brief,
       });
     } catch (e) {
       setStepError(
@@ -542,6 +582,7 @@ export function Onboarding({
     void create();
   }
   function submit() {
+    if (website) return;
     if (step < last) advance();
     else if (askAccount) void saveToAccount();
     else void create();
@@ -565,7 +606,7 @@ export function Onboarding({
       <nav
         className="gf-onboarding-progress-wrap"
         aria-label="Brand setup"
-        hidden={!!launchPhase}
+        hidden={!!launchPhase || website}
         style={{ "--onboarding-steps": steps.length } as CSSProperties}
       >
         <div
@@ -636,9 +677,25 @@ export function Onboarding({
             }}
           />
         )}
+        {website && !launchPhase && (
+          <div
+            className="gf-onboarding-scroll"
+            role="region"
+            aria-label="Your website"
+          >
+            <WebsiteBrief
+              disabled={locked}
+              onApply={applyWebsite}
+              onSkip={() => {
+                setWebsite(false);
+                move(0);
+              }}
+            />
+          </div>
+        )}
         <div
           className="gf-onboarding-scroll"
-          hidden={!!launchPhase}
+          hidden={!!launchPhase || website}
           aria-busy={busy || undefined}
           role="region"
           aria-label="Setup questions"
@@ -663,6 +720,14 @@ export function Onboarding({
 
             {step === 0 && (
               <>
+                {drafted && (
+                  <p className="gf-flow-note">
+                    <Icon name="check" size={14} />
+                    Drafted from your website. Check and edit anything; your
+                    key messages, topics, boundaries and call to action go into
+                    your first brief.
+                  </p>
+                )}
                 <Field label="Name your brand / podcast">
                   {(id) => (
                     <AutoTextarea
@@ -1027,8 +1092,20 @@ export function Onboarding({
             </p>
           )}
         </div>
-        <footer className="gf-onboarding-actions" hidden={!!launchPhase}>
-          {step > 0 ? (
+        <footer
+          className="gf-onboarding-actions"
+          hidden={!!launchPhase || (website && !onCancel)}
+        >
+          {website ? (
+            <button
+              type="button"
+              className="gf-button ghost"
+              disabled={busy}
+              onClick={onCancel}
+            >
+              Back to Factory
+            </button>
+          ) : step > 0 ? (
             <button
               type="button"
               className="gf-button ghost"
@@ -1047,9 +1124,20 @@ export function Onboarding({
             >
               Back to Factory
             </button>
+          ) : askWebsite && !profile && !uncertain ? (
+            <button
+              type="button"
+              className="gf-button ghost"
+              disabled={locked}
+              onClick={() => setWebsite(true)}
+            >
+              <Icon name="back" size={15} />
+              Back
+            </button>
           ) : (
             <span />
           )}
+          {!website && (
           <button
             type="submit"
             className="gf-button gf-onboarding-cta"
@@ -1099,6 +1187,7 @@ export function Onboarding({
               <ArrowRight size={18} strokeWidth={1.8} />
             </span>
           </button>
+          )}
         </footer>
       </form>
     </section>

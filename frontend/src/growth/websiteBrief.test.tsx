@@ -1,9 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Campaign, Profile } from "../types";
+import { Onboarding } from "./Onboarding";
+import type { Workspace } from "./useCampaignWorkspace";
 import { WebsiteBrief } from "./WebsiteBrief";
+import { workspaceApi } from "./workspaceApi";
 import {
   briefFromDraft,
   editableFrom,
+  websiteBriefApi,
   type BrandDraft,
   type Research,
   type ResearchEvent,
@@ -110,6 +115,7 @@ function setReducedMotion(reduce: boolean) {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   // @ts-expect-error reset the jsdom default
   delete window.matchMedia;
 });
@@ -258,5 +264,71 @@ describe("briefFromDraft", () => {
     expect(result.objective).toBe("discovery");
     expect(result.metric).toBe("");
     expect(result.brandKit?.primary_color).toBe("#101010");
+  });
+});
+
+describe("onboarding step 1: your website", () => {
+  it("prefills the questions and the first campaign brief, saving only at launch", async () => {
+    vi.spyOn(websiteBriefApi, "start").mockResolvedValue(research("running", [opening]));
+    vi.spyOn(websiteBriefApi, "get").mockResolvedValue(research("done", [opening], { draft }));
+    const profile = vi
+      .spyOn(workspaceApi, "profile")
+      .mockResolvedValue({ id: "p1", name: "All-In" } as Profile);
+    const save = vi
+      .spyOn(workspaceApi, "save")
+      .mockResolvedValue({ id: "c1", name: "All-In — main" } as Campaign);
+    const w = {
+      busy: false,
+      loading: false,
+      load: vi.fn().mockResolvedValue(undefined),
+      setProfileId: vi.fn(),
+    } as unknown as Workspace;
+    render(<Onboarding w={w} onComplete={vi.fn()} />);
+    expect(screen.getByRole("heading", { name: /Got a website\?/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("yourshow.com"), { target: { value: "allin.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Read my website" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use this brief" }, { timeout: 3000 }));
+
+    expect(await screen.findByRole("heading", { name: "Who are we making this for?" })).toBeInTheDocument();
+    expect(screen.getByText(/Drafted from your website/)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Name your brand / podcast" })).toHaveValue("All-In");
+    expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
+      "Founders and investors who follow tech and markets.",
+    );
+    expect(profile).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("radio", { name: /Drive full-episode visits/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("radio", { name: /Other/ })).toBeChecked();
+    expect(screen.getByLabelText("Your creative direction")).toHaveValue(
+      "Candid, funny, sharp. Argue the point plainly.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(profile.mock.calls[0][0].brand_context).toContain("Avoid: Investment advice");
+    const body = save.mock.calls[0][0];
+    expect(body).toMatchObject({ objective: "traffic", primary_metric: "full_episode_visits" });
+    expect(body.brief).toMatchObject({
+      audience: "Founders and investors who follow tech and markets.",
+      key_messages: ["Smart people disagreeing in good faith"],
+      must_include: ["markets", "AI"],
+      must_avoid: ["Investment advice"],
+      cta: "Watch the full episode",
+      cta_link: "https://allin.com/episodes",
+    });
+  });
+
+  it("skips straight to the typed questions", () => {
+    render(
+      <Onboarding
+        w={{ busy: false, loading: false } as unknown as Workspace}
+        onComplete={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Skip — I’ll type it" }));
+    expect(screen.getByRole("heading", { name: "Who are we making this for?" })).toHaveFocus();
+    expect(screen.getByRole("textbox", { name: "Name your brand / podcast" })).toHaveValue("");
   });
 });

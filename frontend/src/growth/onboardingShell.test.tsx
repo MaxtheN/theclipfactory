@@ -95,7 +95,14 @@ async function enterOnboarding(viaQuickActions = false) {
       ?.setAttribute("open", "");
     fireEvent.click(screen.getByRole("button", { name: "New brand" }));
   }
+  await skipWebsite();
   return screen.findByRole("heading", { name: "Who are we making this for?" });
+}
+/** Onboarding opens with "Got a website?"; these tests cover the typed path. */
+async function skipWebsite() {
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Skip — I’ll type it" }),
+  );
 }
 function next() {
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -109,6 +116,7 @@ describe("standalone onboarding shell", () => {
       .mockResolvedValueOnce([]);
     try {
       render(<GrowthApp />);
+      await skipWebsite();
       await screen.findByRole("heading", {
         name: "Who are we making this for?",
       });
@@ -144,6 +152,7 @@ describe("standalone onboarding shell", () => {
       .mockResolvedValueOnce([]);
     try {
       render(<GrowthApp />);
+      await skipWebsite();
       await screen.findByRole("heading", {
         name: "Who are we making this for?",
       });
@@ -258,6 +267,7 @@ describe("standalone onboarding shell", () => {
       previewRequest<Campaign[]>("/api/campaigns"),
     ]);
     render(<GrowthApp />);
+    fireEvent.click(screen.getByRole("button", { name: "Skip — I’ll type it" }));
     const question = screen.getByRole("heading", {
       name: "Who are we making this for?",
     });
@@ -321,6 +331,7 @@ describe("standalone onboarding shell", () => {
     ]);
     render(<GrowthApp />);
     await screen.findByRole("button", { name: "Back to Factory" });
+    await skipWebsite();
     fireEvent.change(screen.getByLabelText("Name your brand / podcast"), {
       target: { value: "Direct preview workspace" },
     });

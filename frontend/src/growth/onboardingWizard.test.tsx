@@ -40,7 +40,7 @@ function workspace(): Workspace {
 function start() {
   const w = workspace(),
     complete = vi.fn();
-  render(<Onboarding w={w} onComplete={complete} />);
+  render(<Onboarding w={w} onComplete={complete} askWebsite={false} />);
   return { w, complete };
 }
 function fillAudience() {
@@ -170,7 +170,7 @@ describe("guided workspace onboarding", () => {
     const { rerender } = render(
       <>
         <button autoFocus>Outside the wizard</button>
-        <Onboarding active={false} w={w} onComplete={complete} />
+        <Onboarding active={false} w={w} onComplete={complete} askWebsite={false} />
       </>,
     );
     expect(
@@ -179,7 +179,7 @@ describe("guided workspace onboarding", () => {
     rerender(
       <>
         <button autoFocus>Outside the wizard</button>
-        <Onboarding active w={w} onComplete={complete} />
+        <Onboarding active w={w} onComplete={complete} askWebsite={false} />
       </>,
     );
     expect(
@@ -517,7 +517,7 @@ describe("guided workspace onboarding", () => {
         complete = vi.fn(),
         busy = vi.fn();
       vi.mocked(w.load).mockReturnValueOnce(reload.promise);
-      render(<Onboarding w={w} onComplete={complete} onBusyChange={busy} />);
+      render(<Onboarding w={w} onComplete={complete} onBusyChange={busy} askWebsite={false} />);
       toReview();
       const form = screen
         .getByRole("button", { name: "Launch" })
@@ -632,6 +632,7 @@ describe("guided workspace onboarding", () => {
             w={workspace()}
             onComplete={complete}
             onBusyChange={busy}
+            askWebsite={false}
           />,
         );
         toReview();

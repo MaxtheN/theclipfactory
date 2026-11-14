@@ -40,7 +40,7 @@ function start() {
       setProfileId: vi.fn(),
     } as unknown as Workspace,
     complete = vi.fn();
-  render(<Onboarding w={w} onComplete={complete} askAccount />);
+  render(<Onboarding w={w} onComplete={complete} askAccount askWebsite={false} />);
   return { w, complete };
 }
 function next() {
@@ -194,7 +194,7 @@ describe("account as the last onboarding step", () => {
       load: vi.fn(),
       setProfileId: vi.fn(),
     } as unknown as Workspace;
-    render(<Onboarding w={w} onComplete={vi.fn()} />);
+    render(<Onboarding w={w} onComplete={vi.fn()} askWebsite={false} />);
     expect(
       screen.getByRole("progressbar", { name: "Setup progress" }),
     ).toHaveAttribute("aria-valuemax", "4");
