@@ -16,7 +16,9 @@ import {
   type OpenProduction,
 } from "./FactoryHome";
 import { FactoryTabs } from "./FactoryMap";
-import { clearDemoResult, loadDemoResult, saveDemoResult, type DemoResult } from "./demoStore";
+import { loadDemoResult, saveDemoResult, type DemoResult } from "./demoStore";
+import { post } from "../api";
+import type { LearningDemoPlan } from "./LearningLoopDemo";
 import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
 import { QuickActions, type QuickAction } from "./QuickActions";
@@ -150,7 +152,22 @@ export function GrowthApp() {
   }, [stage]);
   // The demo's simulated outcome lives in its own per-brand store, never in account history.
   const [demoResult, setDemoResult] = useState<DemoResult | null>(() => loadDemoResult(w.profileId));
-  useEffect(() => setDemoResult(loadDemoResult(w.profileId)), [w.profileId]);
+  useEffect(() => {
+    const stored = loadDemoResult(w.profileId);
+    setDemoResult(stored);
+    if (stored || !w.profileId) return;
+    // The desktop app runs in private mode, so browser storage is empty on each launch. The
+    // demo plan is a read-only, deterministic computation over real clips: rebuild it.
+    let live = true;
+    const day = new Date();
+    day.setHours(12, 0, 0, 0);
+    post<LearningDemoPlan>(`/api/demo-loop/${encodeURIComponent(w.profileId)}/learning-loop`)
+      .then((plan) => live && setDemoResult({ plan, after: null, ran_at: day.toISOString() }))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [w.profileId]);
   const keepDemoResult = useCallback(
     (result: DemoResult) => {
       saveDemoResult(w.profileId, result);
@@ -158,10 +175,6 @@ export function GrowthApp() {
     },
     [w.profileId],
   );
-  function resetDemo() {
-    clearDemoResult(w.profileId);
-    setDemoResult(null);
-  }
   const current = views[stage];
   // Sub-pages: a quiet "← Back" sits top-left above the title.
   const back: Stage | undefined =
@@ -767,7 +780,6 @@ export function GrowthApp() {
                   onEditingRules={() => go("research")}
                   onRehearse={openRehearsal}
                   demo={demoResult}
-                  onResetDemo={resetDemo}
                   demoOpen={demoOpen && !onboarding && usable && stage === "results"}
                   onCloseDemo={() => setDemoOpen(false)}
                   onDemoResult={keepDemoResult}

@@ -161,7 +161,18 @@
 .gf-results-demo-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 360ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .gf-results-demo-panel.is-open { grid-template-rows: 1fr; }
 .gf-results-demo-panel > div { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.gf-results-demo-panel .gf-lld { flex: none; height: min(620px, 70vh); }
+.gf-results-demo-panel .gf-lld {
+  flex: none; display: flex; flex-direction: column; height: clamp(560px, calc(100vh - 160px), 760px);
+}
+.gf-results-demo-panel .gf-lld-stage { flex: 1 1 auto; min-height: 0; align-content: start; }
+.gf-results-demo-panel .gf-lld-stage .gf-fmap-canvas { overflow: auto; }
+/* The control bar is pinned inside the panel: never clipped, always readable. */
+.gf-results-demo-panel .gf-lld-foot {
+  flex: none; position: relative; z-index: 10; background: #fff; flex-wrap: wrap; align-items: center;
+  border-top: 1px solid var(--lld-line); border-radius: 0 0 10px 10px;
+}
+.gf-results-demo-panel .gf-lld-next-btn { color: var(--lld-ink); border-color: #cfcac0; }
+.gf-results-demo-panel .gf-lld-next-btn.is-quiet { color: #4a5054; }
 @media (prefers-reduced-motion: reduce) { .gf-results-demo-panel { transition: none; } }
 
 .gf-factory-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }

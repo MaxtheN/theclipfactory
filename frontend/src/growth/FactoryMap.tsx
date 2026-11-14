@@ -840,6 +840,7 @@ export function FactoryMap({
       </header>
       <FactoryOverview model={model} rehearsal={mode === "demo" ? rehearsal : undefined} selected={overview} onSelect={setOverview} onPreview={setPreviewStage} />
       {mode === "demo" && <><LoopRehearsalControls state={rehearsal} /><LoopRehearsalInspector state={rehearsal} /></>}
+      {mode === "real" && <RunLedgerCard runs={runs} clips={clips} />}
       <details className="gf-fmap-engine-details"><summary>Open full map</summary>
       {mode === "real" && replay.on && replayRun && (
         <div className="gf-fmap-replay" role="status">
@@ -948,7 +949,6 @@ export function FactoryMap({
           .map((s) => `${s.title}: ${s.status}`)
           .join(". ") || "No station is working right now."}
       </p>
-      {mode === "real" && <RunLedgerCard runs={runs} clips={clips} />}
       </details>
       {mode === "real" && opened &&
         createPortal(

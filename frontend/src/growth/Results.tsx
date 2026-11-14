@@ -1060,7 +1060,7 @@ const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { m
 const compact = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(n));
 
 /** The demo's outcome on Results: a simulated, deterministic history built from the brand's real clips. */
-function DemoOutcome({ demo, sim, onReset }: { demo: DemoResult; sim: SimResults; onReset?: () => void }) {
+function DemoOutcome({ demo, sim, onReplay }: { demo: DemoResult; sim: SimResults; onReplay?: () => void }) {
   const { plan, after } = demo;
   const parent = plan.clips.find((c) => c.clip_id === plan.recut.clip_id);
   const byClip = new Map(sim.posts.map((p) => [p.clip_id, p]));
@@ -1075,9 +1075,9 @@ function DemoOutcome({ demo, sim, onReset }: { demo: DemoResult; sim: SimResults
       <header>
         <h2 id="gf-results-sim-title">Learning loop</h2>
         <span className="gf-results-sim-pill">Simulated</span>
-        {onReset && (
-          <button type="button" className="gf-results-reset" onClick={onReset}>
-            Reset demo
+        {onReplay && (
+          <button type="button" className="gf-results-reset" onClick={onReplay}>
+            Replay demo
           </button>
         )}
       </header>
@@ -1157,7 +1157,6 @@ export function Results({
   onEditingRules,
   onRehearse,
   demo = null,
-  onResetDemo,
   demoOpen = false,
   onCloseDemo,
   onDemoResult,
@@ -1171,7 +1170,6 @@ export function Results({
   onRehearse?: () => void;
   /** The learning-loop demo's simulated outcome (its own store, never account history). */
   demo?: DemoResult | null;
-  onResetDemo?: () => void;
   /** The demo panel expands inline below the strip. */
   demoOpen?: boolean;
   onCloseDemo?: () => void;
@@ -1240,8 +1238,14 @@ export function Results({
   });
   const [moreOpen, setMoreOpen] = useState(false);
   const [demoShown, setDemoShown] = useState(demoOpen);
+  const demoPanel = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (demoOpen) return setDemoShown(true);
+    if (demoOpen) {
+      setDemoShown(true);
+      // Bring the whole panel, controls included, into view once it has expanded.
+      const timer = window.setTimeout(() => demoPanel.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }), 400);
+      return () => window.clearTimeout(timer);
+    }
     // Keep the demo mounted while the panel collapses, then unmount it.
     const timer = window.setTimeout(() => setDemoShown(false), 380);
     return () => window.clearTimeout(timer);
@@ -1251,6 +1255,15 @@ export function Results({
   const posted = rows.length + untracked.length;
   const measuring = rows.filter((r) => r.window < 1).length;
   const learned = (view?.beliefs ?? []).filter((b) => b.status !== "retired" && b.counts.matching > 0);
+  // A demo draft already rendered for the re-edited clip fills the "after" side.
+  const draft = demo && !demo.after
+    ? [...factory.data.clips]
+        .filter((c) => (c as Clip & { parent_clip_id?: string | null }).parent_clip_id === demo.plan.recut.clip_id)
+        .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))[0]
+    : undefined;
+  const demoView: DemoResult | null = demo && draft
+    ? { ...demo, after: { clip_id: draft.id, media_url: `/api/clips/${encodeURIComponent(draft.id)}/media`, hook: draft.hook } }
+    : demo;
   // Simulated history only while no real post exists; display only, never written to real tables.
   const sim = useMemo(
     () => (demo && !posted ? simulateResults(demo, brandPool) : null),
@@ -1297,7 +1310,7 @@ export function Results({
           <DemoLoopButton onClick={demoOpen ? () => onCloseDemo?.() : onRehearse} expanded={demoOpen} />
         </div>
       )}
-      <div className={`gf-results-demo-panel${demoOpen ? " is-open" : ""}`}>
+      <div ref={demoPanel} className={`gf-results-demo-panel${demoOpen ? " is-open" : ""}`}>
         <div>
           {w.profileId && (demoOpen || demoShown) && (
             <LearningLoopDemo
@@ -1309,7 +1322,7 @@ export function Results({
           )}
         </div>
       </div>
-      {demo && sim && <DemoOutcome demo={demo} sim={sim} onReset={onResetDemo} />}
+      {demoView && sim && <DemoOutcome demo={demoView} sim={sim} onReplay={demoOpen ? undefined : onRehearse} />}
       <p id="gf-results-now" className="gf-results-now" role="status">{story.headline}</p>
       {(!demo || learned.length > 0) && <section className="gf-results-learned" aria-labelledby="gf-results-learned-title">
         <h2 id="gf-results-learned-title">What we learned</h2>
