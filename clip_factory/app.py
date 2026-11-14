@@ -2560,4 +2560,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
     install_cloud_api(app, lambda: default_account(store))
 
+    from .publish_api import install as install_publish_api
+
+    # Approve & post: human-approved, quality-gated Reels via Composio with durable attempts.
+    install_publish_api(app, runtime, engine, campaigns)
+
     return app

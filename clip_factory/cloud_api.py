@@ -40,6 +40,9 @@ def install(app: FastAPI, account_factory):
             raise HTTPException(409, cache.get("error") or NOT_CONFIGURED)
         return current
 
+    # Shared accessor so publishing hosts files with the same signed-in session (one refresh-token owner).
+    app.state.cloud_account = account
+
     def call(action):
         try:
             return action()
