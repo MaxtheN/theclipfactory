@@ -52,7 +52,7 @@ export function Autopilot({ state }: { state: FactoryState }) {
     </div>
   );
 }
-function Stages({ source }: { source: FactorySource }) {
+export function Stages({ source }: { source: FactorySource }) {
   const stages = Array.isArray(source.stages) ? source.stages : [];
   const current = stages.find((stage) => stage.status === "failed" || stage.status === "active");
   if (!stages.length) return null;

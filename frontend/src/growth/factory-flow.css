@@ -647,3 +647,34 @@
     background: var(--material-pane-solid);
   }
 }
+
+
+/* Production line inside the footage list: stage tracker, status and storyboard per source. */
+.gf-footage-item {
+  border-bottom: 1px solid var(--material-divider);
+}
+.gf-footage-item .gf-footage-row {
+  border-bottom: 0;
+}
+.gf-footage-line {
+  padding: 0 0 18px 60px;
+  display: grid;
+  gap: 10px;
+}
+.gf-footage-status {
+  margin: 6px 0 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+.gf-footage-line progress {
+  width: 100%;
+  height: 4px;
+}
+.gf-review-wall {
+  margin-top: 12px;
+}
+@media (max-width: 720px) {
+  .gf-footage-line {
+    padding-left: 0;
+  }
+}

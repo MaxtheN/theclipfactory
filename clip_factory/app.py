@@ -1098,22 +1098,29 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         if metadata.pop("burn_hook", False) and body.hook.strip():
             body.hook_overlay = True
         report = not metadata.pop("parallel", False)
-        # Presentation is a hypothesis too: the swarm varies it across clips and records which was used.
-        treatment = metadata.get("treatment") or {}
-        if treatment.get("captions") in {"standard", "pop"}:
-            body.caption_style = treatment["captions"]
-        if treatment.get("motion") in {"static", "push_in"}:
-            body.motion = treatment["motion"]
         if metadata.get("strategy_snapshot"):
             direction = metadata["strategy_snapshot"]
             body.framing = direction["framing"]
             body.caption_style = direction["caption_style"]
             body.hook_overlay = True
             body.end = min(body.end, body.start + direction["duration_seconds"])
-            metadata["edit_plan"] = plan_of(body)
             metadata["provenance_mode"] = "strategy"
         else:
             frame_action(job_id, video, body)
+        # Presentation is a hypothesis too: the swarm varies it across clips and records which was
+        # used. Under an approved direction, a treatment that differs from it is a recorded departure.
+        treatment = metadata.get("treatment") or {}
+        if treatment.get("captions") in {"standard", "pop"} and treatment["captions"] != body.caption_style:
+            if metadata.get("strategy_snapshot") and treatment["captions"] == "pop":
+                metadata["strategy_departures"] = [
+                    "Swarm treatment: word-by-word captions instead of the saved caption style."
+                ]
+            if treatment["captions"] == "pop" or not metadata.get("strategy_snapshot"):
+                body.caption_style = treatment["captions"]
+        if treatment.get("motion") in {"static", "push_in"}:
+            body.motion = treatment["motion"]
+        if metadata.get("strategy_snapshot"):
+            metadata["edit_plan"] = plan_of(body)
         if not media.caption_entries(video.get("transcript"), [{"start": body.start, "end": body.end}]):
             # Nothing meaningful is said in this range: a clean picture, no captions to check.
             body.subtitles = False
@@ -1193,7 +1200,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         return {"video_id": video["id"], "clips": output, "requires_review": True}
 
     @app.post("/api/videos", status_code=201)
-    def upload_video(file: UploadFile):
+    def upload_video(file: UploadFile, autostart: bool = True):
+        """autostart=false: the caller starts production itself (for example inside a campaign)."""
         identifier = new_id()
         original = Path(file.filename or "video.mp4").name
         suffix = Path(original).suffix.lower()
@@ -1223,7 +1231,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 **info,
             }
             store.put("videos", video)
-            if settings()["autonomy"] == "auto":
+            if autostart and settings()["autonomy"] == "auto":
                 model = choose_model()
                 # Autopilot: start only when it can actually run; otherwise the source waits, with the
                 # reason shown on the factory screen.
@@ -2498,7 +2506,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 identifier, body.profile_id, body.video_id, body.expected_strategy_version_id
             )
             return submit_production(
-                body.video_id, body.model_id, "team", body.revision_budget, campaign_snapshot=snapshot
+                body.video_id, body.model_id, body.strategy, body.revision_budget, campaign_snapshot=snapshot
             )
 
     install_campaign_api(app, campaigns, render=campaign_render, produce=campaign_produce)

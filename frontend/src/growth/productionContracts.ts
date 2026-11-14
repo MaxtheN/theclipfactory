@@ -28,6 +28,8 @@ export interface AgentProductionRequest {
   // IDs are dynamic: installed Ollama models use ollama:<name>:<tag>.
   model_id: string;
   revision_budget?: number;
+  /** team (default): a few self-checked clips. swarm: many clips, one hypothesis each. */
+  strategy?: "team" | "swarm";
 }
 export interface TranscriptImportRequest {
   format: "srt" | "vtt" | "json";
@@ -601,9 +603,10 @@ export function parseExportRecord(
 export function parseAgentProductionResponse(
   value: unknown,
   scope: ProductionScope = {},
+  strategy: "team" | "swarm" = "team",
 ): AgentProductionResponse {
   requireShape(object(value), "Agent production requires a job/run envelope.");
-  const job = parseProductionJob(value.job, undefined, "team");
+  const job = parseProductionJob(value.job, undefined, strategy);
   const run = value.run;
   requireShape(
     object(run) &&
@@ -611,7 +614,7 @@ export function parseAgentProductionResponse(
       identifier(run.video_id) &&
       run.job_id === job.id &&
       identifier(run.model_id) &&
-      run.mode === "team" &&
+      run.mode === strategy &&
       [
         "queued",
         "running",

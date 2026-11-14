@@ -3,6 +3,7 @@ import { endpoint, put } from "../api";
 import { ClipCard } from "../components/ClipCard";
 import { Empty } from "../components/ui";
 import type { Tab } from "../navigation";
+import type { Clip } from "../types";
 import type { FactoryState } from "../useFactory";
 import { newestFirst } from "./Home";
 
@@ -12,17 +13,21 @@ type Filter = (typeof filters)[number];
 export function Clips({
   state,
   navigate,
+  scope,
 }: {
   state: FactoryState;
   navigate: (tab: Tab) => void;
+  /** Limit the wall to some clips, for example one workspace and profile. */
+  scope?: (clip: Clip) => boolean;
 }) {
+  const all = scope ? state.data.clips.filter(scope) : state.data.clips;
   const [filter, setFilter] = useState<Filter>("Needs review");
   const [source, setSource] = useState("");
   const [hypothesis, setHypothesis] = useState("");
   const hypotheses = [
-    ...new Set(state.data.clips.map((clip) => clip.hypothesis).filter((h): h is string => !!h)),
+    ...new Set(all.map((clip) => clip.hypothesis).filter((h): h is string => !!h)),
   ].sort();
-  const clips = newestFirst(state.data.clips).filter(
+  const clips = newestFirst(all).filter(
     (clip) =>
       (!source || clip.video_id === source) && (!hypothesis || clip.hypothesis === hypothesis),
   );
@@ -35,7 +40,7 @@ export function Clips({
     filter === "All" ? true : filter === "Approved" ? clip.approved : !clip.approved,
   );
   const sources = state.data.videos.filter((video) =>
-    state.data.clips.some((clip) => clip.video_id === video.id),
+    all.some((clip) => clip.video_id === video.id),
   );
   // One click for a wall of swarm clips. Clips whose self-check flagged something are left for
   // an individual decision.
@@ -46,7 +51,7 @@ export function Clips({
         clip.team_review_status === "not_applicable" ||
         clip.team_review_status === "pass"),
   );
-  if (!state.data.clips.length)
+  if (!all.length)
     return (
       <Empty
         title={

@@ -1015,3 +1015,45 @@ def test_making_clips_again_replaces_earlier_drafts_but_keeps_everything_someone
     assert again["job"]["context"]["cleared_drafts"] == 0
     terminal_run(client, again)
     assert before <= {c["id"] for c in store.all("clips")}
+
+
+def test_campaign_swarm_makes_many_clips_under_the_approved_direction(client, monkeypatch, scripted):
+    from test_campaign_api import setup_campaign
+
+    assert client.patch("/api/settings", json={"autonomy": "auto"}).status_code == 200
+    monkeypatch.setattr(media, "probe", lambda _: {"duration": 600.0, "width": 320, "height": 180, "has_audio": False})
+    # The shell uploads with autostart=false and starts production itself, inside the workspace.
+    upload = client.post("/api/videos?autostart=false", files={"file": ("talk.mp4", b"video", "video/mp4")})
+    assert upload.status_code == 201 and client.get("/api/jobs").json() == []
+    video = upload.json()
+    profiles, campaign, version, path = setup_campaign(client, [video], duration=20)
+    renders = install_mock_render(client, monkeypatch)
+
+    def ideas(job, model, requests):
+        replies = []
+        for request in requests:
+            start = float(request["prompt"].split("Your stretch is ", 1)[1].split("s", 1)[0])
+            replies.append({"output": json.dumps({"ideas": [
+                {"hypothesis": "question", "start": start + 5, "end": start + 40, "hook": "Why?", "caption": "C"},
+                {"hypothesis": "story", "start": start + 100, "end": start + 130, "hook": "Then", "caption": "C"},
+            ]})})
+        return replies
+
+    monkeypatch.setattr(client.app.state.models, "run_batch", ideas)
+    body = {"video_id": video["id"], "profile_id": profiles[0]["id"], "strategy": "swarm"}
+    response = client.post(path + "/produce", json=body)
+    assert response.status_code == 202, response.text
+    submission = response.json()
+    assert submission["job"]["kind"] == "swarm" and submission["run"]["mode"] == "swarm"
+    assert wait_job(client, submission["job"]["id"], timeout=30)["status"] == "completed"
+    run = client.get(f"/api/team/runs/{submission['run']['id']}").json()
+    assert run["context"]["campaign_snapshot"]["campaign_id"] == campaign["id"]
+    clips = [c for c in client.get("/api/clips").json() if c["video_id"] == video["id"]]
+    assert len(clips) == 4 and len(renders) == 4
+    # Every clip belongs to the workspace and its approved direction, so the shell lists it.
+    assert {(c["campaign_id"], c["profile_id"]) for c in clips} == {(campaign["id"], profiles[0]["id"])}
+    assert all(c["strategy_version_id"] == version["id"] for c in clips)
+    assert {c["hypothesis"] for c in clips} == {"question", "story"}
+    assert all(c["team_review_status"] == "not_applicable" for c in clips)
+    assert client.post(path + "/produce", json={**body, "strategy": "committee"}).status_code == 422
+    assert not scripted.calls
