@@ -591,3 +591,76 @@ def test_team_inherits_actual_models_memory_guard_before_any_inference(harness, 
     assert harness.engine.get(run["id"])["status"] == "failed"
     models.jobs.process.assert_not_called()
     assert not harness.rendered
+
+
+def test_performance_cannot_cite_source_as_an_actual_outcome(harness):
+    seed_observations(harness.store)
+    outputs = script()
+    outputs.insert(
+        2,
+        {
+            "recommendations": [
+                {
+                    "recommendation": "Claim a sales lift",
+                    "evidence_refs": ["source:source"],
+                    "limitation": "A source is not a platform outcome",
+                }
+            ]
+        },
+    )
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run = harness.create()
+    with pytest.raises(WorkError, match="unknown evidence"):
+        harness.engine.execute(run["id"], "job")
+    assert titles(harness.models) == ["Plan", "Footage", "Performance"]
+    assert not harness.rendered
+    assert harness.engine.get(run["id"])["status"] == "failed"
+
+
+def test_audio_transcription_completes_before_footage_and_uses_snapshot_language(harness):
+    harness.video["has_audio"] = True
+    harness.store.put("videos", harness.video)
+    calls = []
+
+    def transcribe(job, video, language):
+        calls.append((job, video["id"], language))
+        harness.store.patch(
+            "videos",
+            video["id"],
+            transcript={"segments": [{"start": 0, "end": 1, "text": "Actual spoken words"}]},
+        )
+        return {"video_id": video["id"], "language": language}
+
+    harness.engine.transcribe = transcribe
+    harness.models = ScriptedModels(script("transcript:0"))
+    harness.engine.models = harness.models
+    run = harness.create()
+    harness.config["language"] = "fr"
+    harness.engine.execute(run["id"], "job")
+    saved = harness.engine.get(run["id"])
+    assert calls == [("job", "source", "en")]
+    assert saved["context"]["evidence"]["transcript:0"] == {
+        "start": 0,
+        "end": 1,
+        "text": "Actual spoken words",
+    }
+    assert next(task for task in saved["tasks"] if task["role"] == "transcribe")["status"] == "completed"
+    assert (
+        harness.models.calls[1]["data"]["context"]["evidence"]["transcript:0"]["text"]
+        == "Actual spoken words"
+    )
+
+
+def test_passing_revision_preserves_initial_critic_findings_in_ledger(harness):
+    outputs = script(verdict="revise") + [revision(), edits(hook="Corrected draft"), critique()]
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    critics = [task for task in run["tasks"] if task["role"] == "critic"]
+    assert [task["output"]["verdict"] for task in critics] == ["revise", "pass"]
+    assert critics[0]["output"]["findings"][0]["message"] == "Claim needs source support"
+    assert run["revision_count"] == 1
+    assert result["review_status"] == "pass"
+    assert harness.rendered[0]["hook"] == "Corrected draft"
+    assert harness.store.get("clips", result["clip_ids"][0])["approved"] is False
