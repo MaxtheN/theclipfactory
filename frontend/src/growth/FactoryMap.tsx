@@ -48,9 +48,9 @@ const STATE_LABEL: Record<StationState, string> = {
   active: "Working",
   done: "Done",
   waiting: "Needs you",
-  idle: "Resting",
-  empty: "Not started",
-  failed: "Stopped",
+  idle: "Idle",
+  empty: "Idle",
+  failed: "Held",
 };
 
 /** Campaign-scoped inputs shared by the full map and the mini-map. */
@@ -121,9 +121,26 @@ function useMapData(w: Workspace, factory: FactoryState, active: boolean) {
 
 type Point = { x: number; y: number };
 type Box = { left: number; right: number; top: number; bottom: number; cx: number; cy: number };
+interface Wires {
+  paths: Map<string, string>;
+  /** Where the learn → scout return line runs along the bottom (label anchor). */
+  loop: Point | null;
+}
 
-/** Wire geometry from the measured station boxes (container coordinates). */
-function wirePaths(boxes: Map<StationId, Box>) {
+/** A horizontal → vertical → horizontal connector with softly rounded corners. */
+function elbow(s: Point, e: Point, gx: number): string {
+  const dy = e.y - s.y;
+  if (Math.abs(dy) < 1) return `M ${s.x} ${s.y} L ${e.x} ${e.y}`;
+  const r = Math.max(0, Math.min(10, Math.abs(dy) / 2, gx - s.x, e.x - gx));
+  const dir = Math.sign(dy);
+  return (
+    `M ${s.x} ${s.y} H ${gx - r} Q ${gx} ${s.y} ${gx} ${s.y + dir * r}` +
+    ` V ${e.y - dir * r} Q ${gx} ${e.y} ${gx + r} ${e.y} H ${e.x}`
+  );
+}
+
+/** Wire geometry from the measured station boxes (track coordinates). */
+function wirePaths(boxes: Map<StationId, Box>): Wires {
   const paths = new Map<string, string>();
   const order = STATIONS.map((s) => s.id);
   const familyOf = (id: StationId) => STATIONS.find((s) => s.id === id)!.family;
@@ -131,41 +148,44 @@ function wirePaths(boxes: Map<StationId, Box>) {
     const a = boxes.get(order[i]),
       b = boxes.get(order[i + 1]);
     if (!a || !b) continue;
-    let d: string;
-    if (familyOf(order[i]) === familyOf(order[i + 1])) {
-      d = `M ${a.cx} ${a.bottom} L ${b.cx} ${b.top}`;
-    } else {
-      const s: Point = { x: a.right, y: a.cy },
-        e: Point = { x: b.left, y: b.cy };
-      const k = Math.max(24, (e.x - s.x) / 2);
-      d = `M ${s.x} ${s.y} C ${s.x + k} ${s.y} ${e.x - k} ${e.y} ${e.x} ${e.y}`;
-    }
+    const d =
+      familyOf(order[i]) === familyOf(order[i + 1])
+        ? `M ${a.cx} ${a.bottom} L ${b.cx} ${b.top}`
+        : elbow({ x: a.right, y: a.cy }, { x: b.left, y: b.cy }, (a.right + b.left) / 2);
     paths.set(`${order[i]}>${order[i + 1]}`, d);
   }
   const rules = boxes.get("rules"),
     scout = boxes.get("scout");
+  let loop: Point | null = null;
   if (rules && scout) {
-    const top = Math.min(...[...boxes.values()].map((b) => b.top)) - 30;
-    const x1 = rules.right,
-      y1 = rules.cy,
-      out = x1 + 22;
+    // One quiet line beneath the whole line: out of Style rules, along the
+    // bottom, and up the gutter into Scout's input.
+    const r = 12;
+    const floor = Math.max(...[...boxes.values()].map((b) => b.bottom)) + 30;
+    const out = rules.right + 20;
+    const gx = scout.left - 12;
     paths.set(
       "return",
-      `M ${x1} ${y1} C ${out + 14} ${y1} ${out + 14} ${top} ${out - 16} ${top} L ${scout.cx + 18} ${top} C ${scout.cx} ${top} ${scout.cx} ${top} ${scout.cx} ${scout.top}`,
+      `M ${rules.right} ${rules.cy} H ${out - r} Q ${out} ${rules.cy} ${out} ${rules.cy + r}` +
+        ` V ${floor - r} Q ${out} ${floor} ${out - r} ${floor} H ${gx + r}` +
+        ` Q ${gx} ${floor} ${gx} ${floor - r} V ${scout.cy + 8}` +
+        ` Q ${gx} ${scout.cy} ${gx + 8} ${scout.cy} H ${scout.left}`,
     );
+    loop = { x: (out + gx) / 2, y: floor };
   }
-  return paths;
+  return { paths, loop };
 }
 
 function useWires(
-  canvas: React.RefObject<HTMLDivElement | null>,
+  track: React.RefObject<HTMLDivElement | null>,
   deps: unknown[],
 ) {
-  const [paths, setPaths] = useState<Map<string, string>>(new Map());
+  const [wires, setWires] = useState<Wires>({ paths: new Map(), loop: null });
   const [size, setSize] = useState({ w: 0, h: 0 });
   const measure = useCallback(() => {
-    const root = canvas.current;
+    const root = track.current;
     if (!root) return;
+    // Measured against the scrolling track, so geometry survives horizontal scroll.
     const origin = root.getBoundingClientRect();
     const boxes = new Map<StationId, Box>();
     root.querySelectorAll<HTMLElement>("[data-station]").forEach((el) => {
@@ -183,18 +203,18 @@ function useWires(
       });
     });
     setSize({ w: origin.width, h: origin.height });
-    setPaths(wirePaths(boxes));
-  }, [canvas]);
+    setWires(wirePaths(boxes));
+  }, [track]);
   useLayoutEffect(() => {
     measure();
-    const root = canvas.current;
+    const root = track.current;
     if (!root || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => measure());
     observer.observe(root);
     return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [measure, ...deps]);
-  return { paths, size };
+  return { ...wires, size };
 }
 
 /** Stations that just went from working to done pulse once. */
@@ -219,6 +239,20 @@ function usePulses(model: FactoryMapModel) {
   return pulses;
 }
 
+/** The one status pill: a fixed palette by state, never by stage family. */
+function StatePill({ state }: { state: StationState }) {
+  return (
+    <span className={`gf-fmap-pill is-${state}`}>
+      {state === "done" ? (
+        <Icon name="check" size={11} />
+      ) : (
+        <i aria-hidden="true" />
+      )}
+      {STATE_LABEL[state]}
+    </span>
+  );
+}
+
 function StationCard({
   station,
   pulse,
@@ -230,46 +264,72 @@ function StationCard({
   selected: boolean;
   onOpen: () => void;
 }) {
+  const metric = station.counts[0];
   return (
     <button
       type="button"
       data-station={station.id}
-      className={`gf-fmap-station fam-${station.family} is-${station.state}${pulse ? " is-pulse" : ""}${selected ? " is-selected" : ""}${station.dim ? " is-dim" : ""}`}
+      className={`gf-fmap-station is-${station.state}${pulse ? " is-pulse" : ""}${selected ? " is-selected" : ""}${station.dim ? " is-dim" : ""}`}
       aria-label={`${station.title}: ${STATE_LABEL[station.state]}. ${station.status}. Open details.`}
       aria-expanded={selected}
+      title={station.status}
       onClick={onOpen}
     >
-      <span className="gf-fmap-station-head">
-        <span className="gf-fmap-dot" aria-hidden="true" />
-        <strong>{station.title}</strong>
-      </span>
-      <span className="gf-fmap-agent-row">
-        <span className="gf-fmap-agent">{station.agent}</span>
-        <span className={`gf-fmap-badge is-${station.state}`}>
-          {STATE_LABEL[station.state]}
-        </span>
-      </span>
+      <strong className="gf-fmap-title">{station.title}</strong>
       <span className="gf-fmap-status">{station.status}</span>
-      {station.id === "scout" && station.lanes > 0 && (
-        <span className="gf-fmap-lanes" aria-hidden="true">
-          {Array.from({ length: station.lanes }, (_, i) => (
-            <i key={i} style={{ animationDelay: `${(i * 137) % 900}ms` }} />
-          ))}
+      <span className="gf-fmap-foot">
+        {metric ? (
+          <span className="gf-fmap-metric">
+            <b>{metric.value}</b> {metric.label}
+          </span>
+        ) : (
+          <span className="gf-fmap-metric" aria-hidden="true" />
+        )}
+        <StatePill state={station.state} />
+      </span>
+      {station.state === "active" && (
+        <span className="gf-fmap-progress" aria-hidden="true">
+          <i />
         </span>
       )}
-      {station.counts.length > 0 && (
-        <span className="gf-fmap-counts">
-          {station.counts.map((c) => (
-            <span key={c.label}>
-              <b>{c.value}</b> {c.label}
-            </span>
-          ))}
-        </span>
-      )}
-      {station.last && <span className="gf-fmap-last">{station.last}</span>}
     </button>
   );
 }
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(false), 1400);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+  return (
+    <button
+      type="button"
+      className="gf-fmap-copy"
+      aria-label={copied ? `${label} copied` : `Copy ${label}`}
+      title={copied ? "Copied" : "Copy"}
+      onClick={() => {
+        void navigator.clipboard?.writeText(value).then(
+          () => setCopied(true),
+          () => undefined,
+        );
+      }}
+    >
+      {copied ? (
+        <Icon name="check" size={12} />
+      ) : (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="9" y="9" width="11" height="11" rx="2" />
+          <path d="M5 15V6a2 2 0 0 1 2-2h8" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+/** Identifiers render in monospace with a copy button. */
+const isIdLabel = (label: string) => /\bID\b/.test(label);
 
 function StationSheet({
   station,
@@ -289,17 +349,21 @@ function StationSheet({
   }, [station.id, onClose]);
   return (
     <aside
-      className={`gf-fmap-sheet fam-${station.family}`}
+      className="gf-fmap-sheet"
       role="dialog"
       aria-modal="false"
       aria-labelledby="gf-fmap-sheet-title"
     >
       <header>
         <div>
-          <span className="gf-fmap-family">{FAMILY_LABEL[station.family]}</span>
+          <span className="gf-fmap-eyebrow">
+            <i className={`gf-fmap-famdot fam-${station.family}`} aria-hidden="true" />
+            {FAMILY_LABEL[station.family]}
+          </span>
           <h3 id="gf-fmap-sheet-title">{station.title}</h3>
           <p>
-            {station.agent} · <span className={`gf-fmap-badge is-${station.state}`}>{STATE_LABEL[station.state]}</span>
+            <span>{station.agent}</span>
+            <StatePill state={station.state} />
           </p>
         </div>
         <button
@@ -312,7 +376,10 @@ function StationSheet({
           <Icon name="close" size={16} />
         </button>
       </header>
-      <p className="gf-fmap-sheet-status">{station.status}</p>
+      <section className="gf-fmap-sheet-now">
+        <p>{station.status}</p>
+        {station.last && <p className="gf-fmap-note">Latest: {station.last}</p>}
+      </section>
       {station.sheet.map((section) => (
         <section key={section.title}>
           <h4>{section.title}</h4>
@@ -321,7 +388,16 @@ function StationSheet({
               {section.rows.map((row, i) => (
                 <div key={`${row.label}-${i}`}>
                   <dt>{row.label}</dt>
-                  <dd>{row.value}</dd>
+                  <dd>
+                    {isIdLabel(row.label) ? (
+                      <span className="gf-fmap-id">
+                        <code>{row.value}</code>
+                        <CopyButton value={row.value} label={row.label} />
+                      </span>
+                    ) : (
+                      row.value
+                    )}
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -340,6 +416,126 @@ function StationSheet({
   );
 }
 
+const sentence = (status: string) => {
+  const text = status.replace(/_/g, " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+const shortWhen = (iso: string, now: number) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Unknown time";
+  const sameDay = new Date(now).toDateString() === d.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+};
+const fullWhen = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? "Unknown time"
+    : d.toLocaleString([], { dateStyle: "medium", timeStyle: "medium" });
+};
+
+/** Compact run selector: a short summary on the button, the full detail in the menu. */
+function RunPicker({
+  runs,
+  value,
+  onChange,
+}: {
+  runs: TeamRun[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedIndex = Math.max(0, runs.findIndex((r) => r.id === value));
+  const [cursor, setCursor] = useState(selectedIndex);
+  const root = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const now = Date.now();
+  const current = runs[selectedIndex];
+  useEffect(() => {
+    if (!open) return;
+    setCursor(selectedIndex);
+    list.current?.focus();
+    const away = (e: MouseEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [open, selectedIndex]);
+  const choose = (i: number) => {
+    onChange(runs[i].id);
+    setOpen(false);
+    button.current?.focus();
+  };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") setCursor((c) => Math.min(runs.length - 1, c + 1));
+    else if (e.key === "ArrowUp") setCursor((c) => Math.max(0, c - 1));
+    else if (e.key === "Home") setCursor(0);
+    else if (e.key === "End") setCursor(runs.length - 1);
+    else if (e.key === "Enter" || e.key === " ") choose(cursor);
+    else if (e.key === "Escape") {
+      setOpen(false);
+      button.current?.focus();
+    } else if (e.key === "Tab") setOpen(false);
+    else return;
+    e.preventDefault();
+  };
+  if (!current) return null;
+  return (
+    <div className="gf-fmap-picker" ref={root}>
+      <button
+        ref={button}
+        type="button"
+        className="gf-fmap-picker-button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Run from ${fullWhen(current.created_at)}, ${sentence(current.status)}. Choose a run.`}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+      >
+        <span className="gf-fmap-picker-k">Run</span>
+        <span className="gf-fmap-picker-v">{shortWhen(current.created_at, now)}</span>
+        <span className={`gf-fmap-run-status is-${current.status}`}>{sentence(current.status)}</span>
+        <Icon name="down" size={14} />
+      </button>
+      {open && (
+        <ul
+          ref={list}
+          className="gf-fmap-picker-menu"
+          role="listbox"
+          tabIndex={-1}
+          aria-label="Recent runs"
+          aria-activedescendant={`gf-fmap-run-${cursor}`}
+          onKeyDown={onKey}
+        >
+          {runs.map((r, i) => (
+            <li
+              key={r.id}
+              id={`gf-fmap-run-${i}`}
+              role="option"
+              aria-selected={i === selectedIndex}
+              className={i === cursor ? "is-cursor" : undefined}
+              onMouseEnter={() => setCursor(i)}
+              onClick={() => choose(i)}
+            >
+              <span className="gf-fmap-picker-when">{fullWhen(r.created_at)}</span>
+              <span className={`gf-fmap-run-status is-${r.status}`}>{sentence(r.status)}</span>
+              <code>{r.id}</code>
+              {i === selectedIndex && <Icon name="check" size={14} />}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function RunLedgerCard({
   runs,
   clips,
@@ -353,7 +549,9 @@ export function RunLedgerCard({
   if (!run)
     return (
       <section className="gf-fmap-ledger" aria-label="Run ledger">
-        <h3>Run ledger</h3>
+        <header>
+          <h3>Run ledger</h3>
+        </header>
         <p className="gf-fmap-note">
           No run recorded for this campaign yet. Produce clips from an episode
           and its timings, clips and approvals appear here.
@@ -362,74 +560,75 @@ export function RunLedgerCard({
     );
   const ledger = runLedger(run, clips, Date.now());
   const longest = Math.max(1, ...ledger.stages.map((s) => s.seconds));
+  const stats: [string, number][] = [
+    ["Clips produced", ledger.produced],
+    ["Kept (you approved)", ledger.kept],
+    ["Below the bar", ledger.belowBar],
+    ["Waiting for you", ledger.waiting],
+  ];
   return (
     <section className="gf-fmap-ledger" aria-label="Run ledger">
       <header>
-        <h3>Run ledger</h3>
-        <label>
-          <span className="gf-fmap-family">Run</span>
-          <select value={run.id} onChange={(e) => setChosen(e.target.value)}>
-            {ordered.map((r) => (
-              <option key={r.id} value={r.id}>
-                {new Date(r.created_at).toLocaleString()} · {r.status.replace(/_/g, " ")}
-              </option>
-            ))}
-          </select>
-        </label>
-      </header>
-      <div className="gf-fmap-ledger-grid">
         <div>
-          <h4>Time per stage · {clock(ledger.totalSeconds)} total</h4>
-          {ledger.stages.length ? (
-            <ul className="gf-fmap-bars">
-              {ledger.stages.map((s) => (
-                <li key={s.station} className={`fam-${STATIONS.find((x) => x.id === s.station)!.family}`}>
-                  <span>{s.title}</span>
-                  <i style={{ width: `${Math.max(3, (s.seconds / longest) * 100)}%` }} />
-                  <b>
-                    {clock(s.seconds)}
-                    {s.running ? " · running" : ""}
-                  </b>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="gf-fmap-note">No stage timings were recorded on this run.</p>
-          )}
+          <h3>Run ledger</h3>
+          <p>What one run took, produced and cost.</p>
         </div>
-        <dl className="gf-fmap-ledger-stats">
-          <div>
-            <dt>Clips produced</dt>
-            <dd>{ledger.produced}</dd>
+        <RunPicker runs={ordered} value={run.id} onChange={setChosen} />
+      </header>
+      <dl className="gf-fmap-ledger-stats">
+        {stats.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
           </div>
-          <div>
-            <dt>Kept (you approved)</dt>
-            <dd>{ledger.kept}</dd>
-          </div>
-          <div>
-            <dt>Below the bar</dt>
-            <dd>{ledger.belowBar}</dd>
-          </div>
-          <div>
-            <dt>Waiting for you</dt>
-            <dd>{ledger.waiting}</dd>
-          </div>
-          <div>
-            <dt>Your actions</dt>
-            <dd>
-              {ledger.approvals} approval{ledger.approvals === 1 ? "" : "s"}
-              {ledger.overrides ? ` · ${ledger.overrides} override${ledger.overrides === 1 ? "" : "s"}` : ""}
-            </dd>
-          </div>
-          <div>
-            <dt>Processing cost</dt>
-            <dd>{ledger.cost.inference}</dd>
-          </div>
-        </dl>
+        ))}
+      </dl>
+      <div className="gf-fmap-ledger-time">
+        <h4>
+          <span>Time per stage</span>
+          <span className="gf-fmap-num">{clock(ledger.totalSeconds)} total</span>
+        </h4>
+        {ledger.stages.length ? (
+          <ul className="gf-fmap-bars">
+            {ledger.stages.map((s) => (
+              <li key={s.station} className={s.running ? "is-running" : undefined}>
+                <span>{s.title}</span>
+                <span className="gf-fmap-bar" aria-hidden="true">
+                  <i style={{ width: `${Math.max(2, (s.seconds / longest) * 100)}%` }} />
+                </span>
+                <b>
+                  {clock(s.seconds)}
+                  {s.running ? " · running" : ""}
+                </b>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="gf-fmap-note">No stage timings were recorded on this run.</p>
+        )}
       </div>
+      <dl className="gf-fmap-ledger-meta">
+        <div>
+          <dt>Your actions</dt>
+          <dd>
+            {ledger.approvals} approval{ledger.approvals === 1 ? "" : "s"}
+            {ledger.overrides ? ` · ${ledger.overrides} override${ledger.overrides === 1 ? "" : "s"}` : ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Processing cost</dt>
+          <dd>{ledger.cost.inference}</dd>
+        </div>
+        <div>
+          <dt>Run ID</dt>
+          <dd className="gf-fmap-id">
+            <code>{ledger.runId}</code>
+            <CopyButton value={ledger.runId} label="run ID" />
+          </dd>
+        </div>
+      </dl>
       <p className="gf-fmap-note">
-        {ledger.cost.note} Not counted: {ledger.cost.excluded.join("; ")}. Run{" "}
-        <code>{ledger.runId}</code>.
+        {ledger.cost.note} Not counted: {ledger.cost.excluded.join("; ")}.
       </p>
     </section>
   );
@@ -514,11 +713,13 @@ export function FactoryMap({
       : real;
   const pulses = usePulses(model);
   const [open, setOpen] = useState<StationId | null>(null);
-  const canvas = useRef<HTMLDivElement>(null);
-  const { paths, size } = useWires(canvas, [model.stations.map((s) => s.status).join("|")]);
+  const track = useRef<HTMLDivElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+  const { paths, loop, size } = useWires(track, [model.stations.map((s) => s.status).join("|")]);
   const closeSheet = useCallback(() => setOpen(null), []);
   const opened = model.stations.find((s) => s.id === open);
   const flowing = model.edges.filter((e) => e.flowing);
+  const working = model.stations.filter((s) => s.state === "active").length;
 
   return (
     <section
@@ -534,14 +735,18 @@ export function FactoryMap({
             learn. Live from this Mac's records.
           </p>
         </div>
-        <div className="gf-fmap-actions">
-          <span className={`gf-fmap-live${model.live ? " is-on" : ""}`}>
+        <div className="gf-fmap-actions" role="toolbar" aria-label="Factory map controls">
+          <span
+            className={`gf-fmap-live${model.live ? " is-on" : ""}`}
+            title={working ? `${working} station${working === 1 ? "" : "s"} working` : undefined}
+          >
             <i aria-hidden="true" />
             {replay.on ? "Replay" : model.live ? "Working now" : "Resting"}
           </span>
+          <span className="gf-fmap-actions-rule" aria-hidden="true" />
           <button
             type="button"
-            className="gf-button secondary compact"
+            className="gf-fmap-tool"
             aria-pressed={replay.on}
             disabled={!replayRun}
             title={
@@ -552,7 +757,7 @@ export function FactoryMap({
             aria-describedby="gf-fmap-replay-help"
             onClick={replay.toggle}
           >
-            <Icon name={replay.on ? "close" : "play"} size={14} />
+            <Icon name={replay.on ? "close" : "play"} size={13} />
             {replay.on ? "Stop replay" : "Demo replay"}
           </button>
           <span id="gf-fmap-replay-help" className="gf-visually-hidden">
@@ -566,7 +771,7 @@ export function FactoryMap({
         <div className="gf-fmap-replay" role="status">
           <strong>Demo replay · recorded run, {REPLAY_SPEED}× speed</strong>
           <span>
-            Run {replayRun.id} from {new Date(replayRun.created_at).toLocaleString()}.
+            Run <code>{replayRun.id}</code> from {fullWhen(replayRun.created_at)}.
             Only its recorded timestamps are played back; nothing here is live.
           </span>
           <progress
@@ -579,78 +784,87 @@ export function FactoryMap({
           </small>
         </div>
       )}
-      <ul className="gf-fmap-legend" aria-label="Stage families">
-        {FAMILIES.map((f) => (
-          <li key={f} className={`fam-${f}`}>
-            <i aria-hidden="true" />
-            {FAMILY_LABEL[f]}
-          </li>
-        ))}
-      </ul>
-      <div className="gf-fmap-canvas" ref={canvas}>
-        <svg
-          className="gf-fmap-wires"
-          width={size.w}
-          height={size.h}
-          aria-hidden="true"
-        >
-          {model.edges.map((e) => {
-            const d = paths.get(`${e.from}>${e.to}`);
-            const fam = STATIONS.find((s) => s.id === e.to)!.family;
-            return d ? (
+      <div
+        className={`gf-fmap-canvas${scrolled ? " is-scrolled" : ""}`}
+        tabIndex={-1}
+        onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
+      >
+        <div className="gf-fmap-track" ref={track}>
+          <svg
+            className="gf-fmap-wires"
+            width={size.w}
+            height={size.h}
+            aria-hidden="true"
+          >
+            {model.edges.map((e) => {
+              const d = paths.get(`${e.from}>${e.to}`);
+              return d ? (
+                <path
+                  key={`${e.from}>${e.to}`}
+                  d={d}
+                  className={`gf-fmap-wire${e.flowing ? " is-flowing" : ""}`}
+                />
+              ) : null;
+            })}
+            {paths.get("return") && (
               <path
-                key={`${e.from}>${e.to}`}
-                d={d}
-                className={`gf-fmap-wire fam-${fam}${e.flowing ? " is-flowing" : ""}`}
+                d={paths.get("return")}
+                className={`gf-fmap-wire is-return${model.returnArc.lit ? " is-lit" : ""}`}
               />
-            ) : null;
-          })}
-          {paths.get("return") && (
-            <path
-              d={paths.get("return")}
-              className={`gf-fmap-wire is-return${model.returnArc.lit ? " is-lit" : ""}`}
-            />
-          )}
-        </svg>
-        {!reduced &&
-          flowing.map((e) => {
-            const d = paths.get(`${e.from}>${e.to}`);
-            const fam = STATIONS.find((s) => s.id === e.to)!.family;
-            return d
-              ? [0, 1, 2].map((n) => (
-                  <span
-                    key={`${e.from}>${e.to}-${n}`}
-                    className={`gf-fmap-token fam-${fam}`}
-                    data-testid="flow-token"
-                    style={{
-                      offsetPath: `path('${d}')`,
-                      animationDelay: `${n * 0.6}s`,
-                    }}
-                    aria-hidden="true"
-                  />
-                ))
-              : null;
-          })}
-        <span className={`gf-fmap-return-label${model.returnArc.lit ? " is-lit" : ""}`}>
-          {model.returnArc.label}
-        </span>
-        <div className="gf-fmap-grid">
-          {FAMILIES.map((family) => (
-            <div key={family} className={`gf-fmap-col fam-${family}`}>
-              <span className="gf-fmap-family">{FAMILY_LABEL[family]}</span>
-              {model.stations
-                .filter((s) => s.family === family)
-                .map((s) => (
-                  <StationCard
-                    key={s.id}
-                    station={s}
-                    pulse={pulses.has(s.id)}
-                    selected={open === s.id}
-                    onOpen={() => setOpen((cur) => (cur === s.id ? null : s.id))}
-                  />
-                ))}
-            </div>
-          ))}
+            )}
+          </svg>
+          {!reduced &&
+            flowing.map((e) => {
+              const d = paths.get(`${e.from}>${e.to}`);
+              return d
+                ? [0, 1].map((n) => (
+                    <span
+                      key={`${e.from}>${e.to}-${n}`}
+                      className="gf-fmap-token"
+                      data-testid="flow-token"
+                      style={{
+                        offsetPath: `path('${d}')`,
+                        animationDelay: `${n * 1.1}s`,
+                      }}
+                      aria-hidden="true"
+                    />
+                  ))
+                : null;
+            })}
+          <span
+            className={`gf-fmap-return-label${model.returnArc.lit ? " is-lit" : ""}`}
+            style={loop ? { left: loop.x, top: loop.y } : undefined}
+            hidden={!loop}
+          >
+            <Icon name="refresh" size={11} />
+            {model.returnArc.label}
+          </span>
+          <div className="gf-fmap-grid">
+            {FAMILIES.map((family) => {
+              const members = model.stations.filter((s) => s.family === family);
+              const done = members.filter((s) => s.state === "done").length;
+              return (
+                <div key={family} className="gf-fmap-col" role="group" aria-label={FAMILY_LABEL[family]}>
+                  <div className="gf-fmap-phase">
+                    <i className={`gf-fmap-famdot fam-${family}`} aria-hidden="true" />
+                    <span>{FAMILY_LABEL[family]}</span>
+                    <small className="gf-fmap-num" title={`${done} of ${members.length} done`}>
+                      {done}/{members.length}
+                    </small>
+                  </div>
+                  {members.map((s) => (
+                    <StationCard
+                      key={s.id}
+                      station={s}
+                      pulse={pulses.has(s.id)}
+                      selected={open === s.id}
+                      onOpen={() => setOpen((cur) => (cur === s.id ? null : s.id))}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
       <p className="gf-visually-hidden" role="status" aria-live="polite">
@@ -700,8 +914,8 @@ export function FactoryMiniMap({
         {shown.map((s) => (
           <li
             key={s.id}
-            className={`fam-${s.family} is-${s.state}`}
-            title={`${s.title}: ${s.status}`}
+            className={`is-${s.state}`}
+            title={`${s.title}: ${STATE_LABEL[s.state]}. ${s.status}`}
           >
             <i aria-hidden="true" />
             <span>{s.title}</span>
