@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { api } from "../api";
 import type { TeamRun } from "../types";
 import type { FactoryState } from "../useFactory";
@@ -116,7 +116,7 @@ describe("FactoryMap", () => {
     expect(button.getAttribute("title")).toMatch(/No finished run yet/);
     expect(screen.getByText(/Demo replay is unavailable/)).toBeTruthy();
     // Honest empty state for missing data, never invented numbers.
-    expect(screen.getByRole("button", { name: /Strategist: Resting\. Unavailable right now/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Strategist: Idle\. Unavailable right now/ })).toBeTruthy();
     expect(screen.getByText(/No run recorded for this campaign yet/)).toBeTruthy();
   });
 
@@ -127,6 +127,20 @@ describe("FactoryMap", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Demo replay" })).not.toBeDisabled(),
     );
+  });
+
+  it("summarises the chosen run compactly and lists full detail in the menu", async () => {
+    motion(false);
+    vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([finishedRun]);
+    render(<FactoryMap w={w} factory={factory(false)} />);
+    const picker = await screen.findByRole("button", { name: /Choose a run/ });
+    expect(picker.textContent).toMatch(/^Run.*Needs review$/);
+    fireEvent.click(picker);
+    const option = screen.getByRole("option", { selected: true });
+    expect(option.textContent).toMatch(/Needs review/);
+    expect(option.textContent).toMatch(/run/);
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
 
   it("moves tokens only while real work happens", async () => {
