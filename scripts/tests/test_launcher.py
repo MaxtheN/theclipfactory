@@ -148,3 +148,26 @@ def test_path_preserved(monkeypatch):
     launcher.preserve_tool_path()
     assert launcher.os.environ["PATH"].startswith("/custom/bin:/usr/bin:")
     assert "/opt/homebrew/bin" in launcher.os.environ["PATH"].split(":")
+
+
+def test_occupied_port_fails_without_token_leak(parent, capsys):
+    with socket.socket() as busy:
+        busy.bind(("127.0.0.1", 0))
+        busy.listen()
+        assert launcher.main(["--headless", "--port", str(busy.getsockname()[1])]) == 1
+    output = capsys.readouterr()
+    assert parent["token"] not in output.err + output.out
+
+
+def test_browser_failure_stops_server(monkeypatch, parent, capsys):
+    monkeypatch.setattr(launcher.webbrowser, "open", lambda _: False)
+    assert launcher.main(["--browser"]) == 1
+    assert parent["stopped"]
+    assert "--headless" in capsys.readouterr().err
+
+
+def test_startup_thread_failure():
+    server = types.SimpleNamespace(started=False)
+    thread = types.SimpleNamespace(is_alive=lambda: False)
+    with pytest.raises(launcher.LauncherError, match="stopped during startup"):
+        launcher.wait_ready(server, thread, "http://127.0.0.1:1", "secret", threading.Event())
