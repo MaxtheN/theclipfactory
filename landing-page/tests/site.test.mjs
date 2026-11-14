@@ -46,22 +46,20 @@ for (const [label, count] of [
   });
 }
 
-test("every demo CTA keeps the existing destination and safe new-tab behaviour", () => {
-  const links = [...html.matchAll(new RegExp(`<a\\b[^>]*href="${DEMO}"[^>]*>`, "g"))];
-  assert.ok(links.length >= 4);
-  for (const [tag] of links) {
-    assert.ok(tag.includes('target="_blank"'));
-    assert.ok(tag.includes('rel="noopener"'));
-    assert.ok(!tag.includes("download"));
-  }
+test("download CTAs are real buttons and the old demo link is gone", () => {
+  const buttons = [...html.matchAll(/<button\b[^>]*data-download[^>]*>/g)].map((m) => m[0]);
+  assert.ok(buttons.length >= 4);
+  for (const tag of buttons) assert.ok(tag.includes('type="button"'));
+  const hero = html.split('class="wrap hero-copy"')[1].split('class="hero-clips"')[0];
+  assert.match(hero, /data-download/);
+  assert.doesNotMatch(html, new RegExp(DEMO.replace(/[.]/g, "\\.")));
 });
 
-test("the page does not offer a download for the unreleased Mac app", () => {
-  assert.doesNotMatch(html, /Download for Mac/i);
-  const hero = html.split('class="wrap hero-copy"')[1].split('class="hero-clips"')[0];
-  assert.match(hero, /In development/);
-  assert.match(hero, /sample data/);
-  assert.match(html, /Sample data/);
+test("the orbit section is decorative apart from its heading", () => {
+  const orbit = html.split('id="orbit"')[1].split("</section>")[0];
+  assert.match(orbit, /class="orbit-stage" aria-hidden="true"/);
+  assert.ok((orbit.match(/class="orbit-card/g) || []).length >= 10);
+  assert.match(orbit, /<h2 id="orbit-title"/);
 });
 
 test("the mobile menu keeps its accessible associations", () => {
