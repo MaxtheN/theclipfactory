@@ -24,8 +24,15 @@ class AdsClient(MetaClient):
     # Deliberately narrow: only USD minor-unit interpretation is supported.
     CURRENCY_EXPONENTS: ClassVar[dict[str, int]] = {"USD": 2}
     SPEC_FIELDS: ClassVar[set[str]] = {
-        "ad_account_id", "instagram_account_id", "page_id", "instagram_media_id",
-        "name", "destination_url", "country", "lifetime_budget_minor", "duration_days",
+        "ad_account_id",
+        "instagram_account_id",
+        "page_id",
+        "instagram_media_id",
+        "name",
+        "destination_url",
+        "country",
+        "lifetime_budget_minor",
+        "duration_days",
     }
     VERIFICATION_GAP = (
         "Paid experiment writes are disabled: official Meta documentation did not verify "
@@ -49,9 +56,7 @@ class AdsClient(MetaClient):
     def accounts(self) -> list[dict]:
         """Enumerate live /me/adaccounts; return only credential-free allowlisted fields."""
         accounts = []
-        for row in self._pages(
-            "me/adaccounts", {"fields": "id,name,currency,account_status", "limit": 100}
-        ):
+        for row in self._pages("me/adaccounts", {"fields": "id,name,currency,account_status", "limit": 100}):
             account_id = self._ad_account_id(row.get("id"))
             if (
                 not isinstance(row.get("name"), str)
@@ -59,15 +64,17 @@ class AdsClient(MetaClient):
                 or type(row.get("account_status")) is not int
             ):
                 raise MetaError("Meta returned incomplete ad account details.")
-            accounts.append({
-                "id": account_id, "name": row["name"], "currency": row["currency"],
-                "account_status": row["account_status"],
-            })
+            accounts.append(
+                {
+                    "id": account_id,
+                    "name": row["name"],
+                    "currency": row["currency"],
+                    "account_status": row["account_status"],
+                }
+            )
         return accounts
 
-    def preflight(
-        self, spec: dict, *, cancel_check: Callable[[], bool] | None = None
-    ) -> dict:
+    def preflight(self, spec: dict, *, cancel_check: Callable[[], bool] | None = None) -> dict:
         """Validate a general-ad candidate via GETs, without reserving budget or creating objects.
 
         Only US adults, USD integer minor units, and owned published Reels are
@@ -86,7 +93,9 @@ class AdsClient(MetaClient):
         try:
             validate_public_video_url(spec["destination_url"])
         except MetaError:
-            raise MetaError("Destination must be a public HTTPS URL without credentials or fragment.") from None
+            raise MetaError(
+                "Destination must be a public HTTPS URL without credentials or fragment."
+            ) from None
         if spec["country"] != "US":
             raise MetaError("Only US adult general-ad targeting is supported.")
         budget, days = spec["lifetime_budget_minor"], spec["duration_days"]
@@ -122,21 +131,32 @@ class AdsClient(MetaClient):
         if media.get("media_type") != "VIDEO" or media.get("media_product_type") != "REELS":
             raise MetaError("Selected published media is not an Instagram Reel.")
         return {
-            "stage": "preflight_only", "can_create": False, "can_activate": False,
+            "stage": "preflight_only",
+            "can_create": False,
+            "can_activate": False,
             "verification_gap": self.VERIFICATION_GAP,
             "spec": {**spec, "ad_account_id": ad_account_id},
-            "currency": account["currency"], "currency_exponent": exponent,
+            "currency": account["currency"],
+            "currency_exponent": exponent,
             # Intent only, not a verified Meta write payload.
             "intended_constraints": {
-                "objective": "OUTCOME_TRAFFIC", "special_ad_categories": [],
-                "billing_event": "IMPRESSIONS", "optimization_goal": "LINK_CLICKS",
-                "country": "US", "age_min": 18, "placement": "instagram_reels_only",
-                "initial_status": "PAUSED", "lifetime_budget_minor": budget,
+                "objective": "OUTCOME_TRAFFIC",
+                "special_ad_categories": [],
+                "billing_event": "IMPRESSIONS",
+                "optimization_goal": "LINK_CLICKS",
+                "country": "US",
+                "age_min": 18,
+                "placement": "instagram_reels_only",
+                "initial_status": "PAUSED",
+                "lifetime_budget_minor": budget,
             },
         }
 
     def create_experiment(
-        self, spec: dict, persist: Callable[[dict], None], *,
+        self,
+        spec: dict,
+        persist: Callable[[dict], None],
+        *,
         cancel_check: Callable[[], bool] | None = None,
     ) -> dict:
         """Preflight then refuse creation. No writes means no persistence callback."""
@@ -150,7 +170,8 @@ class AdsClient(MetaClient):
         _id(campaign_id)
         self._validate_status(status)
         raise MetaError(
-            "Campaign-only status changes are disabled; use a verified experiment record. " + self.VERIFICATION_GAP,
+            "Campaign-only status changes are disabled; use a verified experiment record. "
+            + self.VERIFICATION_GAP,
             code="paid_creative_unverified",
         )
 
@@ -160,7 +181,11 @@ class AdsClient(MetaClient):
             raise MetaError("Status must be ACTIVE or PAUSED.")
 
     def set_experiment_status(
-        self, record: dict, status: str, *, persist: Callable[[dict], None] | None = None,
+        self,
+        record: dict,
+        status: str,
+        *,
+        persist: Callable[[dict], None] | None = None,
         cancel_check: Callable[[], bool] | None = None,
     ) -> dict:
         """Unavailable for both activation and pause; never trust caller-supplied object IDs.
