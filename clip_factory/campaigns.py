@@ -200,6 +200,9 @@ class AgentProduction(Body):
     # team: a few clips with planning, self-check and revisions. swarm: many clips, one hypothesis
     # each, under the same approved direction.
     strategy: Literal["team", "swarm"] = "team"
+    # Optional creator note for this run only ("what to look for"). Passed to the planner and scouts
+    # as delimited guidance inside the approved Style rules; never a rule change or an instruction.
+    direction: str = Field(default="", max_length=500)
 
 
 LEGACY_GOAL_KEYS = ("objective", "primary_metric")

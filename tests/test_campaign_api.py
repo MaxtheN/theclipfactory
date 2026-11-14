@@ -226,6 +226,30 @@ def test_agent_context_uses_only_its_profile_and_campaign(client, monkeypatch):
     assert legacy["context"]["previous_observations"] == []
 
 
+def test_optional_run_direction_reaches_the_team_run_and_is_bounded(client, monkeypatch):
+    video = upload_mock(client, monkeypatch)
+    profiles, campaign, version, path = setup_campaign(client, [video], duration=5)
+    monkeypatch.setattr(client.app.state.models, "require", lambda *a: None)
+    seen = []
+
+    def execute(run_id, job_id):
+        seen.append(client.app.state.team.get(run_id))
+        return {}
+
+    monkeypatch.setattr(client.app.state.team, "execute", execute)
+    body = {"video_id": video["id"], "profile_id": profiles[0]["id"]}
+    too_long = client.post(path + "/produce", json={**body, "direction": "x" * 501})
+    assert too_long.status_code == 422
+    response = client.post(path + "/produce", json={**body, "direction": "  the spiciest takes on AI policy, under 40s "})
+    assert response.status_code == 202, response.text
+    wait_job(client, response.json()["job"]["id"])
+    assert seen[0]["context"]["creator_direction"] == "the spiciest takes on AI policy, under 40s"
+    response = client.post(path + "/produce", json=body)
+    assert response.status_code == 202, response.text
+    wait_job(client, response.json()["job"]["id"])
+    assert "creator_direction" not in seen[1]["context"]
+
+
 @pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg required")
 def test_real_cross_source_learning_loop_and_restart(client, tmp_path):
     filters = subprocess.run(

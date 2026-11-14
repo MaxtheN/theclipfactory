@@ -281,6 +281,21 @@ describe("production request boundary", () => {
       productionApi.campaignProduce("campaign-1", body),
     ).rejects.toThrow("different model");
   });
+  it("passes optional run direction through and bounds it before sending", async () => {
+    const fetch = respond(agentEnvelope());
+    const body = {
+      expected_strategy_version_id: "strategy-1",
+      video_id: "video-1",
+      profile_id: "profile-1",
+      model_id: "ollama:qwen3-vl:8b",
+      direction: "the spiciest takes on AI policy, under 40s",
+    };
+    await productionApi.campaignProduce("campaign-1", body);
+    expect(JSON.parse(fetch.mock.calls[0][1].body).direction).toBe(body.direction);
+    await expect(
+      productionApi.campaignProduce("campaign-1", { ...body, direction: "x".repeat(501) }),
+    ).rejects.toThrow("500 characters");
+  });
   it.each([undefined, {}, {campaign_snapshot: null}, {campaign_snapshot: {}}])("rejects a scoped agent envelope with missing frozen context %j", async context => {
     const value=agentEnvelope();
     respond({...value,run:{...value.run,context}});

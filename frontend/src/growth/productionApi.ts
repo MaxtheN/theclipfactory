@@ -7,6 +7,7 @@ import {
   parseProductionJob,
   parseProductionVideo,
   ProductionResponseError,
+  DIRECTION_MAX,
   type AgentProductionRequest,
   type AgentProductionResponse,
   type CampaignRenderRequest,
@@ -278,6 +279,13 @@ export const productionApi = {
           body.revision_budget >= 0 &&
           body.revision_budget <= 2,
         "Choose a revision budget between 0 and 2.",
+      );
+    if (body.direction !== undefined)
+      requireInput(
+        typeof body.direction === "string" &&
+          body.direction.trim().length > 0 &&
+          body.direction.length <= DIRECTION_MAX,
+        `Keep what the agents should look for within ${DIRECTION_MAX} characters.`,
       );
     const result = parseAgentProductionResponse(
       await post<unknown>(campaignPath(campaignId, "produce"), body),

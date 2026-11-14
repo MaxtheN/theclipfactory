@@ -1404,6 +1404,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         *,
         preflight=True,
         campaign_snapshot=None,
+        direction: str = "",
     ) -> dict:
         with operations_lock:
             video = require("videos", identifier)
@@ -1425,6 +1426,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                     objective=snapshot_goal(campaign_snapshot)["objective"],
                     _campaign_snapshot=campaign_snapshot,
                 )
+            if direction.strip():
+                # The creator's optional "what to look for" note for this run only.
+                config["_creator_direction"] = direction.strip()
             run = app.state.team.create(video, config, model_id, mode=mode, revision_budget=revision_budget)
             job = jobs().submit(
                 mode if mode in {"team", "swarm"} else "pipeline",
@@ -2527,7 +2531,12 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 identifier, body.profile_id, body.video_id, body.expected_strategy_version_id
             )
             return submit_production(
-                body.video_id, body.model_id, body.strategy, body.revision_budget, campaign_snapshot=snapshot
+                body.video_id,
+                body.model_id,
+                body.strategy,
+                body.revision_budget,
+                campaign_snapshot=snapshot,
+                direction=body.direction,
             )
 
     install_campaign_api(app, campaigns, render=campaign_render, produce=campaign_produce)

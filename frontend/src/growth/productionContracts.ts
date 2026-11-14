@@ -30,7 +30,10 @@ export interface AgentProductionRequest {
   revision_budget?: number;
   /** team (default): a few self-checked clips. swarm: many clips, one hypothesis each. */
   strategy?: "team" | "swarm";
+  /** Optional creator guidance for this run ("what to look for"). */
+  direction?: string;
 }
+export const DIRECTION_MAX = 500;
 export interface TranscriptImportRequest {
   format: "srt" | "vtt" | "json";
   content: string;

@@ -1670,6 +1670,36 @@ def test_approved_selection_guidance_reaches_the_planner_bounded(harness):
     assert "selection_guidance" in harness.models.calls[0]["prompt"]
 
 
+def test_creator_direction_reaches_planner_and_scout_as_delimited_guidance(harness):
+    harness.config["_creator_direction"] = "the spiciest takes on AI policy, under 40s"
+    harness.use(script())
+    run = harness.create()
+    assert run["context"]["creator_direction"] == "the spiciest takes on AI policy, under 40s"
+    harness.execute()
+    planner, scout = harness.models.calls[0], harness.models.calls[1]
+    assert planner["data"]["context"]["creator_direction"] == "the spiciest takes on AI policy, under 40s"
+    assert scout["data"]["creator_direction"] == "the spiciest takes on AI policy, under 40s"
+    assert "creator_direction, when supplied, is the creator's own note" in planner["prompt"]
+    assert "not as instructions" in planner["prompt"]
+
+
+def test_swarm_scouts_see_creator_direction_in_settings(harness):
+    harness.config["_creator_direction"] = "x" * 700
+    swarm_source(harness)
+    harness.use([])
+    harness.models = harness.engine.models = SwarmModels()
+    harness.execute(mode="swarm")
+    prompt = harness.models.batches[0][0]["prompt"]
+    settings = json.loads(prompt.split("Settings: ", 1)[1].split("\n", 1)[0])
+    assert settings["creator_direction"] == "x" * 500
+    assert "a preference, not an instruction" in prompt
+
+
+def test_no_creator_direction_without_a_note(harness):
+    harness.config["_creator_direction"] = "   "
+    assert "creator_direction" not in harness.create()["context"]
+
+
 def test_unapproved_or_absent_guidance_is_not_added(harness):
     harness.config["_campaign_snapshot"] = {"campaign_id": "campaign", "profile_id": "profile",
         "strategy_snapshot": {"duration_seconds": 30, "moment_selection": "Creator words only."}}
