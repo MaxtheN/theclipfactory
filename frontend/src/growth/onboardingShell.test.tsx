@@ -98,10 +98,10 @@ async function enterOnboarding(viaQuickActions = false) {
   await skipWebsite();
   return screen.findByRole("heading", { name: "Who are we making this for?" });
 }
-/** Onboarding opens with "Drop your website"; these tests cover the typed path. */
+/** Onboarding opens with "What’s your website?"; these tests cover the typed path. */
 async function skipWebsite() {
   fireEvent.click(
-    await screen.findByRole("button", { name: "Skip, I’ll type it" }),
+    await screen.findByRole("button", { name: "Skip" }),
   );
 }
 function next() {
@@ -267,7 +267,7 @@ describe("standalone onboarding shell", () => {
       previewRequest<Campaign[]>("/api/campaigns"),
     ]);
     render(<GrowthApp />);
-    fireEvent.click(screen.getByRole("button", { name: "Skip, I’ll type it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
     const question = screen.getByRole("heading", {
       name: "Who are we making this for?",
     });

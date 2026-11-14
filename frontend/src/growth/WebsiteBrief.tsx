@@ -1,37 +1,24 @@
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
-import { ArrowRight, Check, Globe, Quote, Sparkles, X } from "lucide-react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import {
   GOALS,
+  NO_SUGGESTIONS,
   briefFromDraft,
   editableFrom,
   statusLine,
   websiteBriefApi,
+  type AcceptedSuggestions,
   type BrandDraft,
   type EditableBrief,
   type Research,
   type WebsiteBriefApi,
   type WebsiteBriefResult,
 } from "./websiteBriefApi";
-import { AiModelHint } from "./AiModelCard";
+import { AiModelHint, llmApi, type LlmView } from "./AiModelCard";
 import "./website-brief.css";
 
 type Phase = "input" | "reading" | "review" | "error";
-
-const STEPS = [
-  { id: "open", label: "Open your site", stages: ["opening"] },
-  { id: "read", label: "Read your pages", stages: ["reading", "found"] },
-  { id: "voice", label: "Find your voice", stages: ["voice"] },
-  { id: "draft", label: "Draft your brief", stages: ["drafting"] },
-] as const;
 
 const FIELD_LABELS: Record<string, string> = {
   brand_name: "brand name",
@@ -44,26 +31,6 @@ const FIELD_LABELS: Record<string, string> = {
   must_avoid: "boundaries",
   cta: "call to action",
 };
-
-function prefersReducedMotion() {
-  try {
-    return !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  } catch {
-    return false;
-  }
-}
-
-function useReducedMotion() {
-  const [reduced, setReduced] = useState(prefersReducedMotion);
-  useEffect(() => {
-    const query = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    if (!query?.addEventListener) return;
-    const change = () => setReduced(query.matches);
-    query.addEventListener("change", change);
-    return () => query.removeEventListener("change", change);
-  }, []);
-  return reduced;
-}
 
 function hostOf(value: string) {
   try {
@@ -83,22 +50,42 @@ function pathLabel(url: string) {
   }
 }
 
+const sameText = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
+
+/** Which model drafts the brief, read from the same route the AI model settings show. */
+export function modelRouteText(view: LlmView | null, failed: boolean) {
+  if (failed) return "Drafted by the model chosen in AI model settings.";
+  if (!view) return "Checking which model drafts it…";
+  if (view.routes?.brand_research === "openrouter") {
+    const label = view.models.find((m) => m.id === view.settings.model)?.label ?? view.settings.model;
+    return `Drafted by ${label} via OpenRouter (page text is sent to OpenRouter).`;
+  }
+  return "Drafted by the model on this Mac.";
+}
+
 export function WebsiteBrief({
   onApply,
   onSkip,
   client = websiteBriefApi,
+  modelRoute = llmApi.view,
   pollMs = 700,
   initialUrl = "",
   disabled = false,
+  stepNumber = 1,
+  stepCount = 5,
 }: {
   /** Fill onboarding and the first campaign brief from the creator-edited draft. Nothing is saved here. */
   onApply: (result: WebsiteBriefResult) => void;
   /** Continue with the manual onboarding steps. */
   onSkip: () => void;
   client?: WebsiteBriefApi;
+  /** The active model route (local or OpenRouter) for the "How this works" note. */
+  modelRoute?: () => Promise<LlmView>;
   pollMs?: number;
   initialUrl?: string;
   disabled?: boolean;
+  stepNumber?: number;
+  stepCount?: number;
 }) {
   const [phase, setPhase] = useState<Phase>("input");
   const [url, setUrl] = useState(initialUrl);
@@ -106,10 +93,13 @@ export function WebsiteBrief({
   const [research, setResearch] = useState<Research | null>(null);
   const [draft, setDraft] = useState<BrandDraft | null>(null);
   const [edited, setEdited] = useState<EditableBrief | null>(null);
+  const [accepted, setAccepted] = useState<AcceptedSuggestions>(NO_SUGGESTIONS);
   const [error, setError] = useState("");
   const [applyError, setApplyError] = useState("");
   const [openEvidence, setOpenEvidence] = useState<string | null>(null);
-  const reduced = useReducedMotion();
+  const [route, setRoute] = useState<LlmView | null>(null);
+  const [routeFailed, setRouteFailed] = useState(false);
+  const routeAsked = useRef(false);
   const id = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const timer = useRef<number>();
@@ -132,6 +122,14 @@ export function WebsiteBrief({
   }, [phase]);
 
   const host = hostOf(research?.url || url);
+
+  function loadRoute() {
+    if (routeAsked.current) return;
+    routeAsked.current = true;
+    modelRoute()
+      .then((view) => mounted.current && setRoute(view))
+      .catch(() => mounted.current && setRouteFailed(true));
+  }
 
   function fail(message: string) {
     current.current = undefined;
@@ -164,6 +162,7 @@ export function WebsiteBrief({
     if (next.status === "done" && next.draft) {
       setDraft(next.draft);
       setEdited(editableFrom(next.draft));
+      setAccepted(NO_SUGGESTIONS);
       setPhase("review");
     } else if (next.status === "cancelled") {
       setPhase("input");
@@ -217,6 +216,7 @@ export function WebsiteBrief({
     setResearch(null);
     setDraft(null);
     setEdited(null);
+    setAccepted(NO_SUGGESTIONS);
     setError("");
     setOpenEvidence(null);
     setPhase("input");
@@ -224,7 +224,7 @@ export function WebsiteBrief({
 
   function apply() {
     if (!edited || disabled) return;
-    const result = briefFromDraft(edited, draft);
+    const result = briefFromDraft(edited, draft, accepted);
     if (!result.name) {
       setApplyError("Add your brand name to use this brief.");
       return;
@@ -234,45 +234,41 @@ export function WebsiteBrief({
   }
 
   const titles: Record<Phase, string> = {
-    input: "Drop your website — we’ll draft your brand brief and learn who you are.",
+    input: "What’s your website?",
     reading: `Reading ${host}`,
-    review: "Here’s your brand, drafted from your site",
+    review: "Your brand, drafted from your site",
     error: "We couldn’t draft it this time",
   };
   const descriptions: Record<Phase, string> = {
-    input:
-      "We’ll read a few public pages and draft your audience, voice and key messages with the model on this Mac. You edit everything; nothing is saved until you continue.",
-    reading:
-      "A few public pages, read once, understood on this Mac. This usually takes under a minute.",
-    review:
-      "Every line is editable. Tap “from your site” to see the words each one came from.",
-    error: "Your details are safe. You can type them yourself in a minute.",
+    input: "We’ll draft your brand from it. You can edit everything.",
+    reading: "This usually takes under a minute.",
+    review: "Edit anything. Suggestions are only added if you tick them.",
+    error: "Your details are safe. You can type them yourself instead.",
   };
 
   return (
     <section
       className={`gf-onboarding-step gf-website-brief is-${phase}`}
-      data-motion={reduced ? "reduced" : "full"}
       aria-labelledby={`${id}-title`}
     >
-      {phase === "input" && <WebsiteIllustration />}
-      <span className="gf-website-brief-kicker">
-        <Sparkles size={14} strokeWidth={1.8} aria-hidden="true" />
-        Brand from your website
-      </span>
+      <p className="gf-wb-step">
+        Step {stepNumber} of {stepCount}
+      </p>
       <h1 id={`${id}-title`} ref={heading} tabIndex={-1}>
         {titles[phase]}
       </h1>
-      <p className="gf-onboarding-step-description">{descriptions[phase]}</p>
+      <p className="gf-wb-lede">{descriptions[phase]}</p>
 
       {phase === "input" && (
         // Not a <form>: this step renders inside the onboarding wizard's own form.
         <div className="gf-wb-input" role="group" aria-label="Your website">
-          <label className="gf-wb-url" htmlFor={`${id}-url`}>
-            <span className="gf-command-sr-only">Your website</span>
-            <Globe size={18} strokeWidth={1.7} aria-hidden="true" />
+          <div className="gf-wb-url-row">
+            <label className="gf-command-sr-only" htmlFor={`${id}-url`}>
+              Your website
+            </label>
             <input
               id={`${id}-url`}
+              className="gf-wb-url"
               type="text"
               inputMode="url"
               autoComplete="url"
@@ -290,45 +286,55 @@ export function WebsiteBrief({
               onKeyDown={(e) => {
                 if (e.key !== "Enter") return;
                 e.preventDefault();
-                void begin();
+                if (url.trim()) void begin();
               }}
             />
-          </label>
+            <button
+              type="button"
+              className="gf-button gf-wb-continue"
+              disabled={disabled || !url.trim()}
+              onClick={() => void begin()}
+            >
+              Continue
+            </button>
+          </div>
           {inputError && (
             <p className="gf-wb-input-error" id={`${id}-url-error`} role="alert">
               {inputError}
             </p>
           )}
-          <div className="gf-wb-actions">
-            <button type="button" className="gf-button ghost" disabled={disabled} onClick={skip}>
-              Skip, I’ll type it
-            </button>
-            <button
-              type="button"
-              className="gf-button gf-onboarding-cta"
-              disabled={disabled}
-              onClick={() => void begin()}
-            >
-              <span className="gf-onboarding-cta-label">Read my website</span>
-              <ArrowRight size={18} strokeWidth={1.8} aria-hidden="true" />
-            </button>
-          </div>
-          <p className="gf-wb-fineprint">
-            Reads up to 6 public pages and respects robots.txt. No scripts run; nothing leaves this Mac
-            except the page requests.
-          </p>
+          <button type="button" className="gf-wb-text-button" disabled={disabled} onClick={skip}>
+            Skip
+          </button>
+          <details
+            className="gf-wb-how"
+            onToggle={(e) => {
+              if ((e.currentTarget as HTMLDetailsElement).open) loadRoute();
+            }}
+          >
+            <summary>
+              How this works
+              <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" />
+            </summary>
+            <ul>
+              <li>Reads up to 6 public pages of your site.</li>
+              <li>Respects robots.txt. No scripts run.</li>
+              <li>{modelRouteText(route, routeFailed)}</li>
+              <li>Nothing is saved until you continue.</li>
+            </ul>
+          </details>
         </div>
       )}
 
-      {phase === "reading" && (
-        <Reading research={research} host={host} reduced={reduced} onCancel={skip} />
-      )}
+      {phase === "reading" && <Reading research={research} host={host} onCancel={skip} />}
 
       {phase === "review" && edited && draft && (
         <Review
           draft={draft}
           edited={edited}
           host={host}
+          accepted={accepted}
+          setAccepted={setAccepted}
           openEvidence={openEvidence}
           setOpenEvidence={setOpenEvidence}
           onChange={(changes) => setEdited((value) => (value ? { ...value, ...changes } : value))}
@@ -348,9 +354,8 @@ export function WebsiteBrief({
             <button type="button" className="gf-button ghost" onClick={restart}>
               Try another address
             </button>
-            <button type="button" className="gf-button gf-onboarding-cta" onClick={skip}>
-              <span className="gf-onboarding-cta-label">Type it instead</span>
-              <ArrowRight size={18} strokeWidth={1.8} aria-hidden="true" />
+            <button type="button" className="gf-button" onClick={skip}>
+              Type it instead
             </button>
           </div>
         </div>
@@ -362,98 +367,26 @@ export function WebsiteBrief({
 function Reading({
   research,
   host,
-  reduced,
   onCancel,
 }: {
   research: Research | null;
   host: string;
-  reduced: boolean;
   onCancel: () => void;
 }) {
   const events = research?.events ?? [];
-  const stage = research?.stage ?? "opening";
-  const found = events.find((e) => e.stage === "found");
-  const read = events.filter((e) => e.stage === "reading" && e.page);
-  const readLabels = read.map((e) => e.page!.label);
-  // Chips: Home as soon as it is read, then every found page (pending until its own read event).
-  const chips: Array<{ label: string; done: boolean; key: string }> = [];
-  if (readLabels.includes("Home")) chips.push({ label: "Home", done: true, key: "home" });
-  const pending = [...readLabels.filter((l) => l !== "Home")];
-  (found?.labels ?? []).forEach((label, index) => {
-    const at = pending.indexOf(label);
-    if (at >= 0) pending.splice(at, 1);
-    chips.push({ label, done: at >= 0 || stage === "voice" || stage === "drafting", key: `${label}-${index}` });
-  });
-  const lines = useMemo(() => {
-    const out: string[] = [];
-    for (const event of events) {
-      const line = statusLine(event, host);
-      if (out[out.length - 1] !== line) out.push(line);
-    }
-    if (!out.length) out.push(`Opening ${host}…`);
-    if (research?.waiting) out.push("Waiting for other work on this Mac to finish…");
-    return out;
-  }, [events, host, research?.waiting]);
-  const visible = lines.slice(-3);
+  const last = events[events.length - 1];
+  const line = research?.waiting
+    ? "Waiting for other work on this Mac to finish…"
+    : last
+      ? statusLine(last, host)
+      : `Opening ${host}…`;
   const progress = Math.max(4, Math.min(100, research?.progress ?? 4));
-  const activeStep = STEPS.findIndex((s) => (s.stages as readonly string[]).includes(stage));
-  const latestTitle = [...read].reverse()[0]?.page;
 
   return (
-    <div className="gf-wb-reading" data-stage={stage}>
-      <div className="gf-wb-browser" aria-hidden="true">
-        <div className="gf-wb-browser-bar">
-          <span className="gf-wb-dots">
-            <i />
-            <i />
-            <i />
-          </span>
-          <span className="gf-wb-address">
-            <Globe size={12} strokeWidth={1.8} />
-            {latestTitle && latestTitle.label !== "Home" ? pathLabel(latestTitle.url) : host}
-          </span>
-        </div>
-        <div className="gf-wb-browser-body">
-          <span className="gf-wb-sk is-hero" />
-          <span className="gf-wb-sk is-wide" />
-          <span className="gf-wb-sk" />
-          <span className="gf-wb-sk is-short" />
-          <span className="gf-wb-sk-row">
-            <span className="gf-wb-sk is-card" />
-            <span className="gf-wb-sk is-card" />
-            <span className="gf-wb-sk is-card" />
-          </span>
-          {!reduced && <span className="gf-wb-scan" data-testid="wb-scan" />}
-          {(stage === "voice" || stage === "drafting") && <span className="gf-wb-glow" />}
-        </div>
-      </div>
-
-      <ul className="gf-wb-chips" aria-label="Pages">
-        {chips.map((chip, index) => (
-          <li
-            key={chip.key}
-            className={`gf-wb-chip${chip.done ? " is-done" : ""}`}
-            style={{ "--i": index } as CSSProperties}
-          >
-            {chip.done ? <Check size={12} strokeWidth={2} aria-hidden="true" /> : <span className="gf-wb-chip-dot" aria-hidden="true" />}
-            {chip.label}
-            <span className="gf-command-sr-only">{chip.done ? " (read)" : " (queued)"}</span>
-          </li>
-        ))}
-      </ul>
-
-      <div className="gf-wb-status" role="status" aria-live="polite" aria-atomic="true">
-        {visible.map((line, index) => (
-          <p
-            key={`${lines.length - visible.length + index}-${line}`}
-            className={index === visible.length - 1 ? "is-current" : "is-past"}
-            aria-hidden={index === visible.length - 1 ? undefined : true}
-          >
-            {line}
-          </p>
-        ))}
-      </div>
-
+    <div className="gf-wb-reading" data-stage={research?.stage ?? "opening"}>
+      <p className="gf-wb-status" role="status" aria-live="polite" aria-atomic="true">
+        {line}
+      </p>
       <div
         className="gf-wb-progress"
         role="progressbar"
@@ -464,27 +397,9 @@ function Reading({
       >
         <span style={{ width: `${progress}%` }} />
       </div>
-
-      <ol className="gf-wb-steps" aria-label="Steps">
-        {STEPS.map((step, index) => (
-          <li
-            key={step.id}
-            className={index < activeStep ? "is-done" : index === activeStep ? "is-current" : ""}
-            aria-current={index === activeStep ? "step" : undefined}
-          >
-            <span className="gf-wb-step-mark" aria-hidden="true">
-              {index < activeStep ? <Check size={11} strokeWidth={2.2} /> : null}
-            </span>
-            {step.label}
-          </li>
-        ))}
-      </ol>
-
-      <div className="gf-wb-actions is-centered">
-        <button type="button" className="gf-button ghost compact" onClick={onCancel}>
-          Stop and type it instead
-        </button>
-      </div>
+      <button type="button" className="gf-wb-text-button" onClick={onCancel}>
+        Stop and type it instead
+      </button>
     </div>
   );
 }
@@ -493,6 +408,8 @@ function Review({
   draft,
   edited,
   host,
+  accepted,
+  setAccepted,
   openEvidence,
   setOpenEvidence,
   onChange,
@@ -505,6 +422,8 @@ function Review({
   draft: BrandDraft;
   edited: EditableBrief;
   host: string;
+  accepted: AcceptedSuggestions;
+  setAccepted: (value: AcceptedSuggestions) => void;
   openEvidence: string | null;
   setOpenEvidence: (value: string | null) => void;
   onChange: (changes: Partial<EditableBrief>) => void;
@@ -515,16 +434,12 @@ function Review({
   onSkip: () => void;
 }) {
   const goal = GOALS.find((g) => g.objective === edited.objective);
-  let order = 0;
-  const field = (
-    key: string,
-    label: string,
-    control: (id: string) => ReactNode,
-    hint?: string,
-  ) => (
+  const groupId = useId();
+  // What a ticked suggestion replaced, so unticking puts the creator's value back.
+  const before = useRef<{ cta?: Pick<EditableBrief, "ctaText" | "ctaLink">; goal?: Pick<EditableBrief, "objective" | "metric"> }>({});
+  const field = (key: string, label: string, control: (id: string) => ReactNode, hint?: string) => (
     <DraftField
       key={key}
-      index={order++}
       field={key}
       label={label}
       hint={hint}
@@ -536,20 +451,55 @@ function Review({
     </DraftField>
   );
   const kit = draft.brand_kit;
+  const suggested = draft.suggested;
+  const avoidLines = edited.mustAvoid.split("\n").map((v) => v.trim()).filter(Boolean);
+  const hasSuggestions = !!suggested && (suggested.must_avoid.length > 0 || !!suggested.cta || !!suggested.goal);
+
+  function toggleAvoid(value: string, on: boolean) {
+    const rest = avoidLines.filter((v) => !sameText(v, value));
+    onChange({ mustAvoid: (on ? [...rest, value] : rest).join("\n") });
+    setAccepted({
+      ...accepted,
+      mustAvoid: on ? [...accepted.mustAvoid, value] : accepted.mustAvoid.filter((v) => !sameText(v, value)),
+    });
+  }
+  function toggleCta(on: boolean) {
+    if (!suggested?.cta) return;
+    if (on) {
+      before.current.cta = { ctaText: edited.ctaText, ctaLink: edited.ctaLink };
+      onChange({ ctaText: suggested.cta.text, ctaLink: suggested.cta.link || edited.ctaLink });
+    } else if (sameText(edited.ctaText, suggested.cta.text)) {
+      onChange(before.current.cta ?? { ctaText: "", ctaLink: "" });
+    }
+    setAccepted({ ...accepted, cta: on });
+  }
+  function toggleGoal(on: boolean) {
+    if (!suggested?.goal) return;
+    if (on) {
+      before.current.goal = { objective: edited.objective, metric: edited.metric };
+      onChange({ objective: suggested.goal.objective, metric: suggested.goal.metric });
+    } else if (edited.objective === suggested.goal.objective) {
+      onChange(before.current.goal ?? { objective: "discovery", metric: "" });
+    }
+    setAccepted({ ...accepted, goal: on });
+  }
+
   return (
     <div className="gf-wb-review">
-      <p className="gf-wb-source">
-        <Globe size={13} strokeWidth={1.8} aria-hidden="true" />
-        Drafted from {host} · {draft.pages.length} page{draft.pages.length === 1 ? "" : "s"} read ·
-        a draft for you to edit
+      <p className="gf-wb-meta">
+        From {host}, {draft.pages.length} page{draft.pages.length === 1 ? "" : "s"} read.
       </p>
       {draft.dropped.length > 0 && (
-        <p className="gf-wb-dropped">
+        <p className="gf-wb-meta">
           We couldn’t confirm your {draft.dropped.map((f) => FIELD_LABELS[f] || f).join(", ")} from the
           site’s own words, so we left {draft.dropped.length === 1 ? "it" : "them"} for you.
         </p>
       )}
-      <div className="gf-wb-fields">
+
+      <section className="gf-wb-group" aria-labelledby={`${groupId}-site`}>
+        <h2 id={`${groupId}-site`} className="gf-wb-group-title">
+          From your site
+        </h2>
         {field("brand_name", "Brand name", (id) => (
           <input id={id} type="text" maxLength={200} value={edited.brandName} disabled={disabled}
             onChange={(e) => onChange({ brandName: e.target.value })} />
@@ -564,7 +514,7 @@ function Review({
             onChange={(e) => onChange({ audience: e.target.value })} />
         ))}
         {field("suggested_goal", "Goal", (id) => (
-          <span className="gf-wb-goal">
+          <span className="gf-wb-pair">
             <select id={id} value={edited.objective} disabled={disabled}
               onChange={(e) => {
                 const next = GOALS.find((g) => g.objective === e.target.value);
@@ -584,9 +534,8 @@ function Review({
         {field("voice", "Voice", (id) => (
           <span className="gf-wb-voice">
             <input id={id} type="text" maxLength={220} value={edited.adjectives} disabled={disabled}
-              placeholder="3–5 words, comma separated" aria-describedby={`${id}-voice-hint`}
+              placeholder="3 to 5 words, comma separated"
               onChange={(e) => onChange({ adjectives: e.target.value })} />
-            <small id={`${id}-voice-hint`}>3–5 words, comma separated</small>
             <label>
               <span>Do</span>
               <input type="text" maxLength={240} value={edited.voiceDo} disabled={disabled}
@@ -613,7 +562,7 @@ function Review({
             onChange={(e) => onChange({ mustAvoid: e.target.value })} />
         ), "One per line. These become hard limits for every clip.")}
         {field("cta", "Call to action", (id) => (
-          <span className="gf-wb-cta">
+          <span className="gf-wb-pair">
             <input id={id} type="text" maxLength={80} value={edited.ctaText} disabled={disabled}
               placeholder="e.g. Listen to the full episode"
               onChange={(e) => onChange({ ctaText: e.target.value })} />
@@ -623,8 +572,8 @@ function Review({
           </span>
         ))}
         {(kit.primary_color || kit.accent_color || kit.logo_url) && (
-          <div className="gf-wb-field gf-wb-kit" style={{ "--i": order++ } as CSSProperties}>
-            <span className="gf-wb-field-label">Brand kit found</span>
+          <div className="gf-wb-field">
+            <span className="gf-wb-field-label">Brand kit</span>
             <span className="gf-wb-kit-row">
               {[kit.primary_color, kit.accent_color].filter(Boolean).map((color) => (
                 <span key={color} className="gf-wb-swatch">
@@ -634,31 +583,105 @@ function Review({
               ))}
               {kit.logo_url && <span className="gf-wb-swatch">Logo found</span>}
             </span>
-            <small>From your site’s {Object.values(kit.sources ?? {}).filter((v, i, a) => a.indexOf(v) === i).join(" and ") || "markup"}. You can set fonts and a logo file later.</small>
+            <small>
+              From your site’s{" "}
+              {Object.values(kit.sources ?? {}).filter((v, i, a) => a.indexOf(v) === i).join(" and ") || "markup"}.
+              You can set fonts and a logo file later.
+            </small>
           </div>
         )}
-      </div>
+      </section>
+
+      {hasSuggestions && suggested && (
+        <section className="gf-wb-group is-suggested" aria-labelledby={`${groupId}-suggested`}>
+          <h2 id={`${groupId}-suggested`} className="gf-wb-group-title">
+            Suggested
+          </h2>
+          <p className="gf-wb-group-note">
+            Ideas from the model, not from your site. Tick any you want to add.
+          </p>
+          <ul className="gf-wb-suggestions">
+            {suggested.must_avoid.map((value) => (
+              <Suggestion
+                key={`avoid-${value}`}
+                kind="Never touch"
+                value={value}
+                checked={accepted.mustAvoid.some((v) => sameText(v, value))}
+                disabled={disabled}
+                onChange={(on) => toggleAvoid(value, on)}
+              />
+            ))}
+            {suggested.cta && (
+              <Suggestion
+                kind="Call to action"
+                value={suggested.cta.text}
+                checked={accepted.cta}
+                disabled={disabled}
+                onChange={toggleCta}
+              />
+            )}
+            {suggested.goal && (
+              <Suggestion
+                kind="Goal"
+                value={GOALS.find((g) => g.objective === suggested.goal!.objective)?.label ?? suggested.goal.objective}
+                reason={suggested.goal.reason}
+                checked={accepted.goal}
+                disabled={disabled}
+                onChange={toggleGoal}
+              />
+            )}
+          </ul>
+        </section>
+      )}
+
       {error && <p className="gf-wb-input-error" role="alert">{error}</p>}
       <div className="gf-wb-actions">
         <span className="gf-wb-secondary">
-          <button type="button" className="gf-button ghost" onClick={onRestart}>
+          <button type="button" className="gf-wb-text-button" onClick={onRestart}>
             Start over
           </button>
-          <button type="button" className="gf-button ghost" onClick={onSkip}>
+          <button type="button" className="gf-wb-text-button" onClick={onSkip}>
             Type it instead
           </button>
         </span>
-        <button type="button" className="gf-button gf-onboarding-cta" disabled={disabled} onClick={onApply}>
-          <span className="gf-onboarding-cta-label">Use this brief</span>
-          <ArrowRight size={18} strokeWidth={1.8} aria-hidden="true" />
+        <button type="button" className="gf-button gf-wb-continue" disabled={disabled} onClick={onApply}>
+          Use this brief
         </button>
       </div>
     </div>
   );
 }
 
+function Suggestion({
+  kind,
+  value,
+  reason,
+  checked,
+  disabled,
+  onChange,
+}: {
+  kind: string;
+  value: string;
+  reason?: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <li className={`gf-wb-suggestion${checked ? " is-on" : ""}`}>
+      <label>
+        <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+        <span>
+          <span className="gf-wb-suggestion-kind">{kind}</span>
+          <span className="gf-wb-suggestion-value">{value}</span>
+          {reason && <span className="gf-wb-suggestion-reason">{reason}</span>}
+        </span>
+      </label>
+    </li>
+  );
+}
+
 function DraftField({
-  index,
   field,
   label,
   hint,
@@ -667,7 +690,6 @@ function DraftField({
   onToggle,
   children,
 }: {
-  index: number;
   field: string;
   label: string;
   hint?: string;
@@ -679,10 +701,9 @@ function DraftField({
   const id = useId();
   const evidence = draft.evidence.filter((e) => e.field === field);
   const dropped = draft.dropped.includes(field);
-  const pageLabel = (url: string) =>
-    draft.pages.find((p) => p.url === url)?.label || pathLabel(url);
+  const pageLabel = (url: string) => draft.pages.find((p) => p.url === url)?.label || pathLabel(url);
   return (
-    <div className={`gf-wb-field${dropped ? " is-dropped" : ""}`} style={{ "--i": index } as CSSProperties}>
+    <div className={`gf-wb-field${dropped ? " is-dropped" : ""}`}>
       <span className="gf-wb-field-head">
         <label className="gf-wb-field-label" htmlFor={id}>
           {label}
@@ -690,16 +711,16 @@ function DraftField({
         {evidence.length > 0 && (
           <button
             type="button"
-            className={`gf-wb-evidence-toggle${open ? " is-open" : ""}`}
+            className="gf-wb-source"
             aria-expanded={open}
             aria-controls={`${id}-evidence`}
             onClick={onToggle}
           >
-            <Quote size={11} strokeWidth={2} aria-hidden="true" />
-            from your site
+            Source
+            <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
           </button>
         )}
-        {dropped && <span className="gf-wb-unconfirmed">Not confirmed — add your own</span>}
+        {dropped && <span className="gf-wb-unconfirmed">Not confirmed. Add your own.</span>}
       </span>
       {open && evidence.length > 0 && (
         <div
@@ -715,61 +736,14 @@ function DraftField({
             <figure key={item.quote}>
               <blockquote>“{item.quote}”</blockquote>
               <figcaption>
-                {pageLabel(item.page_url)} · <span>{pathLabel(item.page_url)}</span>
+                {pageLabel(item.page_url)}, {pathLabel(item.page_url)}
               </figcaption>
             </figure>
           ))}
-          <button type="button" className="gf-wb-evidence-close" aria-label="Close source" onClick={onToggle}>
-            <X size={12} strokeWidth={2} />
-          </button>
         </div>
       )}
       <span className="gf-wb-control">{children(id)}</span>
       {hint && <small>{hint}</small>}
     </div>
-  );
-}
-
-/** Browser window with a spark: drawn in the app's own frost-and-sand language. */
-function WebsiteIllustration() {
-  return (
-    <svg
-      className="gf-wb-illustration"
-      width="168"
-      height="112"
-      viewBox="0 0 168 112"
-      fill="none"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id="gf-wb-glass" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ffffff" stopOpacity="0.22" />
-          <stop offset="1" stopColor="#ffffff" stopOpacity="0.06" />
-        </linearGradient>
-        <linearGradient id="gf-wb-sand" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#e2c49d" />
-          <stop offset="1" stopColor="#f3e2c9" />
-        </linearGradient>
-        <radialGradient id="gf-wb-glow" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="#f3e2c9" stopOpacity="0.55" />
-          <stop offset="1" stopColor="#f3e2c9" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <rect x="10" y="18" width="128" height="86" rx="12" fill="url(#gf-wb-glass)" stroke="#ffffff" strokeOpacity="0.32" />
-      <path d="M10 38h128" stroke="#ffffff" strokeOpacity="0.22" />
-      <circle cx="24" cy="28" r="3" fill="#f0b9ac" fillOpacity="0.8" />
-      <circle cx="34" cy="28" r="3" fill="#f9e1bf" fillOpacity="0.8" />
-      <circle cx="44" cy="28" r="3" fill="#9bd3b0" fillOpacity="0.8" />
-      <rect x="58" y="24" width="64" height="8" rx="4" fill="#ffffff" fillOpacity="0.12" />
-      <rect className="gf-wb-line l1" x="24" y="52" width="70" height="8" rx="4" fill="url(#gf-wb-sand)" />
-      <rect className="gf-wb-line l2" x="24" y="68" width="98" height="6" rx="3" fill="#ffffff" fillOpacity="0.28" />
-      <rect className="gf-wb-line l3" x="24" y="80" width="82" height="6" rx="3" fill="#ffffff" fillOpacity="0.2" />
-      <rect className="gf-wb-line l4" x="24" y="92" width="54" height="6" rx="3" fill="#ffffff" fillOpacity="0.14" />
-      <g className="gf-wb-spark">
-        <circle cx="138" cy="22" r="22" fill="url(#gf-wb-glow)" />
-        <path d="M138 8l4.2 9.8L152 22l-9.8 4.2L138 36l-4.2-9.8L124 22l9.8-4.2z" fill="url(#gf-wb-sand)" />
-        <path d="M156 42l1.6 3.4L161 47l-3.4 1.6L156 52l-1.6-3.4L151 47l3.4-1.6z" fill="#f3e2c9" fillOpacity="0.8" />
-      </g>
-    </svg>
   );
 }

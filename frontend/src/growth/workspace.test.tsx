@@ -247,7 +247,7 @@ describe("Growth Factory interface", () => {
     ).not.toBeInTheDocument();
     // Onboarding opens on the website step.
     expect(
-      screen.getByRole("heading", { name: /Drop your website/ }),
+      screen.getByRole("heading", { name: "What’s your website?" }),
     ).toBeInTheDocument();
   });
   it("saves a campaign, requires explicit direction approval, then opens Studio", async () => {

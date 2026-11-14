@@ -1,6 +1,6 @@
 import { api, post } from "../api";
 
-/** "Give us your website — we'll draft your brand brief": client + pure draft → onboarding mapping. */
+/** Website step: read a creator's site, draft a brand brief, map the edited draft into onboarding. */
 
 export type ResearchStage =
   | "opening"
@@ -28,6 +28,32 @@ export interface DraftEvidence {
   page_url: string;
 }
 
+/** Where a value in the applied brief came from. Suggestions are never "from_site". */
+export type Provenance = "from_site" | "suggested_by_model" | "edited";
+
+export interface ProvenanceItem {
+  field: string;
+  value: string;
+  source: Provenance;
+}
+
+/** Model ideas (not quoted from the site), shown apart and accepted one by one. */
+export interface DraftSuggestions {
+  must_avoid: string[];
+  cta: { text: string; link: string | null } | null;
+  goal: { objective: string; metric: string; reason: string } | null;
+  provenance: "suggested_by_model";
+}
+
+/** Which suggestions the creator ticked on the review screen. */
+export interface AcceptedSuggestions {
+  mustAvoid: string[];
+  cta: boolean;
+  goal: boolean;
+}
+
+export const NO_SUGGESTIONS: AcceptedSuggestions = { mustAvoid: [], cta: false, goal: false };
+
 export interface BrandDraft {
   brand_name: string;
   one_liner: string;
@@ -49,6 +75,9 @@ export interface BrandDraft {
   dropped: string[];
   pages: Array<{ url: string; label: string; title: string }>;
   source_url: string;
+  /** Evidence-backed fields only. Older services omit it; evidence then decides. */
+  provenance?: Record<string, "from_site">;
+  suggested?: DraftSuggestions | null;
 }
 
 export interface Research {
@@ -112,6 +141,8 @@ export interface WebsiteBriefResult {
   };
   brandKit: BrandDraft["brand_kit"] | null;
   sourceUrl: string;
+  /** Per value: quoted from the site, suggested by the model and accepted, or written by the creator. */
+  provenance: ProvenanceItem[];
 }
 
 export const GOALS: Array<{ objective: string; label: string; metric: string }> =
@@ -172,6 +203,7 @@ export function lines(value: string, max: number, each: number): string[] {
 export function briefFromDraft(
   edited: EditableBrief,
   draft?: BrandDraft | null,
+  accepted: AcceptedSuggestions = NO_SUGGESTIONS,
 ): WebsiteBriefResult {
   const mustAvoid = lines(edited.mustAvoid, 8, 120);
   const avoided = new Set(mustAvoid.map((v) => v.toLocaleLowerCase()));
@@ -214,7 +246,63 @@ export function briefFromDraft(
     },
     brandKit: draft?.brand_kit ?? null,
     sourceUrl: draft?.source_url ?? "",
+    provenance: provenanceOf(
+      { name: clip(edited.brandName, 200), oneLiner: clip(edited.oneLiner, 1500),
+        audience: clip(edited.audience, 3000), objective, mustAvoid, cta },
+      draft,
+      accepted,
+    ),
   };
+}
+
+const same = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
+
+/** Label each applied value. A suggestion counts only if it was ticked; it is never "from_site". */
+function provenanceOf(
+  applied: { name: string; oneLiner: string; audience: string; objective: string; mustAvoid: string[]; cta: string },
+  draft: BrandDraft | null | undefined,
+  accepted: AcceptedSuggestions,
+): ProvenanceItem[] {
+  const backed = (field: string) =>
+    !!draft &&
+    (draft.provenance ? draft.provenance[field] === "from_site" : draft.evidence.some((e) => e.field === field));
+  const suggested = draft?.suggested;
+  const out: ProvenanceItem[] = [];
+  const scalar = (field: string, value: string, original: string | undefined) => {
+    if (value) out.push({ field, value, source: backed(field) && same(value, original ?? "") ? "from_site" : "edited" });
+  };
+  scalar("brand_name", applied.name, draft?.brand_name);
+  scalar("one_liner", applied.oneLiner, draft?.one_liner);
+  scalar("audience", applied.audience, draft?.audience);
+  for (const value of applied.mustAvoid) {
+    const source: Provenance =
+      backed("must_avoid") && (draft?.must_avoid ?? []).some((v) => same(v, value))
+        ? "from_site"
+        : accepted.mustAvoid.some((v) => same(v, value)) &&
+            (suggested?.must_avoid ?? []).some((v) => same(v, value))
+          ? "suggested_by_model"
+          : "edited";
+    out.push({ field: "must_avoid", value, source });
+  }
+  if (applied.cta) {
+    const source: Provenance =
+      accepted.cta && suggested?.cta && same(applied.cta, suggested.cta.text)
+        ? "suggested_by_model"
+        : backed("cta") && same(applied.cta, draft?.cta?.text ?? "")
+          ? "from_site"
+          : "edited";
+    out.push({ field: "cta", value: applied.cta, source });
+  }
+  if (applied.objective !== "discovery") {
+    const source: Provenance =
+      accepted.goal && suggested?.goal?.objective === applied.objective
+        ? "suggested_by_model"
+        : backed("suggested_goal") && draft?.suggested_goal?.objective === applied.objective
+          ? "from_site"
+          : "edited";
+    out.push({ field: "goal", value: applied.objective, source });
+  }
+  return out;
 }
 
 /** Friendly, present-tense copy for a real stage event. */
