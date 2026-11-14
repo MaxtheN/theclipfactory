@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { SHOW_FACTORY_MAP } from "./appEvents";
 import { FirstRunInstagram } from "./FirstRunInstagram";
+import { ClipStyleSheet } from "./ClipStyle";
 import type { Clip, Job, TeamRun, Video } from "../types";
 import { ApiError, endpoint, post } from "../api";
 import { Storyboard } from "../components/Storyboard";
@@ -565,6 +566,10 @@ export function FactoryHome({
           }}
         />
       </div>
+      {/* No approved Style rules yet: pick a clip style right here instead of a dead end. */}
+      {!direction && sources.length > 0 && (
+        <ClipStyleSheet w={w} onFullRules={onDirection} />
+      )}
       {!sources.length && !importing && !pending && !unknown && w.profileId && (
         <FirstRunInstagram profileId={w.profileId} />
       )}
@@ -906,7 +911,7 @@ export function FactoryHome({
                     disabled={!ready}
                     title={
                       !direction
-                        ? "Approve your style rules first."
+                        ? "Pick your clip style first."
                         : !modelId
                           ? "Set up a local model: Channel settings → Advanced → Advanced tools."
                           : status.blocked_reason || undefined
@@ -947,20 +952,6 @@ export function FactoryHome({
                           ? " · Needs a transcript for captions"
                           : ""}
                       </span>
-                      {/* One quiet reminder for the whole list, never a banner. */}
-                      {!direction && index === 0 && (
-                        <span className="gf-row-note">
-                          Style rules need approval first.{" "}
-                          <button
-                            type="button"
-                            className="gf-link-button"
-                            disabled={w.busy}
-                            onClick={onDirection}
-                          >
-                            Approve style rules
-                          </button>
-                        </span>
-                      )}
                     </div>
                     {illustrative && <Pill tone="sand">Illustrative edit</Pill>}
                     {action}

@@ -17,6 +17,12 @@ import { CloudAccountFields, useCloudAccount } from "./CloudSignIn";
 import type { CloudStatus } from "./cloudApi";
 import { WebsiteBrief } from "./WebsiteBrief";
 import { OnboardingIntro, introSeen } from "./OnboardingIntro";
+import {
+  ClipStylePicker,
+  DEFAULT_CLIP_STYLE,
+  approveClipStyle,
+  type ClipStyle,
+} from "./ClipStyle";
 import { GOALS, type WebsiteBriefResult } from "./websiteBriefApi";
 
 const outcomes = [
@@ -179,6 +185,10 @@ export function Onboarding({
   intro?: boolean;
 }) {
   const [showIntro, setShowIntro] = useState(() => intro && !introSeen());
+  // "Your clip style": approved only by the creator's explicit click; saved as Style rules at launch.
+  const [clipStyle, setClipStyle] = useState<ClipStyle>(DEFAULT_CLIP_STYLE);
+  const [styleApproved, setStyleApproved] = useState<ClipStyle | null>(null);
+  const styleReceipt = useRef(false);
   const steps = askAccount
     ? [...baseSteps.slice(0, REVIEW), "Review", "Your account"]
     : baseSteps;
@@ -509,6 +519,20 @@ export function Onboarding({
           throw new Error("Your saved goals could not be confirmed.");
         campaignReceipt.current = savedCampaign;
         setCampaign(savedCampaign);
+      }
+      // The creator approved a clip style: propose it, then approve that exact draft.
+      // A failure here never loses the brand; Factory offers the same choice again.
+      if (styleApproved && !styleReceipt.current) {
+        try {
+          await approveClipStyle(
+            savedProfile.id,
+            savedProfile.active_strategy_id ?? null,
+            styleApproved,
+          );
+          styleReceipt.current = true;
+        } catch {
+          /* Factory shows "Pick your clip style" when no rules are active. */
+        }
       }
       phase = "refresh";
       setLaunchPhase("opening");
@@ -976,6 +1000,35 @@ export function Onboarding({
                   </div>
                   {drafted && <span className="gf-from-site is-static">from your site</span>}
                 </div>
+                <section className="gf-onboarding-style" aria-label="Your clip style">
+                  <header>
+                    <h2>Your clip style</h2>
+                    {styleApproved ? (
+                      <span className="gf-pill approved">Approved ✓</span>
+                    ) : (
+                      <p>Sensible defaults. Tap to change anything.</p>
+                    )}
+                  </header>
+                  <ClipStylePicker
+                    value={clipStyle}
+                    disabled={locked}
+                    onChange={(next) => {
+                      setClipStyle(next);
+                      setStyleApproved(null);
+                    }}
+                  />
+                  {!styleApproved && (
+                    <button
+                      type="button"
+                      className="gf-button secondary"
+                      disabled={locked}
+                      onClick={() => setStyleApproved(clipStyle)}
+                    >
+                      <Check size={15} strokeWidth={1.8} aria-hidden="true" />
+                      Looks good — use this style
+                    </button>
+                  )}
+                </section>
                 <dl className="gf-onboarding-summary">
                   <div className="gf-onboarding-summary-row">
                     <div className="gf-onboarding-summary-copy">

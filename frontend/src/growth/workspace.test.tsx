@@ -152,7 +152,7 @@ describe("Growth Factory interface", () => {
     expect(screen.getByRole("heading", { name: "Brand profile" })).toHaveFocus();
     expect(screen.getByRole("textbox", { name: "Who it's for" })).toHaveValue("Channel-specific founders");
     fireEvent.click(within(daily).getByRole("button", { name: "Factory" }));
-    fireEvent.click(screen.getByRole("button", { name: "Approve style rules" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit full style rules" }));
     expect(screen.getByRole("heading", { name: "Style rules" })).toHaveFocus();
     expect((await activeRules())).toBeNull();
   });

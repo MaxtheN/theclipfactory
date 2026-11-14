@@ -1,4 +1,5 @@
 import { AutoTextarea } from "../components/AutoTextarea";
+import { ClipStyleSheet } from "./ClipStyle";
 import { useEffect, useRef, useState } from "react";
 import { activeJob, installedLlms } from "../productionPreflight";
 import type { Job, TeamRun } from "../types";
@@ -319,7 +320,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
         {revisionParent && <Field label="What would make it better?">{id => <AutoTextarea id={id} value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="What should change, and why?" rows={3} />}</Field>}
         {/* One reason at a time: the first thing to fix. */}
         {mode === "agent" && !revisionParent && <Field label="What should the agents look for? (optional)" hint="Used for this run only, within your style rules.">{id => <AutoTextarea id={id} rows={2} maxLength={DIRECTION_MAX} value={lookFor} disabled={busy} placeholder="e.g. the spiciest takes on AI policy, under 40s" onChange={e => setLookFor(e.target.value)} />}</Field>}
-        {!direction && onDirection ? <button type="button" className="gf-button ghost full" onClick={onDirection}>Approve style rules first</button> : blockers[0] && <p className="gf-help">{blockers[0]}</p>}
+        {!direction ? <ClipStyleSheet w={w} onFullRules={onDirection} /> : blockers[0] && <p className="gf-help">{blockers[0]}</p>}
         <PrimaryAction full label={busy ? "Queuing…" : mode === "agent" ? "Let agents find clips" : revisionParent ? "Render a new revision" : "Make this clip"} intent="produce" disabled={busy || blockers.length > 0} onClick={() => void render()} />
         {revisionParent && <button className="gf-button ghost full" onClick={() => setRevisionParent(undefined)}>Back to review</button>}
         {fineTune}

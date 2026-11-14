@@ -164,7 +164,7 @@ describe("production line on the Factory screen", () => {
     const first = home(workspace(false), factory());
     const blocked = screen.getByRole("button", { name: "Find clips" });
     expect(blocked).toBeDisabled();
-    expect(blocked).toHaveAttribute("title", "Approve your style rules first.");
+    expect(blocked).toHaveAttribute("title", "Pick your clip style first.");
     first.unmount();
     home(workspace(), factory({}, { model: null }));
     expect(screen.getByRole("button", { name: "Find clips" })).toHaveAttribute(

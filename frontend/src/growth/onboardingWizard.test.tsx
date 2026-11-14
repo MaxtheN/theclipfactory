@@ -26,7 +26,10 @@ vi.mock("./workspaceApi", () => ({
     profiles: vi.fn(),
     campaigns: vi.fn(),
     upload: vi.fn(),
+    propose: vi.fn(),
+    approve: vi.fn(),
   },
+  initialDirection: () => ({ angles: [], hooks: [] }),
 }));
 
 function workspace(): Workspace {
@@ -853,6 +856,32 @@ describe("onboarding validation and write recovery", () => {
     expect(workspaceApi.profile).toHaveBeenCalledTimes(1);
     expect(workspaceApi.save).toHaveBeenCalledTimes(1);
     expect(w.load).toHaveBeenCalledWith("already-saved-campaign");
+  });
+  it("creates no Style rules unless the creator approves the clip style", async () => {
+    const { complete } = start();
+    toReview();
+    launch();
+    await waitFor(() => expect(complete).toHaveBeenCalledOnce());
+    expect(workspaceApi.propose).not.toHaveBeenCalled();
+    expect(workspaceApi.approve).not.toHaveBeenCalled();
+  });
+  it("proposes then approves the chosen clip style only after its explicit click", async () => {
+    vi.mocked(workspaceApi.propose).mockResolvedValue({ id: "draft-1" } as never);
+    vi.mocked(workspaceApi.approve).mockResolvedValue({ id: "draft-1" } as never);
+    const { complete } = start();
+    toReview();
+    fireEvent.click(screen.getByRole("button", { name: "45s" }));
+    fireEvent.click(screen.getByRole("button", { name: "Looks good — use this style" }));
+    expect(screen.getByText("Approved ✓")).toBeInTheDocument();
+    noWrites();
+    launch();
+    await waitFor(() => expect(complete).toHaveBeenCalledOnce());
+    expect(workspaceApi.propose).toHaveBeenCalledOnce();
+    const [profileId, base, direction] = vi.mocked(workspaceApi.propose).mock.calls[0];
+    expect(profileId).toBe("new-profile");
+    expect(base).toBeNull();
+    expect(direction.duration_seconds).toBe(45);
+    expect(workspaceApi.approve).toHaveBeenCalledExactlyOnceWith("new-profile", "draft-1");
   });
   it("retries only the refresh after both writes have succeeded", async () => {
     const { w, complete } = start();
