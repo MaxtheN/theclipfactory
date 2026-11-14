@@ -13,8 +13,9 @@ import { Results } from "./Results";
 import { Onboarding } from "./Onboarding";
 import { FactoryHome, type OpenProduction } from "./FactoryHome";
 import { Library } from "./Library";
+import { AutomationPanel } from "./AutomationPanel";
 import { QuickActions, type QuickAction } from "./QuickActions";
-import logo from "./assets/growth-factory-logo.png";
+import { BrandMark } from "./BrandMark";
 import "./growth.css";
 import "./material-tokens.css";
 import "./desktop-glass.css";
@@ -25,11 +26,12 @@ import "./workspace-motion.css";
 import "./account-chrome.css";
 import "./factory-flow.css";
 import "./landing.css";
+import "./desktop-shell.css";
 
 const views = {
   factory: {
     label: "Factory",
-    title: "Good footage. Great stories.",
+    title: "Factory",
     sub: "Turn long-form video into short-form clips. Set the direction, let agents shape the edit, and review every cut.",
     icon: "studio",
   },
@@ -66,6 +68,7 @@ const views = {
 } as const;
 export type Stage = keyof typeof views;
 function storedView(): Stage {
+  if (window.location.hash === "#connections") return "results";
   try {
     const saved = localStorage.getItem("growth-view-v2");
     return saved && saved in views ? (saved as Stage) : "factory";
@@ -79,7 +82,9 @@ export function GrowthApp() {
   const w = useCampaignWorkspace(factory.refresh);
   const [stage, setStage] = useState<Stage>(storedView);
   const [tools, setTools] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(
+    () => reviewPreview && window.location.hash === "#onboarding",
+  );
   const [onboardingSession, setOnboardingSession] = useState(0);
   const [onboardingBusy, setOnboardingBusy] = useState(false);
   const [preferredSource, setPreferredSource] = useState<string>();
@@ -95,7 +100,8 @@ export function GrowthApp() {
     !!w.campaign &&
     w.campaign.profile_ids.includes(w.profileId) &&
     w.profiles.some((p) => p.id === w.profileId);
-  const onboarding = creating || (!w.loading && !w.error && !usable);
+  const onboarding =
+    creating || onboardingBusy || (!w.loading && !w.error && !usable);
   const blocked = w.busy || onboardingBusy;
   const contextKey = `${w.campaign?.id || "empty"}-${w.profileId}`;
   const current = views[stage];
@@ -112,25 +118,29 @@ export function GrowthApp() {
         !event.isComposing
       ) {
         event.preventDefault();
+        if (onboarding) return;
         setQuickOpen((value) => !value);
       }
     }
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, []);
+  }, [onboarding]);
   useEffect(() => {
     try {
       localStorage.setItem("growth-view-v2", stage);
     } catch {
       /* optional preference */
     }
-    if (!tools) heading.current?.focus();
+    if (onboarding) {
+      setQuickOpen(false);
+      setTools(false);
+    } else if (!tools) heading.current?.focus();
   }, [stage, onboarding]);
   useEffect(() => {
     if (tools) toolsReturn.current?.focus();
-    else if (previousTools.current) heading.current?.focus();
+    else if (previousTools.current && !onboarding) heading.current?.focus();
     previousTools.current = tools;
-  }, [tools]);
+  }, [tools, onboarding]);
 
   function go(next: Stage) {
     setTools(false);
@@ -261,14 +271,14 @@ export function GrowthApp() {
         </div>
       )}
       <div
-        className={`gf-app gf-flow-app${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
+        className={`gf-app gf-flow-app${onboarding ? " is-onboarding" : ""}${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
         hidden={tools}
       >
         <a className="gf-skip" href="#growth-main">
           Skip to content
         </a>
         <div className="gf-window">
-          <aside className="gf-sidebar">
+          <aside className="gf-sidebar" hidden={onboarding}>
             <div className="gf-brand-row">
               <a
                 className="gf-brand"
@@ -280,7 +290,7 @@ export function GrowthApp() {
                   if (!blocked) go("factory");
                 }}
               >
-                <img className="gf-logo-image" src={logo} alt="" />
+                <BrandMark />
                 <span>
                   Growth
                   <br />
@@ -360,11 +370,11 @@ export function GrowthApp() {
             </div>
           </aside>
           <div className="gf-workspace">
-            <header className="gf-topbar">
+            <header className="gf-topbar" hidden={onboarding}>
               <label className="gf-workspace-switcher">
-                <span>Workspace</span>
+                <span>Campaign</span>
                 <select
-                  aria-label="Podcast or workspace"
+                  aria-label="Current campaign"
                   value={onboarding ? "__new__" : w.selected}
                   disabled={blocked || w.loading}
                   onChange={(e) => {
@@ -389,9 +399,6 @@ export function GrowthApp() {
                       {c.name}
                     </option>
                   ))}
-                  {!onboarding && (
-                    <option value="__new__">＋ New workspace</option>
-                  )}
                 </select>
               </label>
               <div className="gf-top-right">
@@ -426,8 +433,8 @@ export function GrowthApp() {
                 )}
               </div>
             </header>
-            <main id="growth-main" className="gf-main">
-              <header className={`gf-page-heading${onboarding || stage === "factory" ? " gf-landing-heading" : ""}`}>
+            <main id="growth-main" className="gf-main" tabIndex={-1}>
+              <header className={`gf-page-heading${stage === "factory" ? " gf-landing-heading" : ""}`} hidden={onboarding}>
                 <div>
                   <div className="gf-eyebrow">
                     {onboarding
@@ -464,7 +471,7 @@ export function GrowthApp() {
                     </button>
                   )}
               </header>
-              {help && (
+              {help && !onboarding && (
                 <div className="gf-message">
                   <Icon name="info" />
                   <span>
@@ -484,40 +491,43 @@ export function GrowthApp() {
                   </button>
                 </div>
               )}
-              {w.loading && (
+              {!onboarding && w.loading && (
                 <div className="gf-loading" role="status">
                   <span className="gf-spinner" />
                   Opening your workspace…
                 </div>
               )}
-              {(w.error || Object.keys(factory.errors).length > 0) && (
-                <div className="gf-message error" role="alert">
-                  <Icon name="info" />
-                  <span>
-                    <strong>
-                      {w.error || "Some local resources are unavailable."}
-                    </strong>
-                    {Object.keys(factory.errors).length > 0 && (
+              {!onboarding &&
+                (w.error || Object.keys(factory.errors).length > 0) && (
+                  <div className="gf-message error" role="alert">
+                    <Icon name="info" />
+                    <span>
+                      <strong>
+                        {w.error || "Some local resources are unavailable."}
+                      </strong>
+                      {Object.keys(factory.errors).length > 0 && (
+                        <small>
+                          {[...new Set(Object.values(factory.errors))].join(
+                            " ",
+                          )}
+                        </small>
+                      )}
                       <small>
-                        {[...new Set(Object.values(factory.errors))].join(" ")}
+                        Your inputs stay here. Refresh saved state before
+                        retrying an uncertain action.
                       </small>
-                    )}
-                    <small>
-                      Your inputs stay here. Refresh saved state before retrying
-                      an uncertain action.
-                    </small>
-                  </span>
-                  <button
-                    type="button"
-                    className="gf-button secondary compact"
-                    disabled={blocked}
-                    onClick={refreshWorkspace}
-                  >
-                    Reconnect
-                  </button>
-                </div>
-              )}
-              {w.notice && (
+                    </span>
+                    <button
+                      type="button"
+                      className="gf-button secondary compact"
+                      disabled={blocked}
+                      onClick={refreshWorkspace}
+                    >
+                      Reconnect
+                    </button>
+                  </div>
+                )}
+              {!onboarding && w.notice && (
                 <div className="gf-message success" role="status">
                   <Icon name="check" />
                   <span>{w.notice}</span>
@@ -535,6 +545,7 @@ export function GrowthApp() {
                 <Onboarding
                   key={onboardingSession}
                   w={w}
+                  active={onboarding && !tools}
                   onBusyChange={setOnboardingBusy}
                   onCancel={usable ? () => setCreating(false) : undefined}
                   onComplete={() => {
@@ -622,6 +633,13 @@ export function GrowthApp() {
                   factory={factory}
                   next={(source, mode) => openProduction(source, mode)}
                 />
+                <AutomationPanel
+                  key={`automation-${contextKey}`}
+                  w={w}
+                  factory={factory}
+                  visible={!onboarding && stage === "results"}
+                  onReview={reviewClip}
+                />
               </div>
               {reviewPreview && stage === "factory" && !onboarding && (
                 <p className="gf-flow-preview-note">
@@ -634,7 +652,7 @@ export function GrowthApp() {
         </div>
       </div>
       <QuickActions
-        open={quickOpen}
+        open={quickOpen && !onboarding}
         onDismiss={() => setQuickOpen(false)}
         actions={quickActions}
       />

@@ -1,0 +1,13 @@
+# WO-8 execution checklist
+- [x] Read user request, requirements and blueprints.
+- [x] Inspect exact newGrowthFactory Supabase project and free organization; public schema empty.
+- [x] Write implementation plan before SQL; delegate migration and independent review.
+- [x] Phase1 context/planning certification.
+- [x] Prepare additive transaction, collision guard,3tables,7owner RLS policies, minimal grants and256KiB JSON bounds.
+- [x] Independent security/schema review APPROVED; no anonymous/public data access, identity transfer or event mutation.
+- [x] Paste/copy-back exact migration in SQL Editor, execute and verify Success.
+- [x] Paste/copy-back exact rollback probes; provider returned RLS probes passed; synthetic rows rolled back.
+- [x] Read back3RLS-enabled/forcedtables,7policies,0anonymous/PUBLICtablegrants and intended column rights; all3table rowcounts0.
+- [x] Phase2 implementation/provider verification certification.
+- [SKIP] App Auth/signup/sync/teamsharing/hosted worker: explicitly later on product roadmap; runtime stillSQLite.
+- [x] Branch-only baseline handoff prepared with provider evidence; no paid upgrade or secret copied.

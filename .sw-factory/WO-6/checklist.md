@@ -1,0 +1,17 @@
+# WO-6 execution checklist
+- [x] Read work order, requirements, linked blueprints and existing architecture.
+- [x] Write implementation plan before implementation; delegate disjoint domain, adapter and review work.
+- [x] Phase1 context and planning certification.
+- [x] Implement durable policy/publication/snapshot/work/experiment contracts, leases, bounded retries and exact reconciliation.
+- [x] Wire authenticated API, source-scoped render provenance, bounded local analyst and conservative resource admission before initial/repair calls.
+- [x] Preserve active strategy; require exact one-variable plans, real output receipts and initial unapproved production.
+- [x] Add Results controls, high-contrast setup, owner discovery and saved-state/error gates.
+- [x] Review and fix all blocking findings; final domain/API review, memory/protocol review and independent helper review APPROVED.
+- [x] Full baseline856backend tests passed,6existing skips;274frontend tests and TS/Vite build passed; Ruff/diffcheck passed.
+- [x] Actual4Bdecision→saved-receipt recovery→realchanged15.1second render/hash/decode/reconciliation verified in isolated fixture store, with synthetic metrics labeled.
+- [x] Phase2 implementation and scoped verification certification.
+- [x] Actual native API health/settings/state readback; Composio key and both provider accounts verified separately.
+- [SKIP] Fresh autonomous real-model rehearsal pass: actualfresh4B attempt hit critical host memory and stopped; new admission guard now holds below conservative6GiB/weights+3GiB budget. Qualified recovered render is not relabeled as fresh pass.
+- [SKIP] Audience improvement/live post-to-clip metrics: require a genuine matching publication and sufficient evidence; no fabricated results.
+- [SKIP] Public posting/adspend/cloud sync: outside this implemented read/learning scope.
+- [x] Branch-only baseline handoff prepared with exact limitations; noREADME/main/master writes.

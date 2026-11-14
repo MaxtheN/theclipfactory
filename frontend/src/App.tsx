@@ -9,6 +9,7 @@ import { Instagram } from "./pages/Instagram";
 import { Results } from "./pages/Results";
 import { SettingsPage } from "./pages/Settings";
 import { Icon } from "./growth/Icon";
+import { BrandMark } from "./growth/BrandMark";
 import "./growth/operational-glass.css";
 const tabs = [
   "Campaigns",
@@ -114,9 +115,7 @@ export function App({
       <aside className="sidebar">
         <div className="tools-brand-row">
           <div className="brand" hidden={sidebarCollapsed}>
-            <span className="brand-symbol" aria-hidden="true">
-              c<span>f</span>
-            </span>
+            <BrandMark />
             <div>
               Growth Factory<small>WORKSPACE TOOLS</small>
             </div>
@@ -203,7 +202,7 @@ export function App({
             </button>
           </div>
         </div>
-        <main id="main">
+        <main id="main" tabIndex={-1}>
           <header className="page-heading">
             <div>
               <p className="eyebrow">CREATE WITH INTENT</p>

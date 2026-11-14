@@ -3,7 +3,9 @@
 import itertools
 import json
 
-from clip_factory.evidence import TRANSCRIPT_BUDGET, bounded_transcript
+import pytest
+
+from clip_factory.evidence import TRANSCRIPT_BUDGET, bounded_transcript, selected_transcript
 
 
 def stream(hours=3.4, every=2.0):
@@ -51,3 +53,20 @@ def test_invalid_segments_are_ignored():
         ]
     )
     assert rows == []
+
+
+def test_selected_speech_preserves_late_exact_words_cue_times_and_source_identity():
+    original = [{"start": s, "end": s + 1, "text": f"ACTUAL WORDS AT {s} " + "detail " * 15} for s in range(0, 7200, 2)]
+    discovery, merged = bounded_transcript(original)
+    assert merged and discovery[0]["end"] > 100 and "AT 106" not in discovery[0]["text"]
+    exact = selected_transcript(original, [{"start": 104, "end": 120}], "source-a")
+    item = exact["transcript:selected:0"]
+    assert item["video_id"] == "source-a" and item["type"] == "selected_transcript"
+    assert [cue["text"] for cue in item["segments"]] == [r["text"].strip() for r in original if 104 <= r["start"] < 120]
+    assert item["segments"][0] == {"source_index": 52, **original[52], "text": original[52]["text"].strip()}
+    assert all(cue["start"] >= 104 and cue["end"] <= 120 for cue in item["segments"])
+
+
+def test_selected_speech_rejects_oversize_evidence_instead_of_truncating_words():
+    with pytest.raises(ValueError, match="evidence budget"):
+        selected_transcript([{"start": 0, "end": 30, "text": "speech " * 1000}], [{"start": 0, "end": 30}], "source", budget=300)

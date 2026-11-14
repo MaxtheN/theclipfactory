@@ -104,9 +104,10 @@ def parse_scout(raw: str, rows: list[dict], lo: float, hi: float, limit: int = 2
             continue
         if not (math.isfinite(start) and math.isfinite(end)):
             continue
-        start, end = max(start, lo), min(end, hi)
-        end = min(end, start + MAX_CLIP)
-        if end - start < MIN_CLIP or any(start < p["end"] and end > p["start"] for p in out):
+        # Never turn an invalid proposal into a different edit with stale hook/caption copy.
+        if not lo <= start < end <= hi or not MIN_CLIP <= end - start <= MAX_CLIP:
+            continue
+        if any(start < p["end"] and end > p["start"] for p in out):
             continue
         if not speech(rows, start, end):
             continue  # every scout moment must be backed by time-associated speech
@@ -207,7 +208,9 @@ def scout(
         value = _payload(generate(prompt, [], 300))
         picks = value.get("picks") if isinstance(value, dict) else None
         if isinstance(picks, list):
-            ids = [i for i in dict.fromkeys(picks) if type(i) is int and 0 <= i < len(short)][:count]
+            # Filter before hashing: nested lists/dicts in model output are untrusted too.
+            valid_ids = (i for i in picks if type(i) is int and 0 <= i < len(short))
+            ids = list(dict.fromkeys(valid_ids))[:count]
             if ids:
                 chosen, method = [short[i] for i in ids], "selector"
                 chosen += [p for p in short if p not in chosen][: count - len(chosen)]

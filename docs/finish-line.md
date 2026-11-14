@@ -1,41 +1,39 @@
 # Growth Factory finish line
 
-## The daily flow
+## Product flow
 
-Set podcast/brand name, audience and objective once. Return to Factory, upload footage, inspect real agent work, review the cuts and approve the exact file. Library retains sources, versions and exports. Results shows measured evidence, its limits and the next proposed edit. Context remains editable in Workspace settings.
+Set audience and goal once. Upload footage, inspect agent work, review real cuts and approve the exact file. Results connects an explicit account, tracks an existing post, collects its metrics after three or six days and generates a bounded new draft. Library retains sources, revisions and exports.
 
-## What the team already built on master
+## Implemented on our feature branch
 
-SQLite stores local profiles, campaigns, immutable direction versions, jobs, clips, observations and exports. A serialized local worker handles transcription, frame inspection, planning, rendering and critique. Ollama vision models and MLX models have distinct readiness rules. Real FFmpeg outputs have technical checks, linked revisions, SHA256 checksums and export manifests. The operational UI exposes model setup, ledger/comparisons, Instagram connection/publishing/reconciliation, insights and paid preflight.
+- Animated four-step onboarding; daily Factory/Library/Results flow and real production/review/export wiring.
+- Teammate master7e5d880 merged; reviewed fixes preserve exact selected speech for editor/critic, reject invalid scout ranges and release warm models.
+- SQLite persists policies, publication mappings, cumulative snapshots, work leases/backoff, experiments and verified production receipts. Paused or unknown work does not blindly repeat an external effect.
+- Composio adapter verifies exact connected-account/user/configuration, professional Instagram identity, media ownership and provider publication time. Each local clip-to-post mapping requires an explicit human confirmation.
+- Three-/six-day local collection and bounded analyst trigger. One hook or duration change per experiment; active approved strategy remains intact; resulting drafts start unapproved.
+- Learning calls use bounded local context and at most one validation repair. Invalid citations, both-field edits and unchanged edits are rejected. Smaller1.7B failed actual quality contracts;4B with8K context produced a validated source-faithful proposal and real recovered render. See the exact local proof readout; do not call the failed1.7B runs successes.
+- Supabase project nywbjxmratokyplwjjhu has3private metadata tables and7owner RLS policies. Provider rollback isolation checks passed and all test rows were removed. The app still uses SQLite; cloud Auth/sync/hosted workers are not wired.
 
-## Owners and next integration gates
+## Demo acceptance
 
-| Owner | Deliverable | Acceptance |
-| --- | --- | --- |
-| Kartik | Onboarding, Factory, Library, Results and Studio wiring | Simple daily flow, exact account/version context, retained drafts, real operations and recoverable failures |
-| James | Reliable agent-to-render path | Run the intended local vision model on the supplied All-In footage; inspect each failed role/error, produce usable plans and real playable clips |
-| Nur | Persistent workflow and analytics handoff | Reopen saved work, recover interrupted jobs, link each publication/insight to an exact clip/account and measurement window, deduplicate imports |
-| Together | One complete rehearsal | Upload → two real cuts → concrete revision → review/export → real observation → approved changed rule → subsequent changed edit |
+1. Real source with timestamps → playable9:16captioned draft and checksum.
+2. Review/exact-file approval and export; agent quality alone never grants publication permission.
+3. Exact Instagram identity/post and traceable observation window; sample metrics clearly labeled.
+4. Analyst cites the saved snapshot, changes one concrete field or abstains with a reason.
+5. Real changed render exposes parent/source/base/experiment/job/hash and remains unapproved until review.
+6. Restart/reconcile recovers saved work and never duplicates an unknown render submission.
+7. Report elapsed time, human intervention minutes, direct cost with exclusions and reviewer acceptance. Audience growth/ROAS require real observations and attribution; no manufactured winner.
 
-## Gaps that must stay visible
+## Remaining live gates
 
-- **External precedent research:** source footage inspection exists; reference URL ingestion and a bounded cited audience/creative-research result are not implemented on audited master.
-- **Evidence bridge:** Instagram sync stores media insights, while Results learning uses campaign observations. Verify or build the explicit mapping using publication, local clip, account and window identities. Do not silently pool generic events or another profile's observations.
-- **Follow-up trigger:** a three-day review needs publication timing, due work, fresh evidence collection and an evaluator. Current local scheduler needs the app running and does not implement this learning trigger. Missing/weak evidence must yield insufficient evidence.
-- **Analyst automation:** performance recommendations are produced inside an agent production run; saving a learning proposal currently takes a supplied complete Direction. There is no standalone new-results-to-strategy analysis trigger.
-- **Idempotency:** observation and export creation are not server-idempotent. UI disables duplicate submission and reconciles uncertain writes; durable keys are later backend work.
-- **Live publication:** requires eligible connected account, exact approved clip, explicit enablement and reachable public HTTPS video URL. Local export does not supply public hosting.
-- **Paid execution:** insights/preflight exist; creating, activating, pausing or spending on ads is not implemented.
-- **Agent reliability:** the reviewed JSON/range/evidence-repair and caption fixes are merged from master4966544. Qwen4B and Whisper passed actual production, including a substantive15.1-second draft with fresh grounding. Human editorial acceptance and full-episode scale remain separate gates.
+- Enter the Composio project key in the real app (native Keychain) and import the two existing Active accounts; dashboard connection alone is not an app binding.
+- Verify provider calls/scopes and map a real published post to its exact approved local clip. The provider can verify account/media/time; it cannot prove remote bytes equal a local MP4.
+- Composio publishing execution remains disabled. Existing direct-Meta publishing is a separate path. A reviewed publish flow needs exact approval, trusted public HTTPS media hosting, durable attempt state and unknown-outcome reconciliation.
+- External precedent research/EvidenceBrief ingestion remains separate work. Source footage analysis is not a cited internet research result.
+- Paid activation/spending, attribution and causal-lift claims are outside this prototype.
+- Local scheduling needs the app running; always-on operation requires an actual hosted worker. Supabase tables do not supply that worker.
+- Cloud authentication, explicit safe field projections, conflict handling, team access, signed/notarized Mac release and single-instance hardening remain required later.
 
-## Database decision
+## Team handoff
 
-Keep the existing local SQLite database and files for this single-operator Mac MVP. Supabase is optional later for shared accounts, cloud persistence/auth and storage. A static hosted preview cannot run the local models, FFmpeg worker or a continuously running three-day collector. A later cloud worker needs durable storage, scheduling and account authorization independently of frontend hosting.
-
-## Demo evidence
-
-Record actual elapsed time, active human minutes, accepted outputs, revision count and direct processing cost with exclusions. Compare against a matched manual baseline before claiming savings. Historical analytics may demonstrate the loop when labeled; they cannot establish fresh causal lift. A local model's score is a production hypothesis, not business performance.
-
-## Documentation state
-
-The shared Google Doc's MVP tab now describes onboarding and Factory/Library/Results, retaining the earlier detail mockups. Software Factory has tracked suggestions for Product Description, onboarding/recovery requirements, the results follow-up boundary, the campaign navigation blueprint and a populated Results learning blueprint. These suggestions remain pending review; they are not silently approved requirements. WO4 is In Review and linked to draftPR5 after verified handoff. Current integrated upstream is master4966544; the earlier700c907 audit remains a dated source snapshot.
+Kartik owns interface, account integration and the persistent learning/experiment layer. James owns reliable transcription/scouting/clipping. Nur coordinates saved workflow state against explicit contracts. New work stays on kartik/backend-integration and draftPR5; no main/master push or merge. README files remain unchanged.

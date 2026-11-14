@@ -484,9 +484,10 @@ def test_editor_receives_only_accepted_moment_evidence_and_explicit_angle_ranges
     run, _ = harness.execute()
     editor = harness.models.calls[3]["data"]
     assert set(run["context"]["evidence"]) >= {"frame:0", "frame:1", "transcript:0", "source:source"}
-    assert editor["evidence"] == {"frame:0": {"time": 0.5, "type": "sampled_frame"}}
+    assert set(editor["evidence"]) == {"frame:0", "transcript:selected:0"}
+    assert editor["evidence"]["transcript:selected:0"]["segments"][0]["text"] == "Unselected speech"
     assert editor["allowed_source_ranges"] == {
-        "angle-1": {"start": 0, "end": 2, "objective": "sales", "evidence_refs": ["frame:0"]}
+        "angle-1": {"start": 0, "end": 2, "objective": "sales", "evidence_refs": ["transcript:selected:0", "frame:0"]}
     }
 
 
@@ -1167,3 +1168,94 @@ def test_long_source_with_no_scout_moments_fails_before_strategy(harness):
     with pytest.raises(WorkError, match="no speech-backed moments"):
         harness.engine.execute(run["id"], "job")
     assert not harness.rendered
+
+
+def test_long_scout_selection_supplies_exact_late_speech_to_editor_critic_and_recheck(harness):
+    segments = [
+        {"start": s, "end": s + 1, "text": f"ACTUAL speech at {s} " + "supporting words " * 8}
+        for s in range(0, 1800, 2)
+    ]
+    harness.video = harness.store.put(
+        "videos", {**harness.video, "duration": 1800, "has_audio": True, "transcript": {"segments": segments}}
+    )
+    outputs = script()
+    del outputs[1]
+    outputs[2]["candidates"][0].update(start=106, end=120, evidence_refs=["transcript:selected:0"])
+    harness.models = ScoutingModels(
+        outputs, {"0": [{"start": 106, "end": 130, "hook": "Late speech", "score": 8, "why": "Full thought"}]}
+    )
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert result["review_status"] == "pass" and not harness.store.all("clips")[0]["approved"]
+    evidence = run["context"]["evidence"]
+    assert not any(item.get("type") == "transcript_window" for item in evidence.values())
+    assert any(item.get("type") == "transcript_window" for item in run["context"]["discovery_transcript_evidence"].values())
+    exact = evidence["transcript:selected:0"]
+    assert exact["video_id"] == "source"
+    assert [cue["start"] for cue in exact["segments"]] == list(range(106, 130, 2))
+    assert "ACTUAL speech at 118" in json.dumps(exact)
+    editor = next(call["data"] for call in harness.models.calls if call["schema"]["title"] == "Edits")
+    critic = next(call["data"] for call in harness.models.calls if call["schema"]["title"] == "Critique")
+    assert editor["evidence"]["transcript:selected:0"] == exact
+    assert critic["evidence"]["transcript:selected:0"] == exact
+    tool = next(task for task in run["tasks"] if task["role"] == "source_evidence")
+    assert tool["kind"] == "tool" and tool["status"] == "completed"
+    assert tool["output"]["moments"][0]["selected_refs"][0] == "transcript:selected:0"
+    harness.models.outputs.append(critique())
+    harness.engine.review_clip("job", result["clip_ids"][0])
+    assert harness.models.calls[-1]["data"]["evidence"]["transcript:selected:0"] == exact
+
+
+def test_selected_transcript_bundle_cannot_ground_silence_between_its_actual_cues():
+    evidence = {"transcript:selected:0": {
+        "type": "selected_transcript", "start": 0, "end": 100,
+        "segments": [{"start": 0, "end": 1, "text": "First"}, {"start": 99, "end": 100, "text": "Last"}],
+    }}
+    with pytest.raises(WorkError, match="does not overlap"):
+        TeamEngine._source_refs(["transcript:selected:0"], evidence, 40, 50)
+
+
+@pytest.mark.parametrize("outcome", ["success", "no_moments", "cancelled"])
+def test_scout_warm_model_is_released_on_success_failure_and_cancellation(harness, outcome):
+    segments = [{"start": s, "end": s + 4, "text": f"speech {s}"} for s in range(0, 1800, 5)]
+    harness.video = harness.store.put(
+        "videos", {**harness.video, "duration": 1800, "has_audio": True, "transcript": {"segments": segments}}
+    )
+    outputs = script()
+    del outputs[1]
+    answers = {} if outcome == "no_moments" else {"0": [{"start": 0, "end": 30, "hook": "Source", "score": 7}]}
+    harness.models = ScoutingModels(outputs, answers)
+    harness.models.release_warm = Mock()
+    harness.engine.models = harness.models
+    if outcome == "cancelled":
+        original = harness.models.run
+
+        def cancel_after_scout(*args, **kwargs):
+            result = original(*args, **kwargs)
+            if kwargs["prompt"].startswith("You are one scout"):
+                harness.jobs.cancelled = True
+            return result
+
+        harness.models.run = cancel_after_scout
+    if outcome == "success":
+        harness.execute()
+    else:
+        run = harness.create()
+        with pytest.raises(JobCancelled if outcome == "cancelled" else WorkError):
+            harness.engine.execute(run["id"], "job")
+        assert not harness.rendered
+    harness.models.release_warm.assert_called_once_with("qwen-small")
+
+
+def test_oversize_selected_speech_fails_before_downstream_roles_without_discovery_fallback(harness):
+    harness.store.patch("videos", "source", transcript={"segments": [{"start": 0, "end": 1, "text": "word " * 6000}]})
+    harness.models = ScriptedModels(script()[:2])
+    harness.engine.models = harness.models
+    run = harness.create()
+    with pytest.raises(WorkError, match="Selected timed speech exceeds"):
+        harness.engine.execute(run["id"], "job")
+    assert titles(harness.models) == ["Plan", "Footage"]
+    assert not harness.rendered
+    saved = harness.engine.get(run["id"])
+    assert saved["status"] == "failed"
+    assert next(t for t in saved["tasks"] if t["role"] == "source_evidence")["status"] == "failed"

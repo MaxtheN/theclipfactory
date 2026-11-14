@@ -17,6 +17,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://127.0.0.1:5178/")
     parser.add_argument("--title", default="Growth Factory — Live Interface")
+    parser.add_argument(
+        "--onboarding",
+        action="store_true",
+        help="Open the review onboarding at its first step.",
+    )
     args = parser.parse_args()
     url = urllib.parse.urlsplit(args.url)
     if (
@@ -39,7 +44,7 @@ def main():
 
     window = webview.create_window(
         args.title,
-        args.url,
+        args.url + ("#onboarding" if args.onboarding else ""),
         width=1440,
         height=960,
         min_size=(900, 640),

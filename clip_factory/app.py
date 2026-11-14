@@ -266,7 +266,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             target=run_schedules, daemon=True, name="factory-publish-scheduler"
         )
         app.state.scheduler.start()
+        app.state.autonomy_runtime.start()
         yield
+        app.state.autonomy_runtime.close()
         app.state.schedule_stop.set()
         app.state.scheduler.join(timeout=3)
         app.state.jobs.close()
@@ -526,27 +528,30 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def scout_source(job_id: str, video: dict, model_id: str, config: dict, count: int = 3) -> dict:
         """Long sources: one scout per time window, then a selector (see scouts.py)."""
         work = root / "work" / job_id / "scout-frames"
-        return scouts.scout(
-            generate=lambda prompt, images, max_tokens: models().run(
-                job_id,
-                model_id,
-                "generate",
-                keep_warm=True,
-                prompt=prompt,
-                images=images,
-                max_tokens=max_tokens,
-            )["output"],
-            video=video,
-            frames_for=lambda index, times: media.sample_frames(
-                jobs(), job_id, source_path(video), work / f"chunk-{index:02}", video["duration"], times=times
-            ),
-            objective=config["objective"],
-            brand=config["brand"],
-            count=count,
-            direction=config.get("_campaign_snapshot"),
-            check=lambda: jobs().check(job_id),
-            progress=lambda message: jobs().update(job_id, message=message),
-        )
+        try:
+            return scouts.scout(
+                generate=lambda prompt, images, max_tokens: models().run(
+                    job_id,
+                    model_id,
+                    "generate",
+                    keep_warm=True,
+                    prompt=prompt,
+                    images=images,
+                    max_tokens=max_tokens,
+                )["output"],
+                video=video,
+                frames_for=lambda index, times: media.sample_frames(
+                    jobs(), job_id, source_path(video), work / f"chunk-{index:02}", video["duration"], times=times
+                ),
+                objective=config["objective"],
+                brand=config["brand"],
+                count=count,
+                direction=config.get("_campaign_snapshot"),
+                check=lambda: jobs().check(job_id),
+                progress=lambda message: jobs().update(job_id, message=message),
+            )
+        finally:
+            models().release_warm(model_id)
 
     def analyze_task(job_id: str, video: dict, model_id: str, config: dict | None = None) -> dict:
         work = root / "work" / job_id
@@ -847,6 +852,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         version, encoder = result.pop("ffmpeg_version", None), result.pop("encoder", None)
         receipt = {
             "job_id": job_id,
+            "approval_state_at_creation": "unapproved",
             "started_at": started_at,
             "finished_at": now(),
             "elapsed_seconds": round(time.monotonic() - clock, 3),
@@ -1893,7 +1899,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             ],
         }
 
-    def campaign_render(identifier, body):
+    def campaign_render(identifier, body, *, experiment_id=None):
         with operations_lock:
             snapshot = campaigns.snapshot(
                 identifier, body.profile_id, body.video_id, body.expected_strategy_version_id
@@ -1940,6 +1946,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 deviations.append("Creator supplied an explicit hook rather than a saved strategy hook.")
             metadata = {
                 **snapshot,
+                **({"experiment_id": experiment_id} if experiment_id else {}),
                 "provenance_mode": body.mode,
                 "creator_instructions": body.instructions,
                 "strategy_departures": deviations,
@@ -1958,6 +1965,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 parent_clip_id=lineage["parent_clip_id"],
                 campaign_id=snapshot["campaign_id"],
                 profile_id=snapshot["profile_id"],
+                **({"experiment_id": experiment_id} if experiment_id else {}),
             )
 
     def campaign_produce(identifier, body):
@@ -1970,5 +1978,15 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             )
 
     install_campaign_api(app, campaigns, render=campaign_render, produce=campaign_produce)
+
+    from .autonomy_runtime import AutonomyRuntime
+    from .learning import LearningEngine
+    from .learning_api import install as install_learning_api
+
+    runtime = AutonomyRuntime(app, campaign_render)
+    engine = LearningEngine(store, runtime.collect, runtime.analyze, runtime.produce)
+    app.state.autonomy_runtime = runtime
+    app.state.learning = engine
+    install_learning_api(app, runtime, engine)
 
     return app

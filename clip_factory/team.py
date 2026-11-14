@@ -18,7 +18,7 @@ import psutil
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from . import scouts
-from .evidence import bounded_transcript
+from .evidence import bounded_transcript, selected_transcript
 from .inference_worker import MAX_PROMPT
 from .jobs import JobCancelled, Jobs, WorkError
 from .models import Models
@@ -41,6 +41,7 @@ LABELS = {
     "transcribe": "Source transcription",
     "render": "Deterministic rendering",
     "reuse_footage": "Revalidate saved source analysis",
+    "source_evidence": "Preserve selected timed speech",
     "baseline": "Baseline pipeline",
 }
 
@@ -567,7 +568,10 @@ class TeamEngine:
                     mismatch = "Frame evidence does not support the proposed source range."
                     continue
             elif ref.startswith("transcript:"):
-                if min(end, item["end"]) <= max(start, item["start"]):
+                timed = item.get("segments") if item.get("type") == "selected_transcript" else [item]
+                if not isinstance(timed, list) or not any(
+                    min(end, cue["end"]) > max(start, cue["start"]) for cue in timed
+                ):
                     mismatch = "Transcript evidence does not overlap the proposed source range."
                     continue
             elif not ref.startswith("source:"):
@@ -582,27 +586,33 @@ class TeamEngine:
 
     def _scout_footage(self, run_id, job_id, run, video, context, validate) -> dict:
         evidence, settings = context["evidence"], context["settings"]
-        found = scouts.scout(
-            generate=lambda prompt, images, max_tokens: self.models.run(
-                job_id,
-                run["model_id"],
-                "generate",
-                keep_warm=True,
-                prompt=prompt,
-                images=list(images),
-                max_tokens=max_tokens,
-            )["output"],
-            video=video,
-            frames_for=lambda index, times: self.frames(
-                job_id, video, times, f"scout-frames/chunk-{index:02}"
-            ),
-            objective=settings.get("objective", "discovery"),
-            brand=settings.get("brand", ""),
-            count=5,
-            direction=context.get("campaign_snapshot"),
-            check=lambda: self.jobs.check(job_id),
-            progress=lambda message: self.jobs.update(job_id, message=message),
-        )
+        try:
+            found = scouts.scout(
+                generate=lambda prompt, images, max_tokens: self.models.run(
+                    job_id,
+                    run["model_id"],
+                    "generate",
+                    keep_warm=True,
+                    prompt=prompt,
+                    images=list(images),
+                    max_tokens=max_tokens,
+                )["output"],
+                video=video,
+                frames_for=lambda index, times: self.frames(
+                    job_id, video, times, f"scout-frames/chunk-{index:02}"
+                ),
+                objective=settings.get("objective", "discovery"),
+                brand=settings.get("brand", ""),
+                count=5,
+                direction=context.get("campaign_snapshot"),
+                check=lambda: self.jobs.check(job_id),
+                progress=lambda message: self.jobs.update(job_id, message=message),
+            )
+        finally:
+            # Retain warmth only between scout calls, including cancellation/failure paths.
+            release = getattr(self.models, "release_warm", None)
+            if callable(release):
+                release(run["model_id"])
         self.store.patch(
             "team_runs",
             run_id,
@@ -831,6 +841,41 @@ class TeamEngine:
                     refs=[ref for moment in saved["moments"] for ref in moment["evidence_refs"]],
                 )
                 reused_footage = True
+            # Discovery windows are coverage hints. Downstream factual/caption review needs
+            # the actual speech in each selected range, not a short excerpt from its first seconds.
+            if video.get("transcript"):
+                def attach_selected_speech():
+                    try:
+                        exact = selected_transcript(
+                            video["transcript"].get("segments", []), footage["moments"], video["id"]
+                        )
+                    except ValueError as exc:
+                        raise WorkError(str(exc)) from exc
+                    discovery = {key: item for key, item in evidence.items() if key.startswith("transcript:")}
+                    retained = {
+                        key: item for key, item in evidence.items()
+                        if not key.startswith("transcript:") or item.get("type") != "transcript_window"
+                    }
+                    retained.update(exact)
+                    attached = []
+                    for index, moment in enumerate(footage["moments"]):
+                        speech_ref = f"transcript:selected:{index}"
+                        original = list(moment["evidence_refs"])
+                        citations = ([speech_ref] if speech_ref in exact else []) + [
+                            key for key in original if key in retained
+                        ]
+                        moment["evidence_refs"] = self._source_refs(
+                            citations[:16], retained, moment["start"], moment["end"]
+                        )
+                        attached.append({"moment_index": index, "discovery_refs": original, "selected_refs": moment["evidence_refs"]})
+                    context["discovery_transcript_evidence"] = discovery
+                    evidence.clear()
+                    evidence.update(retained)
+                    self.store.patch("team_runs", run_id, context=context)
+                    return {"video_id": video["id"], "moments": attached, "transcript_refs": list(exact)}
+
+                self._operation(run_id, job_id, "source_evidence", attach_selected_speech, refs=refs)
+                refs = list(evidence)
             performance_refs = [r for r in refs if r.startswith(("feedback:", "observation:", "event:"))]
             performance = None
             if performance_refs:

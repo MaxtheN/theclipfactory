@@ -1,0 +1,220 @@
+/* The window is the viewport. Only an explicitly bounded content area scrolls. */
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.gf-flow-app {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.gf-flow-app .gf-window {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+.gf-flow-app .gf-sidebar {
+  position: relative;
+  top: auto;
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.gf-flow-app .gf-workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.gf-flow-app .gf-main {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  align-self: stretch;
+  justify-self: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.gf-flow-app .gf-topbar {
+  min-width: 0;
+}
+
+/* Onboarding pins its brand, overview and actions around one scrollable question. */
+.gf-flow-app.is-onboarding .gf-window {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+.gf-flow-app.is-onboarding .gf-workspace {
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+}
+.gf-flow-app.is-onboarding .gf-main {
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+.gf-flow-app.is-onboarding .gf-main > .gf-stage:not([hidden]) {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.gf-flow-app .gf-onboarding.gf-onboarding-wizard {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.gf-onboarding-wizard > .gf-onboarding-header,
+.gf-onboarding-wizard > .gf-onboarding-progress-wrap {
+  flex: 0 0 auto;
+}
+.gf-onboarding-wizard .gf-onboarding-form {
+  flex: 1 1 0;
+  min-height: 0;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+.gf-onboarding-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 4px 5px 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  scroll-padding-block: 20px;
+}
+.gf-onboarding-scroll:focus-visible {
+  outline: 1px solid var(--material-focus);
+  outline-offset: -1px;
+  border-radius: 6px;
+}
+.gf-onboarding-wizard .gf-onboarding-actions {
+  flex: 0 0 auto;
+  margin-top: 14px;
+  padding: 0 5px;
+}
+
+/* Advanced tools keep their return bar, navigation and controls inside the window. */
+.gf-operational {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.gf-operational .app-shell,
+.gf-operational.is-sidebar-collapsed .app-shell {
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.gf-operational.is-sidebar-collapsed .app-shell {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+.gf-operational .sidebar,
+.gf-operational.is-sidebar-collapsed .sidebar {
+  position: relative;
+  top: auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.gf-operational .workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.gf-operational .workspace > main {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.gf-operational .workspace > .topbar,
+.gf-operational .workspace > .workspace-footer {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .gf-operational:not(.is-sidebar-collapsed) .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .gf-operational:not(.is-sidebar-collapsed) .sidebar {
+    height: auto;
+    max-height: min(180px, 30dvh);
+  }
+  .gf-operational .workspace-footer {
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    padding: 12px 19px;
+  }
+  .gf-onboarding-wizard .gf-onboarding-form {
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+  .gf-onboarding-wizard .gf-onboarding-actions {
+    margin-top: 12px;
+  }
+}
+@media (max-width: 520px) {
+  .gf-onboarding-scroll {
+    padding-inline: 3px;
+    scrollbar-gutter: auto;
+  }
+  .gf-onboarding-wizard .gf-onboarding-actions {
+    flex-wrap: nowrap;
+    gap: 12px;
+    padding-inline: 3px;
+  }
+  .gf-onboarding-wizard
+    .gf-onboarding-actions
+    > .gf-button:not(.gf-onboarding-cta) {
+    flex: 0 0 auto;
+  }
+  .gf-flow-app .gf-onboarding-cta {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    padding-inline: 13px;
+  }
+}
+@media (max-height: 700px) {
+  .gf-onboarding-header {
+    padding-top: 15px;
+    padding-bottom: 12px;
+  }
+  .gf-onboarding-progress-wrap {
+    margin-top: 0;
+    margin-bottom: 21px;
+  }
+  .gf-onboarding-wizard .gf-onboarding-form {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}

@@ -50,6 +50,22 @@ beforeEach(() => {
 });
 
 describe("Growth Factory interface", () => {
+  it("ignores the onboarding preview hash in the ordinary build", async () => {
+    const originalUrl = window.location.pathname + window.location.search + window.location.hash;
+    window.history.replaceState(null, "", "/#onboarding");
+    try {
+      render(<GrowthApp />);
+      await waitFor(() =>
+        expect(screen.getByLabelText("Campaign name")).toHaveValue("All-In clips"),
+      );
+      expect(screen.getByRole("combobox", { name: "Current campaign" })).toHaveValue("preview-campaign");
+      expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+      expect(screen.queryByRole("heading", { name: "Who are we making this for?" })).not.toBeInTheDocument();
+      expect(window.location.hash).toBe("#onboarding");
+    } finally {
+      window.history.replaceState(null, "", originalUrl);
+    }
+  });
   it("collapses and restores the sidebar without discarding the brief", async () => {
     render(<GrowthApp />);
     const menu = screen.getByLabelText("Workspace menu").closest("details");
@@ -113,7 +129,7 @@ describe("Growth Factory interface", () => {
       screen.getByRole("textbox", { name: "Who are we speaking to?" }),
     ).toHaveValue("My unsaved audience");
   });
-  it("does not bypass unsaved-campaign navigation gates through quick actions", async () => {
+  it("keeps new-workspace onboarding isolated from quick actions and app navigation", async () => {
     render(<GrowthApp />);
     const menu = screen.getByLabelText("Workspace menu").closest("details");
     menu?.setAttribute("open", "");
@@ -124,20 +140,20 @@ describe("Growth Factory interface", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "New workspace" }));
     fireEvent.keyDown(window, { key: "k", metaKey: true });
-    const search = screen.getByRole("combobox", {
-      name: "Search quick actions",
-    });
-    fireEvent.change(search, { target: { value: "research" } });
     expect(
-      screen.getByRole("option", { name: /^Go to Creative direction/ }),
-    ).toBeDisabled();
-    fireEvent.keyDown(search, { key: "Enter" });
-    expect(screen.getByRole("dialog", { name: "Quick actions" })).toBeVisible();
-    fireEvent.keyDown(search, { key: "Escape" });
+      screen.queryByRole("dialog", { name: "Quick actions" }),
+    ).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(
+      screen.queryByRole("combobox", { name: "Search quick actions" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Podcast or workspace name")).toHaveValue("");
     expect(
-      screen.getByRole("button", { name: "Creative direction" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: "Creative direction" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Who are we making this for?" }),
+    ).toHaveFocus();
   });
   it("saves a campaign, requires explicit direction approval, then opens Studio", async () => {
     render(<GrowthApp />);
@@ -315,10 +331,8 @@ describe("approval transition regressions", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "New workspace" }));
     expect(screen.getByLabelText("Podcast or workspace name")).toHaveValue("");
-    expect(
-      screen.getByRole("button", { name: "Creative direction" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Library" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Creative direction" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Library" })).not.toBeInTheDocument();
   });
 });
 

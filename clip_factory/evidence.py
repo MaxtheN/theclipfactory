@@ -66,3 +66,35 @@ def bounded_transcript(segments, budget: int = TRANSCRIPT_BUDGET) -> tuple[list[
         if _size(result) <= budget or limit <= 40:
             return result, True
         limit = int(limit * 0.8)
+
+
+def selected_transcript(segments, ranges: list[dict], video_id: str, budget: int = TRANSCRIPT_BUDGET) -> dict:
+    """Full timed source cues for selected ranges; never treat a window excerpt as complete speech.
+
+    Each reference bundles its original timed cues so the role's 16-reference limit does not
+    silently discard the latter half of a clip. Original cue indices and timestamps survive.
+    Oversize selected evidence is rejected rather than truncated, merged, or falsely grounded.
+    """
+    result = {}
+    for index, span in enumerate(ranges):
+        cues = []
+        for source_index, segment in enumerate(segments or []):
+            if not isinstance(segment, dict):
+                continue
+            start, end = segment.get("start"), segment.get("end")
+            if not all(type(v) in (int, float) and math.isfinite(v) for v in (start, end)) or end <= start:
+                continue
+            if min(span["end"], end) <= max(span["start"], start):
+                continue
+            text = " ".join(str(segment.get("text", "")).split())
+            if text:
+                cues.append({"source_index": source_index, "start": start, "end": end, "text": text})
+        if cues:
+            result[f"transcript:selected:{index}"] = {
+                "type": "selected_transcript", "video_id": video_id,
+                "start": min(c["start"] for c in cues), "end": max(c["end"] for c in cues),
+                "segments": cues,
+            }
+    if len(json.dumps(result, ensure_ascii=False)) > budget:
+        raise ValueError("Selected timed speech exceeds the evidence budget. Choose fewer or shorter moments, or a transcript with shorter timed cues.")
+    return result
