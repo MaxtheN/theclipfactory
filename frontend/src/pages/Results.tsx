@@ -1,0 +1,233 @@
+import { useState } from "react";
+import { post } from "../api";
+import type { FactoryState } from "../useFactory";
+import {
+  Empty,
+  Field,
+  Section,
+  Unknown,
+  ReadOnlyValue,
+  date,
+} from "../components/ui";
+export function MetricGroup({
+  title,
+  metrics,
+}: {
+  title: string;
+  metrics: unknown;
+}) {
+  const entries =
+    metrics && typeof metrics === "object" && !Array.isArray(metrics)
+      ? Object.entries(metrics)
+      : [];
+  return (
+    <div className="metric-group">
+      <h4>{title}</h4>
+      {entries.length ? (
+        <dl className="info-list">
+          {entries.map(([name, value]) => (
+            <div key={name}>
+              <dt>{name.replaceAll("_", " ")}</dt>
+              <dd>
+                <Unknown value={value} />
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="unknown">Unknown — no metrics reported</p>
+      )}
+    </div>
+  );
+}
+export function Results({ state }: { state: FactoryState }) {
+  const [clipId, setClipId] = useState("");
+  const [event, setEvent] = useState("visit");
+  const [value, setValue] = useState("");
+  const [revenue, setRevenue] = useState("");
+  const [occurred, setOccurred] = useState("");
+  const [error, setError] = useState("");
+  const analytics = state.data.analytics;
+  const rows = Array.isArray(analytics?.videos) ? analytics.videos : [];
+  async function record(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (
+      !clipId ||
+      (value !== "" &&
+        (!Number.isFinite(Number(value)) || Number(value) < 0)) ||
+      (revenue !== "" &&
+        (!Number.isFinite(Number(revenue)) || Number(revenue) < 0)) ||
+      (occurred && Number.isNaN(Date.parse(occurred)))
+    ) {
+      setError(
+        "Choose a clip and enter valid non-negative numbers and a valid date.",
+      );
+      return;
+    }
+    const body = {
+      clip_id: clipId,
+      event,
+      source: "manual",
+      ...(value !== "" ? { value: Number(value) } : {}),
+      ...(revenue !== "" ? { revenue: Number(revenue) } : {}),
+      ...(occurred ? { occurred_at: new Date(occurred).toISOString() } : {}),
+    };
+    if (
+      await state.run(
+        () => post("/api/analytics/events", body),
+        "Manual observation recorded. It is not claimed as a causal conversion.",
+      )
+    ) {
+      setValue("");
+      setRevenue("");
+      setOccurred("");
+    }
+  }
+  return (
+    <>
+      <div className="banner">
+        <strong>Unknown is not zero.</strong>
+        <span>
+          Performance is shown only when observed. Media insights may include
+          boosts; paid ad-account reads and manual observations remain separate.
+        </span>
+      </div>
+      <Section
+        title="Observed performance"
+        detail="Source and attribution accompany every report"
+      >
+        {!rows.length ? (
+          <Empty title="No performance observations yet">
+            Publish and sync actual insights, or record a manual event below. No
+            sample metrics are generated.
+          </Empty>
+        ) : (
+          <div className="analytics-grid">
+            {rows.map((row) => (
+              <article className="analytics-card" key={row.clip_id}>
+                <h3>{row.name || row.clip_id}</h3>
+                <p className="muted">Objective: {row.objective || "Unknown"}</p>
+                <div className="two-col">
+                  <MetricGroup title="Media insights" metrics={row.organic} />
+                  <MetricGroup title="Paid" metrics={row.paid} />
+                </div>
+                <dl className="info-list">
+                  <div>
+                    <dt>Source</dt>
+                    <dd>{row.source || "Unknown"}</dd>
+                  </div>
+                  <div>
+                    <dt>Attribution</dt>
+                    <dd>
+                      <ReadOnlyValue value={row.attribution} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Updated</dt>
+                    <dd>{date(row.updated_at)}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        )}
+        {Array.isArray(analytics?.notes) && analytics.notes.length > 0 && (
+          <div className="analytics-notes">
+            {analytics.notes.map((note, i) => (
+              <p key={i}>
+                <ReadOnlyValue value={note} />
+              </p>
+            ))}
+          </div>
+        )}
+        {analytics?.summary && Object.keys(analytics.summary).length > 0 && (
+          <details>
+            <summary>Reported summary (read-only)</summary>
+            <ReadOnlyValue value={analytics.summary} />
+          </details>
+        )}
+        {Array.isArray(analytics?.events) && analytics.events.length > 0 && (
+          <details>
+            <summary>Recorded events (reported provenance)</summary>
+            <ReadOnlyValue value={analytics.events} />
+          </details>
+        )}
+      </Section>
+      <Section
+        title="Record a manual observation"
+        detail="Explicit provenance: manual · not causal attribution"
+      >
+        <form onSubmit={(e) => void record(e)}>
+          <div className="form-grid">
+            <Field label="Observed clip">
+              <select
+                required
+                value={clipId}
+                onChange={(e) => setClipId(e.target.value)}
+              >
+                <option value="">Select a clip</option>
+                {state.data.clips.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Event">
+              <select value={event} onChange={(e) => setEvent(e.target.value)}>
+                {["lead", "purchase", "visit", "follow", "custom"].map((v) => (
+                  <option value={v} key={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Value (optional)">
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+              />
+            </Field>
+            <Field label="Revenue (optional)">
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={revenue}
+                onChange={(e) => setRevenue(e.target.value)}
+              />
+            </Field>
+            <Field label="Occurred at (optional, local time)">
+              <input
+                type="datetime-local"
+                value={occurred}
+                onChange={(e) => setOccurred(e.target.value)}
+              />
+            </Field>
+          </div>
+          <p className="muted">
+            This records what you observed. It does not prove that this clip
+            caused a visit, follow, lead, or purchase. Blank numbers are
+            omitted, not replaced with zero.
+          </p>
+          {error && (
+            <p role="alert" className="error-text">
+              {error}
+            </p>
+          )}
+          <button
+            disabled={
+              state.busy || !state.data.clips.length || !!state.errors.clips
+            }
+          >
+            Record manual event
+          </button>
+        </form>
+      </Section>
+    </>
+  );
+}

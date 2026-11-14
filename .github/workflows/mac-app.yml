@@ -1,0 +1,49 @@
+name: Build Mac desktop artifact (not notarized)
+on:
+  push:
+    branches: ["8090/**"]
+    paths: [".github/workflows/mac-app.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    # GitHub's current public runner table maps macos-15 to arm64; Intel is macos-15-intel.
+    # https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+    runs-on: macos-15
+    # Build saved campaign learning with scoped strategies, retaining native reopen, queue regression, renderer readiness, and immutable hook controls.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Build the ref explicitly selected by workflow_dispatch, never PR text/input shell interpolation.
+          ref: ${{ github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Confirm native Apple Silicon runner and Python
+        run: |
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
+          python -c 'import platform; assert platform.machine() == "arm64"'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build Apple Silicon desktop bundle and run backend tests
+        run: bash scripts/build-mac-app.sh
+      - name: Verify app-owned Python bootstrap without Homebrew
+        run: python scripts/smoke-managed-python.py
+      - name: Smoke packaged executable without GUI
+        run: python scripts/smoke-headless.py --executable 'dist/Clip Factory.app/Contents/MacOS/Clip Factory'
+      - name: Smoke real Cocoa window, authenticated UI, and reopen
+        run: python scripts/smoke-native.py --executable 'dist/Clip Factory.app/Contents/MacOS/Clip Factory'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clip-factory-mac-arm64-not-notarized
+          path: dist/clip-factory-mac-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
