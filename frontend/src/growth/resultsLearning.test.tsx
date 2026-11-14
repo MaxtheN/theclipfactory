@@ -168,13 +168,13 @@ describe("selected profile goal control", () => {
       target: { value: "traffic" },
     });
     expect(
-      screen.getByRole("button", { name: "Save channel settings" }),
+      screen.getByRole("button", { name: "Save settings" }),
     ).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Primary metric"), {
       target: { value: "full_episode_visits" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Save channel settings" }),
+      screen.getByRole("button", { name: "Save settings" }),
     );
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith("profile-a", {

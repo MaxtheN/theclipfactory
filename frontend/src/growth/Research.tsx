@@ -85,8 +85,8 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
   }
   if (!w.campaign)
     return (
-      <Empty title="No channel yet" icon="research">
-        Set up a channel first.
+      <Empty title="No campaign yet" icon="research">
+        Create a campaign first.
       </Empty>
     );
   return (
@@ -207,7 +207,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
           <span>
             <Icon name="lock" size={13} /> For{" "}
             {w.profiles.find((p) => p.id === w.profileId)?.name ||
-              "this channel"}
+              "this workspace"}
           </span>
           <PrimaryAction
             label={

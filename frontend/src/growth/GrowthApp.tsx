@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CircleUserRound, PanelLeft, Settings } from "lucide-react";
+import { PanelLeft, Settings } from "lucide-react";
 import { App } from "../App";
 import { useFactory } from "../useFactory";
 import { useCampaignWorkspace } from "./useCampaignWorkspace";
@@ -13,6 +13,7 @@ import { Results } from "./Results";
 import { Onboarding } from "./Onboarding";
 import { FactoryHome, type OpenProduction } from "./FactoryHome";
 import { Library } from "./Library";
+import { NewCampaign } from "./NewCampaign";
 import { AutomationPanel } from "./AutomationPanel";
 import { QuickActions, type QuickAction } from "./QuickActions";
 import { BrandMark } from "./BrandMark";
@@ -40,7 +41,7 @@ const views = {
   library: {
     label: "Library",
     title: "Library",
-    sub: "Every episode and clip in this channel.",
+    sub: "Every episode and clip in this campaign.",
     icon: "folder",
   },
   results: {
@@ -50,16 +51,22 @@ const views = {
     icon: "results",
   },
   setup: {
-    label: "Channel settings",
-    title: "Channel settings",
-    sub: "Who it's for, the goal, and the voice to keep.",
+    label: "Workspace settings",
+    title: "Workspace settings",
+    sub: "Who it's for, the voice to keep, and this campaign's goal.",
     icon: "settings",
   },
   research: {
     label: "Style rules",
     title: "Style rules",
-    sub: "How agents pick and open each clip. Save, then approve.",
+    sub: "How agents pick and open clips in this campaign. Save, then approve.",
     icon: "research",
+  },
+  campaign: {
+    label: "New campaign",
+    title: "New campaign",
+    sub: "A focused push inside this workspace, with its own goal and episodes.",
+    icon: "plus",
   },
   studio: {
     label: "Studio",
@@ -110,8 +117,13 @@ export function GrowthApp() {
     !!w.campaign &&
     w.campaign.profile_ids.includes(w.profileId) &&
     w.profiles.some((p) => p.id === w.profileId);
-  const linkedProfiles = w.profiles.filter((p) =>
-    w.campaign?.profile_ids.includes(p.id),
+  // Workspace = one person/brand (a backend profile). Campaigns are the
+  // goal-scoped pushes linked to it.
+  const workspaces = w.profiles.filter((p) =>
+    w.campaigns.some((c) => c.profile_ids.includes(p.id)),
+  );
+  const workspaceCampaigns = w.campaigns.filter((c) =>
+    c.profile_ids.includes(w.profileId),
   );
   const onboarding =
     creating || onboardingBusy || (!w.loading && !w.error && !usable);
@@ -119,7 +131,11 @@ export function GrowthApp() {
   const contextKey = `${w.campaign?.id || "empty"}-${w.profileId}`;
   const current = views[stage];
   const primaryStage =
-    stage === "studio" ? "factory" : stage === "research" ? "setup" : stage;
+    stage === "studio"
+      ? "factory"
+      : stage === "research" || stage === "campaign"
+        ? "setup"
+        : stage;
 
   useEffect(() => {
     function shortcut(event: KeyboardEvent) {
@@ -197,9 +213,19 @@ export function GrowthApp() {
       group: "Workspace",
       disabled: blocked || onboarding || !usable,
       keywords:
-        "style rules editing rules creative direction approval channel settings",
-      hint: "Channel settings",
+        "style rules editing rules creative direction approval workspace settings",
+      hint: "Workspace settings",
       run: () => go("research"),
+    },
+    {
+      id: "campaign",
+      label: "New campaign",
+      icon: "plus",
+      group: "Workspace",
+      disabled: blocked || onboarding || !usable,
+      keywords: "campaign goal push episode launch series",
+      hint: "Inside this workspace",
+      run: () => go("campaign"),
     },
     {
       id: "new",
@@ -208,7 +234,7 @@ export function GrowthApp() {
       group: "Workspace",
       disabled: blocked,
       keywords: "podcast profile onboarding",
-      hint: "Channel settings · Advanced",
+      hint: "Workspace settings · Advanced",
       run: newWorkspace,
     },
     {
@@ -337,81 +363,92 @@ export function GrowthApp() {
               <button
                 type="button"
                 className="gf-channel-settings"
-                aria-label="Channel settings"
+                aria-label="Workspace settings"
                 aria-current={primaryStage === "setup" ? "page" : undefined}
-                title="Channel settings"
+                title="Workspace settings"
                 disabled={blocked || !usable || onboarding}
                 onClick={() => go("setup")}
               >
                 <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
-                <span>Channel settings</span>
+                <span>Workspace settings</span>
               </button>
             </div>
           </aside>
           <div className="gf-workspace">
             <header className="gf-topbar" hidden={onboarding}>
-              <label className="gf-workspace-switcher">
-                <span>Channel</span>
-                <select
-                  aria-label="Current campaign"
-                  value={onboarding ? "__new__" : w.selected}
-                  disabled={blocked || w.loading}
-                  onChange={(e) => {
-                    if (e.target.value === "__new__") newWorkspace();
-                    else {
+              <div className="gf-context-switcher">
+                <label className="gf-workspace-switcher">
+                  <span>Workspace</span>
+                  <select
+                    aria-label="Current workspace"
+                    value={onboarding ? "__new__" : w.profileId}
+                    disabled={blocked || w.loading}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (next === "__new__") return newWorkspace();
+                      // Stay on the current campaign if it belongs to this
+                      // workspace; otherwise open the workspace's first one.
+                      const target = w.campaign?.profile_ids.includes(next)
+                        ? w.campaign.id
+                        : w.campaigns.find((c) => c.profile_ids.includes(next))
+                            ?.id;
+                      if (!target) return;
                       setCreating(false);
                       setPreferredClip(undefined);
                       setPreferredSource(undefined);
-                      setStage("factory");
-                      void w.select(e.target.value);
-                    }
-                  }}
-                >
-                  {onboarding && (
-                    <option value="__new__">Set up your workspace</option>
-                  )}
-                  {!onboarding && !w.campaign && (
-                    <option value="">Choose a channel</option>
-                  )}
-                  {w.campaigns.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="gf-top-right">
-                {commandTrigger}
-                {!tools &&
-                  usable &&
-                  !onboarding &&
-                  linkedProfiles.length > 1 && (
-                    <label className="gf-profile-selector">
-                      <CircleUserRound
-                        size={20}
-                        strokeWidth={1.5}
-                        aria-hidden="true"
-                      />
-                      <select
-                        aria-label="Active account profile"
-                        value={w.profileId}
-                        disabled={blocked || w.loading}
-                        onChange={(e) => {
-                          setPreferredSource(undefined);
-                          setPreferredClip(undefined);
-                          setPreferredMode(undefined);
-                          w.setProfileId(e.target.value);
-                        }}
-                      >
-                        {linkedProfiles.map((p) => (
-                          <option value={p.id} key={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
+                      setPreferredMode(undefined);
+                      w.setProfileId(next);
+                      if (target !== w.selected) {
+                        setStage("factory");
+                        void w.select(target);
+                      }
+                    }}
+                  >
+                    {onboarding && (
+                      <option value="__new__">Set up your workspace</option>
+                    )}
+                    {!onboarding && !workspaces.some((p) => p.id === w.profileId) && (
+                      <option value="">Choose a workspace</option>
+                    )}
+                    {workspaces.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                    {!onboarding && <option value="__new__">New workspace…</option>}
+                  </select>
+                </label>
+                {!onboarding && workspaceCampaigns.length > 1 && (
+                  <label className="gf-campaign-switcher">
+                    <span aria-hidden="true">▸</span>
+                    <select
+                      aria-label="Current campaign"
+                      value={w.selected}
+                      disabled={blocked || w.loading}
+                      onChange={(e) => {
+                        if (e.target.value === "__new_campaign__")
+                          return go("campaign");
+                        setPreferredClip(undefined);
+                        setPreferredSource(undefined);
+                        setPreferredMode(undefined);
+                        setStage("factory");
+                        void w.select(e.target.value);
+                      }}
+                    >
+                      {workspaceCampaigns.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                      <option value="__new_campaign__">New campaign…</option>
+                    </select>
+                  </label>
+                )}
+                {!onboarding && usable && workspaceCampaigns.length === 1 && (
+                  <span className="gf-campaign-name">▸ {w.campaign?.name}</span>
+                )}
               </div>
+              <div className="gf-top-right">{commandTrigger}</div>
             </header>
             <main id="growth-main" className="gf-main" tabIndex={-1}>
               <header
@@ -436,7 +473,7 @@ export function GrowthApp() {
                     onClick={() => go("setup")}
                   >
                     <Icon name="back" size={15} />
-                    Back to Channel settings
+                    Back to Workspace settings
                   </button>
                 )}
               </header>
@@ -556,6 +593,7 @@ export function GrowthApp() {
                   w={w}
                   factory={factory}
                   next={() => go("research")}
+                  onNewCampaign={() => go("campaign")}
                   advanced={
                     <nav
                       className="gf-advanced-actions"
@@ -592,6 +630,20 @@ export function GrowthApp() {
                   w={w}
                   next={() => openProduction(preferredSource, "agent")}
                 />
+              </div>
+              <div
+                className="gf-stage"
+                hidden={onboarding || !usable || stage !== "campaign"}
+              >
+                {stage === "campaign" && (
+                  <NewCampaign
+                    key={contextKey}
+                    w={w}
+                    factory={factory}
+                    onCreated={() => go("factory")}
+                    onCancel={() => go("setup")}
+                  />
+                )}
               </div>
               <div
                 className="gf-stage"

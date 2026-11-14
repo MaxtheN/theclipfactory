@@ -53,3 +53,17 @@ Out of scope (other agent): Results*.tsx, AutomationPanel.tsx, all backend Pytho
 ## Tests
 - Update only label/layout assertions. Approval, exact-revision, no implicit publication,
   profile isolation assertions keep their strength.
+
+## Phase 2: Workspace -> Campaigns (UI only)
+- Workspace = backend profile; campaign = goal-scoped push linked to it (profile_ids).
+- Top bar: "Workspace" select (profiles linked to any campaign, plus "New workspace…" -> onboarding),
+  then "▸ campaign" picker only when the workspace has 2+ campaigns (with "New campaign…").
+  The old "Active account profile" select is gone (merged into the workspace switcher).
+- "Channel settings" -> "Workspace settings": Workspace section (name, audience, voice, preferences,
+  account row) and Campaign section (campaign name, goal, metric, New campaign). Same strict save:
+  selected-profile only, membership union, readback.
+- New campaign form (NewCampaign.tsx): name, goal, metric, attach this workspace's episodes.
+  Creates one campaign linked only to the current workspace via the existing POST /api/campaigns.
+- Backend gaps (not built, reported): style rules (strategy versions) are per campaign, so a new
+  campaign starts unapproved; goal/metric are stored on the profile, so they are shared by a
+  workspace's campaigns (each campaign also records its own measurement_intent).

@@ -159,7 +159,7 @@ function fixture({ latestVideos }: { latestVideos?: string[] } = {}) {
   return { w, factory, api, store, next, onSaved, view, profiles, campaign };
 }
 const saveButton = () =>
-  screen.getByRole("button", { name: "Save channel settings" });
+  screen.getByRole("button", { name: "Save settings" });
 function noSideEffects(api: ReturnType<typeof fixture>["api"]) {
   expect(api.createProfile).not.toHaveBeenCalled();
   expect(api.propose).not.toHaveBeenCalled();
@@ -196,7 +196,7 @@ describe("unified channel settings", () => {
     expect(screen.getByLabelText("Attach Source A")).toBeDisabled();
     expect(screen.getByLabelText("Attach Source B")).toBeEnabled();
     expect(screen.getByLabelText("Link Separate profile")).toBeChecked();
-    expect(screen.getByRole("button", { name: "Create profile" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create workspace" })).toBeTruthy();
   });
 
   it("requires a metric only for goal-directed work", () => {
@@ -273,7 +273,7 @@ describe("unified channel settings", () => {
     fireEvent.click(saveButton());
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "no longer linked to this channel",
+        "no longer linked to this campaign",
       ),
     );
     expect(api.updateProfile).not.toHaveBeenCalled();
@@ -293,7 +293,7 @@ describe("unified channel settings", () => {
     fireEvent.click(saveButton());
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "The profile was not saved, so nothing changed",
+        "The workspace was not saved, so nothing changed",
       ),
     );
     expect(api.save).not.toHaveBeenCalled();
@@ -309,7 +309,7 @@ describe("unified channel settings", () => {
   it("reports a partial save and requires readback before saving again", async () => {
     const { api, onSaved, store } = fixture();
     api.save.mockRejectedValueOnce(new ApiError("Conflict", 409));
-    fireEvent.change(screen.getByLabelText("Channel name"), {
+    fireEvent.change(screen.getByLabelText("Campaign name"), {
       target: { value: "Renamed channel" },
     });
     fireEvent.change(screen.getByLabelText("Creative preferences"), {
@@ -323,15 +323,15 @@ describe("unified channel settings", () => {
     expect(store.campaigns[0].name).toBe("Campaign A");
     expect(onSaved).not.toHaveBeenCalled();
     expect(saveButton()).toBeDisabled();
-    expect(screen.getByLabelText("Channel name")).toHaveValue("Renamed channel");
+    expect(screen.getByLabelText("Campaign name")).toHaveValue("Renamed channel");
     fireEvent.click(screen.getByRole("button", { name: "Check saved state" }));
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "profile settings saved; channel details not saved",
+        "workspace saved; campaign not saved",
       ),
     );
     expect(saveButton()).toBeEnabled();
-    expect(screen.getByLabelText("Channel name")).toHaveValue("Renamed channel");
+    expect(screen.getByLabelText("Campaign name")).toHaveValue("Renamed channel");
     fireEvent.click(saveButton());
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(store.campaigns[0].name).toBe("Renamed channel");
@@ -344,7 +344,7 @@ describe("unified channel settings", () => {
       Object.assign(store.profiles.find((p) => p.id === id)!, body);
       throw new ApiError("Cannot reach the local service.", 0);
     });
-    fireEvent.change(screen.getByLabelText("Channel name"), {
+    fireEvent.change(screen.getByLabelText("Campaign name"), {
       target: { value: "Renamed channel" },
     });
     fireEvent.click(saveButton());
@@ -358,7 +358,7 @@ describe("unified channel settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Check saved state" }));
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "profile settings saved; channel details not saved",
+        "workspace saved; campaign not saved",
       ),
     );
     expect(onSaved).not.toHaveBeenCalled();
@@ -390,10 +390,10 @@ describe("unified channel settings", () => {
     fireEvent.click(saveButton());
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
     expect(api.createProfile).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("New profile name"), {
+    fireEvent.change(screen.getByLabelText("New workspace name"), {
       target: { value: "New clips" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create workspace" }));
     await waitFor(() => expect(api.createProfile).toHaveBeenCalledTimes(1));
   });
 });
@@ -412,7 +412,7 @@ describe("app routing", () => {
       await within(main).findByRole("heading", { name: "Results & next test" }),
     ).toBeTruthy();
     expect(
-      within(main).queryByRole("heading", { name: "Channel settings" }),
+      within(main).queryByRole("heading", { name: "Workspace settings" }),
     ).toBeNull();
   });
 });

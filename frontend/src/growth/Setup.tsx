@@ -87,6 +87,7 @@ export function Setup({
   creating,
   onSaved,
   advanced,
+  onNewCampaign,
 }: {
   w: Workspace;
   factory: FactoryState;
@@ -95,6 +96,8 @@ export function Setup({
   onSaved: () => void;
   /** Rarely used workspace actions, shown inside the single Advanced section. */
   advanced?: ReactNode;
+  /** Opens the New campaign form for this workspace. */
+  onNewCampaign?: () => void;
 }) {
   const campaign = creating ? undefined : w.campaign;
   // The profile being edited is fixed for this mount (GrowthApp keys Setup by
@@ -104,6 +107,7 @@ export function Setup({
       ? w.profiles.find((p) => p.id === w.profileId)
       : undefined;
   const [name, setName] = useState(campaign?.name || "");
+  const [workspaceName, setWorkspaceName] = useState(profile?.name || "");
   const [audience, setAudience] = useState(
     campaign?.brief.audience || profile?.audience || "",
   );
@@ -127,7 +131,10 @@ export function Setup({
   const blocked =
     w.busy || w.loading || checking || factory.loading || !campaign || !profile;
   const metricNeeded = objective !== "discovery";
-  const valid = !!name.trim() && (!metricNeeded || !!metric.trim());
+  const valid =
+    !!name.trim() &&
+    !!workspaceName.trim() &&
+    (!metricNeeded || !!metric.trim());
 
   function edited() {
     if (state.kind === "saved" || state.kind === "failed")
@@ -146,6 +153,7 @@ export function Setup({
     // Only writable fields; read-only production_history is never sent.
     const profileBody: ProfileBody = {
       ...goal,
+      name: workspaceName.trim(),
       audience: audience.trim(),
       brand_context: voice.trim(),
       creative_preferences: creative.trim(),
@@ -189,13 +197,13 @@ export function Setup({
         ]);
         const latestCampaign = campaigns.find((c) => c.id === campaignId);
         if (!latestCampaign)
-          throw new Error("This channel is no longer available.");
+          throw new Error("This campaign is no longer available.");
         // 2. The selected profile must still belong to this channel. There is
         // no fallback to another profile.
         const latestProfile = profiles.find((p) => p.id === profileId);
         if (!latestProfile || !latestCampaign.profile_ids.includes(profileId))
           throw new Error(
-            "The selected profile is no longer linked to this channel. Refresh and choose a profile.",
+            "This workspace is no longer linked to this campaign. Refresh and choose again.",
           );
         // 3. Strict writable bodies.
         const { profileBody, campaignBody } = bodies(
@@ -235,7 +243,7 @@ export function Setup({
         failure = message(error, "The save failed.");
         throw error;
       }
-    }, "Channel settings saved. Style rules and earlier clips are unchanged.");
+    }, "Settings saved. Style rules and earlier clips are unchanged.");
     if (!started) return;
     if (ok) {
       setLinkProfiles([]);
@@ -264,11 +272,11 @@ export function Setup({
         unknownOutcome
           ? {
               kind: "unknown",
-              message: `${failure} The profile save was not confirmed and may or may not have been written. Check saved state before saving again.`,
+              message: `${failure} The workspace save was not confirmed and may or may not have been written. Check saved state before saving again.`,
             }
           : {
               kind: "failed",
-              message: `${failure} The profile was not saved, so nothing changed. Your edits are still here.`,
+              message: `${failure} The workspace was not saved, so nothing changed. Your edits are still here.`,
             },
       );
     else if (stage === "campaign")
@@ -276,11 +284,11 @@ export function Setup({
         unknownOutcome
           ? {
               kind: "unknown",
-              message: `${failure} Profile settings saved; the channel details save was not confirmed. Check saved state before saving again.`,
+              message: `${failure} Workspace saved; the campaign save was not confirmed. Check saved state before saving again.`,
             }
           : {
               kind: "partial",
-              message: `${failure} Partially saved: profile settings saved, channel details were not. Check saved state before saving again.`,
+              message: `${failure} Partially saved: workspace saved, campaign was not. Check saved state before saving again.`,
             },
       );
     else
@@ -315,7 +323,7 @@ export function Setup({
             }
           : {
               kind: "failed",
-              message: `Readback: profile settings ${profileOk ? "saved" : "not saved"}; channel details ${campaignOk ? "saved" : "not saved"}. Your edits are still here; saving again is now safe.`,
+              message: `Readback: workspace ${profileOk ? "saved" : "not saved"}; campaign ${campaignOk ? "saved" : "not saved"}. Your edits are still here; saving again is now safe.`,
             },
       );
       if (profileOk && campaignOk) {
@@ -350,43 +358,39 @@ export function Setup({
       });
       setLinkProfiles((old) => union(old, [created.id]));
       setProfileName("");
-    }, "Local profile created. Save channel settings to link it. No social account was connected.");
+    }, "Workspace created. Save settings to share this campaign with it. No social account was connected.");
   }
 
   if (!campaign)
     return (
-      <Empty title="No channel selected" icon="settings">
+      <Empty title="No campaign selected" icon="settings">
         {w.loading
-          ? "Opening your channel…"
-          : "Choose a channel from the top bar."}
+          ? "Opening your workspace…"
+          : "Choose a workspace from the top bar."}
       </Empty>
     );
   if (!profile)
     return (
-      <Empty title="Choose a linked profile" icon="settings">
-        This profile isn't linked to the channel. Refresh and pick another;
+      <Empty title="Choose a workspace" icon="settings">
+        This workspace isn't linked to the campaign. Refresh and pick another;
         nothing changes automatically.
       </Empty>
     );
-  const otherLinked = w.profiles.filter(
-    (p) => linked.has(p.id) && p.id !== profile.id,
-  );
   return (
     <div className="gf-setup-grid gf-channel-settings-grid">
-      <section className="gf-card gf-brief" aria-label="Channel settings form">
+      <section className="gf-card gf-brief" aria-label="Workspace settings form">
         <div className="gf-form-fields">
-          <CloudAccountRow />
-          <FieldGroup title="Your channel">
-            <Field label="Channel name">
+          <FieldGroup title="Workspace">
+            <Field label="Workspace name">
               {(id) => (
                 <AutoTextarea
                   rows={1}
                   id={id}
                   maxLength={200}
-                  placeholder="e.g. Founder stories"
-                  value={name}
+                  placeholder="e.g. All-In Podcast"
+                  value={workspaceName}
                   onChange={(e) => {
-                    setName(e.target.value);
+                    setWorkspaceName(e.target.value);
                     edited();
                   }}
                 />
@@ -408,8 +412,58 @@ export function Setup({
               )}
             </Field>
             <Field
+              label="Voice and boundaries"
+              hint="One rule per line."
+            >
+              {(id) => (
+                <AutoTextarea
+                  id={id}
+                  rows={3}
+                  maxLength={4000}
+                  value={voice}
+                  onChange={(e) => {
+                    setVoice(e.target.value);
+                    edited();
+                  }}
+                />
+              )}
+            </Field>
+            <Field label="Creative preferences">
+              {(id) => (
+                <AutoTextarea
+                  id={id}
+                  rows={2}
+                  maxLength={4000}
+                  placeholder="e.g. Lead with a clear claim; keep the context intact."
+                  value={creative}
+                  onChange={(e) => {
+                    setCreative(e.target.value);
+                    edited();
+                  }}
+                />
+              )}
+            </Field>
+            <CloudAccountRow />
+          </FieldGroup>
+          <FieldGroup title="Campaign">
+            <Field label="Campaign name">
+              {(id) => (
+                <AutoTextarea
+                  rows={1}
+                  id={id}
+                  maxLength={200}
+                  placeholder="e.g. Founder stories"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    edited();
+                  }}
+                />
+              )}
+            </Field>
+            <Field
               label="What are we working toward?"
-              hint="Applies to new clips only."
+              hint="Applies to new clips. Shared by this workspace's campaigns for now."
             >
               {(id) => (
                 <select
@@ -455,42 +509,16 @@ export function Setup({
                 />
               )}
             </Field>
-            <Field
-              label="Voice and boundaries"
-              hint="One rule per line."
-            >
-              {(id) => (
-                <AutoTextarea
-                  id={id}
-                  rows={3}
-                  maxLength={4000}
-                  value={voice}
-                  onChange={(e) => {
-                    setVoice(e.target.value);
-                    edited();
-                  }}
-                />
-              )}
-            </Field>
-            <Field label="Creative preferences">
-              {(id) => (
-                <AutoTextarea
-                  id={id}
-                  rows={2}
-                  maxLength={4000}
-                  placeholder="e.g. Lead with a clear claim; keep the context intact."
-                  value={creative}
-                  onChange={(e) => {
-                    setCreative(e.target.value);
-                    edited();
-                  }}
-                />
-              )}
-            </Field>
-            {otherLinked.length > 0 && (
-              <p className="gf-help">
-                Editing <strong>{profile.name}</strong> only.
-              </p>
+            {onNewCampaign && (
+              <button
+                type="button"
+                className="gf-button ghost compact"
+                disabled={w.busy || checking}
+                onClick={onNewCampaign}
+              >
+                <Icon name="plus" size={14} />
+                New campaign
+              </button>
             )}
           </FieldGroup>
           <details className="gf-disclosure gf-advanced-settings">
@@ -500,7 +528,7 @@ export function Setup({
               <Icon name="down" size={15} />
             </summary>
             <div className="gf-disclosure-body">
-              <h3>Episodes in this channel</h3>
+              <h3>Episodes in this campaign</h3>
               {factory.data.videos.length === 0 && (
                 <p className="gf-help">No imported footage yet.</p>
               )}
@@ -532,7 +560,7 @@ export function Setup({
                   );
                 })}
               </div>
-              <h3>Linked profiles</h3>
+              <h3>Shared with workspaces</h3>
               <div className="gf-profile-options">
                 {w.profiles.map((p) => {
                   const on = linked.has(p.id) || linkProfiles.includes(p.id);
@@ -558,7 +586,7 @@ export function Setup({
                   );
                 })}
               </div>
-              <Field label="New profile name">
+              <Field label="New workspace name">
                 {(id) => (
                   <AutoTextarea
                     rows={1}
@@ -576,7 +604,7 @@ export function Setup({
                 disabled={!profileName.trim() || blocked}
                 onClick={() => void createProfile()}
               >
-                Create profile
+                Create workspace
                 <Icon name="plus" size={14} />
               </button>
               {advanced && (
@@ -600,7 +628,7 @@ export function Setup({
           }
         >
           {state.kind === "idle"
-            ? "Saves this channel only. Nothing is published."
+            ? "Saves this workspace and campaign. Nothing is published."
             : state.message}
         </span>
         <div className="gf-channel-actions">
@@ -625,7 +653,7 @@ export function Setup({
             <Icon name="research" size={14} />
           </button>
           <PrimaryAction
-            label={w.busy ? "Saving…" : "Save channel settings"}
+            label={w.busy ? "Saving…" : "Save settings"}
             intent="approve"
             disabled={blocked || needsReadback || !valid}
             onClick={() => void save()}

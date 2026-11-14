@@ -1432,3 +1432,47 @@
 .gf-style-rule-fields {
   padding: 0 20px;
 }
+
+/* Workspace ▸ Campaign context in the top bar. */
+.gf-context-switcher {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+.gf-campaign-switcher {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.gf-campaign-switcher > span,
+.gf-campaign-name {
+  color: var(--material-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+.gf-campaign-switcher select {
+  max-width: 240px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.gf-new-campaign {
+  max-width: 640px;
+}
+.gf-new-campaign fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.gf-new-campaign legend {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}

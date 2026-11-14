@@ -228,7 +228,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     }, "Verified export created: MP4 and provenance manifest are ready.");
     await reconcile(clip);
   }
-  if (!w.campaign) return <Empty title="No channel yet" icon="studio">Set up a channel to start.</Empty>;
+  if (!w.campaign) return <Empty title="No campaign yet" icon="studio">Create a campaign to start.</Empty>;
   const blockers = mode === "agent" ? [...ready.agent, ...(reviewPreview ? ["Agents run in the Mac app, not in this preview."] : []), ...(ledgerError ? ["Agent status is unavailable. Refresh before starting."] : [])] : [...ready.manual, ...edits, ...(revisionError ? [revisionError] : [])];
   const exportRows = exportsState.clipId === selected?.id ? exportsState.rows : [];
   const making = !selected || !!revisionParent;

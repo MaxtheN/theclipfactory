@@ -76,9 +76,9 @@ afterEach(() => {
 
 async function enterOnboarding(viaQuickActions = false) {
   const workspace = await screen.findByRole("combobox", {
-    name: "Current campaign",
+    name: "Current workspace",
   });
-  await waitFor(() => expect(workspace).toHaveValue("preview-campaign"));
+  await waitFor(() => expect(workspace).toHaveValue("preview-profile-allin"));
   if (viaQuickActions) {
     fireEvent.click(screen.getByRole("button", { name: "Open quick actions" }));
     const search = screen.getByRole("combobox", {
@@ -87,8 +87,8 @@ async function enterOnboarding(viaQuickActions = false) {
     fireEvent.change(search, { target: { value: "new workspace" } });
     fireEvent.keyDown(search, { key: "Enter" });
   } else {
-    // New workspace lives in Channel settings → Advanced, not the sidebar.
-    fireEvent.click(screen.getByRole("button", { name: "Channel settings" }));
+    // New workspace lives in Workspace settings → Advanced, not the sidebar.
+    fireEvent.click(screen.getByRole("button", { name: "Workspace settings" }));
     screen
       .getByLabelText("Advanced controls")
       .closest("details")
@@ -200,9 +200,7 @@ describe("standalone onboarding shell", () => {
       expect(
         screen.getByRole("navigation", { name: "Main navigation" }),
       ).toBeVisible();
-      expect(
-        screen.getByRole("combobox", { name: "Current campaign" }),
-      ).toHaveValue(saved.id);
+      expect(localStorage.getItem("growth-campaign")).toBe(saved.id);
       expect(
         screen.queryByRole("region", { name: "Workspace onboarding" }),
       ).not.toBeInTheDocument();
@@ -270,8 +268,8 @@ describe("standalone onboarding shell", () => {
       ).toHaveValue("Builders and founders"),
     );
     expect(
-      screen.getByRole("combobox", { name: "Current campaign" }),
-    ).toHaveValue("preview-campaign");
+      screen.getByRole("combobox", { name: "Current workspace" }),
+    ).toHaveValue("preview-profile-allin");
     expect(
       screen.getByRole("navigation", { name: "Main navigation" }),
     ).toBeVisible();
@@ -331,9 +329,7 @@ describe("standalone onboarding shell", () => {
       primary_metric: null,
       audience: "Independent podcast creators",
     });
-    expect(
-      screen.getByRole("combobox", { name: "Current campaign" }),
-    ).toHaveValue(saved.id);
+    expect(localStorage.getItem("growth-campaign")).toBe(saved.id);
     expect(
       screen.getByRole("navigation", { name: "Main navigation" }),
     ).toBeVisible();
@@ -371,7 +367,7 @@ describe("standalone onboarding shell", () => {
       screen.queryByRole("button", { name: "Open quick actions" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("combobox", { name: "Current campaign" }),
+      screen.queryByRole("combobox", { name: "Current workspace" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Set up your workspace" }),
@@ -389,7 +385,7 @@ describe("standalone onboarding shell", () => {
     const search = screen.getByRole("combobox", {
       name: "Search quick actions",
     });
-    fireEvent.change(search, { target: { value: "channel settings" } });
+    fireEvent.change(search, { target: { value: "workspace settings" } });
     fireEvent.keyDown(search, { key: "Enter" });
     expect(
       screen.getByRole("textbox", { name: "Who are we speaking to?" }),
@@ -455,11 +451,9 @@ describe("standalone onboarding shell", () => {
       audience: "Podcast producers and company marketers",
     });
     expect(profile.creative_preferences).toContain("A strong point of view");
+    expect(localStorage.getItem("growth-campaign")).toBe(saved.id);
     expect(
-      screen.getByRole("combobox", { name: "Current campaign" }),
-    ).toHaveValue(saved.id);
-    expect(
-      screen.queryByRole("combobox", { name: "Active account profile" }),
+      screen.queryByRole("combobox", { name: "Current campaign" }),
     ).not.toBeInTheDocument();
     expect(localStorage.getItem("growth-profile")).toBe(profile.id);
     expect(await previewRequest<Job[]>("/api/jobs")).toHaveLength(
