@@ -9,10 +9,10 @@ import { ClipReview } from "../components/ClipReview";
 import { TeamLedger } from "../components/TeamLedger";
 import { TeamComparisons } from "../components/TeamComparisons";
 import {
-  hasTranscript,
   installedLlms,
   runtimeSatisfied,
   sourceHasActiveJob,
+  sourceHasTranscript,
   usableModel,
 } from "../productionPreflight";
 export function getCandidates(analysis: unknown): Candidate[] {
@@ -72,8 +72,7 @@ function Editor({
   const [error, setError] = useState("");
   const installed = installedLlms(state.data.models, { needsVision: true });
   const model = usableModel(picked, installed);
-  const needsWhisper =
-    video.has_audio === true && !hasTranscript(video.transcript);
+  const needsWhisper = video.has_audio === true && !sourceHasTranscript(video);
   const sourceBusy = sourceHasActiveJob(state.data.jobs, video.id);
   const analysisReady =
     !state.loading &&
@@ -386,7 +385,8 @@ function Editor({
     </div>
   );
 }
-export function Factory({
+/** Manual control: choose ranges yourself and inspect every run in detail. */
+export function Studio({
   state,
   initialSource = "",
 }: {
@@ -423,8 +423,8 @@ export function Factory({
         </>
       ) : (
         <Empty title="Start with a source video">
-          Import footage in Library to analyze candidates or render a manual
-          selection.
+          Add footage on the Factory page, then come back here to pick a range
+          by hand.
         </Empty>
       )}
       <TeamLedger

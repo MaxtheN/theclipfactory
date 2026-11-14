@@ -127,9 +127,13 @@ type Mutate = (
 export function Campaigns({
   state,
   openFactory,
+  openClips = openFactory,
 }: {
   state: FactoryState;
+  /** Opens Studio: the manual editor and the run details. */
   openFactory: () => void;
+  /** Opens the clip review page. */
+  openClips?: () => void;
 }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -252,7 +256,7 @@ export function Campaigns({
         </Section>
         <Section
           title="Campaign brief"
-          detail="Attach multiple profiles and source videos. Sources remain in Library."
+          detail="Attach multiple profiles and source videos. Sources remain in Footage."
         >
           <Field label="Selected campaign">
             <select
@@ -291,6 +295,7 @@ export function Campaigns({
           blocked={blocked}
           mutate={mutate}
           openFactory={openFactory}
+          openClips={openClips}
         />
       )}
     </div>
@@ -661,6 +666,7 @@ function CampaignWorkspace({
   blocked,
   mutate,
   openFactory,
+  openClips,
 }: {
   campaign: Campaign;
   profiles: Profile[];
@@ -668,6 +674,7 @@ function CampaignWorkspace({
   blocked: boolean;
   mutate: Mutate;
   openFactory: () => void;
+  openClips: () => void;
 }) {
   const [versions, setVersions] = useState<StrategyVersion[]>([]);
   const [observations, setObservations] = useState<Observation[]>([]);
@@ -808,7 +815,7 @@ function CampaignWorkspace({
           mutate={act}
         />
         <button className="secondary small" onClick={openFactory}>
-          Open Factory · optional agents, ledger and clip review
+          Open Studio · manual editing and run details
         </button>
       </Section>
       <Section
@@ -846,7 +853,7 @@ function CampaignWorkspace({
       </Section>
       <Section
         title="Linked clips and snapshots"
-        detail="Only clips assigned to this campaign appear here. Legacy unassigned outputs remain in Factory."
+        detail="Only clips assigned to this campaign appear here. Other clips are on the Clips page."
       >
         {state.errors.clips && (
           <p role="alert">Clip data unavailable; refresh workspace.</p>
@@ -889,8 +896,8 @@ function CampaignWorkspace({
                     }}
                   />
                 </details>
-                <button className="secondary small" onClick={openFactory}>
-                  Review and approve in Factory
+                <button className="secondary small" onClick={openClips}>
+                  Review and approve in Clips
                 </button>
               </div>
             </article>
@@ -1210,7 +1217,7 @@ function ProductionForm({
               mode,
               instructions,
             }),
-          "Campaign render queued with the approved strategy snapshot. Review the output in Factory.",
+          "Campaign render queued with the approved strategy snapshot. Review the output in Clips.",
         );
       }}
     >
@@ -1331,7 +1338,7 @@ function ProductionForm({
                   model_id: modelId,
                   revision_budget: 2,
                 }),
-              "Campaign agent team queued with approved scoped direction. Inspect handoffs in Factory; human review is still required.",
+              "Campaign agent team queued with approved scoped direction. Inspect handoffs in Studio; human review is still required.",
             );
           }}
         >
@@ -1511,7 +1518,7 @@ function EvidenceForm({
         </form>
         {!clips.length && (
           <p className="render-warning">
-            Approve a linked clip for this profile in Factory before importing
+            Approve a linked clip for this profile in Clips before importing
             evidence.
           </p>
         )}

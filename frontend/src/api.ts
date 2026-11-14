@@ -65,6 +65,8 @@ export const post = <T>(path: string, body: unknown = {}) =>
   api<T>(path, { method: "POST", body: JSON.stringify(body) });
 export const put = <T>(path: string, body: unknown) =>
   api<T>(path, { method: "PUT", body: JSON.stringify(body) });
+export const patch = <T>(path: string, body: unknown) =>
+  api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 export const remove = (path: string) =>
   api<unknown>(path, { method: "DELETE" });
 export const endpoint = (
@@ -72,3 +74,12 @@ export const endpoint = (
   id: string,
   action?: string,
 ) => `/api/${kind}/${encodeURIComponent(id)}${action ? `/${action}` : ""}`;
+/** Media URLs reported by the service are only ever loaded from this origin's API. */
+export function localMediaUrl(value: unknown): string | undefined {
+  return typeof value === "string" &&
+    value.startsWith("/api/") &&
+    !value.startsWith("/api//") &&
+    !value.includes("\\")
+    ? value
+    : undefined;
+}

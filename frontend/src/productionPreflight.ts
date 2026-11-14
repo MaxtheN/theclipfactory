@@ -23,6 +23,16 @@ export function hasTranscript(value: unknown) {
   return !!value && typeof value === "object" && Object.keys(value).length > 0;
 }
 
+/** Prefer the service's explicit flag; list responses may carry only a slim transcript. */
+export function sourceHasTranscript(video: {
+  has_transcript?: boolean;
+  transcript?: unknown;
+}) {
+  return typeof video.has_transcript === "boolean"
+    ? video.has_transcript
+    : hasTranscript(video.transcript);
+}
+
 export function installedLlms(models: Model[], { needsVision = false } = {}) {
   return models.filter(
     (m) =>
