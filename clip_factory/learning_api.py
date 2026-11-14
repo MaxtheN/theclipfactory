@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from .autonomy_runtime import ConnectionSettings
@@ -58,6 +58,15 @@ def install(app, runtime, engine):
     @app.post("/api/automation/connections", status_code=201)
     def begin_connection(body: ConnectProfile):
         return runtime.connection_start(body.profile_id)
+
+    @app.post("/api/automation/connect/instagram", status_code=201)
+    def connect_instagram(body: ConnectProfile):
+        """Self-serve: Composio Connect Link for this install, opened in the system browser."""
+        return runtime.connect_instagram(body.profile_id)
+
+    @app.get("/api/automation/connect/{request_id}")
+    def connect_status(request_id: str = Path(pattern=r"^[A-Za-z0-9_-]{1,200}$")):
+        return runtime.connect_status(request_id)
 
     @app.post("/api/automation/connections/{identifier}/verify")
     def finish_connection(identifier: str):

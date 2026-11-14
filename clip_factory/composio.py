@@ -298,11 +298,26 @@ class ComposioClient:
         finally:
             _sensitive_io.reset(token)
 
+    # Connected-account lifecycle values. Anything else is reported as UNKNOWN, never ACTIVE.
+    CONNECTION_STATUSES = frozenset(
+        {"INITIALIZING", "INITIATED", "ACTIVE", "FAILED", "EXPIRED", "INACTIVE", "REVOKED"}
+    )
+
     def initiate_connection(self, auth_config_id, user_id, callback_url=None):
         body = {"auth_config_id": _identifier(auth_config_id), "user_id": _user(user_id)}
         if callback_url is not None:
             body["callback_url"] = _url(callback_url, callback=True)
-        result = self._request("POST", "/api/v3/connected_accounts/link", json=body)
+        try:
+            result = self._request("POST", "/api/v3/connected_accounts/link", json=body)
+        except ComposioError as error:
+            # Composio answers 403 when the project key lacks connected_accounts write access.
+            if error.http_status in {401, 403}:
+                raise ComposioError(
+                    "Your Composio key needs connected-account management permission.",
+                    code="permission_denied",
+                    http_status=403,
+                ) from None
+            raise
         return {
             "connected_account_id": _identifier(result.get("connected_account_id")),
             "redirect_url": _url(result.get("redirect_url")),
@@ -313,6 +328,34 @@ class ComposioClient:
         account, user = _identifier(connected_account_id), _user(user_id)
         result = self._request("GET", f"/api/v3/connected_accounts/{account}")
         return self._validated_account(result, account, user, auth_config_id)
+
+    def connection_status(self, connected_account_id, user_id, auth_config_id):
+        """Lifecycle status of a pending connection this app requested.
+
+        Unlike read_account this accepts non-ACTIVE states, but still requires the exact
+        account, owner, Instagram toolkit and auth configuration. Only the status leaves.
+        """
+        account, user, config = _identifier(connected_account_id), _user(user_id), _identifier(auth_config_id)
+        result = self._request("GET", f"/api/v3/connected_accounts/{account}")
+        auth, toolkit = result.get("auth_config"), result.get("toolkit")
+        if (
+            result.get("id") != account
+            or result.get("user_id") != user
+            or not isinstance(toolkit, dict)
+            or toolkit.get("slug") != "instagram"
+            or not isinstance(auth, dict)
+            or auth.get("id") != config
+        ):
+            raise ComposioError(
+                "This connection does not belong to this app's Instagram request.", code="account_mismatch"
+            )
+        status = result.get("status")
+        status = status if isinstance(status, str) and status in self.CONNECTION_STATUSES else "UNKNOWN"
+        if status == "ACTIVE" and (
+            result.get("is_disabled", False) is not False or auth.get("is_disabled", False) is not False
+        ):
+            status = "INACTIVE"
+        return {"connected_account_id": account, "status": status}
 
     def account_owner(self, connected_account_id, auth_config_id):
         """Discover the authoritative owner of this exact project-scoped connection.

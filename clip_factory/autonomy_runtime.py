@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import secrets
 import threading
 import time
+import webbrowser
+from datetime import UTC, datetime
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -60,6 +64,8 @@ class AutonomyRuntime:
         self.wake = threading.Event()
         self.secrets = ComposioSecrets()
         self.resource_check = self.require_resources
+        # Opens Composio's hosted sign-in in the system browser (never inside the app window).
+        self.open_url = lambda url: webbrowser.open(url, new=2)
 
     def require_resources(self, model, context_tokens):
         from .learning_resources import check_learning_resources
@@ -123,6 +129,103 @@ class AutonomyRuntime:
         if not intent:
             raise HTTPException(404, "Start this account connection from this workspace first.")
         return self.bind_account(identifier, intent["user_id"], intent["profile_id"], intent["auth_config_id"])
+
+    def composio_user_id(self):
+        """Stable per-install Composio user ID. Never an email or a raw cloud identifier.
+
+        Signed in: a namespaced hash of the Supabase user ID, so the same person gets the
+        same owner across reinstalls. Otherwise: a random install ID kept in local SQLite.
+        """
+        link = self.store.get("config", "cloud_link") or {}
+        cloud_user = link.get("user_id")
+        if isinstance(cloud_user, str) and cloud_user.strip():
+            digest = hashlib.sha256(f"growth-factory-composio:{cloud_user}".encode()).hexdigest()
+            return "gf-user-" + digest[:32]
+        install = self.store.get("config", "composio_install") or {}
+        install_id = install.get("install_id")
+        if not isinstance(install_id, str) or len(install_id) != 32 or not all(c in "0123456789abcdef" for c in install_id):
+            install_id = secrets.token_hex(16)
+            self.store.put("config", {"id": "composio_install", "install_id": install_id, "created_at": now()})
+        return "gf-install-" + install_id
+
+    def connect_instagram(self, profile_id):
+        """Create a Composio Connect Link for this install's user and open it in the browser."""
+        from .composio import ComposioError
+
+        if not self.store.get("profiles", profile_id):
+            raise HTTPException(404, "Profile not found.")
+        config = (self.store.get("automation_settings", "local") or {}).get("auth_config_id")
+        if not config:
+            raise HTTPException(409, "Save your Composio settings first.")
+        user_id = self.composio_user_id()
+        try:
+            reply = self.client().initiate_connection(config, user_id)
+        except ComposioError as error:
+            if error.code == "permission_denied":
+                raise HTTPException(403, str(error)) from None
+            raise
+        request_id = reply["connected_account_id"]
+        self.store.put("connection_intents", {"id": request_id, "profile_id": profile_id,
+            "user_id": user_id, "auth_config_id": config, "created_at": now(),
+            "expires_at": reply.get("expires_at"), "status": "pending", "flow": "connect_link"})
+        try:
+            opened = bool(self.open_url(reply["redirect_url"]))
+        except Exception:  # noqa: BLE001 - the UI still shows the link to click
+            opened = False
+        return {"request_id": request_id, "status": "pending", "redirect_url": reply["redirect_url"],
+            "expires_at": reply.get("expires_at"), "opened": opened}
+
+    @staticmethod
+    def _expired(value):
+        if not isinstance(value, str):
+            return False
+        try:
+            moment = datetime.fromisoformat(value)
+        except ValueError:
+            return False
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=UTC)
+        return moment <= datetime.now(UTC)
+
+    def _connect_result(self, intent, status, message=None, account=None):
+        if intent.get("status") != status or intent.get("message") != message:
+            intent = {**intent, "status": status, "message": message, "updated_at": now()}
+            self.store.put("connection_intents", intent)
+        result = {"request_id": intent["id"], "status": status, "message": message}
+        if account:
+            result["account"] = {"id": account["id"], "display_name": account.get("display_name"),
+                "instagram_user_id": account.get("instagram_user_id"), "profile_id": account.get("profile_id")}
+        return result
+
+    def connect_status(self, request_id):
+        """Poll one app-created connection; bind it only after exact identity verification."""
+        from .composio import ComposioError
+
+        intent = self.store.get("connection_intents", request_id)
+        if not intent:
+            raise HTTPException(404, "Start this Instagram connection from this app first.")
+        if intent.get("status") == "connected":
+            return self._connect_result(intent, "connected", account=self.store.get("connected_accounts", request_id))
+        if intent.get("status") in {"failed", "expired"}:
+            return self._connect_result(intent, intent["status"], intent.get("message"))
+        status = self.client().connection_status(request_id, intent["user_id"], intent["auth_config_id"])["status"]
+        if status == "ACTIVE":
+            try:
+                account = self.bind_account(request_id, intent["user_id"], intent["profile_id"], intent["auth_config_id"])
+            except HTTPException as error:
+                if error.status_code != 409:
+                    raise
+                return self._connect_result(intent, "failed", error.detail)
+            except ComposioError as error:
+                if error.code not in {"invalid_identity", "account_mismatch", "invalid_id"}:
+                    raise  # Network or provider hiccup: stay pending and let the UI poll again.
+                return self._connect_result(intent, "failed", str(error))
+            return self._connect_result(intent, "connected", account=account)
+        if status in {"FAILED", "INACTIVE", "REVOKED"}:
+            return self._connect_result(intent, "failed", "Instagram sign-in did not finish. Try again.")
+        if status == "EXPIRED" or self._expired(intent.get("expires_at")):
+            return self._connect_result(intent, "expired", "The sign-in link expired. Start again.")
+        return self._connect_result(intent, "pending")
 
     def bind_account(self, identifier, user_id, profile_id, auth_config_id=None):
         if not self.store.get("profiles", profile_id):
