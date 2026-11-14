@@ -182,7 +182,7 @@ def decode_output(text: str, schema: type[TypedOutput]) -> dict:
         return schema.model_validate(value).model_dump()
     except (ValueError, TypeError, ValidationError) as exc:
         raise WorkError(
-            "Agent returned an invalid structured handoff. No dependent media action was executed."
+            "Agent returned an invalid structured handoff. The handoff was rejected."
         ) from exc
 
 
@@ -897,7 +897,16 @@ class TeamEngine:
                     )
                 except WorkError as exc:
                     if reviewed_edits is None:
-                        raise
+                        critique = {
+                            "verdict": "unknown",
+                            "checks": {key: "unknown" for key in ("context", "claims", "captions", "duplicates")},
+                            "findings": [],
+                        }
+                        stop = (
+                            f"Critic review unavailable: {exc} Draft previews require a valid "
+                            "critic recheck before approval."
+                        )
+                        break
                     edits, critique = reviewed_edits, reviewed_critique
                     stop = (
                         f"Critic recheck rejected: {exc} Retained the prior reviewed draft; "

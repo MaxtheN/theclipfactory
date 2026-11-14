@@ -531,8 +531,6 @@ def test_unknown_or_wrong_account_metrics_do_not_invent_performance(harness, met
         "tools",
         "truncated",
         "duplicate_roles",
-        "critic_ref",
-        "critic_index",
     ],
 )
 def test_invalid_handoff_fails_before_any_render(harness, bad):
@@ -557,11 +555,6 @@ def test_invalid_handoff_fails_before_any_render(harness, bad):
         outputs[0] = '{"summary":"incomplete", "tasks":['
     elif bad == "duplicate_roles":
         outputs[0]["tasks"][0]["role"] = "editor"
-    else:
-        outputs[4] = critique("revise")
-        outputs[4]["findings"][0]["evidence_refs"] = ["fake"] if bad == "critic_ref" else ["source:source"]
-        if bad == "critic_index":
-            outputs[4]["findings"][0]["candidate_index"] = 1
     harness.models = ScriptedModels(outputs)
     harness.engine.models = harness.models
     run = harness.create()
@@ -662,6 +655,30 @@ def test_invalid_revision_retains_validated_draft_with_unresolved_review(harness
     assert clip["approved"] is False
     assert clip["team_review_status"] == "fail"
     assert any(t["role"] == "editor" and t["iteration"] == 1 and t["status"] == "failed" for t in run["tasks"])
+
+
+@pytest.mark.parametrize("case", ["reference", "index", "schema"])
+def test_rejected_first_critic_allows_only_validated_unapproved_previews(harness, case):
+    outputs = script(verdict="revise")
+    if case == "reference":
+        outputs[-1]["findings"][0]["evidence_refs"] = ["source:invented"]
+    elif case == "index":
+        outputs[-1]["findings"][0]["candidate_index"] = 1
+    else:
+        outputs[-1]["findings"][0]["evidence_refs"] *= 17
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review"
+    assert "Critic review unavailable" in run["stop_reason"]
+    assert result["review_status"] == "unknown"
+    assert len(harness.rendered) == 1
+    clip = harness.store.all("clips")[0]
+    assert not clip["approved"] and clip["team_review_status"] == "unknown"
+    assert set(clip["team_checks"].values()) == {"unknown"}
+    assert next(t for t in run["tasks"] if t["role"] == "critic")["status"] == "failed"
+    assert titles(harness.models).count("Critique") == 1
+    assert run["permissions"] == {"publish": False, "ads": False}
 
 
 def test_rejected_critic_recheck_retains_prior_edit_with_its_original_review(harness):
