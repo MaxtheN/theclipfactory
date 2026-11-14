@@ -3,811 +3,489 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f8f7f2" />
+    <meta name="theme-color" content="#ffffff" />
     <title>Growth Factory — Long videos. Short stories.</title>
     <meta
       name="description"
-      content="Turn long-form footage into short-form stories. A local-first AI video workspace for your Mac, with creative direction and human review built in."
+      content="Drop in long-form footage. A crew of agents on your Mac finds the moments and cuts vertical clips. You approve every one."
     />
     <meta property="og:type" content="website" />
     <link rel="canonical" href="https://growth-factory-landing.vercel.app/" />
-    <meta
-      property="og:url"
-      content="https://growth-factory-landing.vercel.app/"
-    />
-    <meta
-      property="og:title"
-      content="Growth Factory — Long videos. Short stories."
-    />
+    <meta property="og:url" content="https://growth-factory-landing.vercel.app/" />
+    <meta property="og:title" content="Growth Factory — Long videos. Short stories." />
     <meta
       property="og:description"
-      content="Your footage, shaped into short-form stories. Agents help find moments and edit. You keep the final say."
+      content="A crew of agents finds the moments in your footage and cuts the clips. You approve every one."
     />
-    <meta
-      property="og:image"
-      content="https://growth-factory-landing.vercel.app/assets/social-card.jpg"
-    />
+    <meta property="og:image" content="https://growth-factory-landing.vercel.app/assets/social-card.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta
-      property="og:image:alt"
-      content="Growth Factory landing page preview"
-    />
+    <meta property="og:image:alt" content="Growth Factory: long videos, short stories" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      rel="preload"
-      href="/assets/dm-sans-regular.ttf"
-      as="font"
-      type="font/ttf"
-      crossorigin
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&amp;family=Inter:wght@400;500;600;700&amp;display=swap"
     />
-    <link
-      rel="preload"
-      href="/assets/instrument-serif-italic.ttf"
-      as="font"
-      type="font/ttf"
-      crossorigin
-    />
+    <link rel="preload" href="/assets/alpine-story.webp" as="image" />
     <link rel="stylesheet" href="/styles.css" />
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <svg
-      class="icon-library"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
+    <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <defs>
-        <symbol id="i-arrow" viewBox="0 0 24 24">
-          <path d="M5 12h14M13 6l6 6-6 6" />
-        </symbol>
-        <symbol id="i-up-right" viewBox="0 0 24 24">
-          <path d="M6 18 18 6M6 6h12v12" />
-        </symbol>
-        <symbol id="i-down" viewBox="0 0 24 24">
-          <path d="M12 4v16m-6-6 6 6 6-6" />
-        </symbol>
-        <symbol id="i-spark" viewBox="0 0 24 24">
-          <path
-            d="m12 3 2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6L12 3Z"
-          />
-        </symbol>
-        <symbol id="i-film" viewBox="0 0 24 24">
-          <rect x="4" y="3" width="16" height="18" rx="2" />
-          <path d="M8 3v18M16 3v18M4 8h4m8 0h4M4 16h4m8 0h4" />
-        </symbol>
-        <symbol id="i-check" viewBox="0 0 24 24">
-          <path d="m5 12 4 4L19 6" />
-        </symbol>
-        <symbol id="i-lock" viewBox="0 0 24 24">
-          <rect x="5" y="10" width="14" height="11" rx="2" />
-          <path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2" />
-        </symbol>
-        <symbol id="i-sliders" viewBox="0 0 24 24">
-          <path d="M4 7h8m4 0h4M4 17h3m4 0h9" />
-          <circle cx="14" cy="7" r="2" />
-          <circle cx="9" cy="17" r="2" />
-        </symbol>
-        <symbol id="i-folder" viewBox="0 0 24 24">
-          <path
-            d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"
-          />
-        </symbol>
-        <symbol id="i-wave" viewBox="0 0 24 24">
-          <path d="M3 10v4m4-8v12m5-15v18m5-15v12m4-8v4" />
-        </symbol>
-        <symbol id="i-plus" viewBox="0 0 24 24">
-          <path d="M12 5v14M5 12h14" />
-        </symbol>
-        <symbol id="i-apple" viewBox="0 0 24 24">
-          <path
-            fill="currentColor"
-            stroke="none"
-            d="M15.2 5.1c.7-.9 1.2-2.1 1.1-3.3-1.1.1-2.4.8-3.1 1.6-.7.8-1.3 2-1.1 3.2 1.2.1 2.4-.6 3.1-1.5ZM18.8 13.2c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-2-1-3.3-.9-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.6 1.3 10.2.9 1.2 1.9 2.5 3.2 2.4 1.3 0 1.8-.8 3.4-.8s2.1.8 3.4.8c1.4 0 2.3-1.2 3.1-2.4.9-1.3 1.3-2.6 1.4-2.7-.1 0-3.1-1.2-3.1-4.6Z"
-          />
-        </symbol>
-        <symbol id="i-menu" viewBox="0 0 24 24">
-          <path d="M4 8h16M4 16h16" />
-        </symbol>
-        <symbol id="i-close" viewBox="0 0 24 24">
-          <path d="m6 6 12 12M6 18 18 6" />
-        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7V5z" /></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7" /></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></symbol>
+        <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l4-1L19 8l-3-3L5 16l-1 4zM14 7l3 3" /></symbol>
+        <symbol id="i-wave" viewBox="0 0 24 24"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></symbol>
+        <symbol id="i-target" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="5" /></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6l8-3zM8.5 12l2.5 2.5 4.5-5" /></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></symbol>
+        <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></symbol>
       </defs>
     </svg>
 
     <a class="skip-link" href="#main">Skip to content</a>
-    <header class="site-header shell">
-      <a class="wordmark" href="#" aria-label="Growth Factory home">
-        <span class="brand-mark" aria-hidden="true"
-          ><span></span><span></span><span></span><span></span
-        ></span>
-        Growth Factory<span class="brand-period">.</span>
-      </a>
-      <nav class="desktop-nav" aria-label="Main navigation">
-        <a href="#workflow">The workflow</a>
-        <a href="#local">Why local?</a>
-        <a href="#faq">FAQ</a>
-      </nav>
-      <a
-        class="button button-small button-outline header-cta"
-        href="https://theclipfactory-frontend-two.vercel.app"
-        target="_blank"
-        rel="noopener"
-        >Explore the demo <svg class="icon"><use href="#i-up-right" /></svg
-      ></a>
-      <button
-        class="menu-toggle"
-        aria-label="Open navigation"
-        aria-controls="mobile-nav"
-        aria-expanded="false"
-      >
-        <svg class="icon"><use href="#i-menu" /></svg>
-      </button>
-      <nav
-        id="mobile-nav"
-        class="mobile-nav"
-        aria-label="Mobile navigation"
-        hidden
-      >
-        <a href="#workflow">The workflow <span>01</span></a>
-        <a href="#local">Why local? <span>02</span></a>
-        <a href="#faq">FAQ <span>03</span></a>
-        <a
-          href="https://theclipfactory-frontend-two.vercel.app"
-          target="_blank"
-          rel="noopener"
-          >Explore the demo <svg class="icon"><use href="#i-up-right" /></svg
-        ></a>
+
+    <header class="site-header">
+      <div class="wrap header-row">
+        <a class="brand" href="#top">
+          <img src="/assets/icon.svg" alt="" width="36" height="36" />
+          <span>Growth Factory</span>
+        </a>
+        <nav class="nav-desktop" aria-label="Sections">
+          <a href="#how">How it works</a>
+          <a href="#agents">Agents</a>
+          <a href="#app">The app</a>
+          <a class="btn btn-dark btn-sm" href="https://theclipfactory-frontend-two.vercel.app" target="_blank" rel="noopener">Try the demo</a>
+        </nav>
+        <button class="menu-btn" type="button" aria-label="Open menu" aria-controls="mobile-nav" aria-expanded="false">
+          <svg aria-hidden="true"><use href="#i-menu" /></svg>
+        </button>
+      </div>
+      <nav id="mobile-nav" class="nav-mobile" aria-label="Sections" hidden>
+        <a href="#how">How it works</a>
+        <a href="#agents">Agents</a>
+        <a href="#app">The app</a>
+        <a class="btn btn-dark" href="https://theclipfactory-frontend-two.vercel.app" target="_blank" rel="noopener">Try the demo</a>
       </nav>
     </header>
 
     <main id="main">
-      <section class="hero shell" aria-labelledby="hero-title">
-        <div class="hero-copy">
-          <div class="eyebrow hero-eyebrow">
-            <span class="status-dot"></span> A LOCAL-FIRST AI VIDEO WORKSPACE
+      <section id="top" class="hero">
+        <img class="hero-photo par" src="/assets/alpine-story.webp" alt="A hiker in an orange jacket above a wide alpine valley" width="1536" height="1024" fetchpriority="high" />
+        <div class="hero-scrim" aria-hidden="true"></div>
+        <div class="hero-fade" aria-hidden="true"></div>
+
+        <div class="wrap hero-copy">
+          <span class="hero-chip rise"><span class="live-dot"></span>A clip factory on your Mac</span>
+          <h1 class="hero-title">
+            <span class="rise" style="animation-delay: 0.1s">Long videos.</span>
+            <span class="rise accent" style="animation-delay: 0.25s">Short stories.</span>
+          </h1>
+          <p class="hero-lead rise" style="animation-delay: 0.4s">Drop in footage. A crew of agents finds the moments. You approve the clips.</p>
+          <div class="hero-actions rise" style="animation-delay: 0.55s">
+            <a class="btn btn-primary btn-lg" href="https://theclipfactory-frontend-two.vercel.app" target="_blank" rel="noopener">
+              Try the demo <svg aria-hidden="true"><use href="#i-arrow" /></svg>
+            </a>
+            <a class="btn btn-glass btn-lg" href="#agents"><svg class="fill" aria-hidden="true"><use href="#i-play" /></svg>Watch it work</a>
           </div>
-          <h1 id="hero-title">Long videos.<br /><em>Short stories.</em></h1>
-          <p class="hero-description">
-            Turn long-form video into short-form clips. Agents help find the
-            moments, shape the edits, and explore new versions.
-            You set the direction. You approve the cut.
-          </p>
-          <div class="hero-actions">
-            <a
-              class="button button-dark"
-              href="https://theclipfactory-frontend-two.vercel.app"
-              target="_blank"
-              rel="noopener"
-              >Explore the demo
-              <svg class="icon"><use href="#i-up-right" /></svg
-            ></a>
-            <button class="text-button" data-open-tour>
-              How it works
-              <svg class="icon"><use href="#i-arrow" /></svg>
-            </button>
-          </div>
-          <ul class="hero-benefits" aria-label="The creative loop">
-            <li><svg class="icon"><use href="#i-film" /></svg> Your footage</li>
-            <li><svg class="icon"><use href="#i-spark" /></svg> Agent-assisted edits</li>
-            <li><svg class="icon"><use href="#i-check" /></svg> Your final say</li>
-          </ul>
-          <p class="demo-note">Interactive demo with sample data. No video rendering.</p>
-          <p class="platform-note">
-            <svg class="icon apple-icon"><use href="#i-apple" /></svg> Mac app for Apple Silicon <span></span> In development
-          </p>
+          <p class="hero-note rise" style="animation-delay: 0.7s">Mac app for Apple Silicon · In development. The demo uses sample data.</p>
         </div>
 
-        <div class="preview-wrap">
-          <div
-            class="app-preview"
-            aria-label="Interactive illustration of the Growth Factory workflow"
-          >
-            <div class="preview-titlebar">
-              <span class="window-dots" aria-hidden="true"
-                ><i></i><i></i><i></i
-              ></span>
-              <div class="preview-title">
-                <svg class="icon"><use href="#i-folder" /></svg> Weekend somewhere
-              </div>
-              <span class="sample-label">ILLUSTRATIVE PREVIEW</span>
+        <div class="hero-clips" aria-hidden="true">
+          <div class="hero-clip hc-1 rise" style="animation-delay: 0.7s">
+            <div class="clip float" style="--r: -7deg">
+              <img src="/assets/towers.webp" alt="" />
+              <span class="clip-dur">0:24</span>
             </div>
-            <div class="preview-body">
-              <aside class="preview-sidebar">
-                <div
-                  class="preview-tabs"
-                  role="tablist"
-                  aria-label="Preview workflow steps"
-                  aria-orientation="horizontal"
-                >
-                  <button
-                    id="tab-brief"
-                    role="tab"
-                    aria-controls="preview-panel"
-                    aria-selected="false"
-                    tabindex="-1"
-                    data-step="0"
-                  >
-                    <svg class="icon"><use href="#i-folder" /></svg
-                    ><span>Brief</span
-                    ><span class="tab-number">01</span>
-                  </button>
-                  <button
-                    id="tab-direction"
-                    role="tab"
-                    aria-controls="preview-panel"
-                    aria-selected="false"
-                    tabindex="-1"
-                    data-step="1"
-                  >
-                    <svg class="icon"><use href="#i-spark" /></svg
-                    ><span>Direction</span
-                    ><span class="tab-number">02</span>
-                  </button>
-                  <button
-                    id="tab-studio"
-                    role="tab"
-                    aria-controls="preview-panel"
-                    aria-selected="true"
-                    tabindex="0"
-                    data-step="2"
-                  >
-                    <svg class="icon"><use href="#i-film" /></svg
-                    ><span>Review</span
-                    ><span class="tab-number">03</span>
-                  </button>
+          </div>
+          <div class="hero-clip hc-2 rise" style="animation-delay: 0.85s">
+            <div class="clip clip-hot float" style="--r: 4deg; animation-delay: -2s">
+              <img src="/assets/hiker.webp" alt="" />
+              <span class="clip-hook">The view nobody posts</span>
+            </div>
+          </div>
+          <div class="hero-clip hc-3 rise" style="animation-delay: 1s">
+            <div class="clip float" style="--r: 9deg; animation-delay: -4s">
+              <img src="/assets/peaks.webp" alt="" />
+              <span class="badge badge-ok badge-corner"><svg aria-hidden="true"><use href="#i-check" /></svg>Approved</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="reel-section" aria-labelledby="reel-title">
+        <div class="wrap reel-head rv">
+          <h2 id="reel-title" class="h-card">Fresh off the line</h2>
+          <span class="muted">All from one 18-minute hike</span>
+        </div>
+        <div class="reel" aria-hidden="true">
+          <div class="reel-track">
+            <div class="clip reel-clip clip-hot"><img src="/assets/hiker.webp" alt="" loading="lazy" /><span class="clip-dur">0:42</span><span class="clip-hook">The view nobody posts</span></div>
+            <div class="clip reel-clip"><img src="/assets/towers.webp" alt="" loading="lazy" /><span class="clip-dur">0:24</span><span class="clip-hook">Wait for the towers</span></div>
+            <div class="clip reel-clip"><img src="/assets/peaks.webp" alt="" loading="lazy" /><span class="clip-dur">0:38</span><span class="clip-hook">Two hours up</span></div>
+            <div class="clip reel-clip"><img src="/assets/valley.webp" alt="" loading="lazy" /><span class="clip-dur">0:31</span><span class="clip-hook">Where the trail ends</span></div>
+            <div class="clip reel-clip"><img class="mono" src="/assets/hiker-close.webp" alt="" loading="lazy" /><span class="clip-dur">0:19</span><span class="clip-hook">Just breathe</span></div>
+            <div class="clip reel-clip"><img src="/assets/summit.webp" alt="" loading="lazy" style="object-position: 40% 50%" /><span class="clip-dur">0:27</span><span class="clip-hook">Golden hour, no filter</span></div>
+            <div class="clip reel-clip"><img src="/assets/alpine-story.webp" alt="" loading="lazy" style="object-position: 10% 50%" /><span class="clip-dur">0:35</span><span class="clip-hook">Left at the fork</span></div>
+            <div class="clip reel-clip clip-hot"><img src="/assets/alpine-story.webp" alt="" loading="lazy" style="object-position: 52% 50%" /><span class="clip-dur">0:22</span><span class="clip-hook">Bigger than it looks</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="how" class="wrap section split" aria-labelledby="how-title">
+        <div class="section-head rv">
+          <h2 id="how-title" class="h-display">One video in.<br /><span class="accent">A wall of clips out.</span></h2>
+          <p class="lead muted">Scroll. Watch the moments get picked out of the footage.</p>
+        </div>
+        <div class="split-frame">
+          <img class="split-photo grey" src="/assets/alpine-story.webp" alt="The full source footage, fading to grey as three vertical clips are picked out in colour" loading="lazy" />
+          <div class="win" style="--l: 4%; --s: -14.6%; animation-range: entry 15% entry 75%">
+            <img src="/assets/alpine-story.webp" alt="" loading="lazy" />
+            <span class="win-dur">0:38</span><span class="win-hook">Two hours up</span>
+          </div>
+          <div class="win" style="--l: 36.3%; --s: -132.5%; animation-range: entry 30% entry 90%">
+            <img src="/assets/alpine-story.webp" alt="" loading="lazy" />
+            <span class="win-dur">0:24</span><span class="win-hook">Wait for the towers</span>
+          </div>
+          <div class="win win-hot" style="--l: 68.6%; --s: -250.4%; animation-range: entry 45% entry 100%">
+            <img src="/assets/alpine-story.webp" alt="" loading="lazy" />
+            <span class="win-dur">0:42</span><span class="win-hook">The view nobody posts</span>
+          </div>
+        </div>
+        <ul class="pills rv" aria-label="Output">
+          <li>9:16 · 1080 × 1920</li>
+          <li>Framed around the action</li>
+          <li>Captions only where someone speaks</li>
+          <li>Covered-lens shots skipped</li>
+        </ul>
+      </section>
+
+      <section id="agents" class="agents" aria-labelledby="agents-title">
+        <img class="agents-photo" src="/assets/alpine-story.webp" alt="" loading="lazy" />
+        <div class="wrap agents-inner">
+          <div class="section-head rv">
+            <h2 id="agents-title" class="h-display">Six agents.<br /><span class="accent">One job each.</span></h2>
+            <p class="lead on-dark">They run on your Mac, one after another. Tap one to see what it does.</p>
+          </div>
+
+          <div class="agent-rail rv">
+            <div class="rail-line" aria-hidden="true"><div class="rail-fill"></div></div>
+            <div class="agent-list" role="tablist" aria-label="Agents" aria-orientation="horizontal">
+              <button class="agent" type="button" role="tab" id="agent-tab-0" aria-controls="agent-panel-0" aria-selected="true" tabindex="0">
+                <span class="agent-node"><svg aria-hidden="true"><use href="#i-wave" /></svg></span>
+                <span class="agent-name">Listener</span><span class="agent-role">Transcribes</span>
+              </button>
+              <button class="agent" type="button" role="tab" id="agent-tab-1" aria-controls="agent-panel-1" aria-selected="false" tabindex="-1">
+                <span class="agent-node"><svg aria-hidden="true"><use href="#i-eye" /></svg></span>
+                <span class="agent-name">Watcher</span><span class="agent-role">Storyboards</span>
+              </button>
+              <button class="agent" type="button" role="tab" id="agent-tab-2" aria-controls="agent-panel-2" aria-selected="false" tabindex="-1">
+                <span class="agent-node"><svg aria-hidden="true"><use href="#i-target" /></svg></span>
+                <span class="agent-name">Scouts</span><span class="agent-role">Pick moments</span>
+              </button>
+              <button class="agent" type="button" role="tab" id="agent-tab-3" aria-controls="agent-panel-3" aria-selected="false" tabindex="-1">
+                <span class="agent-node"><svg aria-hidden="true"><use href="#i-pen" /></svg></span>
+                <span class="agent-name">Writer</span><span class="agent-role">Hooks</span>
+              </button>
+              <button class="agent" type="button" role="tab" id="agent-tab-4" aria-controls="agent-panel-4" aria-selected="false" tabindex="-1">
+                <span class="agent-node"><svg aria-hidden="true"><use href="#i-shield" /></svg></span>
+                <span class="agent-name">Critic</span><span class="agent-role">Checks</span>
+              </button>
+              <button class="agent" type="button" role="tab" id="agent-tab-5" aria-controls="agent-panel-5" aria-selected="false" tabindex="-1">
+                <span class="agent-node"><svg aria-hidden="true"><use href="#i-play" /></svg></span>
+                <span class="agent-name">Editor</span><span class="agent-role">Renders</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="console rv">
+            <div class="console-panel" role="tabpanel" id="agent-panel-0" aria-labelledby="agent-tab-0">
+              <div class="console-info">
+                <span class="console-num">01</span>
+                <h3>Listener</h3>
+                <p>Hears every word and throws out the noise.</p>
+                <span class="console-status"><span class="live-dot"></span>Working on Ridge walk · 18:24</span>
+              </div>
+              <div class="console-visual pop">
+                <div class="wave" aria-hidden="true"></div>
+                <ul class="transcript">
+                  <li class="pop" style="animation-delay: 0.1s"><span class="t-time">02:14</span>“We made it. Look at that.”</li>
+                  <li class="pop" style="animation-delay: 0.3s"><span class="t-time">07:52</span>“Wait for the towers to clear.”</li>
+                  <li class="pop is-ignored" style="animation-delay: 0.5s"><span class="t-time">11:03</span><s>wind noise</s><span class="t-tag">Ignored</span></li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="console-panel" role="tabpanel" id="agent-panel-1" aria-labelledby="agent-tab-1" hidden>
+              <div class="console-info">
+                <span class="console-num">02</span>
+                <h3>Watcher</h3>
+                <p>Looks at every scene and notes what is usable.</p>
+                <span class="console-status"><span class="live-dot"></span>Working on Ridge walk · 18:24</span>
+              </div>
+              <div class="console-visual scenes">
+                <figure class="scene pop"><img src="/assets/alpine-story.webp" alt="" style="object-position: 8% 50%" /><figcaption>Ridge</figcaption></figure>
+                <figure class="scene pop" style="animation-delay: 0.1s"><img src="/assets/alpine-story.webp" alt="" style="object-position: 62% 20%" /><figcaption>Towers</figcaption></figure>
+                <figure class="scene pop" style="animation-delay: 0.2s"><img src="/assets/alpine-story.webp" alt="" style="object-position: 40% 70%" /><figcaption>Valley</figcaption></figure>
+                <figure class="scene pop" style="animation-delay: 0.3s"><img src="/assets/alpine-story.webp" alt="" style="object-position: 86% 60%" /><figcaption>Hiker</figcaption></figure>
+                <figure class="scene scene-bad pop" style="animation-delay: 0.4s"><img src="/assets/alpine-story.webp" alt="" style="object-position: 20% 90%" /><figcaption>Lens covered</figcaption></figure>
+                <figure class="scene pop" style="animation-delay: 0.5s"><img src="/assets/alpine-story.webp" alt="" style="object-position: 30% 10%" /><figcaption>Summit</figcaption></figure>
+                <span class="scan" aria-hidden="true"></span>
+              </div>
+            </div>
+
+            <div class="console-panel" role="tabpanel" id="agent-panel-2" aria-labelledby="agent-tab-2" hidden>
+              <div class="console-info">
+                <span class="console-num">03</span>
+                <h3>Scouts</h3>
+                <p>Finds the best moments and says why each one would work.</p>
+                <span class="console-status"><span class="live-dot"></span>Working on Ridge walk · 18:24</span>
+              </div>
+              <ul class="console-visual scouts">
+                <li class="scout pop"><img src="/assets/towers.webp" alt="" /><div><div class="scout-top"><b>Awe at scale</b><span>02:10 – 02:52</span></div><div class="range"><span style="left: 11%; width: 5%"></span></div></div></li>
+                <li class="scout pop" style="animation-delay: 0.15s"><img src="/assets/hiker.webp" alt="" /><div><div class="scout-top"><b>Quiet payoff</b><span>07:40 – 08:22</span></div><div class="range"><span style="left: 42%; width: 4%"></span></div></div></li>
+                <li class="scout pop" style="animation-delay: 0.3s"><img src="/assets/peaks.webp" alt="" /><div><div class="scout-top"><b>Curiosity</b><span>13:05 – 13:31</span></div><div class="range"><span style="left: 71%; width: 3%"></span></div></div></li>
+              </ul>
+            </div>
+
+            <div class="console-panel" role="tabpanel" id="agent-panel-3" aria-labelledby="agent-tab-3" hidden>
+              <div class="console-info">
+                <span class="console-num">04</span>
+                <h3>Writer</h3>
+                <p>Writes the hook and the caption for each moment.</p>
+                <span class="console-status"><span class="live-dot"></span>Working on Ridge walk · 18:24</span>
+              </div>
+              <div class="console-visual writer pop">
+                <div class="clip writer-clip"><img src="/assets/hiker.webp" alt="" /><span class="clip-hook"><span class="type">The view nobody posts</span></span></div>
+                <div class="writer-copy">
+                  <span class="label">Hook</span>
+                  <span class="writer-hook"><span class="type">The view nobody posts</span></span>
+                  <span class="label">Caption</span>
+                  <span class="writer-caption pop" style="animation-delay: 1.3s">Two hours up for forty seconds of this.</span>
                 </div>
-              </aside>
-              <div
-                id="preview-panel"
-                class="preview-content"
-                role="tabpanel"
-                aria-labelledby="tab-studio"
-                tabindex="0"
-              >
-                <div class="preview-content-top">
-                  <span id="preview-eyebrow">03 / REVIEW THE CUT</span
-                  ><span class="workspace-chip"
-                    ><span></span> YOUR VISION. YOUR CALL.</span
-                  >
+              </div>
+            </div>
+
+            <div class="console-panel" role="tabpanel" id="agent-panel-4" aria-labelledby="agent-tab-4" hidden>
+              <div class="console-info">
+                <span class="console-num">05</span>
+                <h3>Critic</h3>
+                <p>Checks framing, captions and length before you see it.</p>
+                <span class="console-status"><span class="live-dot"></span>Working on Ridge walk · 18:24</span>
+              </div>
+              <ul class="console-visual checks">
+                <li class="pop"><span class="ok-dot"><svg aria-hidden="true"><use href="#i-check" /></svg></span>Action stays in frame</li>
+                <li class="pop" style="animation-delay: 0.25s"><span class="ok-dot"><svg aria-hidden="true"><use href="#i-check" /></svg></span>Captions only on speech</li>
+                <li class="pop" style="animation-delay: 0.5s"><span class="ok-dot"><svg aria-hidden="true"><use href="#i-check" /></svg></span>Hook in the first second</li>
+                <li class="pop" style="animation-delay: 0.75s"><span class="ok-dot"><svg aria-hidden="true"><use href="#i-check" /></svg></span>Under 45 seconds</li>
+              </ul>
+            </div>
+
+            <div class="console-panel" role="tabpanel" id="agent-panel-5" aria-labelledby="agent-tab-5" hidden>
+              <div class="console-info">
+                <span class="console-num">06</span>
+                <h3>Editor</h3>
+                <p>Cuts to 9:16, frames the action, burns in captions.</p>
+                <span class="console-status"><span class="live-dot"></span>Working on Ridge walk · 18:24</span>
+              </div>
+              <div class="console-visual render">
+                <div class="render-head"><span>Rendering 3 clips</span><span class="dim">1080 × 1920 · H.264</span></div>
+                <div class="render-bar"><span></span></div>
+                <div class="render-clips">
+                  <div class="clip pop" style="animation-delay: 1s"><img src="/assets/hiker.webp" alt="" /><span class="done-dot"><svg aria-hidden="true"><use href="#i-check" /></svg></span></div>
+                  <div class="clip pop" style="animation-delay: 1.4s"><img src="/assets/towers.webp" alt="" /><span class="done-dot"><svg aria-hidden="true"><use href="#i-check" /></svg></span></div>
+                  <div class="clip pop" style="animation-delay: 1.8s"><img src="/assets/peaks.webp" alt="" /><span class="done-dot"><svg aria-hidden="true"><use href="#i-check" /></svg></span></div>
                 </div>
-                <div class="preview-workspace">
-                  <div class="preview-direction">
-                    <h2 id="preview-heading">
-                      A first cut.<br />Your final say.
-                    </h2>
-                    <p id="preview-description">
-                      Review the opening, pacing, and captions.
-                      Ask for a revision before you approve.
-                    </p>
-                    <div class="direction-card">
-                      <span class="direction-label"
-                        ><svg class="icon"><use href="#i-spark" /></svg
-                        ><span id="direction-label"
-                          >YOUR CREATIVE DIRECTION</span
-                        ></span
-                      >
-                      <p id="direction-text">
-                        Open with the feeling of getting away. Let the landscape
-                        do the talking.
-                      </p>
-                      <span class="direction-tag" id="direction-tag"
-                        >Warm. Unhurried. A little unexpected.</span
-                      >
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="app" class="app-section" aria-labelledby="app-title">
+        <div class="wrap app-inner">
+          <h2 id="app-title" class="visually-hidden">The app</h2>
+          <div class="app-window tilt">
+            <div class="app-bar">
+              <div class="app-bar-left">
+                <img src="/assets/icon.svg" alt="" width="34" height="34" />
+                <span class="workspace"><img src="/assets/summit.webp" alt="" />Alpine Story</span>
+              </div>
+              <div class="app-tabs" role="tablist" aria-label="App screens" aria-orientation="horizontal">
+                <button type="button" role="tab" id="app-tab-factory" aria-controls="app-panel-factory" aria-selected="true" tabindex="0">Factory</button>
+                <button type="button" role="tab" id="app-tab-review" aria-controls="app-panel-review" aria-selected="false" tabindex="-1">Review</button>
+                <button type="button" role="tab" id="app-tab-results" aria-controls="app-panel-results" aria-selected="false" tabindex="-1">Results</button>
+              </div>
+              <span class="autopilot">Autopilot<span class="toggle" aria-hidden="true"></span></span>
+            </div>
+
+            <div class="app-panel" role="tabpanel" id="app-panel-factory" aria-labelledby="app-tab-factory">
+              <div class="pf pop">
+                <div class="pf-main">
+                  <div class="footage">
+                    <div class="footage-photo">
+                      <img src="/assets/alpine-story.webp" alt="Footage on the line" loading="lazy" />
+                      <span class="on-line"><span class="live-dot"></span>On the line</span>
+                      <span class="footage-title">Ridge walk</span>
                     </div>
-                    <div class="preview-team">
-                      <div class="team-avatar">
-                        <svg class="icon"><use href="#i-sliders" /></svg>
-                      </div>
-                      <div>
-                        <strong id="preview-role"
-                          >Editor → your review</strong
-                        ><span id="preview-role-note"
-                          >Illustrative workflow. Not a rendered video.</span
-                        >
-                      </div>
-                      <svg class="icon team-check"><use href="#i-check" /></svg>
+                    <div class="filmstrip-wrap">
+                      <div class="filmstrip" aria-hidden="true"></div>
+                      <span class="mark" style="--l: 0.07; --w: 0.07"></span>
+                      <span class="mark" style="--l: 0.3; --w: 0.06"></span>
+                      <span class="mark" style="--l: 0.52; --w: 0.08"></span>
+                      <span class="mark" style="--l: 0.78; --w: 0.06"></span>
                     </div>
                   </div>
-                  <div class="preview-film">
-                    <img
-                      src="/assets/alpine-story.webp"
-                      alt="Illustrative footage: an orange-jacketed hiker looking across a dramatic alpine valley"
-                      width="1536"
-                      height="1024"
-                      fetchpriority="high"
-                    />
-                    <span class="film-corner">WEEKEND SOMEWHERE</span>
-                    <span class="film-caption"
-                      >A little further<br /><em>from ordinary.</em></span
-                    >
-                    <span class="film-format"
-                      >SAMPLE FOOTAGE <span>·</span> CONCEPT ONLY</span
-                    >
-                    
+                  <div class="app-clips">
+                    <div class="clip"><img src="/assets/hiker.webp" alt="Clip: The view nobody posts" loading="lazy" /><span class="clip-hook sm">The view nobody posts</span></div>
+                    <div class="clip"><img src="/assets/towers.webp" alt="Clip: Wait for the towers" loading="lazy" /><span class="clip-hook sm">Wait for the towers</span></div>
+                    <div class="clip"><img src="/assets/peaks.webp" alt="Clip: Two hours up" loading="lazy" /><span class="clip-hook sm">Two hours up</span></div>
+                    <div class="clip"><img class="blurred" src="/assets/hiker-close.webp" alt="Clip still rendering" loading="lazy" /><span class="clip-hook sm">Rendering</span></div>
                   </div>
                 </div>
-                <div class="preview-timeline">
-                  <svg class="icon"><use href="#i-film" /></svg
-                  ><span class="timeline-time">00:00</span>
-                  <div class="timeline-track">
-                    <span></span><span></span><span></span><span></span
-                    ><span></span><span></span><span></span><i></i>
+                <div class="pf-side">
+                  <div class="ready-card">
+                    <span class="label">Ready for you</span>
+                    <span class="ready-num">3</span>
+                    <span class="fake-btn dark">Review</span>
                   </div>
-                  <span class="timeline-time">00:30</span
-                  ><span class="timeline-note">ILLUSTRATIVE TIMELINE</span>
+                  <div class="direction-card">
+                    <b>Direction</b>
+                    <div class="mini-pills"><span>Awe</span><span>Quiet payoff</span><span>Under 45s</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="app-panel" role="tabpanel" id="app-panel-review" aria-labelledby="app-tab-review" hidden>
+              <div class="pr pop">
+                <div class="deck-stage">
+                  <div class="deck">
+                    <div class="deck-card back left" aria-hidden="true"><img src="/assets/peaks.webp" alt="" /></div>
+                    <div class="deck-card back right" aria-hidden="true"><img src="/assets/towers.webp" alt="" /></div>
+                    <div class="deck-card front"><img src="/assets/hiker.webp" alt="Clip under review" /><span class="clip-hook">The view nobody posts</span></div>
+                  </div>
+                  <div class="deck-actions" aria-hidden="true">
+                    <span class="round"><svg><use href="#i-x" /></svg></span>
+                    <span class="round big"><svg><use href="#i-check" /></svg></span>
+                    <span class="round"><svg><use href="#i-pen" /></svg></span>
+                  </div>
+                </div>
+                <div class="approved">
+                  <div class="approved-head"><span class="label dark">Approved</span><b>5</b></div>
+                  <div class="approved-grid">
+                    <div class="clip"><img src="/assets/summit.webp" alt="" loading="lazy" /><span class="done-dot ok"><svg aria-hidden="true"><use href="#i-check" /></svg></span></div>
+                    <div class="clip"><img src="/assets/alpine-story.webp" alt="" loading="lazy" style="object-position: 10% 50%" /><span class="done-dot ok"><svg aria-hidden="true"><use href="#i-check" /></svg></span></div>
+                    <div class="clip"><img src="/assets/valley.webp" alt="" loading="lazy" /><span class="done-dot ok"><svg aria-hidden="true"><use href="#i-check" /></svg></span></div>
+                    <div class="clip"><img src="/assets/alpine-story.webp" alt="" loading="lazy" style="object-position: 52% 50%" /><span class="done-dot ok"><svg aria-hidden="true"><use href="#i-check" /></svg></span></div>
+                    <div class="clip"><img src="/assets/hiker-close.webp" alt="" loading="lazy" /><span class="done-dot ok"><svg aria-hidden="true"><use href="#i-check" /></svg></span></div>
+                  </div>
+                  <span class="fake-btn dark">Export 5</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="app-panel" role="tabpanel" id="app-panel-results" aria-labelledby="app-tab-results" hidden>
+              <div class="pres pop">
+                <div class="top-clip">
+                  <img src="/assets/hiker.webp" alt="Top clip: The view nobody posts" loading="lazy" />
+                  <div class="top-clip-stats">
+                    <span class="big-stat">61%</span>
+                    <span class="stat-label">watched to the end</span>
+                    <svg class="curve" role="img" aria-label="This clip holds viewers far longer than the average" viewBox="0 0 400 140" preserveAspectRatio="none">
+                      <path d="M0 8 C 60 30, 120 56, 200 84 S 330 112, 400 122" fill="none" stroke="#B9B3AC" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round" />
+                      <path d="M0 8 C 50 18, 100 28, 170 38 S 300 52, 400 58 L 400 140 L 0 140 Z" fill="#FFE9DD" />
+                      <path d="M0 8 C 50 18, 100 28, 170 38 S 300 52, 400 58" fill="none" stroke="#FF5A1F" stroke-width="4" stroke-linecap="round" />
+                    </svg>
+                    <span class="sample">Sample data</span>
+                  </div>
+                </div>
+                <div class="next-test">
+                  <span class="label orange">Next test</span>
+                  <span class="next-title">Open wide.</span>
+                  <div class="ab">
+                    <img class="mono-dim" src="/assets/hiker-close.webp" alt="Now: opens close on the hiker" loading="lazy" />
+                    <img class="ringed" src="/assets/towers.webp" alt="Try: opens on the wide view" loading="lazy" />
+                  </div>
+                  <span class="fake-btn orange">Run it</span>
                 </div>
               </div>
             </div>
           </div>
-          <div class="preview-under">
-            <span>TRY THE TABS TO EXPLORE THE WORKFLOW</span>
-            <span>Illustration, not a live app</span>
-          </div>
+
+          <ol class="steps">
+            <li class="rv"><span class="step-num">1</span><div><b>Factory</b><span>Drop footage. Watch the line.</span></div></li>
+            <li class="rv"><span class="step-num">2</span><div><b>Review</b><span>Approve, edit or skip each clip.</span></div></li>
+            <li class="rv"><span class="step-num">3</span><div><b>Results</b><span>See what landed. Approve one next test.</span></div></li>
+          </ol>
         </div>
       </section>
 
-      <section class="manifesto shell reveal" aria-label="Our approach">
-        <p>
-          For podcasters. <span>Creators. Small teams.</span><br />
-          More from every recording. <em>Still unmistakably you.</em>
-        </p>
-        <div class="manifesto-rule">
-          <span></span><svg class="icon"><use href="#i-spark" /></svg
-          ><span></span>
-        </div>
-      </section>
-
-      <section
-        id="workflow"
-        class="workflow shell section-space"
-        aria-labelledby="workflow-title"
-      >
-        <div class="section-heading reveal">
-          <div>
-            <p class="eyebrow">ONE SOURCE. A REPEATABLE CREATIVE LOOP.</p>
-            <h2 id="workflow-title">
-              From raw footage<br />to <em>your next cut.</em>
-            </h2>
-          </div>
-          <p>
-            Bring the footage and a clear intention. Agents help with selection,
-            editing, and critique. Your feedback guides the next version.
-          </p>
-        </div>
-        <div class="workflow-grid">
-          <article class="workflow-step reveal">
-            <div class="step-visual brief-visual">
-              <div class="paper paper-back"></div>
-              <div class="paper paper-front">
-                <span class="paper-clip"></span
-                ><span class="tiny-label">THE NEXT GOOD IDEA</span
-                ><strong
-                  >Let’s make<br />something<br /><em
-                    >worth a pause.</em
-                  ></strong
-                >
-                <div class="paper-lines"><span></span><span></span></div>
-                <span class="paper-sign">A brief. A beginning.</span>
-              </div>
-              <span class="visual-stamp"
-                ><svg class="icon"><use href="#i-folder" /></svg> YOUR STARTING
-                POINT</span
-              >
+      <section class="why" aria-label="Why it works">
+        <div class="wrap why-grid">
+          <article class="why-card rv">
+            <div class="why-media">
+              <img src="/assets/peaks.webp" alt="Limestone peaks at dusk" loading="lazy" style="object-position: 50% 30%" />
+              <span class="glass-chip"><svg aria-hidden="true"><use href="#i-lock" /></svg>Local only</span>
             </div>
-            <div class="step-title">
-              <span>01</span>
-              <h3>Bring footage & a brief.</h3>
-            </div>
-            <p>
-              Add a recording, define your audience, and set a goal.
-              Tell your agents what to preserve and what to avoid.
-            </p>
+            <div class="why-copy"><h3>Stays on your Mac</h3><p>Your footage never leaves the machine.</p></div>
           </article>
-          <article class="workflow-step reveal">
-            <div class="step-visual angle-visual">
-              <div class="angle-card angle-card-back">
-                <span>ANOTHER WAY IN</span
-                ><strong>What if we<br />started here?</strong>
-              </div>
-              <div class="angle-card angle-card-front">
-                <svg class="icon"><use href="#i-spark" /></svg
-                ><span>A FRESH PERSPECTIVE</span
-                ><strong
-                  >Find the feeling.<br /><em>Then find the words.</em></strong
-                >
-                <div class="angle-card-bottom">
-                  <span>CREATIVE DIRECTION</span
-                  ><svg class="icon"><use href="#i-arrow" /></svg>
-                </div>
+          <article class="why-card rv">
+            <div class="why-media">
+              <img src="/assets/hiker.webp" alt="Hiker on the ridge, a clip waiting for approval" loading="lazy" style="object-position: 50% 35%" />
+              <div class="why-actions" aria-hidden="true">
+                <span class="round sm"><svg><use href="#i-x" /></svg></span>
+                <span class="round big pulse"><svg><use href="#i-check" /></svg></span>
+                <span class="round sm"><svg><use href="#i-pen" /></svg></span>
               </div>
             </div>
-            <div class="step-title">
-              <span>02</span>
-              <h3>Choose the direction.</h3>
-            </div>
-            <p>
-              Agents suggest moments and opening treatments. Review the
-              creative direction before starting production.
-            </p>
+            <div class="why-copy"><h3>You approve everything</h3><p>Nothing posts on its own.</p></div>
           </article>
-          <article class="workflow-step reveal">
-            <div class="step-visual cut-visual">
-              <div class="cut-frame">
-                <img
-                  src="/assets/alpine-story.webp"
-                  alt=""
-                  loading="lazy"
-                  width="1536"
-                  height="1024"
-                /><span>Take the<br /><em>scenic route.</em></span>
+          <article class="why-card rv">
+            <div class="why-media loop-media" aria-hidden="true">
+              <div class="loop">
+                <svg viewBox="0 0 220 220"><circle cx="110" cy="110" r="88" fill="none" stroke="#ECEAE6" stroke-width="3" stroke-dasharray="4 8" /></svg>
+                <div class="loop-orbit"><span></span></div>
+                <span class="loop-tag t">Make</span><span class="loop-tag r">Review</span><span class="loop-tag b">Post</span><span class="loop-tag l hot">Learn</span>
+                <img src="/assets/mark.svg" alt="" />
               </div>
-              <span class="review-chip"
-                ><svg class="icon"><use href="#i-check" /></svg> YOUR FINAL
-                SAY</span
-              ><span class="cut-cursor" aria-hidden="true"
-                ><svg viewBox="0 0 24 28">
-                  <path d="m2 2 19 13-10 2-5 9Z" />
-                </svg>
-                You</span
-              >
             </div>
-            <div class="step-title">
-              <span>03</span>
-              <h3>Review. Refine. Repeat.</h3>
-            </div>
-            <p>
-              Inspect the cut, request a revision, and approve the exact version.
-              Use creator feedback and real observations to guide the next edit.
-            </p>
+            <div class="why-copy"><h3>Sharper every round</h3><p>One change at a time, from real results.</p></div>
           </article>
         </div>
       </section>
 
-      <section id="local" class="local-section" aria-labelledby="local-title">
-        <div class="shell local-layout">
-          <div class="local-copy reveal">
-            <p class="eyebrow">
-              <span class="status-dot"></span> YOUR MACHINE. YOUR MEDIA. YOUR CONTROL.
-            </p>
-            <h2 id="local-title">
-              Made for your Mac.<br /><em>Not someone’s cloud.</em>
-            </h2>
-            <p>
-              Growth Factory is being built for Apple Silicon, with local models
-              and source footage that stay on your machine.
-            </p>
-            <p>
-              Import footage locally, not into a hosted editing service.
-              External connections such as Instagram are a separate, opt-in step.
-            </p>
-            <div class="local-footnote">
-              <svg class="icon"><use href="#i-apple" /></svg
-              ><span
-                >Designed for Apple Silicon.<br /><small
-                  >Native desktop app in development.</small
-                ></span
-              >
-            </div>
+      <section id="get" class="cta" aria-labelledby="cta-title">
+        <div class="cta-panel">
+          <img class="cta-photo" src="/assets/alpine-story.webp" alt="" loading="lazy" />
+          <div class="cta-shade" aria-hidden="true"></div>
+          <div class="cta-copy rv">
+            <img class="float" src="/assets/icon.svg" alt="" width="88" height="88" />
+            <h2 id="cta-title" class="h-display">Drop footage.<br /><span class="accent">Get stories.</span></h2>
+            <a class="btn btn-primary btn-xl" href="https://theclipfactory-frontend-two.vercel.app" target="_blank" rel="noopener">
+              Try the demo <svg aria-hidden="true"><use href="#i-arrow" /></svg>
+            </a>
+            <span class="cta-note">Mac app for Apple Silicon · In development</span>
           </div>
-          <div
-            class="local-art reveal"
-            aria-label="Local-first creative workflow on a Mac"
-          >
-            <div class="orbit orbit-outer"></div>
-            <div class="orbit orbit-inner"></div>
-            <span class="orbit-dot orbit-dot-one"></span
-            ><span class="orbit-dot orbit-dot-two"></span>
-            <div class="floating-note note-footage">
-              <svg class="icon"><use href="#i-film" /></svg
-              ><span>Your footage</span><span class="note-dot"></span>
-            </div>
-            <div class="floating-note note-ideas">
-              <svg class="icon"><use href="#i-spark" /></svg
-              ><span>Your ideas</span><span class="note-dot"></span>
-            </div>
-            <div class="floating-note note-control">
-              <svg class="icon"><use href="#i-lock" /></svg
-              ><span>Your control</span><span class="note-dot"></span>
-            </div>
-            <div class="macbook">
-              <div class="macbook-screen">
-                <div class="screen-camera"></div>
-                <span class="brand-mark large-mark" aria-hidden="true"
-                  ><span></span><span></span><span></span><span></span></span
-                ><strong>A little more possible.</strong
-                ><span class="screen-caption"
-                  >GROWTH FACTORY. ON YOUR MAC.</span
-                >
-              </div>
-              <div class="macbook-base"></div>
-            </div>
-            <div class="local-art-caption">
-              <svg class="icon"><use href="#i-lock" /></svg> LOCAL BY DESIGN.
-              CREATIVE BY NATURE.
-            </div>
-          </div>
-        </div>
-        <div class="shell principles">
-          <div>
-            <svg class="icon"><use href="#i-folder" /></svg>
-            <h3>Your media stays yours.</h3>
-            <p>Keep source footage on your machine.</p>
-          </div>
-          <div>
-            <svg class="icon"><use href="#i-spark" /></svg>
-            <h3>Help with the heavy lifting.</h3>
-            <p>Local AI roles help plan, edit, and critique.</p>
-          </div>
-          <div>
-            <svg class="icon"><use href="#i-check" /></svg>
-            <h3>You hold the final cut.</h3>
-            <p>Human review is part of the process.</p>
-          </div>
-        </div>
-      </section>
-
-      <section
-        class="control-section shell section-space"
-        aria-labelledby="control-title"
-      >
-        <div
-          class="control-art reveal"
-          aria-label="Illustrative creative review notes"
-        >
-          <div class="review-sheet">
-            <div class="review-sheet-top">
-              <span class="tiny-label">THE CREATIVE REVIEW</span
-              ><svg class="icon"><use href="#i-sliders" /></svg>
-            </div>
-            <h3>Good start.<br /><em>Now make it feel like us.</em></h3>
-            <div class="review-note">
-              <span class="annotation-dot"></span>
-              <p>
-                Keep the quiet opening.<br />Give that final shot a little more
-                room.
-              </p>
-            </div>
-            <div class="review-change">
-              <span>VERSION 01</span
-              ><svg class="icon"><use href="#i-arrow" /></svg
-              ><span>YOUR NEXT CUT</span>
-            </div>
-            <div class="approval-line">
-              <svg class="icon"><use href="#i-check" /></svg
-              ><span>Made with AI. Approved by you.</span>
-            </div>
-          </div>
-          <div class="handwritten-note">
-            Taste is still<br /><em>a human thing.</em
-            ><svg viewBox="0 0 100 60">
-              <path d="M8 9C60-4 90 15 78 43m-8-10 8 13 12-8" />
-            </svg>
-          </div>
-        </div>
-        <div class="control-copy reveal">
-          <p class="eyebrow">THE TOOLS GET SMARTER. THE VISION STAYS YOURS.</p>
-          <h2 id="control-title">
-            More possibilities.<br /><em>Still your point of view.</em>
-          </h2>
-          <p>
-            AI can find the moment, suggest an opening, and help build a first
-            cut. But knowing when something feels right? That part belongs to
-            you.
-          </p>
-          <ul class="control-list">
-            <li>
-              <svg class="icon"><use href="#i-check" /></svg> Approve the
-              direction before production.
-            </li>
-            <li>
-              <svg class="icon"><use href="#i-check" /></svg> Review the cut,
-              not just a model’s score.
-            </li>
-            <li>
-              <svg class="icon"><use href="#i-check" /></svg> Learn from real
-              observations, one idea at a time.
-            </li>
-          </ul>
-          <a
-            class="inline-link"
-            href="https://theclipfactory-frontend-two.vercel.app"
-            target="_blank"
-            rel="noopener"
-            >Take a look around the workspace
-            <svg class="icon"><use href="#i-up-right" /></svg
-          ></a>
-        </div>
-      </section>
-
-      <section
-        id="faq"
-        class="faq-section shell section-space"
-        aria-labelledby="faq-title"
-      >
-        <div class="faq-heading reveal">
-          <p class="eyebrow">BEFORE YOU START</p>
-          <h2 id="faq-title">A little <em>clarity.</em></h2>
-          <p>What the demo does. What’s still in development.</p>
-        </div>
-        <div class="faq-list reveal">
-          <details>
-            <summary>
-              What is Growth Factory?<svg class="icon">
-                <use href="#i-plus" />
-              </svg>
-            </summary>
-            <div>
-              <p>
-                A local-first creative workspace for turning source footage into
-                short-form video. It brings campaign planning, creative
-                direction, production, human review, and learning into one loop,
-                with AI roles helping along the way.
-              </p>
-            </div>
-          </details>
-          <details>
-            <summary>
-              Can I try it right now?<svg class="icon">
-                <use href="#i-plus" />
-              </svg>
-            </summary>
-            <div>
-              <p>
-                Yes — you can
-                <a
-                  href="https://theclipfactory-frontend-two.vercel.app"
-                  target="_blank"
-                  rel="noopener"
-                  >explore the interactive workspace demo</a
-                >. It uses illustrative sample data so you can get a feel for
-                the workflow. The native Mac app is still in development; the
-                hosted demo does not run models, render video, or publish
-                content.
-              </p>
-            </div>
-          </details>
-          <details>
-            <summary>
-              Does my footage leave my Mac?<svg class="icon">
-                <use href="#i-plus" />
-              </svg>
-            </summary>
-            <div>
-              <p>
-                The native workflow is designed to keep your source footage and
-                model processing on your machine. External services, such as
-                Instagram, require separate connection and authorization. This
-                website and the hosted demo do not connect to your local media
-                library.
-              </p>
-            </div>
-          </details>
-          <details>
-            <summary>
-              Does it publish content automatically?<svg class="icon">
-                <use href="#i-plus" />
-              </svg>
-            </summary>
-            <div>
-              <p>
-                No. AI critique and human approval are separate steps. You
-                review the creative direction and final output. Connecting an
-                external account and publishing require their own deliberate
-                authorization.
-              </p>
-            </div>
-          </details>
-          <details>
-            <summary>
-              What Mac do I need?<svg class="icon"><use href="#i-plus" /></svg>
-            </summary>
-            <div>
-              <p>
-                Growth Factory is being developed for Apple Silicon Macs. Model
-                availability and performance depend on your hardware, memory,
-                and selected model. Final system requirements and a public
-                release date have not been announced.
-              </p>
-            </div>
-          </details>
-        </div>
-      </section>
-
-      <section
-        class="closing-section shell reveal"
-        aria-labelledby="closing-title"
-      >
-        <div class="closing-inner">
-          <div class="closing-spark" aria-hidden="true">✳</div>
-          <p class="eyebrow">SEE THE CREATIVE LOOP FOR YOURSELF</p>
-          <h2 id="closing-title">
-            Less busywork.<br /><em>More story.</em>
-          </h2>
-          <a
-            class="button button-dark"
-            href="https://theclipfactory-frontend-two.vercel.app"
-            target="_blank"
-            rel="noopener"
-            >Explore the demo
-            <svg class="icon"><use href="#i-up-right" /></svg
-          ></a>
-          <p class="closing-note">
-            Sample data. No video rendering. Mac app in development.
-          </p>
-          <div class="closing-orbit" aria-hidden="true"></div>
         </div>
       </section>
     </main>
 
-    <footer class="site-footer shell">
-      <div class="footer-main">
-        <a class="wordmark" href="#" aria-label="Growth Factory home"
-          ><span class="brand-mark" aria-hidden="true"
-            ><span></span><span></span><span></span><span></span></span
-          >Growth Factory<span class="brand-period">.</span></a
-        ><span>Your footage. Your direction. Your final say.</span
-        ><a href="#hero-title" class="back-top"
-          >Back to top
-          <svg class="icon"><use href="#i-up-right" /></svg
-        ></a>
-      </div>
-      <div class="footer-bottom">
-        <span>© <span id="year">2026</span> Growth Factory</span
-        ><span>Made for the work you want to make.</span
-        ><span class="footer-status"
-          ><span class="status-dot"></span> Mac app in development</span
-        >
-      </div>
+    <footer class="wrap site-footer">
+      <span class="brand sm"><img src="/assets/icon.svg" alt="" width="28" height="28" /><span>Growth Factory</span></span>
+      <nav aria-label="Footer">
+        <a href="#how">How it works</a>
+        <a href="#agents">Agents</a>
+        <a href="#app">The app</a>
+        <a href="https://theclipfactory-frontend-two.vercel.app" target="_blank" rel="noopener">Demo</a>
+      </nav>
     </footer>
-
-    <dialog id="workflow-tour" aria-labelledby="tour-title">
-      <div class="tour-shell">
-        <div class="tour-top">
-          <span class="eyebrow">A QUICK LOOK AROUND</span
-          ><button class="dialog-close" aria-label="Close walkthrough">
-            <svg class="icon"><use href="#i-close" /></svg>
-          </button>
-        </div>
-        <div class="tour-image">
-          <img
-            src="/assets/alpine-story.webp"
-            alt="Illustrative campaign footage of an alpine adventure"
-            width="1536"
-            height="1024"
-          /><span id="tour-number">01 / 03</span>
-        </div>
-        <div class="tour-copy">
-          <p id="tour-kicker" class="eyebrow">BRING YOUR IDEA</p>
-          <h2 id="tour-title">Every story starts somewhere.</h2>
-          <p id="tour-description">
-            Add your footage and define the audience, the feeling, and the point
-            of the campaign. Give your creative team something to work toward.
-          </p>
-          <div class="tour-controls">
-            <div class="tour-dots" aria-label="Walkthrough progress">
-              <span class="active"></span><span></span><span></span>
-            </div>
-            <button id="tour-next" class="button button-dark button-small">
-              Direction
-              <svg class="icon"><use href="#i-arrow" /></svg></button
-            ><a
-              id="tour-explore"
-              class="button button-dark button-small"
-              href="https://theclipfactory-frontend-two.vercel.app"
-              target="_blank"
-              rel="noopener"
-              hidden
-              >Explore the demo
-              <svg class="icon"><use href="#i-up-right" /></svg
-            ></a>
-          </div>
-        </div>
-        <p class="tour-disclaimer">
-          An introduction to the workflow. The workspace demo uses sample data.
-        </p>
-      </div>
-    </dialog>
   </body>
 </html>
