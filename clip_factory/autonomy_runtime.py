@@ -299,10 +299,25 @@ class AutonomyRuntime:
                 break
             try:
                 self.app.state.learning.tick()
+                self.strategist_tick()
             except Exception:  # noqa: BLE001 - scheduler boundary preserves availability and safe errors
                 # Domain work has durable safe failures; never log provider bodies or credentials.
                 self.store.put("automation_health", {"id": "local", "status": "attention",
                     "message": "Learning worker needs attention. Inspect saved work before retrying.", "updated_at": now()})
+
+    def strategist_tick(self):
+        """After snapshot collection, queue one due strategist layer run (proposals only)."""
+        strategist = getattr(self.app.state, "strategist", None)
+        if strategist is None:
+            return None
+        from .strategist_api import scheduled_tick
+
+        try:
+            return scheduled_tick(self.app, strategist)
+        except Exception:  # noqa: BLE001 - the strategist is advisory; never stop metric collection
+            self.store.put("automation_health", {"id": "strategist", "status": "attention",
+                "message": "Strategist needs attention. Run it manually to see the reason.", "updated_at": now()})
+            return None
 
     def start(self):
         self.thread = threading.Thread(target=self.run, name="growth-learning-worker", daemon=True)

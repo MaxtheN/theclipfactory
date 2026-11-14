@@ -1654,3 +1654,23 @@ def test_swarm_prompts_carry_bounded_learning_memory(harness):
     assert settings["learning_memory"]["experiments"][0]["after"] == "Clearer point"
     assert len(json.dumps(settings["learning_memory"], separators=(",", ":"))) <= 1200
     assert "observational data, not proof" in prompt
+
+
+def test_approved_selection_guidance_reaches_the_planner_bounded(harness):
+    from clip_factory.strategist import GUIDANCE_CLOSE, GUIDANCE_OPEN
+
+    block = f"{GUIDANCE_OPEN}\n- prefer moment type = story (confidence 0.90, 5 posts)\n{GUIDANCE_CLOSE}"
+    harness.config["_campaign_snapshot"] = {"campaign_id": "campaign", "profile_id": "profile",
+        "strategy_snapshot": {"duration_seconds": 30, "moment_selection": "Creator words.\n\n" + block}}
+    harness.use(script())
+    run = harness.create()
+    assert run["context"]["selection_guidance"] == block
+    harness.execute()
+    assert harness.models.calls[0]["data"]["context"]["selection_guidance"] == block
+    assert "selection_guidance" in harness.models.calls[0]["prompt"]
+
+
+def test_unapproved_or_absent_guidance_is_not_added(harness):
+    harness.config["_campaign_snapshot"] = {"campaign_id": "campaign", "profile_id": "profile",
+        "strategy_snapshot": {"duration_seconds": 30, "moment_selection": "Creator words only."}}
+    assert "selection_guidance" not in harness.create()["context"]

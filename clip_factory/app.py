@@ -2544,6 +2544,17 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     app.state.learning = engine
     install_learning_api(app, runtime, engine)
 
+    from .strategist import Strategist
+    from .strategist_api import LocalModel
+    from .strategist_api import install as install_strategist_api
+
+    # Proposal-only: style rules go through Campaigns.propose; nothing here approves or publishes.
+    app.state.strategist = Strategist(
+        store, propose_rules=campaigns.propose_from_beliefs,
+        model_factory=lambda job_id: LocalModel(app, runtime, job_id),
+    )
+    install_strategist_api(app, app.state.strategist)
+
     from .cloud import default_account
     from .cloud_api import install as install_cloud_api
 

@@ -19,10 +19,14 @@ from .team import Objective
 
 Text = Annotated[str, Field(max_length=1200)]
 # Who created a proposed strategy revision. Proposals never approve themselves.
-StrategySource = Literal["manual", "learning_experiment"]
+StrategySource = Literal["manual", "learning_experiment", "strategist"]
 LEARNING_CAVEAT = (
     "Proposed from one learning experiment on observational post metrics. It is a hypothesis to test, "
     "not proof of causal lift or a winner."
+)
+STRATEGIST_CAVEAT = (
+    "Proposed by the strategist from beliefs scored on this account's own measured posts. Observational: a "
+    "pattern to keep testing, not proof of causal lift or a winner."
 )
 Identifier = Annotated[str, Field(min_length=1, max_length=128)]
 
@@ -408,7 +412,7 @@ class Campaigns:
 
     def propose(self, campaign_id, body: Proposal, *, hypothesis="", restored_from=None,
                 source: StrategySource = "manual", learning: dict | None = None):
-        if source not in ("manual", "learning_experiment") or (source == "learning_experiment") != (learning is not None):
+        if source not in ("manual", "learning_experiment", "strategist") or (source != "manual") != (learning is not None):
             raise HTTPException(422, "Unsupported strategy proposal source.")
         with self.store.lock:
             campaign = self.active_campaign(campaign_id)
@@ -443,7 +447,7 @@ class Campaigns:
                     **({"learning": deepcopy(learning)} if learning is not None else {}),
                     "created_at": now(),
                     "approved_at": None,
-                    "limitations": LEARNING_CAVEAT if learning is not None
+                    "limitations": STRATEGIST_CAVEAT if source == "strategist" else LEARNING_CAVEAT if learning is not None
                     else "Observational evidence informs a hypothesis, not proof of causal lift.",
                 },
             )
@@ -496,6 +500,44 @@ class Campaigns:
                 hypothesis=f"Changing the {variable} may improve the profile's measured outcome."[:4000],
                 source="learning_experiment",
                 learning=learning,
+            )
+
+    def propose_from_beliefs(self, campaign_id: str, profile_id: str, layer: str, changes: dict, beliefs: list[dict]):
+        """Turn supported strategist beliefs into a PROPOSED Style-rules revision on the active base.
+
+        Same propose() path as learning experiments: stale-base and profile-coverage guards apply
+        here and again at approval. Only existing Direction fields change; text guidance is a
+        bounded, replaceable block. Nothing is approved and the evidence IDs are the beliefs' own.
+        """
+        from .strategist import merge_guidance
+
+        with self.store.lock:
+            campaign = self.active_campaign(campaign_id)
+            if profile_id not in campaign["profile_ids"] or not campaign.get("active_strategy_id"):
+                raise HTTPException(409, "Approve Style rules for this profile before strategist proposals.")
+            base = self.require("strategy_versions", campaign["active_strategy_id"])
+            if profile_id not in base.get("directions", {}):
+                raise HTTPException(409, "Approve Style rules for this profile before strategist proposals.")
+            direction = deepcopy(base["directions"][profile_id])
+            direction.update(changes.get("structured") or {})
+            field = changes["guidance_field"]
+            if field not in ("moment_selection", "editing_preferences"):
+                raise HTTPException(422, "Unsupported strategist guidance field.")
+            direction[field] = merge_guidance(direction.get(field, ""), changes["guidance"])
+            direction["limitations"] = STRATEGIST_CAVEAT
+            direction["confidence"] = "low"
+            evidence = sorted({e["snapshot_id"] for b in beliefs for e in b.get("evidence", [])})[:40]
+            learning = {"layer": layer, "profile_id": profile_id, "belief_ids": [b["id"] for b in beliefs],
+                        "snapshot_ids": evidence, "caveat": STRATEGIST_CAVEAT,
+                        "beliefs": [{k: b.get(k) for k in ("id", "statement", "variable", "value", "direction",
+                                     "confidence", "status")} for b in beliefs][:10]}
+            statements = " ".join(b["statement"] for b in beliefs)
+            return self.propose(
+                campaign["id"],
+                Proposal(directions={profile_id: Direction.model_validate(direction)},
+                         reason=f"Strategist ({layer}) proposal: {statements} Observational, not causal."[:4000],
+                         base_version_id=base["id"]),
+                hypothesis=statements[:4000], source="strategist", learning=learning,
             )
 
     def decision(self, campaign_id, version_id, *, approve, reason=""):
