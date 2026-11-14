@@ -12,6 +12,39 @@ export type QuickAction = {
   run: () => void;
 };
 
+const RECENT_KEY = "gf-quick-recent-v1";
+function readRecent(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(value) ? value.filter((v) => typeof v === "string").slice(0, 3) : [];
+  } catch {
+    return [];
+  }
+}
+function rememberRecent(id: string) {
+  try {
+    localStorage.setItem(
+      RECENT_KEY,
+      JSON.stringify([id, ...readRecent().filter((v) => v !== id)].slice(0, 3)),
+    );
+  } catch {
+    /* convenience only */
+  }
+}
+/** Spotlight-style ranking: prefix, word start, substring, keyword, then loose letters in order. */
+export function matchScore(action: Pick<QuickAction, "label" | "keywords">, query: string) {
+  if (!query) return 1;
+  const label = action.label.toLocaleLowerCase();
+  if (label.startsWith(query)) return 5;
+  if (label.split(/\s+/).some((word) => word.startsWith(query))) return 4;
+  if (label.includes(query)) return 3;
+  if ((action.keywords || "").toLocaleLowerCase().includes(query)) return 2;
+  if (query.length < 2) return 0;
+  let at = 0;
+  for (const char of label) if (char === query[at]) at++;
+  return at === query.length ? 1 : 0;
+}
+
 export function QuickActions({
   open,
   onDismiss,
@@ -31,12 +64,29 @@ export function QuickActions({
   const titleId = `${id}-title`;
   const descriptionId = `${id}-description`;
   const normalized = query.trim().toLocaleLowerCase();
-  const filtered = actions.filter((action) =>
-    `${action.label} ${action.keywords || ""}`
-      .toLocaleLowerCase()
-      .includes(normalized),
-  );
-  const available = filtered.filter((action) => !action.disabled);
+  const [recentIds, setRecentIds] = useState<string[]>([]);
+  const ranked = actions
+    .map((action, index) => ({ action, index, score: matchScore(action, normalized) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((item) => item.action);
+  // With no query, the last few actions come first under "Recent".
+  const recent = normalized
+    ? []
+    : recentIds
+        .map((rid) => actions.find((action) => action.id === rid && !action.disabled))
+        .filter((action): action is QuickAction => !!action);
+  const filtered = ranked.filter((action) => !recent.includes(action));
+  const sections: { label: string; items: QuickAction[] }[] = [
+    { label: "Recent", items: recent },
+    ...(["Clips", "Brand"] as const).map((group) => ({
+      label: group,
+      items: filtered.filter((action) => action.group === group),
+    })),
+  ];
+  const available = sections
+    .flatMap((section) => section.items)
+    .filter((action) => !action.disabled);
   const active =
     available.find((action) => action.id === selectedId) || available[0];
   const optionId = (action: QuickAction) => `${id}-action-${action.id}`;
@@ -62,6 +112,7 @@ export function QuickActions({
     // Restore the opener before navigation. A subsequent heading focus must
     // not be overwritten by the dialog's controlled-close effect.
     dismiss();
+    rememberRecent(action.id);
     action.run();
   }
 
@@ -73,6 +124,7 @@ export function QuickActions({
           : null;
       setQuery("");
       setSelectedId(null);
+      setRecentIds(readRecent());
       if (!dialog.current?.open) dialog.current?.showModal();
       input.current?.focus();
     } else closeAndRestore();
@@ -174,8 +226,7 @@ export function QuickActions({
           aria-label="Quick actions"
           className="gf-command-list"
         >
-          {(["Clips", "Brand"] as const).map((group) => {
-            const grouped = filtered.filter((action) => action.group === group);
+          {sections.map(({ label: group, items: grouped }) => {
             if (!grouped.length) return null;
             return (
               <div
@@ -218,16 +269,18 @@ export function QuickActions({
               </div>
             );
           })}
-          {!filtered.length && (
+          {!filtered.length && !recent.length && (
             <p role="status" className="gf-command-empty">
               No matching actions.
             </p>
           )}
         </div>
         <div className="gf-command-footer" aria-hidden="true">
-          <span>↑ ↓ to move</span>
-          <span>↵ to open</span>
-          <span>Esc to close</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+          <span><kbd>↵</kbd> open</span>
+          <span><kbd>esc</kbd> close</span>
+          <span className="gf-command-footer-spacer" />
+          <span><kbd>⌘</kbd><kbd>K</kbd> toggle</span>
         </div>
       </div>
     </dialog>

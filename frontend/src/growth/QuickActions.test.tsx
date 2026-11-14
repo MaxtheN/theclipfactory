@@ -1,7 +1,7 @@
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { QuickActions, type QuickAction } from "./QuickActions";
+import { QuickActions, matchScore, type QuickAction } from "./QuickActions";
 
 const showModal = HTMLDialogElement.prototype.showModal;
 const close = HTMLDialogElement.prototype.close;
@@ -155,5 +155,25 @@ describe("Quick actions", () => {
     expect(run).toHaveBeenCalledOnce();
     expect(destination).toHaveFocus();
     destination.remove();
+  });
+  it("ranks prefix over substring, allows loose letters, and lists recent actions first", () => {
+    expect(matchScore({ label: "Go to Library" }, "go")).toBeGreaterThan(
+      matchScore({ label: "Undo go" }, "go"),
+    );
+    expect(matchScore({ label: "Style rules" }, "styrl")).toBe(1);
+    expect(matchScore({ label: "Style rules" }, "xyz")).toBe(0);
+    localStorage.removeItem("gf-quick-recent-v1");
+    const library = vi.fn();
+    const actions: QuickAction[] = [
+      { id: "factory", label: "Go to Factory", icon: "studio", group: "Clips", run: vi.fn() },
+      { id: "library", label: "Go to Library", icon: "folder", group: "Clips", run: library },
+    ];
+    const { input } = openPalette(actions);
+    fireEvent.change(input, { target: { value: "libr" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(library).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Open quick actions" }));
+    expect(screen.getByRole("group", { name: "Recent" })).toHaveTextContent("Go to Library");
+    expect(screen.getByRole("option", { name: "Go to Library" })).toHaveAttribute("aria-selected", "true");
   });
 });
