@@ -98,7 +98,7 @@ export function GrowthApp() {
   // is configured, nobody is signed in and the creator hasn't chosen offline.
   const [askAccount, setAskAccount] = useState(false);
   const [creating, setCreating] = useState(
-    () => reviewPreview && window.location.hash === "#onboarding",
+    () => reviewPreview && ["#onboarding", "#intro"].includes(window.location.hash),
   );
   const [onboardingSession, setOnboardingSession] = useState(0);
   const [onboardingBusy, setOnboardingBusy] = useState(false);
@@ -596,7 +596,10 @@ export function GrowthApp() {
                   w={w}
                   active={onboarding && !tools}
                   askAccount={askAccount}
-                  intro={!w.loading && w.profiles.length === 0}
+                  intro={
+                    (!w.loading && w.profiles.length === 0) ||
+                    (reviewPreview && window.location.hash === "#intro")
+                  }
                   onBusyChange={setOnboardingBusy}
                   onCancel={usable ? () => setCreating(false) : undefined}
                   onComplete={() => {

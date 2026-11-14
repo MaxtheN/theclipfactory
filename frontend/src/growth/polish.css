@@ -796,13 +796,14 @@
 
 /* ---------- Onboarding: welcome, website art, prefill, brand ready ---------- */
 .gf-app .gf-intro {
-  position: relative;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
   display: grid;
   place-items: center;
-  min-height: min(640px, 78vh);
   overflow: hidden;
-  border-radius: var(--gf-radius);
   isolation: isolate;
+  background: var(--material-canvas);
 }
 .gf-intro-aurora {
   position: absolute;
@@ -825,7 +826,7 @@
   display: grid;
   justify-items: center;
   gap: var(--gf-s4);
-  max-width: 560px;
+  max-width: 680px;
   padding: var(--gf-s6);
   text-align: center;
   animation: gf-intro-rise 600ms var(--gf-ease) both;
@@ -884,7 +885,7 @@
 
 .gf-wb-illustration {
   display: block;
-  margin: 0 0 var(--gf-s3);
+  margin: 0 auto var(--gf-s3);
   overflow: visible;
 }
 .gf-wb-illustration .gf-wb-line {
@@ -996,6 +997,14 @@
 @keyframes gf-ready-in {
   from { opacity: 0; transform: translateY(10px) scale(0.97); }
   to { opacity: 1; transform: none; }
+}
+
+/* The URL field is one box, not a box inside a box. */
+.gf-app .gf-wb-url input,
+.gf-app .gf-wb-url input:focus {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 /* ---------- 1024px: nothing wraps into a mess ---------- */
