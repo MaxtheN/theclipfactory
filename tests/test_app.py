@@ -715,3 +715,18 @@ def test_llm_requests_accept_ollama_ids_and_reject_others(client):
     assert rejected.status_code == 422
     stopped = client.post("/api/inference", json={"prompt": "hi", "model_id": "ollama:qwen3.6:35b-a3b"})
     assert stopped.status_code == 400 and "Ollama is not running" in stopped.text
+
+
+def test_parse_candidates_accepts_bare_lists_and_skips_bad_rows():
+    # Ping pong regression: Ollama Qwen returned a fenced bare array, not {"candidates": [...]}.
+    output = (
+        "```json\n"
+        '[{"start": 52.49, "end": 97.46, "hook": "Training", "caption": "c", "objective": "discovery"},'
+        ' {"start": "1:02", "end": 70}, "junk", {"start": 100, "end": 205},'
+        ' {"start": 262.43, "end": 307.41, "hook": "Technique", "caption": "c", "objective": "awareness"}]\n'
+        "```"
+    )
+    candidates = parse_candidates(output, 1259.675, "discovery")
+    assert [c["start"] for c in candidates] == [52.49, 262.43]  # malformed and >60 s rows skipped
+    prose = 'Here are clips: {"candidates": [{"start": 1, "end": 2}]} hope this helps {not json}'
+    assert parse_candidates(prose, 5, "discovery")[0]["end"] == 2

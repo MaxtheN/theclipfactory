@@ -25,10 +25,11 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from platformdirs import user_data_path
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import media
+from . import media, scouts
 from .ads import AdsClient
 from .campaign_api import install as install_campaign_api
 from .campaigns import Campaigns
+from .evidence import bounded_transcript
 from .jobs import Jobs, WorkError
 from .meta import MetaClient, MetaError, MetaOAuth, SecureTokenStore, validate_public_video_url
 from .models import Models, apple_silicon
@@ -167,53 +168,65 @@ class Narration(Body):
     text: str = Field(min_length=1, max_length=5000)
 
 
+def _json_payload(text: str):
+    """First JSON object or array in the reply; tolerates fences and surrounding prose."""
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(text):
+        if char in "{[":
+            try:
+                return decoder.raw_decode(text, index)[0]
+            except ValueError:
+                continue
+    raise ValueError("No JSON payload")
+
+
 def parse_candidates(output: str, duration: float, objective: str) -> list[dict]:
     # Model output is untrusted data; strict schema and video boundaries precede any rendering.
     stripped = re.sub(r"<think>.*?</think>", "", output, flags=re.DOTALL).strip()
-    stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", stripped).strip()
-    begin, end = stripped.find("{"), stripped.rfind("}")
     try:
-        value = json.loads(stripped[begin : end + 1])
-        rows = value["candidates"]
+        value = _json_payload(stripped)
+        # Local models often return the candidate list bare instead of {"candidates": [...]}.
+        rows = value if isinstance(value, list) else value["candidates"]
         if not isinstance(rows, list):
             raise TypeError()
-        valid = []
-        for candidate in rows[:8]:
-            if not isinstance(candidate, dict):
-                continue
-            try:
-                item = Render.model_validate(
-                    {
-                        key: candidate[key]
-                        for key in ["start", "end", "hook", "caption", "objective"]
-                        if key in candidate
-                    }
-                )
-            except (ValueError, TypeError):
-                continue
-            if (
-                item.end <= item.start
-                or item.start >= duration
-                or item.end > duration + 0.1
-                or item.end - item.start > MAX_CANDIDATE_SECONDS
-            ):
-                continue
-            item.end = min(item.end, duration)
-            if objective != "discovery":
-                item.objective = objective
-            valid.append(
+    except (ValueError, KeyError, TypeError):
+        rows = []
+    valid = []
+    for candidate in rows[:8]:
+        # One malformed candidate must not discard the valid ones beside it.
+        if not isinstance(candidate, dict):
+            continue
+        try:
+            item = Render.model_validate(
                 {
-                    **item.model_dump(exclude={"subtitles", "format", *PLAN_EXTRAS}),
-                    "reason": str(candidate.get("reason", "Local model suggestion"))[:1000],
+                    key: candidate[key]
+                    for key in ["start", "end", "hook", "caption", "objective"]
+                    if key in candidate
                 }
             )
-        if not valid:
-            raise ValueError()
-        return valid[:3]
-    except (ValueError, KeyError, TypeError):
+        except (ValueError, TypeError):
+            continue
+        if (
+            item.end <= item.start
+            or item.start >= duration
+            or item.end > duration + 0.1
+            or item.end - item.start > MAX_CANDIDATE_SECONDS
+        ):
+            continue
+        item.end = min(item.end, duration)
+        if objective != "discovery":
+            item.objective = objective
+        valid.append(
+            {
+                **item.model_dump(exclude={"subtitles", "format", *PLAN_EXTRAS}),
+                "reason": str(candidate.get("reason", "Local model suggestion"))[:1000],
+            }
+        )
+    if not valid:
         raise WorkError(
             "Model returned no valid clip ranges. Retry with a shorter source or select a range manually."
-        ) from None
+        )
+    return valid[:3]
 
 
 def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAPI:
@@ -238,12 +251,13 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             app.state.models,
             transcribe=transcribe_task,
             render=render_team,
-            frames=lambda job, video: media.sample_frames(
+            frames=lambda job, video, times=None, name="team-frames": media.sample_frames(
                 app.state.jobs,
                 job,
                 source_path(video),
-                root / "work" / job / "team-frames",
+                root / "work" / job / name,
                 video["duration"],
+                times=times,
             ),
             baseline=pipeline_task,
         )
@@ -509,6 +523,31 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         finally:
             audio.unlink(missing_ok=True)
 
+    def scout_source(job_id: str, video: dict, model_id: str, config: dict, count: int = 3) -> dict:
+        """Long sources: one scout per time window, then a selector (see scouts.py)."""
+        work = root / "work" / job_id / "scout-frames"
+        return scouts.scout(
+            generate=lambda prompt, images, max_tokens: models().run(
+                job_id,
+                model_id,
+                "generate",
+                keep_warm=True,
+                prompt=prompt,
+                images=images,
+                max_tokens=max_tokens,
+            )["output"],
+            video=video,
+            frames_for=lambda index, times: media.sample_frames(
+                jobs(), job_id, source_path(video), work / f"chunk-{index:02}", video["duration"], times=times
+            ),
+            objective=config["objective"],
+            brand=config["brand"],
+            count=count,
+            direction=config.get("_campaign_snapshot"),
+            check=lambda: jobs().check(job_id),
+            progress=lambda message: jobs().update(job_id, message=message),
+        )
+
     def analyze_task(job_id: str, video: dict, model_id: str, config: dict | None = None) -> dict:
         work = root / "work" / job_id
         frames = media.sample_frames(jobs(), job_id, source_path(video), work / "frames", video["duration"])
@@ -541,17 +580,12 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             ]
         transcript = video.get("transcript")
         if transcript:
-            segments, used = [], 0
-            for segment in transcript.get("segments", []):
-                text = str(segment.get("text", ""))[:2000]
-                if used + len(text) > 18000:
-                    break
-                segments.append({"start": segment.get("start"), "end": segment.get("end"), "text": text})
-                used += len(text)
+            segments, merged = bounded_transcript(transcript.get("segments", []), budget=18000)
             transcript = {
                 "language": transcript.get("language"),
                 "segments": segments,
-                "limited_context": len(segments) < len(transcript.get("segments", [])),
+                # Long sources arrive as time windows with speech excerpts, not every segment.
+                "limited_context": merged,
             }
         prompt = (
             "You are a video editor proposing source-backed Instagram Reel moments. Return ONLY JSON "
@@ -580,6 +614,22 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 ensure_ascii=False,
             )
         )
+        if scouts.is_long(video):
+            found = scout_source(job_id, video, model_id, config)
+            candidates = parse_candidates(
+                json.dumps({"candidates": found["moments"]}), video["duration"], config["objective"]
+            )
+            result = {
+                "video_id": video["id"],
+                "candidates": candidates,
+                "method": "scouts",
+                "scouting": {k: found[k] for k in ["chunks", "skipped", "selector"]}
+                | {"candidates_found": len(found["pool"])},
+                "limitations": "Scouts each reviewed one time window with sampled frames; review all proposed "
+                "ranges and claims before publishing.",
+            }
+            store.patch("videos", video["id"], analysis=result, status="analyzed")
+            return result
         for attempt in range(2):
             jobs().check(job_id)
             output = models().run(
@@ -600,6 +650,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         result = {
             "video_id": video["id"],
             "candidates": candidates,
+            "method": "single_pass",
             "sampled_frames": len(frames),
             "limitations": "Approximate sampled-frame analysis; review all proposed ranges and claims before publishing.",
         }

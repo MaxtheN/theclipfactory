@@ -1067,3 +1067,103 @@ def test_restart_recovers_persisted_team_render_before_callback_return(harness):
     assert render["status"] == "completed" and render["output"]["clip_id"] == "persisted"
     assert render["output"]["recovered_from_persisted_output"] is True
     assert not harness.models.calls
+
+
+def test_off_range_citation_is_dropped_when_other_evidence_grounds_the_moment(harness):
+    # Ping pong regression: the model cited one transcript segment just outside its range.
+    harness.store.patch(
+        "videos",
+        "source",
+        transcript={
+            "segments": [
+                {"start": 0.25, "end": 0.75, "text": "In range"},
+                {"start": 2.5, "end": 3, "text": "After"},
+            ]
+        },
+    )
+    outputs = script()
+    outputs[1]["moments"][0]["evidence_refs"] = ["frame:0", "transcript:1", "transcript:0"]
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    assert run["status"] == "needs_review"
+    analyst = next(t for t in run["tasks"] if t["role"] == "footage_analyst")
+    assert analyst["output"]["moments"][0]["evidence_refs"] == ["frame:0", "transcript:0"]
+
+
+def test_ungrounded_moment_is_dropped_while_grounded_one_proceeds(harness):
+    outputs = script()
+    grounded = outputs[1]["moments"][0]
+    outputs[1]["moments"] = [
+        {"start": 1.6, "end": 2, "summary": "No evidence inside", "evidence_refs": ["frame:0"]},
+        grounded,
+    ]
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    analyst = next(t for t in run["tasks"] if t["role"] == "footage_analyst")
+    assert [m["summary"] for m in analyst["output"]["moments"]] == [grounded["summary"]]
+
+
+def test_unknown_reference_rejects_the_moment_and_requests_a_correction(harness):
+    outputs = script()
+    bad = copy.deepcopy(outputs[1])
+    bad["moments"][0]["evidence_refs"] = ["frame:0", "transcript:99"]
+    outputs.insert(1, bad)  # first footage handoff cites unknown evidence; the retry is valid
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    footage_calls = [
+        c for c in harness.models.calls if c["data"].get("assignment", "").startswith("Complete footage")
+    ]
+    assert len(footage_calls) == 2
+    assert "unknown evidence" in json.dumps(footage_calls[1]["data"]["format_correction"])
+    assert run["status"] == "needs_review"
+
+
+class ScoutingModels(ScriptedModels):
+    """Answers scout and selector prompts itself; team roles go to the scripted outputs."""
+
+    def __init__(self, outputs, scout_answer):
+        super().__init__(outputs)
+        self.scout_answer, self.scout_calls = scout_answer, []
+
+    def run(self, job_id, model_id, action, keep_warm=False, **payload):
+        if payload["prompt"].startswith(("You are one scout", "Scouts reviewed")):
+            self.scout_calls.append(keep_warm)
+            lo = payload["prompt"].split("You only see seconds ", 1)[-1].split("-", 1)[0]
+            return {"output": json.dumps(self.scout_answer.get(lo, []))}
+        return super().run(job_id, model_id, action, **payload)
+
+
+def test_long_source_footage_comes_from_scouts_and_passes_evidence_checks(harness):
+    segments = [{"start": s, "end": s + 4, "text": f"speech {s}"} for s in range(0, 1800, 5)]
+    harness.video = harness.store.put(
+        "videos", {**harness.video, "duration": 1800, "has_audio": True, "transcript": {"segments": segments}}
+    )
+    outputs = script()
+    del outputs[1]  # no footage-analyst prompt: scouts replace it
+    harness.models = ScoutingModels(
+        outputs, {"0": [{"start": 0, "end": 30, "hook": "Opening bit", "score": 7, "why": "clear payoff"}]}
+    )
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review" and result["review_status"] == "pass"
+    assert harness.models.scout_calls and all(harness.models.scout_calls)  # every scout call kept warm
+    assert run["scouting"]["chunks"] == 3 and run["scouting"]["candidates_found"] == 1
+    moment = next(t for t in run["tasks"] if t["role"] == "footage_analyst")["output"]["moments"][0]
+    assert (moment["start"], moment["end"]) == (0, 30) and "frame:0" in moment["evidence_refs"]
+    assert harness.rendered[0]["start"] == 0
+
+
+def test_long_source_with_no_scout_moments_fails_before_strategy(harness):
+    segments = [{"start": s, "end": s + 4, "text": "um"} for s in range(0, 1800, 5)]
+    harness.video = harness.store.put(
+        "videos", {**harness.video, "duration": 1800, "has_audio": True, "transcript": {"segments": segments}}
+    )
+    harness.models = ScoutingModels([plan()], {})
+    harness.engine.models = harness.models
+    run = harness.create()
+    with pytest.raises(WorkError, match="no speech-backed moments"):
+        harness.engine.execute(run["id"], "job")
+    assert not harness.rendered

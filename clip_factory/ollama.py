@@ -163,6 +163,7 @@ class Ollama:
         images: list[str] | None = None,
         max_tokens: int = 1500,
         check=lambda: None,
+        keep_alive: int | str = 0,
     ) -> str:
         """Stream a chat completion so cancellation is honoured between chunks."""
         info = self.model(name)
@@ -187,8 +188,9 @@ class Ollama:
             "model": name,
             "messages": [message],
             "stream": True,
-            # Unload after the task, like the MLX worker, so Whisper/Kokoro jobs get the memory.
-            "keep_alive": 0,
+            # Default: unload after the task, like the MLX worker, so Whisper/Kokoro get the memory.
+            # Multi-call runs (agent swarms) pass a duration to avoid reloading weights per call.
+            "keep_alive": keep_alive,
             "options": {"temperature": 0.3, "num_predict": max_tokens},
         }
         if info["thinking"]:
