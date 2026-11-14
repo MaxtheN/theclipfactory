@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   fireEvent,
   render,
@@ -29,13 +29,25 @@ import { workspaceApi } from "./workspaceApi";
 import { resetPreview } from "./previewApi";
 import { GrowthApp } from "./GrowthApp";
 
+const nativeShowModal = HTMLDialogElement.prototype.showModal;
+const nativeClose = HTMLDialogElement.prototype.close;
+beforeAll(() => {
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+});
+afterAll(() => {
+  HTMLDialogElement.prototype.showModal = nativeShowModal;
+  HTMLDialogElement.prototype.close = nativeClose;
+});
+
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 /** A small in-memory service: PUTs replace the exact record by ID. */
 function fixture({
   latestVideos,
   part = "brand",
-}: { latestVideos?: string[]; part?: "brand" | "campaign" } = {}) {
+  editor = "identity",
+}: { latestVideos?: string[]; part?: "brand" | "campaign"; editor?: "identity" | "kit" | null } = {}) {
   const profiles: Profile[] = [
     {
       id: "profile-a",
@@ -167,6 +179,7 @@ function fixture({
       part={part}
     />,
   );
+  if (part === "brand" && editor) fireEvent.click(screen.getByRole("button", { name: editor === "kit" ? /^Brand kit/ : /^Brand, audience & voice/ }));
   return { w, factory, api, store, next, onSaved, onAccounts, view, profiles, campaign };
 }
 const saveButton = () =>
@@ -186,7 +199,51 @@ beforeEach(() => {
 });
 
 describe("brand profile", () => {
-  it("shows only brand fields, the links and one save action", () => {
+  it("starts with concise groups and keeps unsaved edits across editor dismissal", () => {
+    const { api, view } = fixture({ editor: null });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("region", { name: "Brand profile overview" })).toBeVisible();
+    const opener = screen.getByRole("button", { name: /^Brand, audience & voice/ });
+    opener.focus();
+    fireEvent.click(opener);
+    const editor = screen.getByRole("dialog", { name: "Brand, audience & voice" });
+    expect(editor).toBeVisible();
+    fireEvent.change(within(editor).getByLabelText("Who it's for"), { target: { value: "A draft audience" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Close Brand, audience & voice" }));
+    expect(opener).toHaveFocus();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(opener);
+    expect(within(screen.getByRole("dialog")).getByLabelText("Who it's for")).toHaveValue("A draft audience");
+    expect(api.updateProfile).not.toHaveBeenCalled();
+    expect(api.save).not.toHaveBeenCalled();
+    expect(view.container.querySelectorAll("dialog")).toHaveLength(3);
+  });
+
+  it("opens goals from its card or request, retains its draft, and closes on navigation", () => {
+    const { w, factory, api } = fixture({ editor: null });
+    cleanup();
+    const goals = <Setup w={w} factory={factory} creating={false} next={vi.fn()} onSaved={vi.fn()} part="campaign" />;
+    const props = { w, factory, creating: false, next: vi.fn(), onSaved: vi.fn(), goals };
+    const view = render(<Setup {...props} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Goals & brief/ }));
+    const dialog = screen.getByRole("dialog", { name: "Goals & brief" });
+    expect(dialog).toHaveClass("gf-panel-dialog-wide");
+    fireEvent.change(within(dialog).getByLabelText("Notes for the agents"), { target: { value: "A goal draft" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close Goals & brief" }));
+    view.rerender(<Setup {...props} goalsRequest={1} />);
+    expect(within(screen.getByRole("dialog", { name: "Goals & brief" })).getByLabelText("Notes for the agents")).toHaveValue("A goal draft");
+    view.rerender(<Setup {...props} active={false} goalsRequest={1} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    view.rerender(<Setup {...props} active goalsRequest={1} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Goals & brief/ }));
+    expect(within(screen.getByRole("dialog", { name: "Goals & brief" })).getByLabelText("Notes for the agents")).toHaveValue("A goal draft");
+    expect(api.save).not.toHaveBeenCalled();
+    expect(api.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it("shows focused brand fields and only offers Save after an edit", () => {
     const { view, next, onAccounts } = fixture();
     expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo");
     expect(screen.getByLabelText("Who it's for")).toHaveValue("Builders");
@@ -195,14 +252,17 @@ describe("brand profile", () => {
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByLabelText("Campaign name")).toBeNull();
     expect(screen.queryByRole("button", { name: "Save brief" })).toBeNull();
-    expect(
-      screen.getAllByRole("button", { name: /^Save/ }).map((b) => b.textContent),
-    ).toEqual(["Save brand"]);
+    expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Who it's for"), { target: { value: "An edited audience" } });
+    expect(screen.getByRole("button", { name: "Save brand" })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("Who it's for"), { target: { value: "Builders" } });
+    expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull();
     expect(view.container.querySelector('input[type="file"]')).toBeNull();
     // Advanced is closed and holds the rarely used notes.
     const advanced = screen.getByLabelText("Advanced controls").closest("details")!;
     expect(advanced.open).toBe(false);
     expect(advanced).toContainElement(screen.getByLabelText("Extra creative notes"));
+    fireEvent.click(screen.getByRole("button", { name: "Close Brand, audience & voice" }));
     fireEvent.click(screen.getByRole("button", { name: "Style rules" }));
     expect(next).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Connected accounts" }));
@@ -240,12 +300,42 @@ describe("brand profile", () => {
     });
     expect(store.campaigns[0].active_strategy_id).toBe("version-a");
     expect(screen.getByRole("status")).toHaveTextContent("Saved and confirmed.");
+    expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull();
     expect(next).not.toHaveBeenCalled();
     noSideEffects(api);
   });
 
+  it("explains an incomplete identity when saving from the kit editor", () => {
+    fixture();
+    fireEvent.change(screen.getByLabelText("Brand name"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close Brand, audience & voice" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Brand kit/ }));
+    const kit = screen.getByRole("dialog", { name: "Brand kit" });
+    expect(within(kit).getByRole("alert")).toHaveTextContent("Your brand name needs attention.");
+    fireEvent.click(within(kit).getByRole("button", { name: "Review brand details" }));
+    expect(within(screen.getByRole("dialog", { name: "Brand, audience & voice" })).getByLabelText("Brand name")).toHaveValue("");
+  });
+
+  it("explains an invalid kit in the identity editor and returns to the retained kit draft", () => {
+    const { api } = fixture({ editor: "kit" });
+    fireEvent.change(screen.getByLabelText("Logo (PNG file on this Mac)"), { target: { value: "unfinished-logo.jpg" } });
+    fireEvent.change(screen.getByLabelText("Main colour"), { target: { value: "#123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close Brand kit" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Brand, audience & voice/ }));
+    const identity = screen.getByRole("dialog", { name: "Brand, audience & voice" });
+    expect(within(identity).getByRole("alert")).toHaveTextContent("Brand kit needs attention.");
+    expect(within(identity).getByRole("button", { name: "Save brand" })).toBeDisabled();
+    fireEvent.click(within(identity).getByRole("button", { name: "Review brand kit" }));
+    const kit = screen.getByRole("dialog", { name: "Brand kit" });
+    expect(within(kit).getByLabelText("Logo (PNG file on this Mac)")).toHaveValue("unfinished-logo.jpg");
+    expect(within(kit).getByLabelText("Main colour")).toHaveValue("#123456");
+    expect(within(kit).getByRole("alert")).toHaveTextContent("full path to a .png file");
+    expect(api.updateProfile).not.toHaveBeenCalled();
+    expect(api.save).not.toHaveBeenCalled();
+  });
+
   it("saves the brand kit only when it is edited, and checks it first", async () => {
-    const { api, store, onSaved } = fixture();
+    const { api, store, onSaved } = fixture({ editor: "kit" });
     fireEvent.change(screen.getByLabelText("Logo (PNG file on this Mac)"), {
       target: { value: "logo.jpg" },
     });
@@ -270,9 +360,41 @@ describe("brand profile", () => {
     expect(api.save).not.toHaveBeenCalled();
   });
 
+  it("keeps a newer kit draft validated and sends it after an earlier save confirms", async () => {
+    const { api, store, onSaved } = fixture();
+    let release!: () => void;
+    const pendingWrite = new Promise<void>((resolve) => { release = resolve; });
+    api.updateProfile.mockImplementationOnce(async (id, body) => {
+      await pendingWrite;
+      const saved = store.profiles.find((p) => p.id === id)!;
+      Object.assign(saved, clone(body));
+      return clone(saved);
+    });
+    fireEvent.change(screen.getByLabelText("Who it's for"), { target: { value: "The first saved audience" } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(api.updateProfile).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Close Brand, audience & voice" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Brand kit/ }));
+    fireEvent.change(screen.getByLabelText("Main colour"), { target: { value: "#123456" } });
+    fireEvent.change(screen.getByLabelText("Logo (PNG file on this Mac)"), { target: { value: "unfinished.jpg" } });
+    release();
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("alert")).toHaveTextContent("full path to a .png file");
+    expect(screen.getByRole("status")).toHaveTextContent("Your newer edits are still unsaved.");
+    expect(saveButton()).toBeDisabled();
+    expect(screen.getByLabelText("Main colour")).toHaveValue("#123456");
+    fireEvent.change(screen.getByLabelText("Logo (PNG file on this Mac)"), { target: { value: "/Users/me/later-logo.png" } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(2));
+    expect(api.updateProfile.mock.calls[0][1].brand_kit).toBeUndefined();
+    expect(api.updateProfile.mock.calls[1][1].brand_kit).toMatchObject({ primary_color: "#123456", logo_file: "/Users/me/later-logo.png" });
+    expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull();
+  });
+
   it("never falls back to another brand when the selected one is no longer linked", async () => {
     const { api, store, onSaved } = fixture();
     store.campaigns[0].profile_ids = ["profile-b"];
+    fireEvent.change(screen.getByLabelText("Who it's for"), { target: { value: "A changed audience" } });
     fireEvent.click(saveButton());
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -333,6 +455,7 @@ describe("brand profile", () => {
       ),
     );
     expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull();
     expect(api.updateProfile).toHaveBeenCalledTimes(1);
     expect(store.profiles[0].name).toBe("Renamed brand");
     noSideEffects(api);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { Field, Pill } from "./parts";
 import {
@@ -26,6 +26,8 @@ import {
 import { postCopyApi, type PostCopy } from "./referencesApi";
 import { CloudSignIn } from "./CloudSignIn";
 import { PostPreview } from "./PostPreview";
+import { PanelDialog } from "./PanelDialog";
+import { Icon } from "./Icon";
 import { clipMediaUrl } from "./productionApi";
 
 export interface PostableClip {
@@ -65,15 +67,26 @@ function Counters({ text, limits, label }: { text: string; limits: PostLimits; l
  * scheduled time, to the chosen accounts. The package (caption, hashtags, CTA, cover, feed
  * sharing) is previewed on a phone first. Uncertain outcomes offer "Check status", never a blind retry.
  */
+function PostEditorSurface({ compact, open, onClose, children }: { compact: boolean; open: boolean; onClose: () => void; children: ReactNode }) {
+  return compact
+    ? <PanelDialog open={open} onClose={onClose} title="Prepare your post" description="Preview this exact clip, choose its accounts, then post or schedule when you're ready." size="wide">{children}</PanelDialog>
+    : <>{children}</>;
+}
+
 export function PostToInstagram({
   clip,
   disabled = false,
+  compact = false,
+  activeSurface = true,
   approve,
   pollMs = 3000,
   now = () => new Date(),
 }: {
   clip: PostableClip;
   disabled?: boolean;
+  /** Keeps review focused; the full editor stays mounted in a deliberate sheet. */
+  compact?: boolean;
+  activeSurface?: boolean;
   /** Records the human approval of this exact revision; returns the saved clip. */
   approve: () => Promise<PostableClip | false | undefined>;
   pollMs?: number;
@@ -100,6 +113,9 @@ export function PostToInstagram({
   const [copy, setCopy] = useState<PostCopy | null>();
   const [writing, setWriting] = useState("");
   const [signingIn, setSigningIn] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  useEffect(() => setEditorOpen(false), [clip.id, clip.sha256]);
+  useEffect(() => { if (!activeSurface) setEditorOpen(false); }, [activeSurface]);
   // Generated copy prefills the caption until the person edits it themselves.
   const edited = useRef(false), prefilled = useRef(false);
   const live = useRef(true);
@@ -283,11 +299,22 @@ export function PostToInstagram({
           <summary>Details</summary>
           <ul>{report.reasons.map(r => <li key={r}>{r}</li>)}</ul>
         </details>}
-        {held && <Field label="Override reason (required to post a held clip)">{id => <AutoTextarea id={id} rows={2} value={override} onChange={e => setOverride(e.target.value)} placeholder="Why is it fine to post anyway?" />}</Field>}
+        {held && !compact && <Field label="Override reason (required to post a held clip)">{id => <AutoTextarea id={id} rows={2} value={override} onChange={e => setOverride(e.target.value)} placeholder="Why is it fine to post anyway?" />}</Field>}
       </> : !error && <p className="gf-help">Checking quality…</p>}
     </section>
 
-    <section className="gf-review-section gf-post-section" aria-label="Post to Instagram">
+    {compact && <section className="gf-review-section gf-post-launcher" aria-label="Posting tools">
+      <button type="button" className="gf-button secondary full" onClick={() => setEditorOpen(true)}><Icon name="send" size={16} /> Prepare your post<Icon name="arrow" size={15} /></button>
+      <p className="gf-post-note">Preview, caption, accounts and timing.</p>
+      {attempts.length > 0 && <p className="gf-post-note" role="status" aria-label="Posting activity">{[...new Set(attempts.map(a => a.state))].map(state => `${stateLabel[state]}: ${attempts.filter(a => a.state === state).length}`).join(" · ")}</p>}
+      {attempts.some(a => a.state === "unknown" || (a.state === "container_created" && !a.active)) && <p className="gf-post-recovery-note" role="status">A post needs a status check. Open posting to check the exact attempt before trying again.</p>}
+      {pending.some(row => row.overdue_at) && <p className="gf-post-recovery-note" role="status">A scheduled post was missed while the app was closed. Nothing was posted. Open posting to choose what happens next.</p>}
+      {pending.some(row => !row.overdue_at) && <p className="gf-post-note">Scheduled posts are waiting. The app must be open at their scheduled time.</p>}
+      {notice && <p className="gf-post-note" role="status">{notice}</p>}
+      {error && <div className="gf-inline-error" role="alert">{error}</div>}
+    </section>}
+    <PostEditorSurface compact={compact} open={editorOpen && activeSurface} onClose={() => setEditorOpen(false)}>
+    <section className={`gf-review-section gf-post-section${compact ? " gf-post-sheet" : ""}`} aria-label="Post to Instagram">
       <div className="gf-review-section-head"><h3>Post to Instagram</h3></div>
       {signInRequired && <div className="gf-post-signin">
         <div>
@@ -311,14 +338,16 @@ export function PostToInstagram({
           <button type="button" className="gf-button ghost compact" disabled={busy} onClick={() => void decide(row, "cancel")}>Cancel</button>
         </div>
       </li>)}</ul>}
-      <PostPreview
+      <div className="gf-post-composer"><div className="gf-post-composer-preview">
+      {(!compact || (editorOpen && activeSurface)) && <PostPreview
         videoUrl={clipMediaUrl(clip.id)}
         coverUrl={coverUrl}
         handle={shownAccount ? accountName(shownAccount) : targets?.accounts[0]?.display_name || "your_account"}
         caption={shownAccount ? captionFor(shownAccount) : caption}
         shareToFeed={shareToFeed}
         when={mode === "schedule" && scheduledAt ? `Posts ${localTime(scheduledAt)} (${zone})` : null}
-      />
+      />}
+      </div><div className="gf-post-composer-fields">
       {targets && (targets.accounts.length === 0
         ? <p className="gf-help">Connect an Instagram account for this brand first.</p>
         : <fieldset className="gf-post-group gf-post-accounts"><legend>Account</legend>{targets.accounts.map(account => <label key={account.id} className="gf-post-account">
@@ -380,6 +409,7 @@ export function PostToInstagram({
         </div>}
       </fieldset>
       {captionProblems.length > 0 && <div className="gf-inline-error" role="alert">{[...new Set(captionProblems)].join(" ")}</div>}
+      {compact && held && <div className="gf-post-group"><p className="gf-post-recovery-note">{verdict}</p><Field label="Override reason (required to post a held clip)">{id => <AutoTextarea id={id} rows={2} value={override} onChange={e => setOverride(e.target.value)} placeholder="Why is it fine to post anyway?" />}</Field></div>}
       <button className="gf-button full gf-post-submit" disabled={!ready} onClick={() => void submit()}>{submitLabel}</button>
       {notice && <p role="status">{notice}</p>}
       {error && <div className="gf-inline-error" role="alert">{error}</div>}
@@ -395,6 +425,8 @@ export function PostToInstagram({
         {a.state !== "unknown" && canResume(a) &&
           <button className="gf-button ghost" disabled={busy} onClick={() => void act(a, "resume")}>Continue</button>}
       </li>)}</ul>}
+      </div></div>
     </section>
+    </PostEditorSurface>
   </div>;
 }

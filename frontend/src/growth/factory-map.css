@@ -2,48 +2,42 @@
    neutral (idle), blue (working), green (done), amber (needs you), red (held). */
 .gf-fmap,
 .gf-fmap-mini,
-.gf-fmap-sheet {
+.gf-fmap-sheet,
+.gf-fmap-picker-menu {
   --fmap-ink: var(--material-ink, #f3f1ec);
-  --fmap-muted: rgba(243, 241, 236, 0.66);
-  --fmap-faint: rgba(243, 241, 236, 0.46);
+  --fmap-muted: rgba(243, 241, 236, 0.78);
+  --fmap-faint: rgba(243, 241, 236, 0.66);
   --fmap-line: rgba(255, 255, 255, 0.12);
   --fmap-hairline: rgba(255, 255, 255, 0.09);
-  --fmap-card: var(--gf-card-fill, rgba(118, 128, 136, 0.2));
-  --fmap-card-hover: rgba(132, 142, 150, 0.26);
-  --fmap-frame: rgba(16, 20, 24, 0.16);
-  --fmap-wire: rgba(255, 255, 255, 0.16);
+  --fmap-card: rgba(105, 117, 126, 0.12);
+  --fmap-card-hover: rgba(139, 148, 153, 0.2);
+  --fmap-frame: rgba(25, 32, 38, 0.16);
+  --fmap-wire: rgba(218, 209, 194, 0.5);
   --fmap-radius: var(--gf-radius, 12px);
   --fmap-ease: var(--gf-ease, cubic-bezier(0.2, 0.7, 0.2, 1));
   --fmap-fast: var(--gf-fast, 150ms);
   --fmap-base: var(--gf-base, 200ms);
 
-  --st-idle: rgba(243, 241, 236, 0.62);
+  --st-idle: rgba(243, 241, 236, 0.78);
   --st-idle-bg: rgba(255, 255, 255, 0.07);
-  --st-blue: #9cc1ff;
-  --st-blue-bg: rgba(120, 165, 255, 0.15);
-  --st-green: #93d8ad;
-  --st-green-bg: rgba(110, 200, 145, 0.13);
-  --st-amber: #f1c97f;
-  --st-amber-bg: rgba(240, 190, 100, 0.15);
-  --st-red: #f3a597;
-  --st-red-bg: rgba(240, 140, 120, 0.15);
+  --st-blue: #b5c8d5;
+  --st-blue-bg: rgba(160, 188, 207, 0.12);
+  --st-green: #b8cbb8;
+  --st-green-bg: rgba(167, 194, 167, 0.12);
+  --st-amber: #e2c49d;
+  --st-amber-bg: rgba(226, 196, 157, 0.13);
+  --st-red: #e2b1a5;
+  --st-red-bg: rgba(214, 165, 154, 0.13);
 
   font-family: var(--material-font, -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif);
 }
-/* Family identity survives only as a tiny, quiet dot beside the phase name. */
-.gf-fmap-famdot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--fam, var(--fmap-faint));
-  opacity: 0.85;
+/* Phase identity is sequence; color belongs to real operational state. */
+.gf-fmap-phase-index {
+  color: var(--st-amber);
+  font-size: 10px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
-.gf-fmap-famdot.fam-understand { --fam: #8fb0cc; }
-.gf-fmap-famdot.fam-create { --fam: #ccb488; }
-.gf-fmap-famdot.fam-judge { --fam: #ae9fcc; }
-.gf-fmap-famdot.fam-ship { --fam: #92c3a9; }
-.gf-fmap-famdot.fam-learn { --fam: #cc9f93; }
 
 .gf-visually-hidden {
   position: absolute !important;
@@ -210,7 +204,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Frame: scrolls inside itself when the line is wider than the window. */
+/* Five fluid lanes fit a desktop content area. Only compact panes scroll
+   horizontally; connectors are remeasured from these live card bounds. */
 .gf-fmap-canvas {
   position: relative;
   overflow: auto;
@@ -225,20 +220,21 @@
 }
 .gf-fmap-track {
   position: relative;
-  min-width: 1088px;
+  min-width: 900px;
 }
 .gf-fmap-grid {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(5, minmax(176px, 1fr));
-  gap: 36px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 24px;
   padding: 0 44px 64px 20px;
 }
 .gf-fmap-col {
   display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 .gf-fmap-phase {
   position: sticky;
@@ -259,7 +255,8 @@
   transition: background-color var(--fmap-fast) ease;
 }
 .gf-fmap-canvas.is-scrolled .gf-fmap-phase {
-  background: rgb(44, 49, 54);
+  background: rgba(58, 66, 72, 0.92);
+  backdrop-filter: blur(16px);
   box-shadow: 0 1px 0 var(--fmap-hairline);
 }
 .gf-fmap-phase small {
@@ -270,7 +267,8 @@
   color: var(--fmap-faint);
 }
 
-/* Wires: thin and neutral. Only an active edge carries moving dots. */
+/* A legible main route and a quieter learning return. Activity comes only
+   from recorded working edges; resting connections stay completely still. */
 .gf-fmap-wires {
   position: absolute;
   inset: 0;
@@ -281,19 +279,25 @@
 .gf-fmap-wire {
   fill: none;
   stroke: var(--fmap-wire);
-  stroke-width: 1.25;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: geometricPrecision;
+  filter: drop-shadow(0 1px 0 rgba(15, 22, 28, 0.28));
   transition: stroke var(--fmap-base) ease;
 }
 .gf-fmap-wire.is-flowing {
-  stroke: color-mix(in srgb, var(--st-blue) 55%, transparent);
+  stroke: color-mix(in srgb, var(--st-blue) 90%, transparent);
+  stroke-width: 2.5;
 }
 .gf-fmap-wire.is-return {
-  stroke: rgba(255, 255, 255, 0.11);
+  stroke: rgba(218, 209, 194, 0.32);
+  stroke-width: 1.5;
 }
 .gf-fmap-wire.is-return.is-lit {
-  stroke: color-mix(in srgb, var(--st-amber) 60%, transparent);
+  stroke: color-mix(in srgb, var(--st-amber) 82%, transparent);
+  stroke-width: 2;
 }
 .gf-fmap-return-label {
   position: absolute;
@@ -342,7 +346,8 @@
   justify-content: flex-start;
   gap: 6px;
   width: 100%;
-  min-height: 124px;
+  min-width: 0;
+  min-height: 120px;
   padding: 14px 14px 12px;
   text-align: left;
   font: inherit;
@@ -352,7 +357,9 @@
   border-radius: var(--fmap-radius);
   border: 1px solid var(--fmap-line);
   background: var(--fmap-card);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025) inset;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   transition:
     border-color var(--fmap-fast) ease,
     background-color var(--fmap-fast) ease,
@@ -369,15 +376,16 @@
   outline-offset: 2px;
 }
 .gf-fmap .gf-fmap-station.is-selected {
-  border-color: rgba(255, 255, 255, 0.38);
+  border-color: var(--st-amber);
 }
 .gf-fmap .gf-fmap-station.is-active {
   border-color: color-mix(in srgb, var(--st-blue) 55%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-blue) 16%, transparent);
+  background: rgba(155, 178, 195, 0.13);
 }
 .gf-fmap .gf-fmap-station.is-empty,
 .gf-fmap .gf-fmap-station.is-dim {
-  opacity: 0.6;
+  background: rgba(66, 78, 88, 0.08);
+  border-color: var(--fmap-hairline);
 }
 .gf-fmap .gf-fmap-station.is-pulse {
   animation: gf-fmap-pulse 1.2s var(--fmap-ease) 1;
@@ -692,8 +700,9 @@
   min-width: 0;
   padding: 12px 14px;
   border-radius: 10px;
-  border: 1px solid var(--fmap-hairline);
-  background: rgba(255, 255, 255, 0.03);
+  border-left: 1px solid var(--fmap-hairline);
+  border-radius: 0;
+  background: transparent;
 }
 .gf-fmap-ledger-stats dt {
   font-size: 12px;
@@ -744,7 +753,7 @@
   display: block;
   height: 100%;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.34);
+  background: rgba(226, 196, 157, 0.42);
 }
 .gf-fmap-bars li.is-running .gf-fmap-bar i {
   background: var(--st-blue);
@@ -842,19 +851,20 @@
   color: var(--st-red);
 }
 .gf-fmap-picker-menu {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 6px);
-  right: 0;
-  width: max-content;
-  min-width: 300px;
-  max-width: min(420px, calc(100vw - 32px));
+  position: fixed;
+  z-index: 80;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   margin: 0;
   padding: 4px;
   list-style: none;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(30, 35, 40, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--fmap-ink);
+  background: rgba(57, 65, 72, 0.92);
+  backdrop-filter: blur(28px) saturate(1.1);
+  -webkit-backdrop-filter: blur(28px) saturate(1.1);
   box-shadow: 0 18px 48px -16px rgba(0, 0, 0, 0.7);
   animation: gf-fmap-menu-in 140ms var(--fmap-ease);
 }
@@ -879,6 +889,7 @@
 }
 .gf-fmap-picker-menu code {
   grid-column: 1;
+  overflow-wrap: anywhere;
   color: var(--fmap-faint);
   font-size: 11px;
 }
@@ -952,13 +963,31 @@
 
 /* Factory segment control (Episodes | Factory map) */
 .gf-fmap-segment {
-  display: inline-flex;
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  isolation: isolate;
   gap: 2px;
   margin-bottom: 18px;
   padding: 3px;
   border-radius: 10px;
   border: 1px solid var(--material-line, rgba(255, 255, 255, 0.2));
   background: rgba(255, 255, 255, 0.05);
+}
+.gf-fmap-segment-selection {
+  position: absolute;
+  z-index: -1;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 8px) / 2);
+  border-radius: 7px;
+  background: rgba(226, 196, 157, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(226, 196, 157, 0.22);
+  transition: transform 240ms var(--gf-ease, cubic-bezier(0.2, 0.7, 0.2, 1));
+}
+.gf-fmap-segment[data-view="map"] .gf-fmap-segment-selection {
+  transform: translateX(calc(100% + 2px));
 }
 .gf-fmap-segment button {
   padding: 6px 14px;
@@ -969,6 +998,7 @@
   color: var(--material-secondary, #e8e4dc);
   background: transparent;
   cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
 }
 .gf-fmap-segment button:hover {
   color: var(--material-ink, #f3f1ec);
@@ -976,8 +1006,19 @@
 }
 .gf-fmap-segment button[aria-selected="true"],
 .gf-fmap-segment button[aria-selected="true"]:hover {
-  color: var(--material-button-ink, #292d2e);
-  background: var(--material-button, #f0ece4);
+  color: var(--material-ink, #f3f1ec);
+  background: transparent;
+}
+.gf-fmap-segment button:focus-visible {
+  outline: 2px solid var(--material-focus, #e2c49d);
+  outline-offset: 2px;
+}
+.gf-fmap-view:not([hidden]) {
+  animation: gf-fmap-view-in 260ms var(--gf-ease, cubic-bezier(0.2, 0.7, 0.2, 1));
+}
+@keyframes gf-fmap-view-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
 }
 
 @keyframes gf-fmap-ride {
@@ -1034,6 +1075,9 @@
   opacity: 0.5;
 }
 @media (prefers-reduced-motion: reduce) {
+  .gf-fmap-view,
+  .gf-fmap-segment *,
+  .gf-fmap-picker-menu,
   .gf-fmap *,
   .gf-fmap *::before,
   .gf-fmap-mini *,

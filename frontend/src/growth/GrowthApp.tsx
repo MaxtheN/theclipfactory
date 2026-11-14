@@ -98,6 +98,7 @@ export function GrowthApp() {
   const w = useCampaignWorkspace(factory.refresh);
   const [stage, setStage] = useState<Stage>(storedView);
   const [tools, setTools] = useState(false);
+  const [goalsRequest, setGoalsRequest] = useState({ context: "", sequence: 0 });
   // Account creation is the last onboarding step, asked only when the cloud
   // is configured, nobody is signed in and the creator hasn't chosen offline.
   const [askAccount, setAskAccount] = useState(false);
@@ -132,6 +133,9 @@ export function GrowthApp() {
     creating || onboardingBusy || (!w.loading && !w.error && !usable);
   const blocked = w.busy || onboardingBusy;
   const contextKey = `${w.campaign?.id || "empty"}-${w.profileId}`;
+  useEffect(() => {
+    setGoalsRequest({ context: contextKey, sequence: 0 });
+  }, [contextKey]);
   const current = views[stage];
   // Sub-pages: a quiet "← Back" sits top-left above the title.
   const back: Stage | undefined =
@@ -230,13 +234,10 @@ export function GrowthApp() {
     setPreferredClip(clip);
     go("studio");
   };
-  /** Brand profile, scrolled to Goals & brief (the default campaign's brief). */
+  /** Open the focused brief editor from navigation and quick actions. */
   function openGoals() {
     go("setup");
-    window.setTimeout(
-      () => document.getElementById("gf-goals")?.scrollIntoView?.({ block: "start" }),
-      0,
-    );
+    setGoalsRequest((request) => ({ context: contextKey, sequence: request.sequence + 1 }));
   }
   function reviewClip(clip: Clip) {
     openProduction(clip.video_id, undefined, clip.id);
@@ -434,6 +435,16 @@ export function GrowthApp() {
               >
                 <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
                 <span>Brand profile</span>
+              </button>
+              <button
+                type="button"
+                className="gf-channel-settings"
+                title="Advanced tools"
+                disabled={blocked || !usable || onboarding}
+                onClick={() => setTools(true)}
+              >
+                <Icon name="settings" size={17} />
+                <span>Advanced tools</span>
               </button>
               {accountEmail && (
                 <p className="gf-sidebar-account" title={`Signed in as ${accountEmail}`}>
@@ -661,6 +672,8 @@ export function GrowthApp() {
               >
                 <Setup
                   key={contextKey}
+                  active={!tools && !onboarding && stage === "setup"}
+                  goalsRequest={goalsRequest.context === contextKey ? goalsRequest.sequence : 0}
                   creating={false}
                   onSaved={() => {}}
                   w={w}
@@ -696,15 +709,6 @@ export function GrowthApp() {
                         <Icon name="plus" size={15} />
                         New brand
                       </button>
-                      <button
-                        type="button"
-                        className="gf-button secondary compact"
-                        disabled={blocked}
-                        onClick={() => setTools(true)}
-                      >
-                        <Icon name="settings" size={15} />
-                        Advanced tools
-                      </button>
                     </nav>
                   }
                 />
@@ -716,7 +720,7 @@ export function GrowthApp() {
                 <Research
                   key={contextKey}
                   w={w}
-                  next={() => openProduction(preferredSource, "agent")}
+                  onFactory={() => go("factory")}
                 />
               </div>
               <div
@@ -744,6 +748,7 @@ export function GrowthApp() {
                   preferredSource={preferredSource}
                   preferredMode={preferredMode}
                   preferredClip={preferredClip}
+                  activeSurface={!tools && !onboarding && stage === "studio"}
                   next={() => go("results")}
                   onDirection={() => go("research")}
                   onEditBrief={openGoals}

@@ -1,0 +1,46 @@
+.gf-app .gf-brand-overview { background: transparent; border: 0; box-shadow: none; }
+.gf-brand-overview-heading { padding: 0 0 20px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
+.gf-brand-eyebrow { display: block; color: var(--material-metadata); font-size: 10px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 8px; }
+.gf-brand-overview-heading h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.6px; }
+.gf-brand-caption { font-size: 12px; color: var(--material-secondary); }
+.gf-brand-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.gf-app .gf-brand-setting-row { min-width: 0; min-height: 148px; display: grid; grid-template-columns: 36px minmax(0, 1fr); align-content: start; align-items: start; gap: 14px; padding: 20px; text-align: left; border: 1px solid var(--gf-card-line); border-radius: var(--gf-radius); box-shadow: var(--gf-card-shadow); background: var(--gf-card-fill); color: var(--material-ink); cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease; }
+.gf-app .gf-brand-setting-row:hover { background: var(--material-hover); border-color: var(--material-line); }
+.gf-brand-setting-icon { width: 36px; height: 36px; display: grid; place-items: center; color: var(--material-focus); border: 1px solid var(--material-divider); border-radius: 9px; background: var(--material-field); }
+.gf-brand-setting-row > span:nth-child(2) { min-width: 0; }
+.gf-brand-setting-row strong { display: block; font-size: 14px; font-weight: 550; }
+.gf-brand-setting-row small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-top: 6px; overflow: hidden; font-size: 12px; color: var(--material-secondary); line-height: 1.5; }
+.gf-brand-row-action { grid-column: 2; display: flex; gap: 8px; align-items: center; margin-top: 5px; font-size: 12px; color: var(--material-secondary); }
+.gf-brand-row-action > svg:last-child { margin-left: auto; }
+.gf-brand-swatches { display: flex; gap: 4px; margin-right: 4px; }
+.gf-brand-swatches i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35); }
+.gf-app .gf-brand-quick-links .gf-link-rows { display: flex; margin: 0; gap: 12px; }
+.gf-brand-quick-links .gf-link-row { flex: 1; border: 1px solid var(--material-divider); padding: 0 16px; }
+.gf-app .gf-brand-editor .gf-field-group { padding: 0; margin: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.gf-brand-editor .gf-field-group > legend { display: none; }
+.gf-app .gf-panel-dialog .gf-stage-action { position: static; display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 0; padding: 0; border: 0; box-shadow: none; background: transparent; }
+.gf-panel-dialog .gf-stage-action > span { font-size: 12px; line-height: 1.5; color: var(--material-secondary); }
+.gf-panel-dialog .gf-stage-action > span[role="alert"] { color: var(--material-danger); }
+.gf-brand-account-grid { display: grid; gap: 20px; }
+.gf-app .gf-brand-account-grid .gf-profile-account { margin: 0; padding: 20px; }
+.gf-brand-account-grid .gf-cloud-account-row { flex-wrap: wrap; gap: 16px; }
+.gf-brand-account-grid .gf-profile-account h3 { margin: 0 0 12px; font-size: 15px; }
+.gf-brand-account-grid .gf-ai-model { padding: 24px; }
+.gf-app .gf-brand-goals-editor > .gf-channel-settings-grid { max-width: none; }
+.gf-app .gf-brand-goals-editor .gf-field-group { padding: 0; border: 0; box-shadow: none; background: transparent; backdrop-filter: none; }
+.gf-brand-setting-row:focus-visible { outline: 2px solid var(--material-focus); outline-offset: 2px; }
+@media (max-width: 600px) { .gf-brand-caption { display: none; } .gf-brand-settings-grid { grid-template-columns: 1fr; } .gf-app .gf-brand-setting-row { min-height: 126px; padding: 18px; } .gf-app .gf-brand-quick-links .gf-link-rows { flex-wrap: wrap; } .gf-panel-dialog .gf-stage-action { flex-wrap: wrap; } }
+@media (prefers-reduced-motion: reduce) { .gf-app .gf-brand-setting-row { transition: none; } }
+/* Goals keeps one content scroll region and its save controls in a separate row. */
+.gf-app .gf-panel-dialog:has(.gf-brand-goals-editor) { height: min(820px, calc(100dvh - 56px)); }
+.gf-app .gf-panel-dialog:has(.gf-brand-goals-editor) > .gf-panel-dialog-body { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.gf-brand-goals-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.gf-app .gf-panel-dialog .gf-brand-goals-editor > .gf-channel-settings-grid { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 16px; }
+.gf-app .gf-panel-dialog .gf-brand-goals-editor .gf-brief { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 0 12px 0 0; }
+.gf-app .gf-panel-dialog .gf-brand-goals-editor .gf-stage-action,
+.gf-app .gf-panel-dialog .gf-panel-dialog-footer .gf-stage-action { position: static; flex: 0 0 auto; z-index: auto; background: var(--material-pane-solid); box-shadow: none; backdrop-filter: none; }
+.gf-app .gf-panel-dialog .gf-brand-goals-editor .gf-stage-action { margin: 0; padding: 16px 0 0; border: 0; border-top: 1px solid var(--material-divider); border-radius: 0; background: transparent; }
+/* Profile confirmations never float over the grid or obscure compact layouts. */
+.gf-app .gf-channel-settings-grid > .gf-stage-action.gf-profile-save-status { position: static; z-index: auto; }
+.gf-app .gf-channel-settings-grid > .gf-stage-action.gf-profile-save-status.is-clean { min-height: 0; padding: 4px 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.gf-app .gf-panel-dialog .gf-profile-save-status.is-clean { min-height: 0; padding: 0; background: transparent; }

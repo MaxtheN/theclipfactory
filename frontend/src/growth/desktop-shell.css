@@ -50,6 +50,9 @@ body,
 .gf-flow-app .gf-topbar {
   min-width: 0;
 }
+/* Programmatic/skip-link focus belongs to the content landmark, not a window-sized frame. */
+.gf-flow-app .gf-main:focus { outline: none; }
+
 
 /* Onboarding pins its brand, overview and actions around one scrollable question. */
 .gf-flow-app.is-onboarding .gf-window {

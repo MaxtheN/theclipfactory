@@ -2,6 +2,7 @@ import { SHOW_FACTORY_MAP } from "./appEvents";
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -451,19 +452,56 @@ function RunPicker({
   const root = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+  const [position, setPosition] = useState<{
+    left: number; top: number; width: number; maxHeight: number;
+  }>();
   const now = Date.now();
   const current = runs[selectedIndex];
+  // The app and the ledger both have bounded scroll regions. Place the menu in
+  // the viewport so neither region can clip it, including near the window edge.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = button.current?.getBoundingClientRect();
+      if (!rect) return;
+      const gutter = 12;
+      const width = Math.min(380, window.innerWidth - gutter * 2);
+      const below = window.innerHeight - rect.bottom - gutter - 6;
+      const above = rect.top - gutter - 6;
+      const height = Math.min(list.current?.scrollHeight || runs.length * 62 + 8, 360);
+      const upward = below < height && above > below;
+      const maxHeight = Math.max(40, Math.min(360, upward ? above : below));
+      setPosition({
+        left: Math.max(gutter, Math.min(rect.right - width, window.innerWidth - width - gutter)),
+        top: upward ? Math.max(gutter, rect.top - Math.min(height, maxHeight) - 6) : rect.bottom + 6,
+        width,
+        maxHeight,
+      });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, runs.length]);
   useEffect(() => {
     if (!open) return;
     setCursor(selectedIndex);
     list.current?.focus();
     const away = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
+      if (!root.current?.contains(e.target as Node) && !list.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", away);
     return () => document.removeEventListener("mousedown", away);
   }, [open, selectedIndex]);
+  useEffect(() => {
+    if (open) document.getElementById(`${menuId}-option-${cursor}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [open, cursor, menuId]);
   const choose = (i: number) => {
+    if (!runs[i]) return;
     onChange(runs[i].id);
     setOpen(false);
     button.current?.focus();
@@ -475,10 +513,14 @@ function RunPicker({
     else if (e.key === "End") setCursor(runs.length - 1);
     else if (e.key === "Enter" || e.key === " ") choose(cursor);
     else if (e.key === "Escape") {
+      e.stopPropagation();
       setOpen(false);
       button.current?.focus();
-    } else if (e.key === "Tab") setOpen(false);
-    else return;
+    } else if (e.key === "Tab") {
+      setOpen(false);
+      button.current?.focus();
+      return;
+    } else return;
     e.preventDefault();
   };
   if (!current) return null;
@@ -490,6 +532,7 @@ function RunPicker({
         className="gf-fmap-picker-button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
         aria-label={`Run from ${fullWhen(current.created_at)}, ${sentence(current.status)}. Choose a run.`}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => {
@@ -504,20 +547,22 @@ function RunPicker({
         <span className={`gf-fmap-run-status is-${current.status}`}>{sentence(current.status)}</span>
         <Icon name="down" size={14} />
       </button>
-      {open && (
+      {open && createPortal(
         <ul
+          id={menuId}
           ref={list}
           className="gf-fmap-picker-menu"
+          style={position ? { ...position, visibility: "visible" } : { visibility: "hidden" }}
           role="listbox"
           tabIndex={-1}
           aria-label="Recent runs"
-          aria-activedescendant={`gf-fmap-run-${cursor}`}
+          aria-activedescendant={`${menuId}-option-${cursor}`}
           onKeyDown={onKey}
         >
           {runs.map((r, i) => (
             <li
               key={r.id}
-              id={`gf-fmap-run-${i}`}
+              id={`${menuId}-option-${i}`}
               role="option"
               aria-selected={i === selectedIndex}
               className={i === cursor ? "is-cursor" : undefined}
@@ -530,7 +575,8 @@ function RunPicker({
               {i === selectedIndex && <Icon name="check" size={14} />}
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body,
       )}
     </div>
   );
@@ -731,8 +777,8 @@ export function FactoryMap({
         <div>
           <h2 id="gf-fmap-title">Factory map</h2>
           <p>
-            Every agent on the line, from raw footage to what the next clips
-            learn. Live from this Mac's records.
+            From source footage to the next creative decision. Select any station
+            to see its work and recorded progress.
           </p>
         </div>
         <div className="gf-fmap-actions" role="toolbar" aria-label="Factory map controls">
@@ -840,13 +886,13 @@ export function FactoryMap({
             {model.returnArc.label}
           </span>
           <div className="gf-fmap-grid">
-            {FAMILIES.map((family) => {
+            {FAMILIES.map((family, index) => {
               const members = model.stations.filter((s) => s.family === family);
               const done = members.filter((s) => s.state === "done").length;
               return (
                 <div key={family} className="gf-fmap-col" role="group" aria-label={FAMILY_LABEL[family]}>
                   <div className="gf-fmap-phase">
-                    <i className={`gf-fmap-famdot fam-${family}`} aria-hidden="true" />
+                    <span className="gf-fmap-phase-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
                     <span>{FAMILY_LABEL[family]}</span>
                     <small className="gf-fmap-num" title={`${done} of ${members.length} done`}>
                       {done}/{members.length}
@@ -971,7 +1017,8 @@ export function FactoryTabs({
   }, []);
   return (
     <>
-      <div className="gf-fmap-segment" role="tablist" aria-label="Factory view">
+      <div className="gf-fmap-segment" data-view={tab} role="tablist" aria-label="Factory view">
+        <span className="gf-fmap-segment-selection" aria-hidden="true" />
         {(
           [
             ["episodes", "Episodes"],
@@ -984,8 +1031,18 @@ export function FactoryTabs({
             role="tab"
             id={`gf-factory-tab-${key}`}
             aria-selected={tab === key}
+            tabIndex={tab === key ? 0 : -1}
             aria-controls={`gf-factory-panel-${key}`}
             onClick={() => choose(key)}
+            onKeyDown={(event) => {
+              const next = event.key === "ArrowRight" || event.key === "ArrowLeft"
+                ? (tab === "episodes" ? "map" : "episodes")
+                : event.key === "Home" ? "episodes" : event.key === "End" ? "map" : null;
+              if (!next) return;
+              event.preventDefault();
+              choose(next);
+              document.getElementById(`gf-factory-tab-${next}`)?.focus();
+            }}
           >
             {label}
           </button>
@@ -993,6 +1050,7 @@ export function FactoryTabs({
       </div>
       <div
         id="gf-factory-panel-episodes"
+        className="gf-fmap-view"
         role="tabpanel"
         aria-labelledby="gf-factory-tab-episodes"
         hidden={tab !== "episodes"}
@@ -1002,6 +1060,7 @@ export function FactoryTabs({
       {tab === "map" && (
         <div
           id="gf-factory-panel-map"
+          className="gf-fmap-view"
           role="tabpanel"
           aria-labelledby="gf-factory-tab-map"
         >

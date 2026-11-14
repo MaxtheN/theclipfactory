@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { api } from "../api";
 import type { TeamRun } from "../types";
 import type { FactoryState } from "../useFactory";
-import { FactoryMap, FactoryMiniMap } from "./FactoryMap";
+import { FactoryMap, FactoryMiniMap, FactoryTabs, RunLedgerCard } from "./FactoryMap";
 import { strategistApi } from "./strategistApi";
 import type { Workspace } from "./useCampaignWorkspace";
 import { workspaceApi } from "./workspaceApi";
@@ -141,6 +141,33 @@ describe("FactoryMap", () => {
     expect(option.textContent).toMatch(/run/);
     fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
     expect(screen.queryByRole("listbox")).toBeNull();
+    expect(picker).toHaveFocus();
+  });
+
+  it("opens the run menu above a low trigger outside clipped ancestors and keeps keyboard selection", () => {
+    const earlier = { ...finishedRun, id: "earlier", created_at: at(-60), status: "completed" } as TeamRun;
+    const { container } = render(<div style={{ overflow: "hidden", height: 30 }}><RunLedgerCard runs={[finishedRun, earlier]} clips={[]} /></div>);
+    const picker = screen.getByRole("button", { name: /Choose a run/ });
+    vi.spyOn(picker, "getBoundingClientRect").mockReturnValue({
+      left: window.innerWidth - 190, right: window.innerWidth - 10,
+      top: window.innerHeight - 40, bottom: window.innerHeight - 8,
+      width: 180, height: 32,
+    } as DOMRect);
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    const menu = screen.getByRole("listbox");
+    expect(container.contains(menu)).toBe(false);
+    expect(menu.parentElement).toBe(document.body);
+    expect(menu).toHaveFocus();
+    expect(parseFloat(menu.style.top)).toBeLessThan(window.innerHeight - 40);
+    expect(parseFloat(menu.style.left) + parseFloat(menu.style.width)).toBeLessThanOrEqual(window.innerWidth - 12);
+    fireEvent.keyDown(menu, { key: "End" });
+    fireEvent.keyDown(menu, { key: "Enter" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(picker).toHaveAccessibleName(/Completed/);
+    expect(picker).toHaveFocus();
+    fireEvent.click(picker);
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
 
   it("moves tokens only while real work happens", async () => {
@@ -167,6 +194,26 @@ describe("FactoryMap", () => {
     expect(container.querySelector(".gf-fmap")!.getAttribute("data-reduced")).toBe("true");
     expect(screen.queryAllByTestId("flow-token")).toHaveLength(0);
     expect(screen.getByRole("button", { name: /^Listen: Working\./ })).toBeTruthy();
+  });
+});
+
+describe("FactoryTabs", () => {
+  it("supports arrow-key view switching while retaining an episode draft", () => {
+    localStorage.removeItem("growth-factory-tab-v1");
+    motion(true);
+    vi.spyOn(workspaceApi, "teamRuns").mockResolvedValue([]);
+    render(<FactoryTabs w={w} factory={factory(false)} active={false}><input aria-label="Episode draft" defaultValue="" /></FactoryTabs>);
+    const draft = screen.getByRole("textbox", { name: "Episode draft" });
+    fireEvent.change(draft, { target: { value: "Unfinished import title" } });
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Episodes" }), { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: "Factory map" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Factory map" })).toHaveAttribute("aria-selected", "true");
+    expect(draft).toBeInTheDocument();
+    expect(draft).not.toBeVisible();
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Factory map" }), { key: "Home" });
+    expect(draft).toBeVisible();
+    expect(draft).toHaveValue("Unfinished import title");
+    localStorage.removeItem("growth-factory-tab-v1");
   });
 });
 

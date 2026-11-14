@@ -14,6 +14,8 @@ import {
 import { Icon } from "./Icon";
 import { CloudAccountRow } from "./CloudSignIn";
 import { AiModelCard } from "./AiModelCard";
+import { PanelDialog } from "./PanelDialog";
+import "./brand-profile.css";
 import { objectives, type BrandKit, type Campaign, type Profile } from "../types";
 import { campaignGoalBody } from "./learningState";
 import { CampaignBriefEditor } from "./CampaignBrief";
@@ -141,6 +143,8 @@ export function Setup({
   onAccounts,
   goals,
   part = "brand",
+  active = true,
+  goalsRequest = 0,
 }: {
   w: Workspace;
   factory: FactoryState;
@@ -157,6 +161,10 @@ export function Setup({
   /** Opens connected accounts (Results). */
   onAccounts?: () => void;
   part?: Part;
+  /** Hides native modals when this screen is not the active app surface. */
+  active?: boolean;
+  /** A new positive value opens Goals & brief, including through quick actions. */
+  goalsRequest?: number;
 }) {
   const campaign = creating ? undefined : w.campaign;
   // The brand being edited is fixed for this mount (GrowthApp keys Setup by
@@ -165,6 +173,15 @@ export function Setup({
     campaign && campaign.profile_ids.includes(w.profileId)
       ? w.profiles.find((p) => p.id === w.profileId)
       : undefined;
+  const [editor, setEditor] = useState<"identity" | "kit" | "account" | "goals" | null>(null);
+  const handledGoalsRequest = useRef(0);
+  useEffect(() => {
+    if (!active) setEditor(null);
+    else if (goals && goalsRequest > 0 && goalsRequest !== handledGoalsRequest.current) {
+      handledGoalsRequest.current = goalsRequest;
+      setEditor("goals");
+    }
+  }, [active, goalsRequest, goals]);
   const [name, setName] = useState(campaign?.name || "");
   const [brandName, setBrandName] = useState(profile?.name || "");
   const [audience, setAudience] = useState(profile?.audience || "");
@@ -200,6 +217,27 @@ export function Setup({
   const [primary, setPrimary] = useState(savedKit?.primary_color || DEFAULT_KIT.primary_color);
   const [accent, setAccent] = useState(savedKit?.accent_color || DEFAULT_KIT.accent_color);
   const [logo, setLogo] = useState(savedKit?.logo_file || "");
+  const brandDraft = {
+    name: brandName.trim(), audience: audience.trim(), voice: voice.trim(), creative: creative.trim(),
+    kit: { font: fontFamily.trim(), primary: primary.toUpperCase(), accent: accent.toUpperCase(), logo: logo.trim() },
+  };
+  const [savedBrandDraft, setSavedBrandDraft] = useState(brandDraft);
+  const brandDirty = JSON.stringify(brandDraft) !== JSON.stringify(savedBrandDraft);
+  const kitDirty = JSON.stringify(brandDraft.kit) !== JSON.stringify(savedBrandDraft.kit);
+  function confirmBrandDraft() {
+    const sent = attempt.current;
+    if (sent?.part !== "brand") return;
+    setSavedBrandDraft((previous) => ({
+      name: sent.profile.name, audience: sent.profile.audience,
+      voice: sent.profile.brand_context, creative: sent.profile.creative_preferences,
+      kit: sent.profile.brand_kit ? {
+        font: sent.profile.brand_kit.font_family?.trim() || "",
+        primary: (sent.profile.brand_kit.primary_color || DEFAULT_KIT.primary_color).toUpperCase(),
+        accent: (sent.profile.brand_kit.accent_color || DEFAULT_KIT.accent_color).toUpperCase(),
+        logo: sent.profile.brand_kit.logo_file?.trim() || "",
+      } : previous.kit,
+    }));
+  }
   const [linkProfiles, setLinkProfiles] = useState<string[]>([]);
   const [attachSources, setAttachSources] = useState<string[]>([]);
   const [profileName, setProfileName] = useState("");
@@ -212,6 +250,11 @@ export function Setup({
   const linked = new Set(campaign?.profile_ids || []);
   const attached = new Set(campaign?.video_ids || []);
   const needsReadback = state.kind === "unknown";
+  useEffect(() => {
+    if (part !== "brand" || state.kind !== "saved" || brandDirty) return;
+    const timer = window.setTimeout(() => setState({ kind: "idle" }), 4000);
+    return () => window.clearTimeout(timer);
+  }, [part, state.kind, brandDirty]);
   const blocked =
     w.busy || w.loading || checking || factory.loading || !campaign || !profile;
   const metricNeeded = objective !== "discovery";
@@ -225,7 +268,7 @@ export function Setup({
           : "";
   const valid =
     part === "brand"
-      ? !!brandName.trim() && !(kitEdited && kitError)
+      ? !!brandName.trim() && !((kitEdited || kitDirty) && kitError)
       : !!name.trim() && (!metricNeeded || !!metric.trim());
 
   function edited() {
@@ -252,7 +295,7 @@ export function Setup({
       brand_context: voice.trim(),
       creative_preferences: creative.trim(),
     };
-    if (kitEdited)
+    if (kitEdited || kitDirty)
       body.brand_kit = {
         ...(savedKit || {}),
         font_family: fontFamily.trim(),
@@ -331,6 +374,7 @@ export function Setup({
     );
     if (!started) return;
     if (ok) {
+      confirmBrandDraft();
       setLinkProfiles([]);
       setAttachSources([]);
       setKitEdited(false);
@@ -403,6 +447,7 @@ export function Setup({
             },
       );
       if (ok) {
+        confirmBrandDraft();
         setLinkProfiles([]);
         setAttachSources([]);
         setKitEdited(false);
@@ -490,8 +535,7 @@ export function Setup({
       </Empty>
     );
 
-  const brandForm = (
-    <>
+  const identityForm = (
       <FieldGroup title="Brand">
         <Field label="Brand name">
           {(id) => (
@@ -626,31 +670,10 @@ export function Setup({
             />
           )}
         </Field>
-        <div className="gf-link-rows">
-          <button
-            type="button"
-            className="gf-link-row"
-            disabled={w.busy || checking}
-            onClick={next}
-          >
-            <Icon name="research" size={16} />
-            <span>Style rules</span>
-            <Icon name="arrow" size={14} />
-          </button>
-          {onAccounts && (
-            <button
-              type="button"
-              className="gf-link-row"
-              disabled={w.busy || checking}
-              onClick={onAccounts}
-            >
-              <Icon name="results" size={16} />
-              <span>Connected accounts</span>
-              <Icon name="arrow" size={14} />
-            </button>
-          )}
-        </div>
       </FieldGroup>
+  );
+
+  const kitForm = (
       <FieldGroup title="Brand kit">
         <div className="gf-form-pair">
           <Field label="Main colour">
@@ -708,12 +731,15 @@ export function Setup({
             />
           )}
         </Field>
-        {kitEdited && kitError && (
+        {(kitEdited || kitDirty) && kitError && (
           <p className="gf-help" role="alert">
             {kitError}
           </p>
         )}
       </FieldGroup>
+  );
+
+  const advancedForm = (
       <details className="gf-disclosure gf-advanced-settings">
         <summary aria-label="Advanced controls">
           <Icon name="settings" />
@@ -750,7 +776,6 @@ export function Setup({
           {advanced}
         </div>
       </details>
-    </>
   );
 
   const campaignForm = (
@@ -929,44 +954,38 @@ export function Setup({
     </>
   );
 
-  return (
-    <>
-    <div
-      className="gf-setup-grid gf-channel-settings-grid"
-      id={part === "campaign" ? "gf-goals" : undefined}
-    >
-      {part === "brand" && (
-        <section className="gf-profile-account" aria-label="Your account">
-          <h2>Account</h2>
-          <CloudAccountRow showLocal />
-        </section>
-      )}
-      {part === "brand" && <AiModelCard />}
-      <section
-        className="gf-card gf-brief"
-        aria-label={part === "brand" ? "Brand profile form" : "Goals & brief form"}
-      >
-        <div className="gf-form-fields">
-          {part === "brand" ? brandForm : campaignForm}
-        </div>
-      </section>
-      <div className="gf-stage-action">
+  const kitNeedsAttention = part === "brand" && (kitEdited || kitDirty) && !!kitError && editor !== "kit";
+  const identityNeedsAttention = part === "brand" && !brandName.trim() && editor !== "identity";
+  const saveActions = part === "brand" && !brandDirty && state.kind === "idle" ? null : (
+      <div className={`gf-stage-action${part === "brand" ? " gf-profile-save-status" : ""}${part === "brand" && !brandDirty ? " is-clean" : ""}`}>
         <span
           role={
             state.kind === "idle"
-              ? undefined
+              ? kitNeedsAttention || identityNeedsAttention ? "alert" : undefined
               : state.kind === "saved"
                 ? "status"
                 : "alert"
           }
         >
           {state.kind === "idle"
-            ? part === "brand"
+            ? kitNeedsAttention
+              ? `Brand kit needs attention. ${kitError}`
+              : identityNeedsAttention
+                ? "Your brand name needs attention. Add a name before saving."
+                : part === "brand"
               ? "Saves your brand. Nothing is published."
               : "Saves your goals. Nothing is published."
-            : state.message}
+            : part === "brand" && state.kind === "saved" && brandDirty
+              ? "Earlier changes saved. Your newer edits are still unsaved."
+              : state.message}
         </span>
         <div className="gf-channel-actions">
+          {identityNeedsAttention && <button type="button" className="gf-button secondary compact" onClick={() => setEditor("identity")}>
+            Review brand details
+          </button>}
+          {kitNeedsAttention && <button type="button" className="gf-button secondary compact" onClick={() => setEditor("kit")}>
+            Review brand kit
+          </button>}
           {needsReadback && (
             <button
               type="button"
@@ -978,16 +997,106 @@ export function Setup({
               <Icon name="refresh" size={14} />
             </button>
           )}
-          <PrimaryAction
+          {(part === "campaign" || brandDirty) && <PrimaryAction
             label={w.busy ? "Saving…" : part === "brand" ? "Save brand" : "Save goals"}
             intent="approve"
             disabled={blocked || needsReadback || !valid}
             onClick={() => void save()}
-          />
+          />}
         </div>
       </div>
+  );
+
+  return (
+    <>
+    <div
+      className="gf-setup-grid gf-channel-settings-grid"
+      id={part === "campaign" ? "gf-goals" : undefined}
+    >
+      {part === "brand" ? (
+        <>
+          <section className="gf-brand-overview" aria-label="Brand profile overview">
+            <div className="gf-brand-overview-heading">
+              <div><span className="gf-brand-eyebrow">Your brand</span><h2>{brandName || "Untitled brand"}</h2></div>
+              <span className="gf-brand-caption">A shared direction for every clip.</span>
+            </div>
+            <div className="gf-brand-settings-grid">
+              <button type="button" className="gf-brand-setting-row" onClick={() => setEditor("identity")}>
+                <span className="gf-brand-setting-icon"><Icon name="headphones" size={19} /></span>
+                <span><strong>Brand, audience & voice</strong><small>{audience.trim() || "Define who you’re speaking to and how you sound."}</small></span>
+                <span className="gf-brand-row-action">Edit details<Icon name="arrow" size={15} /></span>
+              </button>
+              {goals && <button type="button" className="gf-brand-setting-row" onClick={() => setEditor("goals")}>
+                <span className="gf-brand-setting-icon"><Icon name="results" size={19} /></span>
+                <span><strong>Goals & brief</strong><small>Your outcome, creative brief and episode sharing.</small></span>
+                <span className="gf-brand-row-action">Review direction<Icon name="arrow" size={15} /></span>
+              </button>}
+              <button type="button" className="gf-brand-setting-row" onClick={() => setEditor("kit")}>
+                <span className="gf-brand-setting-icon"><Icon name="studio" size={19} /></span>
+                <span><strong>Brand kit</strong><small>{(kitEdited || kitDirty) && kitError ? "Needs attention · " + kitError : `${fontFamily.trim() || "Default font"} · ${logo.trim() ? "Logo added" : "No logo yet"}`}</small></span>
+                <span className="gf-brand-row-action"><span className="gf-brand-swatches" aria-label="Brand colours"><i style={{ background: primary }} /><i style={{ background: accent }} /></span>Edit appearance<Icon name="arrow" size={15} /></span>
+              </button>
+              <button type="button" className="gf-brand-setting-row" onClick={() => setEditor("account")}>
+                <span className="gf-brand-setting-icon"><Icon name="settings" size={19} /></span>
+                <span><strong>Account & AI model</strong><small>Sign-in, model routing and processing preferences.</small></span>
+                <span className="gf-brand-row-action">Manage<Icon name="arrow" size={15} /></span>
+              </button>
+            </div>
+          </section>
+          <div className="gf-brand-quick-links">
+            <div className="gf-link-rows">
+          <button
+            type="button"
+            className="gf-link-row"
+            disabled={w.busy || checking}
+            onClick={next}
+          >
+            <Icon name="research" size={16} />
+            <span>Style rules</span>
+            <Icon name="arrow" size={14} />
+          </button>
+          {onAccounts && (
+            <button
+              type="button"
+              className="gf-link-row"
+              disabled={w.busy || checking}
+              onClick={onAccounts}
+            >
+              <Icon name="results" size={16} />
+              <span>Connected accounts</span>
+              <Icon name="arrow" size={14} />
+            </button>
+          )}
+            </div>
+          </div>
+          {advancedForm}
+          {!editor && saveActions}
+          <PanelDialog open={active && editor === "identity"} onClose={() => setEditor(null)} title="Brand, audience & voice" description="A clear identity keeps every clip on brand. Your drafts stay here when you close.">
+            <div className="gf-brand-editor">{identityForm}</div>
+            {editor === "identity" && saveActions && <div className="gf-panel-dialog-footer">{saveActions}</div>}
+          </PanelDialog>
+          <PanelDialog open={active && editor === "kit"} onClose={() => setEditor(null)} title="Brand kit" description="Colours, typography and the logo used in your clips.">
+            <div className="gf-brand-editor">{kitForm}</div>
+            {editor === "kit" && saveActions && <div className="gf-panel-dialog-footer">{saveActions}</div>}
+          </PanelDialog>
+          <PanelDialog open={active && editor === "account"} onClose={() => setEditor(null)} title="Account & AI model" size="wide" description="Manage your account and choose how the factory processes your footage.">
+            <div className="gf-brand-account-grid">
+              <section className="gf-profile-account" aria-label="Your account"><h3>Account</h3><CloudAccountRow showLocal /></section>
+              <AiModelCard />
+            </div>
+          </PanelDialog>
+          {goals && <PanelDialog open={active && editor === "goals"} onClose={() => setEditor(null)} title="Goals & brief" size="wide" description="Keep the desired outcome, creative direction and episode context together.">
+            <div className="gf-brand-goals-editor">{goals}</div>
+          </PanelDialog>}
+        </>
+      ) : (
+        <>
+          <section className="gf-card gf-brief" aria-label="Goals & brief form"><div className="gf-form-fields">{campaignForm}</div></section>
+          {saveActions}
+        </>
+      )}
     </div>
-    {goals}
+
     </>
   );
 }

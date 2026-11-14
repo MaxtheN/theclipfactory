@@ -18,6 +18,7 @@ import { SpeechSetup, SpeechlessChip } from "./SpeechSetup";
 import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
 import { PostToInstagram } from "./PostToInstagram";
+import { PanelDialog } from "./PanelDialog";
 import { ReferenceResearchLauncher } from "./ReferenceResearch";
 import { briefSummary } from "./briefModel";
 import { rankOf, reviewOrder } from "./clipRanking";
@@ -28,12 +29,13 @@ import { changedEditFields, clipInScope, editErrors, jobInScope, object, readine
 
 type Mode = "manual" | "agent";
 const message = (e: unknown) => e instanceof Error ? e.message : "The operation was not confirmed. Refresh before retrying.";
-export function Studio({ w, factory, preferredSource, preferredMode, preferredClip, onDirection, onEditBrief }: {
+export function Studio({ w, factory, preferredSource, preferredMode, preferredClip, onDirection, onEditBrief, activeSurface = true }: {
   w: Workspace; factory: FactoryState; /** Kept for callers; Results is one click away in the sidebar. */ next: () => void; preferredSource?: string; preferredMode?: Mode; preferredClip?: string;
   /** Opens the direction screen when production is blocked on approval. */
   onDirection?: () => void;
   /** Opens Workspace settings, where the campaign brief is edited. */
   onEditBrief?: () => void;
+  activeSurface?: boolean;
 }) {
   const sources = factory.data.videos.filter(v => w.campaign?.video_ids.includes(v.id));
   const scope = { campaignId: w.campaign?.id || "", profileId: w.profileId, sourceIds: sources.map(v => v.id) };
@@ -61,6 +63,8 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const [exportsState, setExportsState] = useState<{ clipId: string; rows: ExportRecord[]; error: string }>({ clipId: "", rows: [], error: "" });
   const [uncertainExports, setUncertainExports] = useState<Set<string>>(new Set());
   const [cancelId, setCancelId] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false), [logOpen, setLogOpen] = useState(false);
+  useEffect(() => { if (!activeSurface) { setDetailsOpen(false); setLogOpen(false); } }, [activeSurface]);
   const lock = useRef(false), video = useRef<HTMLVideoElement>(null);
   const active = w.versions.find(v => v.id === activeRulesId(w) && v.status === "approved");
   const direction = active?.directions[w.profileId];
@@ -300,19 +304,19 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
       </>}
       {clips.length > 0 && !reviewPreview && <ReferenceResearchLauncher campaignId={w.campaign.id} profileId={w.profileId} entry="studio" preferredClipId={selected?.id} />}
       {ledgerError && <p className="gf-inline-error" role="alert">Agent status: {ledgerError}</p>}
-      {jobs.length > 0 && <Disclosure title="Production log" icon="clock">
+      {jobs.length > 0 && <><button type="button" className="gf-production-log-trigger" onClick={() => setLogOpen(true)}><Icon name="clock" size={16} /><span>Production log<small>{jobs.length} job{jobs.length === 1 ? "" : "s"} · messages and agent activity</small></span><Icon name="arrow" size={16} /></button><PanelDialog open={logOpen && activeSurface} onClose={() => setLogOpen(false)} title="Production log" description="Recorded activity for this campaign’s footage.">
         {jobs.map(job => {
           const context = object(job.context), run = runs.find(r => r.id === context?.team_run_id || r.job_id === job.id);
           const retryReason = savedRetryBlocker(job);
-          return <div key={job.id} className="gf-form-fields"><div className="gf-spec-row"><strong>{job.kind} · {job.status}</strong><span>{job.id}</span></div><p>{job.error || job.message || "No worker message recorded."}</p>{activeJob(job) && <progress aria-label={`Production progress ${job.id}`} max={100} value={typeof job.progress === "number" ? job.progress : undefined} />}
+          return <details key={job.id} className="gf-production-log-entry" open={activeJob(job) || !!job.error}><summary><span><strong>{job.kind}</strong><small>{job.id}</small></span><Pill tone={job.status === "failed" || job.status === "cancelled" ? "sand" : job.status === "completed" ? "mint" : "quiet"}>{job.status}</Pill><Icon name="down" size={15} /></summary><div className="gf-form-fields"><p>{job.error || job.message || "No worker message recorded."}</p>{activeJob(job) && <progress aria-label={`Production progress ${job.id}`} max={100} value={typeof job.progress === "number" ? job.progress : undefined} />}
             {activeJob(job) && (cancelId === job.id ? <div><p>Cancel this job? Work in progress may still finish.</p><button className="gf-button secondary" disabled={busy} onClick={() => void perform(async () => { await productionApi.cancelJob(job.id); setCancelId(""); }, "Cancellation requested.")}>Confirm cancellation</button><button className="gf-button ghost" onClick={() => setCancelId("")}>Keep running</button></div> : <button className="gf-button ghost" disabled={busy} onClick={() => setCancelId(job.id)}>Cancel job</button>)}
             {["failed", "cancelled"].includes(job.status) && (job.kind === "render"
               ? <><button className="gf-button secondary" disabled={busy || !!retryReason} onClick={() => void retry(job)}>Retry saved render</button>{retryReason && <p className="gf-help">{retryReason}</p>}</>
               : <p className="gf-approval-note">To try again, fix the issue above, then use Let agents find clips.</p>)}
             {run && <Disclosure title={`Agent tasks · ${run.status}`}><p>Model: {run.model_id} · Corrections: {run.revision_count}/{run.revision_budget}</p><p>{run.stop_reason || "No stop reason recorded."}</p>{run.tasks.map(task => <div key={task.id}><strong>{task.label} · {task.status}</strong><p>{task.role} · Iteration {task.iteration}</p><small>Inputs: {task.input_refs.join(", ") || "Not recorded"}</small><pre>{task.output ? JSON.stringify(task.output, null, 2) : task.error || "No output recorded"}</pre></div>)}</Disclosure>}
-          </div>;
+          </div></details>;
         })}
-      </Disclosure>}
+      </PanelDialog></>}
     </section>
     <aside className="gf-card gf-review-inspector">
       <div className="gf-card-header"><div><h2>{!making ? "Review this clip" : revisionParent ? "Request a change" : "Find clips"}</h2></div>{!making && <Pill tone={selected.approved && !illustrativeSelected ? "mint" : "quiet"}>{illustrativeSelected ? "Illustrative edit" : selected.approved ? "Approved" : "Needs review"}</Pill>}</div>
@@ -337,15 +341,16 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
             <button className="gf-button secondary full" disabled={busy} onClick={() => revise(selected)}>Request a change<Icon name="settings" size={15} /></button>
           </div>
           {/* The hosted preview shows the post package with illustrative data; posting stays off there. */}
-          {(reviewPreview || !illustrativeSelected) && <PostToInstagram clip={selected} disabled={!reviewReady || reviewPreview} approve={async () => { const box: { clip?: ProductionClip } = {}; const ok = await perform(async () => { box.clip = await productionApi.review(selected, true); }, "Approved this exact revision."); return ok ? box.clip : false; }} />}
+          {(reviewPreview || !illustrativeSelected) && <PostToInstagram compact activeSurface={activeSurface} clip={selected} disabled={!reviewReady || reviewPreview} approve={async () => { const box: { clip?: ProductionClip } = {}; const ok = await perform(async () => { box.clip = await productionApi.review(selected, true); }, "Approved this exact revision."); return ok ? box.clip : false; }} />}
         </div>
         <div className="gf-review-details">
-          <Disclosure title="Details" icon="info">
+          <button type="button" className="gf-review-detail-trigger" onClick={() => setDetailsOpen(true)}><Icon name="info" size={16} /><span>Checks & version details<small>Technical evidence and export history</small></span><Icon name="arrow" size={16} /></button>
+          <PanelDialog open={detailsOpen && activeSurface} onClose={() => setDetailsOpen(false)} title="Checks & version details" description={`Evidence for ${selected.name}. Technical checks do not replace your review.`}>
             <ClipEvidence clip={selected} />
             {selected.team_run_id && <button className="gf-button ghost full" disabled={busy || stale || factory.data.jobs.some(j => activeJob(j) && object(j.context)?.video_id === selected.video_id) || reviewPreview} onClick={() => void perform(async () => { const exact = selected.approved ? await productionApi.review(selected, false) : selected; await productionApi.recheck(exact); }, "Recheck queued. This version needs fresh approval afterwards.")}>Recheck technical critique</button>}
             <h3>Exports</h3>
             {reviewPreview ? <p>Exports run in the Mac app.</p> : <><button className="gf-button ghost" disabled={busy} onClick={() => void reconcile(selected)}>Refresh export history</button>{exportsState.error && <p role="alert">{exportsState.error}</p>}{uncertainExports.has(selected.id) && <p className="gf-help">An export was submitted for this version. Check history before exporting again; it won't be resent automatically.</p>}{!exportRows.length && <p>No exports yet.</p>}{exportRows.map(record => <div key={record.id}><strong>{record.created_at}</strong><p>{record.location}</p><a className="gf-button ghost" href={exportMediaUrl(record.id)} download>Download MP4</a><a className="gf-button ghost" href={exportManifestUrl(record.id)} download>Download manifest</a></div>)}</>}
-          </Disclosure>
+          </PanelDialog>
         </div>
       </>}
     </aside>

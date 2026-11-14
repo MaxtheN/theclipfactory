@@ -5,6 +5,7 @@ import { Icon } from "./Icon";
 import { formatTime } from "./parts";
 import { clipMediaUrl } from "./productionApi";
 import { reviewPreview } from "./workspaceApi";
+import { ReelsActionRail } from "./PostPreview";
 
 /**
  * A clip's cover tile. Pressing it plays the clip right there, with sound, in a
@@ -93,7 +94,7 @@ export function QuickLook({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <video
+      <div className="gf-quicklook-media"><video
         src={clipMediaUrl(clip.id)}
         poster={endpoint("clips", clip.id, "cover")}
         controls
@@ -101,7 +102,7 @@ export function QuickLook({
         playsInline
         aria-label={`Playing ${title}`}
         onError={() => setFailed(true)}
-      />
+      /><ReelsActionRail /></div>
       {failed && (
         <p className="gf-inline-error" role="alert">
           This clip could not be played. Its file may have been removed from

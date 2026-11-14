@@ -54,6 +54,14 @@ beforeEach(() => {
   localStorage.setItem("growth-view-v2", "setup");
 });
 
+function openBrandEditor() {
+  fireEvent.click(screen.getByRole("button", { name: /^Brand, audience & voice/ }));
+  return screen.getByRole("dialog", { name: "Brand, audience & voice" });
+}
+function closeBrandEditor() {
+  fireEvent.click(screen.getByRole("button", { name: "Close Brand, audience & voice" }));
+}
+
 function openEditingRules() {
   fireEvent.keyDown(window, { key: "k", metaKey: true });
   const search = screen.getByRole("combobox", { name: "Search quick actions" });
@@ -136,21 +144,25 @@ describe("Growth Factory interface", () => {
     expect(screen.getByRole("heading", { name: "Brand profile" })).toHaveFocus();
     screen.getByLabelText("Advanced controls").closest("details")?.setAttribute("open", "");
     const advanced = screen.getByRole("navigation", { name: "Advanced navigation" });
-    expect(within(advanced).getAllByRole("button").map((button) => button.textContent?.trim())).toEqual(["New brand", "Advanced tools"]);
+    expect(within(advanced).getAllByRole("button").map((button) => button.textContent?.trim())).toEqual(["New brand"]);
+    openBrandEditor();
     fireEvent.change(screen.getByRole("textbox", { name: "Who it's for" }), { target: { value: "Channel-specific founders" } });
     fireEvent.click(screen.getByRole("button", { name: "Save brand" }));
     // The workspace audience is saved on the workspace; the campaign brief keeps its own.
     await waitFor(async () => expect((await previewRequest<{ audience: string }[]>("/api/profiles")).some((p) => p.audience === "Channel-specific founders")).toBe(true));
     expect((await previewRequest<Campaign>(path)).brief.audience).toBe("Builders and founders");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save brand" })).toBeEnabled());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull());
     expect(screen.getByRole("heading", { name: "Brand profile" })).toBeVisible();
     expect(screen.queryByRole("heading", { name: "Style rules" })).not.toBeInTheDocument();
     expect((await activeRules())).toBeNull();
+    closeBrandEditor();
     fireEvent.click(screen.getByRole("button", { name: "Style rules" }));
     expect(screen.getByRole("heading", { name: "Style rules" })).toHaveFocus();
     fireEvent.click(screen.getByRole("button", { name: "Back to Brand profile" }));
     expect(screen.getByRole("heading", { name: "Brand profile" })).toHaveFocus();
+    openBrandEditor();
     expect(screen.getByRole("textbox", { name: "Who it's for" })).toHaveValue("Channel-specific founders");
+    closeBrandEditor();
     fireEvent.click(within(daily).getByRole("button", { name: "Factory" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit full style rules" }));
     expect(screen.getByRole("heading", { name: "Style rules" })).toHaveFocus();
@@ -177,12 +189,14 @@ describe("Growth Factory interface", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"),
     );
+    openBrandEditor();
     fireEvent.change(
       screen.getByRole("textbox", { name: "Who it's for" }),
       {
         target: { value: "A retained audience" },
       },
     );
+    closeBrandEditor();
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     expect(
       screen.queryByRole("navigation", { name: "Main navigation" }),
@@ -194,6 +208,7 @@ describe("Growth Factory interface", () => {
     expect(
       screen.getByRole("navigation", { name: "Main navigation" }),
     ).toBeVisible();
+    openBrandEditor();
     expect(
       screen.getByRole("textbox", { name: "Who it's for" }),
     ).toHaveValue("A retained audience");
@@ -203,6 +218,7 @@ describe("Growth Factory interface", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"),
     );
+    openBrandEditor();
     const audience = screen.getByRole("textbox", {
       name: "Who it's for",
     });
@@ -215,6 +231,7 @@ describe("Growth Factory interface", () => {
     expect(search).toHaveFocus();
     fireEvent.keyDown(search, { key: "Escape" });
     expect(audience).toHaveFocus();
+    closeBrandEditor();
     fireEvent.click(screen.getByRole("button", { name: "Open quick actions" }));
     fireEvent.change(search, { target: { value: "library" } });
     fireEvent.keyDown(search, { key: "Enter" });
@@ -223,10 +240,55 @@ describe("Growth Factory interface", () => {
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     fireEvent.change(search, { target: { value: "setup" } });
     fireEvent.keyDown(search, { key: "Enter" });
+    openBrandEditor();
     expect(
       screen.getByRole("textbox", { name: "Who it's for" }),
     ).toHaveValue("My unsaved audience");
   });
+  it("opens Goals from quick actions and closes editors when navigating away", async () => {
+    render(<GrowthApp />);
+    await waitFor(() => expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"));
+    openBrandEditor();
+    fireEvent.change(screen.getByRole("textbox", { name: "Who it's for" }), { target: { value: "A retained modal draft" } });
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    const search = screen.getByRole("combobox", { name: "Search quick actions" });
+    fireEvent.change(search, { target: { value: "library" } });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "Library" })).toHaveFocus();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.change(search, { target: { value: "goals" } });
+    fireEvent.keyDown(search, { key: "Enter" });
+    const goals = await screen.findByRole("dialog", { name: "Goals & brief" });
+    expect(within(goals).getByRole("combobox", { name: "What are we working toward?" })).toBeVisible();
+    fireEvent.click(within(goals).getByRole("button", { name: "Close Goals & brief" }));
+    openBrandEditor();
+    expect(screen.getByRole("textbox", { name: "Who it's for" })).toHaveValue("A retained modal draft");
+  });
+
+  it("does not replay a handled Goals request when changing brand contexts", async () => {
+    render(<GrowthApp />);
+    const brand = await screen.findByRole("combobox", { name: "Current brand" });
+    await waitFor(() => expect(brand).toHaveValue("preview-profile-allin"));
+    function requestGoals() {
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      const search = screen.getByRole("combobox", { name: "Search quick actions" });
+      fireEvent.change(search, { target: { value: "goals" } });
+      fireEvent.keyDown(search, { key: "Enter" });
+    }
+    requestGoals();
+    const goals = await screen.findByRole("dialog", { name: "Goals & brief" });
+    fireEvent.click(within(goals).getByRole("button", { name: "Close Goals & brief" }));
+    fireEvent.change(brand, { target: { value: "preview-profile-test" } });
+    await waitFor(() => expect(screen.getByLabelText("Brand name")).toHaveValue("Test profile"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.change(brand, { target: { value: "preview-profile-allin" } });
+    await waitFor(() => expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    requestGoals();
+    expect(await screen.findByRole("dialog", { name: "Goals & brief" })).toBeVisible();
+  });
+
   it("keeps new-workspace onboarding isolated from quick actions and app navigation", async () => {
     render(<GrowthApp />);
     await waitFor(() =>
@@ -250,16 +312,20 @@ describe("Growth Factory interface", () => {
       screen.getByRole("heading", { name: "What’s your website?" }),
     ).toBeInTheDocument();
   });
-  it("saves a campaign, requires explicit direction approval, then opens Studio", async () => {
+  it("saves brand edits and keeps approved style rules on the page until Factory is requested", async () => {
     render(<GrowthApp />);
     await waitFor(() =>
       expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"),
     );
+    expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull();
+    openBrandEditor();
+    fireEvent.change(screen.getByRole("textbox", { name: "Who it's for" }), { target: { value: "Builders and founders making thoughtful clips" } });
     fireEvent.click(
       screen.getByRole("button", { name: "Save brand" }),
     );
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save brand" })).toBeEnabled());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull());
     expect(screen.getByRole("heading", { name: "Brand profile" })).toBeVisible();
+    closeBrandEditor();
     fireEvent.click(screen.getByRole("button", { name: "Style rules" }));
     await screen.findByRole("heading", {
       name: "Style rules",
@@ -268,13 +334,17 @@ describe("Growth Factory interface", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /^Approve style rules\b/ }),
     );
-    await screen.findByRole("heading", {
-      name: "Studio",
-    });
+    const factoryAction = await screen.findByRole("button", { name: "Go to Factory" });
+    expect(screen.getByRole("heading", { name: "Style rules" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Studio" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Approve style rules\b/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Save draft\b/ })).toBeNull();
     expect((await activeRules())).toBe(
       "preview-strategy-v1",
     );
-    expect(screen.getByLabelText("Production mode")).toHaveValue("agent");
+    fireEvent.click(factoryAction);
+    expect(screen.getByRole("heading", { name: "Factory" })).toHaveFocus();
+    expect(screen.queryByRole("heading", { name: "Studio" })).toBeNull();
     expect(
       screen.queryByRole("link", { name: /Export/ }),
     ).not.toBeInTheDocument();
@@ -284,14 +354,17 @@ describe("Growth Factory interface", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"),
     );
+    openBrandEditor();
     fireEvent.change(
       screen.getByRole("textbox", { name: "Who it's for" }),
       {
         target: { value: "A very specific audience" },
       },
     );
+    closeBrandEditor();
     openEditingRules();
     fireEvent.click(screen.getByRole("button", { name: "Brand profile" }));
+    openBrandEditor();
     expect(
       screen.getByRole("textbox", { name: "Who it's for" }),
     ).toHaveValue("A very specific audience");
@@ -299,6 +372,27 @@ describe("Growth Factory interface", () => {
 });
 
 describe("approval transition regressions", () => {
+  it("treats a reason-only edit to active rules as a new draft and stays on Style rules", async () => {
+    const active = await send<StrategyVersion>(`${rules}/preview-strategy-v1/approve`);
+    render(<GrowthApp />);
+    await waitFor(() => expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"));
+    openEditingRules();
+    fireEvent.click(screen.getByText("Notes & reference"));
+    expect(screen.getByLabelText("Why try this?")).toHaveValue(active.reason);
+    expect(screen.queryByRole("button", { name: /^Save draft\b/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Why try this?"), { target: { value: "Compare the same rules with a clearer reason." } });
+    fireEvent.click(screen.getByRole("button", { name: /^Save draft\b/ }));
+    await screen.findByRole("button", { name: /^Approve style rules\b/ });
+    expect(screen.getByRole("heading", { name: "Style rules" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Studio" })).toBeNull();
+    const versions = await previewRequest<StrategyVersion[]>(rules);
+    const draft = versions.find((version) => version.id !== active.id && version.reason === "Compare the same rules with a clearer reason.")!;
+    expect(draft).toBeDefined();
+    expect(draft.reason).toBe("Compare the same rules with a clearer reason.");
+    expect(draft.directions["preview-profile-allin"]).toEqual(active.directions["preview-profile-allin"]);
+    expect(await activeRules()).toBe(active.id);
+  });
+
   it("saves edited reference text before allowing direction approval", async () => {
     render(<GrowthApp />);
     await waitFor(() =>
@@ -373,6 +467,8 @@ describe("approval transition regressions", () => {
     });
     localStorage.setItem("growth-view-v2", "results");
     render(<GrowthApp />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Insights/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add a result by hand" }));
     await screen.findByRole("button", { name: /^Approve next test\b/ });
     fireEvent.change(screen.getByLabelText("Proposed source-selection rule"), {
       target: { value: "An unsaved different rule." },

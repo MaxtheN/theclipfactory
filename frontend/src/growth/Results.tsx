@@ -12,6 +12,7 @@ import { pendingRules, scopeAutomation, type Row } from "./flowEvents";
 import { postedRows, resultsStory, type PostedRow } from "./resultsModel";
 import { StrategistPanel } from "./StrategistPanel";
 import { FactoryUpgrades } from "./FactoryUpgrades";
+import { PanelDialog } from "./PanelDialog";
 import type { StrategistView } from "./strategistApi";
 import "./results-story.css";
 import {
@@ -1126,14 +1127,11 @@ export function Results({
     pendingRules: pendingCount,
     now,
   });
-  const accounts = useRef<HTMLDivElement>(null);
-  const toAccounts = useCallback(() => {
-    const el = accounts.current;
-    if (!el) return;
-    const details = el.querySelector("details");
-    if (details && !details.open) details.open = true;
-    el.scrollIntoView?.({ behavior: "smooth", block: "start" });
-  }, []);
+  const [section, setSection] = useState<"posts" | "insights">("posts");
+  const [accountsOpen, setAccountsOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [upgradesOpen, setUpgradesOpen] = useState(false);
+  const toAccounts = useCallback(() => setAccountsOpen(true), []);
   useEffect(() => {
     if (!visible || !["#gf-accounts", "#connections"].includes(window.location.hash))
       return;
@@ -1153,12 +1151,25 @@ export function Results({
   return (
     <div className="gf-results-page">
       <StoryHeader story={story} />
-      <PostedClips
-        rows={rows}
-        untracked={untracked}
-        error={data.error}
-        onAccounts={toAccounts}
-      />
+      <div className="gf-results-workspace-bar">
+        <div className="gf-results-workspace-switch" role="group" aria-label="Results view">
+          <button type="button" aria-pressed={section === "posts"} onClick={() => setSection("posts")}>
+            <Icon name="play" size={15} /> Posted clips
+            {rows.length + untracked.length > 0 && <span>{rows.length + untracked.length}</span>}
+          </button>
+          <button type="button" aria-pressed={section === "insights"} onClick={() => setSection("insights")}>
+            <Icon name="results" size={15} /> Insights
+            {pendingCount + drafts.length > 0 && <span>{pendingCount + drafts.length} to review</span>}
+          </button>
+        </div>
+        <button type="button" className="gf-button secondary compact" onClick={toAccounts}>
+          <Icon name="link" size={15} /> Accounts & tracking
+        </button>
+      </div>
+      <div className="gf-results-workspace-view" hidden={section !== "posts"}>
+        <PostedClips rows={rows} untracked={untracked} error={data.error} onAccounts={toAccounts} />
+      </div>
+      <div className="gf-results-workspace-view" hidden={section !== "insights"}>
       {visible && w.profileId && (
         <StrategistPanel
           key={w.profileId}
@@ -1212,24 +1223,31 @@ export function Results({
           }
         />
       )}
-      {visible && <FactoryUpgrades />}
-      <div ref={accounts} className="gf-results-accounts">
-        <AutomationPanel
-          w={w}
-          factory={factory}
-          visible={visible}
-          onReview={onReview}
-          onEditingRules={onEditingRules}
-          layout="accounts"
-        />
       </div>
-      <Disclosure title="Add a result by hand" icon="upload">
-        <p className="gf-help">
-          For numbers from somewhere the app can't read. Each one keeps its
-          source and window; nothing here proves why a clip did well.
-        </p>
+      <footer className="gf-results-workspace-tools">
+        <div>
+          <button type="button" onClick={() => setManualOpen(true)}><Icon name="upload" size={15} /> Add a result by hand</button>
+          <button type="button" onClick={() => setUpgradesOpen(true)}><Icon name="settings" size={15} /> Factory upgrades</button>
+        </div>
+      </footer>
+      <PanelDialog open={accountsOpen && visible} onClose={() => setAccountsOpen(false)} title="Instagram accounts" description="Connect an account, track a post, or set its measurement window.">
+        <div className="gf-results-accounts">
+          <AutomationPanel
+            w={w}
+            factory={factory}
+            visible={visible && accountsOpen}
+            onReview={onReview}
+            onEditingRules={onEditingRules}
+            layout="accounts"
+          />
+        </div>
+      </PanelDialog>
+      <PanelDialog open={manualOpen && visible} onClose={() => setManualOpen(false)} title="Add a result by hand" description="For numbers the app can't read. Keep the source, time window and limits with every result.">
         <HandEnteredResults w={w} factory={factory} next={next} />
-      </Disclosure>
+      </PanelDialog>
+      <PanelDialog open={upgradesOpen && visible} onClose={() => setUpgradesOpen(false)} title="Factory upgrades" description="Review craft gaps and proposed improvements.">
+        {visible && <FactoryUpgrades />}
+      </PanelDialog>
     </div>
   );
 }

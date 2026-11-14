@@ -424,6 +424,10 @@ describe("clips in the front door", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Play Hook a" }));
     const dialog = screen.getByLabelText("Playing Hook a").closest("dialog")!;
+    // Preview chrome stays decorative: it cannot trigger a social action.
+    expect(dialog.querySelector(".gf-reels-rail")).toHaveAttribute("aria-hidden", "true");
+    expect(dialog.querySelectorAll(".gf-reels-rail li")).toHaveLength(5);
+    expect(within(dialog).getAllByRole("button").map(button => button.textContent)).toEqual(["Review", "Close"]);
     // From the quick look, review is one press away and closes the player.
     fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
     expect(onReview).toHaveBeenCalledWith(clip);

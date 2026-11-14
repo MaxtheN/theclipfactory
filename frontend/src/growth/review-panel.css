@@ -33,6 +33,46 @@
 }
 .gf-app .gf-review-inspector .gf-review-details { padding: 0 var(--gf-review-pad); }
 
+/* Keep the review decision in view; supporting records open in a bounded sheet. */
+.gf-app .gf-review-detail-trigger,
+.gf-app .gf-production-log-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--material-secondary);
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 16px 0;
+}
+.gf-app .gf-production-log-trigger { padding: 16px 22px; border-top: 1px solid var(--material-divider); }
+.gf-review-detail-trigger > span,
+.gf-production-log-trigger > span { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.gf-review-detail-trigger small,
+.gf-production-log-trigger small { font-size: 11.5px; font-weight: 400; color: var(--material-secondary); opacity: .8; }
+.gf-app .gf-review-detail-trigger:hover,
+.gf-app .gf-production-log-trigger:hover { color: var(--material-ink); }
+.gf-app .gf-review-detail-trigger:focus-visible,
+.gf-app .gf-production-log-trigger:focus-visible { outline: 2px solid var(--material-focus); outline-offset: -2px; border-radius: 8px; }
+.gf-production-log-entry { border-bottom: 1px solid var(--material-divider); }
+.gf-production-log-entry > summary { display: flex; align-items: center; gap: 12px; padding: 16px 0; cursor: pointer; list-style: none; }
+.gf-production-log-entry > summary::-webkit-details-marker { display: none; }
+.gf-production-log-entry > summary > span:first-child { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.gf-production-log-entry summary strong { font-size: 13px; text-transform: capitalize; }
+.gf-production-log-entry summary small { font-size: 11px; color: var(--material-secondary); overflow-wrap: anywhere; }
+.gf-production-log-entry summary > svg { transition: transform 160ms ease; }
+.gf-production-log-entry[open] > summary > svg { transform: rotate(180deg); }
+.gf-production-log-entry .gf-form-fields { padding: 0 0 20px; }
+.gf-production-log-entry pre { max-height: 280px; overflow: auto; font-size: 11px; padding: 12px; border-radius: 8px; background: var(--material-field); }
+.gf-app .gf-review-details .gf-clip-evidence { padding: 0; }
+.gf-app .gf-review-details .gf-evidence-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+.gf-app .gf-review-details .gf-evidence-summary .gf-evidence-fact { display: grid; grid-template-columns: 1fr; gap: 2px; }
+.gf-app .gf-review-details .gf-evidence-summary dd { text-align: left; font-size: 13px; }
+
 /* Pills are labels: never squeezed or clipped by their row. */
 .gf-app .gf-pill {
   flex-shrink: 0;
@@ -49,6 +89,9 @@
   overflow: visible;
 }
 .gf-app .gf-clip-strip { align-items: stretch; padding-block: 10px 14px; }
+.gf-app .gf-clip-strip { background: transparent; }
+.gf-app .gf-clip-strip > button .gf-score-chip { color: var(--material-ink); background: var(--material-hover); border-radius: 6px; font-variant-numeric: tabular-nums; }
+.gf-app .gf-clip-strip > button .gf-score-chip.is-low { color: var(--material-warning); background: var(--material-warning-fill); }
 .gf-app .gf-clip-strip > button {
   width: 236px;
   max-width: none;
@@ -81,3 +124,6 @@
 }
 .gf-app .gf-clip-strip > button > .gf-score-chip,
 .gf-app .gf-clip-strip > button > svg { flex: none; }
+
+@media (prefers-reduced-motion: reduce) { .gf-production-log-entry summary > svg { transition: none; } }
+@media (max-width: 600px) { .gf-app .gf-review-details .gf-evidence-summary { grid-template-columns: 1fr; } }

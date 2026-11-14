@@ -32,10 +32,17 @@ function Glyph({ name, size = 20 }: { name: keyof typeof glyphs; size?: number }
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{glyphs[name]}</svg>;
 }
 
+/** Visual preview chrome only: these never trigger platform actions or imply engagement. */
+export function ReelsActionRail() {
+  return <ul className="gf-reels-rail" aria-hidden="true">
+    {(["like", "comment", "share", "save", "more"] as const).map(name => <li key={name}><Glyph name={name} /></li>)}
+  </ul>;
+}
+
 /**
  * A neutral 9:16 phone mock of the post as a Reels screen: the clip itself (captions are burned
- * into the video) playing muted over its cover, the top bar, the action rail with placeholder
- * counts, the account handle with a Follow pill, the caption as the feed shows it, and the
+ * into the video) playing muted over its cover, the top bar, a decorative action rail,
+ * the account handle with a Follow pill, the caption as the feed shows it, and the
  * audio line. Not a copy of Instagram's interface or marks; it shows what goes out.
  * With reduced motion the clip starts paused on its cover; a tap plays it.
  */
@@ -58,7 +65,6 @@ export function PostPreview({
   const [playing, setPlaying] = useState(() => !reducedMotion());
   const { text, truncated } = truncateForFeed(caption, REELS_PREVIEW_CHARS);
   const name = handle.replace(/^@/, "") || "your_account";
-  const rail: [keyof typeof glyphs, string][] = [["like", "Likes"], ["comment", "Comments"], ["share", "Shares"], ["save", "Saves"]];
   return <figure className="gf-post-preview" aria-label="Post preview">
     <div className="gf-phone">
       <div className="gf-phone-screen">
@@ -75,10 +81,7 @@ export function PostPreview({
           onClick={e => { const v = e.currentTarget; if (v.paused) { void v.play().catch(() => undefined); setPlaying(true); } else { v.pause(); setPlaying(false); } }}
         />
         <div className="gf-reels-top" aria-hidden="true"><strong>Reels</strong><Glyph name="camera" size={18} /></div>
-        <ul className="gf-reels-rail" aria-hidden="true">
-          {rail.map(([glyph, label]) => <li key={glyph} title={`${label} appear after posting`}><Glyph name={glyph} /><small>—</small></li>)}
-          <li><Glyph name="more" /></li>
-        </ul>
+        <ReelsActionRail />
         <div className="gf-phone-overlay">
           <div className="gf-phone-account">
             <span className="gf-phone-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>

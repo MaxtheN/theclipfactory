@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { clip as baseClip, testState } from "../test-state";
 import type { FactoryState } from "../useFactory";
 import type { Job, TeamRun } from "../types";
@@ -31,6 +31,12 @@ function factory(clips: ProductionClip[] = []): FactoryState {
 const queued = (id = "job-1"): Job => ({ id, kind: "render", status: "queued", context: { video_id: "v1", campaign_id: "camp", profile_id: "profile" } });
 function loaded() { fireEvent.loadedData(screen.getByLabelText("Review Test clip")); }
 function settings() { fireEvent.click(screen.getByText("Fine-tune")); }
+const nativeDialogs = { showModal: HTMLDialogElement.prototype.showModal, close: HTMLDialogElement.prototype.close };
+beforeAll(() => {
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+});
+afterAll(() => Object.assign(HTMLDialogElement.prototype, nativeDialogs));
 beforeEach(() => {
   mode.preview = false;
   vi.clearAllMocks();
@@ -40,6 +46,23 @@ beforeEach(() => {
 });
 
 describe("Studio production integration", () => {
+  it("closes review and production dialogs when leaving the active surface", () => {
+    const w = workspace(), f = factory([clip]);
+    f.data.jobs = [queued()];
+    const view = render(<Studio w={w} factory={f} next={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /Production log/ }));
+    expect(screen.getByRole("dialog", { name: "Production log" })).toBeInTheDocument();
+    view.rerender(<Studio w={w} factory={f} next={() => {}} activeSurface={false} />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    view.rerender(<Studio w={w} factory={f} next={() => {}} activeSurface />);
+    fireEvent.click(screen.getByRole("button", { name: /Checks & version details/ }));
+    expect(screen.getByRole("dialog", { name: "Checks & version details" })).toBeInTheDocument();
+    view.rerender(<Studio w={w} factory={f} next={() => {}} activeSurface={false} />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(productionApi.review).not.toHaveBeenCalled();
+    expect(productionApi.cancelJob).not.toHaveBeenCalled();
+  });
+
   it("defaults to one agent action with every pipeline control behind a closed Fine-tune", () => {
     render(<Studio w={workspace()} factory={factory()} next={() => {}} />);
     expect(screen.getByRole("button", { name: "Let agents find clips" })).toBeInTheDocument();
@@ -179,6 +202,9 @@ describe("Studio production integration", () => {
     const f = factory();
     f.data.jobs = [queued(), { ...queued("failed-revision"), status: "failed", context: { video_id: "v1", campaign_id: "camp", profile_id: "profile", parent_clip_id: "c1", plan } }];
     render(<Studio w={workspace()} factory={f} next={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /Production log/ }));
+    const failed = screen.getByText("failed-revision").closest("details")!;
+    fireEvent.click(failed.querySelector("summary")!);
     fireEvent.click(screen.getByRole("button", { name: "Cancel job" }));
     expect(productionApi.cancelJob).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Confirm cancellation" }));
@@ -196,6 +222,8 @@ describe("Studio production integration", () => {
     f.data.jobs = [{ ...queued("failed-cut"), status: "failed", context: { video_id: "v1", campaign_id: "camp", profile_id: "profile", attempt: 1, plan: { ...plan, start: 12, end: 22, subtitles: false, focus_x: .7 } } }];
     render(<Studio w={workspace()} factory={f} next={() => {}} />);
     expect(productionApi.campaignRender).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Production log/ }));
+    fireEvent.click(screen.getByText("failed-cut").closest("details")!.querySelector("summary")!);
     fireEvent.click(screen.getByRole("button", { name: "Retry saved render" }));
     await waitFor(() => expect(productionApi.campaignRender).toHaveBeenCalledExactlyOnceWith("camp", expect.objectContaining({ retry_of_job_id: "failed-cut", start: 12, end: 22, subtitles: false, focus_x: .7, expected_strategy_version_id: "strategy" })));
   });

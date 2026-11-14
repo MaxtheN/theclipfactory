@@ -7,7 +7,7 @@ import { Icon } from "./Icon";
 import { ReferenceResearchLauncher } from "./ReferenceResearch";
 
 /** The selected workspace's ONE Style-rules set, inherited by every campaign in it. */
-export function Research({ w, next }: { w: Workspace; next: () => void }) {
+export function Research({ w, onFactory }: { w: Workspace; onFactory: () => void }) {
   const workspace = w.profiles.find((p) => p.id === w.profileId);
   const activeId = activeRulesId(w);
   // Only workspace drafts can be approved; older per-campaign versions are history.
@@ -31,7 +31,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
   const [hookB, setHookB] = useState(seed.hooks[1] || "Question first");
   const [reference, setReference] = useState("");
   const [reason, setReason] = useState(
-    pending?.reason ||
+    pending?.reason || active?.reason ||
       "Test the opening treatment while preserving source meaning.",
   );
   const direction = {
@@ -54,7 +54,8 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
   const changedFromActive =
     !active ||
     JSON.stringify(direction) !==
-      JSON.stringify(active.directions[w.profileId]);
+      JSON.stringify(active.directions[w.profileId]) ||
+    proposedReason !== active.reason;
   const step = approvalStep({
     pending: !!pending,
     active: !!active,
@@ -65,13 +66,10 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
   async function primary() {
     if (!workspace || blocked) return;
     if (canApprove) {
-      if (
-        await w.run(
-          () => workspaceApi.approve(workspace.id, pending!.id),
-          "Style rules approved. New clips will follow them.",
-        )
-      )
-        next();
+      await w.run(
+        () => workspaceApi.approve(workspace.id, pending!.id),
+        "Style rules approved. New clips will follow them.",
+      );
     } else
       await w.run(
         () =>
@@ -207,7 +205,11 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
             <Icon name="lock" size={13} /> For every clip for{" "}
             {workspace.name}
           </span>
-          <PrimaryAction
+          {step.approved ? (
+            <button type="button" className="gf-button secondary" disabled={blocked} onClick={onFactory}>
+              Go to Factory <Icon name="arrow" size={16} />
+            </button>
+          ) : <PrimaryAction
             label={
               w.busy
                 ? "Saving…"
@@ -225,7 +227,7 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
               !reason.trim()
             }
             onClick={() => void primary()}
-          />
+          />}
         </div>
         {/* Reference reels -> one cited pattern -> an A/B test and a proposed rules note. */}
         <ReferenceResearchLauncher

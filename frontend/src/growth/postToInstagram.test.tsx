@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PostToInstagram } from "./PostToInstagram";
@@ -48,6 +48,12 @@ const schedule = (over: Partial<PostSchedule> = {}): PostSchedule => ({
   attempts: [attempt({ state: "scheduled", active: false, scheduled_for: "2026-11-14T19:00:00+00:00" })], ...over,
 });
 const NOW = new Date(2026, 10, 14, 12, 0, 0);
+const nativeDialogs = { showModal: HTMLDialogElement.prototype.showModal, close: HTMLDialogElement.prototype.close };
+beforeAll(() => {
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+});
+afterAll(() => Object.assign(HTMLDialogElement.prototype, nativeDialogs));
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -57,6 +63,59 @@ beforeEach(() => {
 });
 
 describe("PostToInstagram", () => {
+  it("keeps quality visible and preserves posting drafts when the review sheet closes", async () => {
+    const view = render(<PostToInstagram compact clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} now={() => NOW} />);
+    expect(await screen.findByText("Passed: ready to post")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Clip with burned-in captions")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Prepare your post" }));
+    const dialog = screen.getByRole("dialog", { name: "Prepare your post" });
+    const caption = within(dialog).getByLabelText("Caption");
+    fireEvent.change(caption, { target: { value: "A caption I am still editing" } });
+    await userEvent.click(within(dialog).getByLabelText("Schedule"));
+    const date = within(dialog).getByLabelText("Date and time");
+    const savedDate = (date as HTMLInputElement).value;
+    await userEvent.click(within(dialog).getByRole("button", { name: "Close Prepare your post" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Prepare your post" }));
+    expect(screen.getByLabelText("Caption")).toHaveValue("A caption I am still editing");
+    expect(screen.getByLabelText("Date and time")).toHaveValue(savedDate);
+    view.rerender(<PostToInstagram compact activeSurface={false} clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} now={() => NOW} />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    view.rerender(<PostToInstagram compact activeSurface clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} now={() => NOW} />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Prepare your post" }));
+    expect(screen.getByLabelText("Caption")).toHaveValue("A caption I am still editing");
+    expect(screen.getByLabelText("Date and time")).toHaveValue(savedDate);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.schedule).not.toHaveBeenCalled();
+  });
+
+  it("keeps unknown posting outcomes visible outside the closed sheet", async () => {
+    api.targets.mockResolvedValue(targets({ attempts: [attempt({ state: "unknown", active: false })] }));
+    render(<PostToInstagram compact clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    expect(await screen.findByText(/A post needs a status check/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Posting activity")).toHaveTextContent("Outcome unknown · check status: 1");
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Prepare your post" }));
+    expect(screen.getByRole("button", { name: "Check status" })).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.resume).not.toHaveBeenCalled();
+  });
+
+  it("keeps a held clip's override editable in the compact posting sheet", async () => {
+    api.quality.mockResolvedValue({ ...pass, verdict: "hold", reasons: ["Check the crop"] });
+    render(<PostToInstagram compact clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    await screen.findByText("Quality gate: hold");
+    await userEvent.click(screen.getByRole("button", { name: "Prepare your post" }));
+    const dialog = screen.getByRole("dialog", { name: "Prepare your post" });
+    await userEvent.click(within(dialog).getByLabelText(/brand/));
+    expect(within(dialog).getByRole("button", { name: "Post to Instagram" })).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText(/Override reason/), { target: { value: "The full sentence and subject are visible." } });
+    expect(within(dialog).getByRole("button", { name: "Post to Instagram" })).toBeEnabled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
   it("shows sign in required and disables posting", async () => {
     api.targets.mockResolvedValue(targets({ signed_in: false }));
     render(<PostToInstagram clip={clip} approve={vi.fn()} />);
@@ -259,7 +318,9 @@ describe("PostToInstagram", () => {
     expect(within(preview).getByText("Reels")).toBeInTheDocument();
     expect(within(preview).getByText("Follow")).toBeInTheDocument();
     expect(within(preview).getByText("Original audio")).toBeInTheDocument();
-    expect(within(preview).getAllByText("—")).toHaveLength(4);
+    expect(preview.querySelector(".gf-reels-rail")).toHaveAttribute("aria-hidden", "true");
+    expect(preview.querySelectorAll(".gf-reels-rail li")).toHaveLength(5);
+    expect(within(preview).queryByText("—")).not.toBeInTheDocument();
     await userEvent.click(screen.getByLabelText(/second/));
     expect(within(preview).getByText("second")).toBeInTheDocument();
   });

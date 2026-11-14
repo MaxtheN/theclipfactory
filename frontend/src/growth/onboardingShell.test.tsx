@@ -297,6 +297,7 @@ describe("standalone onboarding shell", () => {
       "An existing draft",
     );
     fireEvent.click(cancel);
+    fireEvent.click(await screen.findByRole("button", { name: /^Brand, audience & voice/ }));
     await waitFor(() =>
       expect(
         screen.getByRole("textbox", {
@@ -304,6 +305,7 @@ describe("standalone onboarding shell", () => {
         }),
       ).toHaveValue("Builders and founders"),
     );
+    fireEvent.click(screen.getByRole("button", { name: "Close Brand, audience & voice" }));
     expect(
       screen.getByRole("combobox", { name: "Current brand" }),
     ).toHaveValue("preview-profile-allin");
@@ -383,6 +385,7 @@ describe("standalone onboarding shell", () => {
   it("isolates the wizard from app chrome/shortcuts and preserves the mounted workspace draft on cancel", async () => {
     localStorage.setItem("growth-view-v2", "setup");
     render(<GrowthApp />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Brand, audience & voice/ }));
     await waitFor(() =>
       expect(
         screen.getByRole("textbox", { name: "Who it's for" }),
@@ -394,6 +397,7 @@ describe("standalone onboarding shell", () => {
     fireEvent.change(audience, {
       target: { value: "An unsaved workspace audience" },
     });
+    fireEvent.click(screen.getByRole("button", { name: "Close Brand, audience & voice" }));
     const question = await enterOnboarding();
     expect(question).toHaveFocus();
     expect(
@@ -423,6 +427,7 @@ describe("standalone onboarding shell", () => {
     });
     fireEvent.change(search, { target: { value: "brand profile" } });
     fireEvent.keyDown(search, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: /^Brand, audience & voice/ }));
     expect(
       screen.getByRole("textbox", { name: "Who it's for" }),
     ).toHaveValue("An unsaved workspace audience");
