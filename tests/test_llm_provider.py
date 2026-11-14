@@ -433,3 +433,16 @@ def test_api_saves_replaces_and_removes_the_key_without_echoing_it(tmp_path):
         removed = session.delete("/api/llm-provider/key").json()
         assert removed["key"]["present"] is False and set(removed["routes"].values()) == {"local"}
     assert KEY not in json.dumps([row for kind in ("llm_settings", "llm_calls", "jobs") for row in app.state.store.all(kind)])
+
+
+def test_thinking_is_off_and_a_truncated_answer_is_billed_but_rejected(tmp_path):
+    truncated = {"choices": [{"message": {"content": None}, "finish_reason": "length"}],
+                 "usage": {"prompt_tokens": 5000, "completion_tokens": 1200, "cost": 0.0011}}
+    server = Server(truncated)
+    gate = gateway(tmp_path, server)
+    with pytest.raises(lp.CloudError, match="ran out of output room"):
+        gate.complete_json("brand_research", "", "x", {"type": "object"}, job_id="j")
+    assert server.bodies()[0]["reasoning"] == {"enabled": False}
+    (row,) = gate.store.all(lp.LEDGER_KIND)
+    assert row["status"] == "error" and row["cost_usd"] == 0.0011
+    assert gate.spend()["cost_usd"] == 0.0011

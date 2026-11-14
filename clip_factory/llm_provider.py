@@ -398,6 +398,9 @@ class LlmGateway:
             "max_tokens": int(max_tokens),
             "temperature": float(temperature),
             "usage": {"include": True},
+            # Haiku/Sonnet 5.5 think by default on OpenRouter; thinking tokens would consume max_tokens and
+            # leave no answer. The local path also runs with thinking off.
+            "reasoning": {"enabled": False},
         }
         if schema is not None:
             body["response_format"] = {"type": "json_schema",
@@ -418,18 +421,6 @@ class LlmGateway:
                 self._record(role, model, None, job_id, self.clock() - started, error=again.kind)
                 raise
         latency = self.clock() - started
-        try:
-            choice = data["choices"][0]
-            text = choice["message"]["content"]
-            if isinstance(text, list):  # content parts
-                text = "".join(p.get("text", "") for p in text if isinstance(p, dict))
-            if not isinstance(text, str):
-                raise TypeError
-        except (KeyError, IndexError, TypeError):
-            self._record(role, model, None, job_id, latency, error="invalid")
-            raise CloudError("OpenRouter returned no text for this request.", "invalid") from None
-        if len(text) > MAX_OUTPUT_CHARS:
-            raise CloudError("OpenRouter output exceeded the size limit.", "invalid")
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
         prompt_tokens = int(usage.get("prompt_tokens") or 0)
         completion_tokens = int(usage.get("completion_tokens") or 0)
@@ -440,12 +431,29 @@ class LlmGateway:
             price = MODELS[model]
             cost = (prompt_tokens * price["input_per_mtok"] + completion_tokens * price["output_per_mtok"]) / 1e6
             basis = "estimated_from_list_price"
+        try:
+            choice = data["choices"][0]
+            text = choice["message"]["content"]
+            if isinstance(text, list):  # content parts
+                text = "".join(p.get("text", "") for p in text if isinstance(p, dict))
+            if not isinstance(text, str) or not text.strip():
+                raise TypeError
+        except (KeyError, IndexError, TypeError, AttributeError):
+            text, problem = "", "OpenRouter returned no text for this request."
+            if isinstance(data.get("choices"), list) and data["choices"] and isinstance(data["choices"][0], dict) \
+                    and data["choices"][0].get("finish_reason") == "length":
+                problem = "The cloud model ran out of output room before answering."
+        else:
+            problem = "OpenRouter output exceeded the size limit." if len(text) > MAX_OUTPUT_CHARS else ""
         completion = Completion(
-            text=_json_text(text) if schema is not None else text, provider="openrouter", model=model,
+            text=_json_text(text) if schema is not None and text else text, provider="openrouter", model=model,
             prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, cost_usd=cost, cost_basis=basis,
             latency_seconds=latency, extra={"images_sent": len(sent_images)},
         )
-        self._record(role, model, completion, job_id, latency)
+        # Paid tokens are recorded even when the answer is unusable.
+        self._record(role, model, completion, job_id, latency, error="invalid" if problem else None)
+        if problem:
+            raise CloudError(problem, "invalid")
         return completion
 
     def _record(self, role, model, completion: Completion | None, job_id, latency, *, error: str | None = None):
@@ -468,7 +476,7 @@ class LlmGateway:
             pass
 
     def spend(self) -> dict:
-        rows = [r for r in self.store.all(LEDGER_KIND) if r.get("status") == "ok"]
+        rows = [r for r in self.store.all(LEDGER_KIND) if r.get("status") == "ok" or r.get("cost_usd")]
         return {"calls": len(rows), "cost_usd": round(sum(float(r.get("cost_usd") or 0) for r in rows), 6),
                 "prompt_tokens": sum(int(r.get("prompt_tokens") or 0) for r in rows),
                 "completion_tokens": sum(int(r.get("completion_tokens") or 0) for r in rows)}
