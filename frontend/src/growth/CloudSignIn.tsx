@@ -2,10 +2,9 @@ import { useEffect, useState, type FormEvent } from "react";
 import { cloudApi, type CloudStatus } from "./cloudApi";
 import { Field } from "./parts";
 import { Icon } from "./Icon";
-import { BrandMark } from "./BrandMark";
 
-type Mode = "sign-in" | "sign-up";
-type Phase = "checking" | "form" | "submitting" | "signed-in" | "error";
+export type Mode = "sign-in" | "sign-up";
+type Phase = "checking" | "form" | "signed-in";
 
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 72;
@@ -16,25 +15,189 @@ function message(error: unknown) {
     : "Something went wrong. Please retry.";
 }
 
-/**
- * Optional Growth Factory account. Shown before first-run onboarding when the
- * cloud is configured and nobody is signed in; "Continue offline" keeps the
- * app fully local.
- */
-export function CloudSignIn({
-  onDone,
-  onSkip,
-}: {
-  onDone: (status: CloudStatus) => void;
-  onSkip: () => void;
-}) {
-  const [phase, setPhase] = useState<Phase>("checking");
-  const [mode, setMode] = useState<Mode>("sign-in");
+/** Shared account state: email + password go straight to the local backend
+ * (which keeps the session in the Keychain); the password is never stored and
+ * is cleared after every completed request. */
+export function useCloudAccount(initialMode: Mode = "sign-in") {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const trimmed = email.trim();
+  const validEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmed);
+  const validPassword =
+    password.length >= MIN_PASSWORD && password.length <= MAX_PASSWORD;
+
+  function switchMode(next: Mode) {
+    if (submitting) return;
+    setMode(next);
+    setError("");
+    setNotice("");
+  }
+
+  /** Resolves to the signed-in status, or null when the user must act. */
+  async function submit(): Promise<CloudStatus | null> {
+    if (submitting) return null;
+    if (!validEmail) {
+      setError("Enter a valid email address.");
+      return null;
+    }
+    if (!validPassword) {
+      setError(
+        `Use a password between ${MIN_PASSWORD} and ${MAX_PASSWORD} characters.`,
+      );
+      return null;
+    }
+    setError("");
+    setNotice("");
+    setSubmitting(true);
+    try {
+      const body = { email: trimmed, password };
+      const result =
+        mode === "sign-up"
+          ? await cloudApi.signUp(body)
+          : await cloudApi.signIn(body);
+      setPassword("");
+      if (result.signed_in) return result;
+      setNotice(
+        result.message ||
+          "Check your email to confirm your account, then sign in.",
+      );
+      setMode("sign-in");
+      return null;
+    } catch (err) {
+      setError(message(err));
+      return null;
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return {
+    mode,
+    switchMode,
+    email,
+    setEmail,
+    password,
+    setPassword,
+    error,
+    setError,
+    notice,
+    submitting,
+    validEmail,
+    validPassword,
+    submit,
+  };
+}
+export type CloudAccount = ReturnType<typeof useCloudAccount>;
+
+/** Tabs, email, password and messages. The caller owns the form and buttons. */
+export function CloudAccountFields({
+  account,
+  disabled = false,
+  order = ["sign-in", "sign-up"],
+}: {
+  account: CloudAccount;
+  disabled?: boolean;
+  order?: Mode[];
+}) {
+  const labels: Record<Mode, string> = {
+    "sign-in": "Sign in",
+    "sign-up": "Create account",
+  };
+  const off = disabled || account.submitting;
+  return (
+    <>
+      <div className="gf-cloud-tabs" role="tablist" aria-label="Account options">
+        {order.map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={account.mode === id}
+            className={`gf-cloud-tab${account.mode === id ? " is-selected" : ""}`}
+            disabled={off}
+            onClick={() => account.switchMode(id)}
+          >
+            {labels[id]}
+          </button>
+        ))}
+      </div>
+      <div className="gf-form-fields gf-cloud-fields" role="tabpanel">
+        <Field label="Email">
+          {(id) => (
+            <input
+              id={id}
+              type="email"
+              autoComplete="email"
+              maxLength={254}
+              required
+              placeholder="you@example.com"
+              value={account.email}
+              disabled={off}
+              onChange={(e) => account.setEmail(e.target.value)}
+            />
+          )}
+        </Field>
+        <Field
+          label="Password"
+          hint={
+            account.mode === "sign-up"
+              ? `At least ${MIN_PASSWORD} characters.`
+              : undefined
+          }
+        >
+          {(id) => (
+            <input
+              id={id}
+              type="password"
+              autoComplete={
+                account.mode === "sign-up" ? "new-password" : "current-password"
+              }
+              minLength={MIN_PASSWORD}
+              maxLength={MAX_PASSWORD}
+              required
+              value={account.password}
+              disabled={off}
+              onChange={(e) => account.setPassword(e.target.value)}
+            />
+          )}
+        </Field>
+      </div>
+      {account.notice && (
+        <p className="gf-flow-note" role="status">
+          <Icon name="info" size={14} />
+          {account.notice}
+        </p>
+      )}
+      {account.error && (
+        <div className="gf-onboarding-recovery" role="alert">
+          <p>{account.error}</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Optional Growth Factory account, used from Workspace settings. First-run
+ * onboarding embeds the same fields as its final step instead.
+ * "Continue offline" keeps the app fully local.
+ */
+export function CloudSignIn({
+  onDone,
+  onSkip,
+  skipLabel = "Continue offline",
+}: {
+  onDone: (status: CloudStatus) => void;
+  onSkip: () => void;
+  skipLabel?: string;
+}) {
+  const [phase, setPhase] = useState<Phase>("checking");
   const [status, setStatus] = useState<CloudStatus | null>(null);
+  const account = useCloudAccount("sign-in");
 
   useEffect(() => {
     let live = true;
@@ -51,8 +214,8 @@ export function CloudSignIn({
       })
       .catch((err: unknown) => {
         if (!live) return;
-        setError(message(err));
-        setPhase("error");
+        account.setError(message(err));
+        setPhase("form");
       });
     return () => {
       live = false;
@@ -60,83 +223,21 @@ export function CloudSignIn({
     // Status is checked once per mount; callbacks are not dependencies.
   }, []);
 
-  const trimmed = email.trim();
-  const validEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmed);
-  const validPassword =
-    password.length >= MIN_PASSWORD && password.length <= MAX_PASSWORD;
-  const submitting = phase === "submitting";
-
-  function switchMode(next: Mode) {
-    if (submitting) return;
-    setMode(next);
-    setError("");
-    setNotice("");
-  }
-
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (submitting) return;
-    if (!validEmail) {
-      setError("Enter a valid email address.");
-      return;
-    }
-    if (!validPassword) {
-      setError(
-        `Use a password between ${MIN_PASSWORD} and ${MAX_PASSWORD} characters.`,
-      );
-      return;
-    }
-    setError("");
-    setNotice("");
-    setPhase("submitting");
-    try {
-      const body = { email: trimmed, password };
-      const result =
-        mode === "sign-up"
-          ? await cloudApi.signUp(body)
-          : await cloudApi.signIn(body);
-      setStatus(result);
-      if (result.signed_in) {
-        setPassword("");
-        setPhase("signed-in");
-        onDone(result);
-        return;
-      }
-      setPassword("");
-      setNotice(
-        result.message ||
-          "Check your email to confirm your account, then sign in.",
-      );
-      setMode("sign-in");
-      setPhase("form");
-    } catch (err) {
-      setError(message(err));
-      setPhase("error");
-    }
+    const result = await account.submit();
+    if (!result) return;
+    setStatus(result);
+    setPhase("signed-in");
+    onDone(result);
   }
-
-  const tabs: { id: Mode; label: string }[] = [
-    { id: "sign-in", label: "Sign in" },
-    { id: "sign-up", label: "Create account" },
-  ];
 
   return (
     <section
-      className="gf-onboarding gf-onboarding-wizard gf-cloud-sign-in"
+      className="gf-cloud-sign-in"
       aria-label="Growth Factory account"
-      aria-busy={phase === "checking" || submitting}
+      aria-busy={phase === "checking" || account.submitting}
     >
-      <header className="gf-onboarding-header">
-        <div className="gf-onboarding-brand">
-          <BrandMark />
-          <span>
-            Growth
-            <br />
-            Factory.
-          </span>
-        </div>
-      </header>
-
       {phase === "checking" && (
         <div className="gf-loading" role="status">
           <span className="gf-spinner" />
@@ -151,115 +252,40 @@ export function CloudSignIn({
         </p>
       )}
 
-      {(phase === "form" || phase === "submitting" || phase === "error") && (
-        <form className="gf-onboarding-form" onSubmit={submit} noValidate>
-          <div className="gf-onboarding-scroll">
-            <div className="gf-onboarding-step">
-              <h1>
-                {mode === "sign-in"
-                  ? "Sign in to Growth Factory"
-                  : "Create your Growth Factory account"}
-              </h1>
-              <p className="gf-onboarding-step-description">
-                Your footage and workspace stay on this Mac. An account links
-                this Mac to your Growth Factory workspace.
-              </p>
-              <div
-                className="gf-cloud-tabs"
-                role="tablist"
-                aria-label="Account options"
-              >
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={mode === tab.id}
-                    className={`gf-button ${mode === tab.id ? "secondary" : "ghost"} compact`}
-                    disabled={submitting}
-                    onClick={() => switchMode(tab.id)}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <div className="gf-form-fields" role="tabpanel">
-                <Field label="Email">
-                  {(id) => (
-                    <input
-                      id={id}
-                      type="email"
-                      autoComplete="email"
-                      maxLength={254}
-                      required
-                      value={email}
-                      disabled={submitting}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
-                  )}
-                </Field>
-                <Field
-                  label="Password"
-                  hint={
-                    mode === "sign-up"
-                      ? `At least ${MIN_PASSWORD} characters.`
-                      : undefined
-                  }
-                >
-                  {(id) => (
-                    <input
-                      id={id}
-                      type="password"
-                      autoComplete={
-                        mode === "sign-up" ? "new-password" : "current-password"
-                      }
-                      minLength={MIN_PASSWORD}
-                      maxLength={MAX_PASSWORD}
-                      required
-                      value={password}
-                      disabled={submitting}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
-                  )}
-                </Field>
-              </div>
-            </div>
-            {notice && (
-              <p className="gf-flow-note" role="status">
-                <Icon name="info" size={14} />
-                {notice}
-              </p>
-            )}
-            {error && (
-              <div className="gf-onboarding-recovery" role="alert">
-                <p>{error}</p>
-              </div>
-            )}
-          </div>
-          <footer className="gf-onboarding-actions">
+      {phase === "form" && (
+        <form className="gf-cloud-form" onSubmit={submit} noValidate>
+          <h2>
+            {account.mode === "sign-in"
+              ? "Sign in to Growth Factory"
+              : "Create your Growth Factory account"}
+          </h2>
+          <p>Your footage stays on this Mac. An account keeps this workspace linked to you.</p>
+          <CloudAccountFields account={account} />
+          <footer className="gf-cloud-actions">
             <button
               type="button"
-              className="gf-button ghost"
-              disabled={submitting}
+              className="gf-button ghost compact"
+              disabled={account.submitting}
               onClick={onSkip}
             >
-              Continue offline
+              {skipLabel}
             </button>
             <button
               type="submit"
-              className="gf-button gf-onboarding-cta"
-              data-error={!!error}
-              disabled={submitting || !validEmail || !validPassword}
+              className="gf-button compact"
+              disabled={
+                account.submitting ||
+                !account.validEmail ||
+                !account.validPassword
+              }
             >
-              <span className="gf-onboarding-cta-label">
-                {submitting
-                  ? mode === "sign-in"
-                    ? "Signing in…"
-                    : "Creating account…"
-                  : mode === "sign-in"
-                    ? "Sign in"
-                    : "Create account"}
-              </span>
+              {account.submitting
+                ? account.mode === "sign-in"
+                  ? "Signing in…"
+                  : "Creating account…"
+                : account.mode === "sign-in"
+                  ? "Sign in"
+                  : "Create account"}
             </button>
           </footer>
         </form>
@@ -298,6 +324,7 @@ export function CloudAccountRow({ onSignIn }: { onSignIn?: () => void }) {
             .then(setStatus, (err: unknown) => setError(message(err)));
         }}
         onSkip={() => setSigningIn(false)}
+        skipLabel="Cancel"
       />
     );
 

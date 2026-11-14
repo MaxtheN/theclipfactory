@@ -10,7 +10,7 @@ import { Setup } from "./Setup";
 import { Research } from "./Research";
 import { Studio } from "./Studio";
 import { Results } from "./Results";
-import { Onboarding } from "./Onboarding";
+import { Onboarding, OFFLINE_KEY } from "./Onboarding";
 import { FactoryHome, type OpenProduction } from "./FactoryHome";
 import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
@@ -30,7 +30,7 @@ import "./factory-flow.css";
 import "./landing.css";
 import "./desktop-shell.css";
 import "./navigation.css";
-import { CloudSignIn } from "./CloudSignIn";
+import { cloudApi } from "./cloudApi";
 
 const views = {
   factory: {
@@ -92,15 +92,9 @@ export function GrowthApp() {
   const w = useCampaignWorkspace(factory.refresh);
   const [stage, setStage] = useState<Stage>(storedView);
   const [tools, setTools] = useState(false);
-  const [cloudGate, setCloudGate] = useState<"pending" | "done">(() => {
-    try {
-      return localStorage.getItem("gf.cloud.offline") === "1"
-        ? "done"
-        : "pending";
-    } catch {
-      return "pending";
-    }
-  });
+  // Account creation is the last onboarding step, asked only when the cloud
+  // is configured, nobody is signed in and the creator hasn't chosen offline.
+  const [askAccount, setAskAccount] = useState(false);
   const [creating, setCreating] = useState(
     () => reviewPreview && window.location.hash === "#onboarding",
   );
@@ -138,6 +132,22 @@ export function GrowthApp() {
         ? "setup"
         : stage;
 
+  useEffect(() => {
+    if (!onboarding) return;
+    let live = true;
+    try {
+      if (localStorage.getItem(OFFLINE_KEY) === "1") return;
+    } catch {
+      /* preference only */
+    }
+    cloudApi
+      .status()
+      .then((s) => live && setAskAccount(s.configured && !s.signed_in))
+      .catch(() => live && setAskAccount(false));
+    return () => {
+      live = false;
+    };
+  }, [onboarding, onboardingSession]);
   useEffect(() => {
     function shortcut(event: KeyboardEvent) {
       if (
@@ -526,34 +536,21 @@ export function GrowthApp() {
                 </div>
               )}
               <div className="gf-stage" hidden={!onboarding}>
-                {cloudGate === "pending" && !usable && !creating ? (
-                  <CloudSignIn
-                    onDone={() => setCloudGate("done")}
-                    onSkip={() => {
-                      try {
-                        localStorage.setItem("gf.cloud.offline", "1");
-                      } catch {
-                        /* preference only */
-                      }
-                      setCloudGate("done");
-                    }}
-                  />
-                ) : (
-                  <Onboarding
-                    key={onboardingSession}
-                    w={w}
-                    active={onboarding && !tools}
-                    onBusyChange={setOnboardingBusy}
-                    onCancel={usable ? () => setCreating(false) : undefined}
-                    onComplete={() => {
-                      setCreating(false);
-                      setPreferredSource(undefined);
-                      setPreferredClip(undefined);
-                      setPreferredMode(undefined);
-                      go("factory");
-                    }}
-                  />
-                )}
+                <Onboarding
+                  key={onboardingSession}
+                  w={w}
+                  active={onboarding && !tools}
+                  askAccount={askAccount}
+                  onBusyChange={setOnboardingBusy}
+                  onCancel={usable ? () => setCreating(false) : undefined}
+                  onComplete={() => {
+                    setCreating(false);
+                    setPreferredSource(undefined);
+                    setPreferredClip(undefined);
+                    setPreferredMode(undefined);
+                    go("factory");
+                  }}
+                />
               </div>
               <div
                 className="gf-stage"

@@ -765,13 +765,7 @@ export async function previewRequest<T>(
       ],
       sources: [],
     } as T;
-  if (path === "/api/cloud/status")
-    return {
-      configured: false,
-      signed_in: false,
-      email: null,
-      workspace_id: null,
-    } as T;
+  if (path.startsWith("/api/cloud/")) return previewCloud(path, options) as T;
   const s = state();
   advance(s);
   let body: Record<string, unknown> = {};
@@ -791,4 +785,32 @@ export async function previewRequest<T>(
   );
   persist(s);
   return copy(result) as T;
+}
+
+/** Review preview of the optional account. Off unless localStorage
+ * "gf.preview.cloud" is "1"; then sign-in/up succeed locally. The password in
+ * the request body is never read or kept. */
+let previewCloudEmail: string | null = null;
+function previewCloud(path: string, options: RequestInit) {
+  let configured = false;
+  try {
+    configured = localStorage.getItem("gf.preview.cloud") === "1";
+  } catch {
+    /* preview preference only */
+  }
+  if (configured && (path === "/api/cloud/sign-in" || path === "/api/cloud/sign-up")) {
+    try {
+      const body = JSON.parse(String(options.body ?? "{}")) as { email?: unknown };
+      previewCloudEmail = typeof body.email === "string" ? body.email : null;
+    } catch {
+      previewCloudEmail = null;
+    }
+  }
+  if (path === "/api/cloud/sign-out") previewCloudEmail = null;
+  return {
+    configured,
+    signed_in: configured && !!previewCloudEmail,
+    email: configured ? previewCloudEmail : null,
+    workspace_id: configured && previewCloudEmail ? "preview-workspace" : null,
+  };
 }

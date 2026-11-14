@@ -102,6 +102,32 @@ function next() {
 }
 
 describe("standalone onboarding shell", () => {
+  it("starts a new workspace with the questions and leaves the account for the last step", async () => {
+    localStorage.setItem("gf.preview.cloud", "1");
+    const campaigns = vi
+      .spyOn(workspaceApi, "campaigns")
+      .mockResolvedValueOnce([]);
+    try {
+      render(<GrowthApp />);
+      await screen.findByRole("heading", {
+        name: "Who are we making this for?",
+      });
+      expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: /Sign in to Growth Factory/ }),
+      ).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(
+          screen.getByRole("progressbar", { name: "Setup progress" }),
+        ).toHaveAttribute("aria-valuemax", "5"),
+      );
+      expect(
+        screen.getByRole("button", { name: "Go to Your account" }),
+      ).toBeDisabled();
+    } finally {
+      campaigns.mockRestore();
+    }
+  });
   it("holds the natural first-run launch screen after the refreshed campaign becomes usable", async () => {
     vi.stubGlobal(
       "matchMedia",

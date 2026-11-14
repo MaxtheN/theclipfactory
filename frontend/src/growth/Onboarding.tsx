@@ -13,6 +13,8 @@ import { Disclosure, Field } from "./parts";
 import { Icon } from "./Icon";
 import { BrandMark } from "./BrandMark";
 import { LaunchTransition, type LaunchPhase } from "./LaunchTransition";
+import { CloudAccountFields, useCloudAccount } from "./CloudSignIn";
+import type { CloudStatus } from "./cloudApi";
 
 const outcomes = [
   {
@@ -70,12 +72,15 @@ const voices = [
     accent: "171, 201, 181",
   },
 ] as const;
-const steps = [
+const baseSteps = [
   "Your audience",
   "Your outcome",
   "Your voice",
   "Review & launch",
 ];
+const REVIEW = 3;
+/** Set once the creator chooses to stay local, so later workspaces skip the ask. */
+export const OFFLINE_KEY = "gf.cloud.offline";
 type Outcome = (typeof outcomes)[number]["id"] | "other" | "discovery" | "";
 type Voice = (typeof voices)[number]["id"] | "other";
 
@@ -148,13 +153,25 @@ export function Onboarding({
   onCancel,
   onBusyChange,
   active = true,
+  askAccount = false,
 }: {
   w: Workspace;
   onComplete: () => void;
   onCancel?: () => void;
   onBusyChange?: (busy: boolean) => void;
   active?: boolean;
+  /** Cloud is configured and nobody is signed in: end with an account step. */
+  askAccount?: boolean;
 }) {
+  const steps = askAccount
+    ? [...baseSteps.slice(0, REVIEW), "Review", "Your account"]
+    : baseSteps;
+  const progressLabels = askAccount
+    ? ["Audience", "Outcome", "Voice", "Review", "Account"]
+    : ["Audience", "Outcome", "Voice", "Launch"];
+  const last = steps.length - 1;
+  const account = useCloudAccount("sign-up");
+  const [signedIn, setSignedIn] = useState<CloudStatus | null>(null);
   const [name, setName] = useState("");
   const [audience, setAudience] = useState("");
   const [outcome, setOutcome] = useState<Outcome>("");
@@ -288,7 +305,7 @@ export function Onboarding({
       return;
     }
     animateClick();
-    const next = editingReview ? 3 : Math.min(3, step + 1);
+    const next = editingReview ? REVIEW : Math.min(last, step + 1);
     setFurthest((value) => Math.max(value, next));
     move(next);
   }
@@ -477,12 +494,16 @@ export function Onboarding({
     "What are we working toward?",
     "How should your edits feel?",
     "Review your workspace",
+    "Save your workspace to your account",
   ];
   const descriptions = [
     "Tell us who you make this for. We’ll use it to guide your edits.",
     "One clear goal helps every edit work toward the same thing.",
     "Choose the approach that feels most like you. You can refine it later.",
-    "Check your choices, then save them and open Factory.",
+    askAccount
+      ? "Check your choices. Next, save them to your account."
+      : "Check your choices, then save them and open Factory.",
+    "Your footage stays on this Mac. An account keeps this workspace yours.",
   ];
   function goToProgress(index: number) {
     if (locked || index > furthest) return;
@@ -490,17 +511,35 @@ export function Onboarding({
       for (let earlier = 0; earlier < index; earlier++) {
         const message = problem(earlier);
         if (message) {
-          move(earlier, furthest === 3);
+          move(earlier, furthest >= REVIEW);
           setStepError(message);
           return;
         }
       }
     }
-    move(index, furthest === 3 && index < 3);
+    move(index, furthest >= REVIEW && index < REVIEW);
+  }
+  async function saveToAccount() {
+    if (locked || account.submitting) return;
+    if (signedIn) return void create();
+    const result = await account.submit();
+    if (!result) return;
+    setSignedIn(result);
+    void create();
+  }
+  function continueOffline() {
+    if (locked || account.submitting) return;
+    try {
+      localStorage.setItem(OFFLINE_KEY, "1");
+    } catch {
+      /* preference only */
+    }
+    void create();
   }
   function submit() {
-    if (step === 3) void create();
-    else advance();
+    if (step < last) advance();
+    else if (askAccount) void saveToAccount();
+    else void create();
   }
 
   return (
@@ -522,19 +561,20 @@ export function Onboarding({
         className="gf-onboarding-progress-wrap"
         aria-label="Workspace setup"
         hidden={!!launchPhase}
+        style={{ "--onboarding-steps": steps.length } as CSSProperties}
       >
         <div
           className="gf-onboarding-track"
           role="progressbar"
           aria-label="Setup progress"
           aria-valuemin={1}
-          aria-valuemax={4}
+          aria-valuemax={steps.length}
           aria-valuenow={step + 1}
-          aria-valuetext={`Step ${step + 1} of 4: ${steps[step]}`}
+          aria-valuetext={`Step ${step + 1} of ${steps.length}: ${steps[step]}`}
         >
           <span
             className="gf-onboarding-track-fill"
-            style={{ width: `${(step / 3) * 100}%` }}
+            style={{ width: `${(step / last) * 100}%` }}
           />
         </div>
         <ol className="gf-onboarding-progress" aria-label="Onboarding progress">
@@ -564,7 +604,7 @@ export function Onboarding({
                   )}
                 </span>
                 <span className="gf-onboarding-progress-label">
-                  {["Audience", "Outcome", "Voice", "Launch"][index]}
+                  {progressLabels[index]}
                 </span>
               </button>
             </li>
@@ -600,7 +640,7 @@ export function Onboarding({
           tabIndex={0}
         >
           <p className="gf-command-sr-only" role="status">
-            Step {step + 1} of 4: {steps[step]}
+            Step {step + 1} of {steps.length}: {steps[step]}
           </p>
           <section
             key={step}
@@ -608,7 +648,8 @@ export function Onboarding({
             aria-labelledby={`${choiceId}-step-${step}`}
           >
             <span className="gf-onboarding-step-count">
-              {String(step + 1).padStart(2, "0")} / 04
+              {String(step + 1).padStart(2, "0")} /{" "}
+              {String(steps.length).padStart(2, "0")}
             </span>
             <h1 id={`${choiceId}-step-${step}`} ref={heading} tabIndex={-1}>
               {stepTitles[step]}
@@ -739,7 +780,7 @@ export function Onboarding({
                     setOutcome("discovery");
                     setFurthest((v) => Math.max(v, 2));
                     animateClick();
-                    move(editingReview ? 3 : 2);
+                    move(editingReview ? REVIEW : 2);
                   }}
                 >
                   Explore first
@@ -898,10 +939,41 @@ export function Onboarding({
                   </p>
                 </Disclosure>
                 <p className="gf-onboarding-review-note">
-                  Launch saves your choices and opens Factory. You choose when to
-                  add footage and start production.
+                  {askAccount
+                    ? "Next, save this workspace to your account, or keep it on this Mac only."
+                    : "Launch saves your choices and opens Factory. You choose when to add footage and start production."}
                 </p>
               </>
+            )}
+
+            {step === 4 && askAccount && (
+              <div className="gf-onboarding-account">
+                {signedIn ? (
+                  <p className="gf-flow-note" role="status">
+                    <Icon name="check" size={14} />
+                    Signed in as {signedIn.email}.
+                  </p>
+                ) : (
+                  <CloudAccountFields
+                    account={account}
+                    disabled={locked}
+                    order={["sign-up", "sign-in"]}
+                  />
+                )}
+                {!signedIn && (
+                  <p className="gf-onboarding-offline">
+                    <span>Not now?</span>
+                    <button
+                      type="button"
+                      className="gf-button ghost compact"
+                      disabled={locked || account.submitting}
+                      onClick={continueOffline}
+                    >
+                      Continue offline
+                    </button>
+                  </p>
+                )}
+              </div>
             )}
           </section>
 
@@ -978,18 +1050,37 @@ export function Onboarding({
             className="gf-button gf-onboarding-cta"
             data-error={!!(stepError || error)}
             data-launching={launching}
-            disabled={busy || !!uncertain || w.busy || w.loading}
+            disabled={
+              busy ||
+              !!uncertain ||
+              w.busy ||
+              w.loading ||
+              (step === last &&
+                askAccount &&
+                !signedIn &&
+                (account.submitting ||
+                  !account.validEmail ||
+                  !account.validPassword))
+            }
           >
             <span className="gf-onboarding-cta-label">
               {busy
                 ? "Saving workspace…"
-                : step === 3
-                  ? campaign
-                    ? "Open workspace"
-                    : "Launch workspace"
-                  : editingReview
-                    ? "Review changes"
-                    : "Continue"}
+                : account.submitting
+                  ? account.mode === "sign-up"
+                    ? "Creating account…"
+                    : "Signing in…"
+                  : step === last
+                    ? campaign
+                      ? "Open workspace"
+                      : askAccount && !signedIn
+                        ? account.mode === "sign-up"
+                          ? "Create account & launch"
+                          : "Sign in & launch"
+                        : "Launch workspace"
+                    : editingReview
+                      ? "Review changes"
+                      : "Continue"}
             </span>
             <span
               key={flight}
