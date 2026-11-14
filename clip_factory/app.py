@@ -2698,4 +2698,14 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     # Per-clip Instagram caption copy (model with a labelled template fallback); never posts.
     install_post_copy(app, store)
 
+    from .brand_research_api import BrandResearchService, LocalBrandModel
+    from .brand_research_api import install as install_brand_research_api
+
+    # Onboarding "draft my brand from my website": guarded reads on a light thread, the admission-checked
+    # local model on the heavy worker, drafts in memory only until the creator confirms them.
+    app.state.brand_research = BrandResearchService(
+        lambda: app.state.jobs, model_factory=lambda job_id: LocalBrandModel(app, runtime, job_id)
+    )
+    install_brand_research_api(app, app.state.brand_research)
+
     return app

@@ -183,6 +183,9 @@ def test_extract_visible_text_metadata_and_social_links():
     assert page.theme_color == "#1a2b3c" and page.css_colors == {"accent": "#f5a623"}
     social = br.social_links([page])
     assert [s["network"] for s in social] == ["Instagram", "X", "YouTube"]  # at most three
+    episode = br.extract("https://signal.example.com/", '<a href="https://open.spotify.com/episode/123">ep</a>'
+                         '<a href="https://open.spotify.com/show/abc">show</a>')
+    assert br.social_links([episode]) == [{"network": "Spotify", "url": "https://open.spotify.com/show/abc"}]
 
 
 def test_page_selection_same_site_brand_pages_only():
@@ -480,3 +483,16 @@ def test_local_model_uses_admission_guard_and_bounded_context():
     assert args == ("job1", "ollama:qwen3-vl:4b-instruct", "generate")
     assert kwargs["context_tokens"] == 8192 and kwargs["max_tokens"] == br.MAX_OUTPUT_TOKENS
     assert kwargs["schema"] == br.DRAFT_SCHEMA
+
+
+def test_app_installs_authenticated_brand_research_routes(tmp_path):
+    from clip_factory.app import create_app
+
+    app = create_app(tmp_path, token="local-test")
+    with TestClient(app, base_url="http://127.0.0.1", headers={"X-Clip-Token": "local-test"}) as session:
+        assert session.post("/api/brand-research", json={"url": "allin.com"},
+                            headers={"X-Clip-Token": "wrong"}).status_code == 401
+        assert session.get("/api/brand-research/x", headers={"X-Clip-Token": "wrong"}).status_code == 401
+        assert session.post("/api/brand-research", json={"url": "ftp://allin.com"}).status_code == 422
+        assert session.get("/api/brand-research/missing").status_code == 404
+        assert isinstance(app.state.brand_research, BrandResearchService)

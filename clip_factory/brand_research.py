@@ -81,6 +81,7 @@ SOCIAL_HOSTS = {
     "tiktok.com": "TikTok", "linkedin.com": "LinkedIn", "facebook.com": "Facebook",
     "threads.net": "Threads", "open.spotify.com": "Spotify", "podcasts.apple.com": "Apple Podcasts",
 }
+PROFILE_PATHS = {"open.spotify.com": "/show/", "podcasts.apple.com": "/"}
 HEX_COLOR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 
@@ -465,6 +466,8 @@ def social_links(pages: list[Page]) -> list[dict]:
             name = SOCIAL_HOSTS.get(host)
             if not name or parts.scheme != "https" or len(parts.path.strip("/")) < 2:
                 continue
+            if PROFILE_PATHS.get(host) and not parts.path.startswith(PROFILE_PATHS[host]):
+                continue  # an episode or a single post is not the brand's profile
             clean = urlunsplit(("https", parts.netloc, parts.path, "", ""))
             if name in seen:
                 continue
