@@ -22,6 +22,7 @@ export const objectives = [
   "custom",
 ] as const;
 export interface Settings {
+  production_strategy?: "team" | "baseline";
   brand: string;
   objective: string;
   language: string;
@@ -75,6 +76,9 @@ export interface Video {
   status?: string;
 }
 export interface Clip {
+  team_run_id?: string | null;
+  team_review_status?: "pass" | "fail" | "unknown" | null;
+  team_findings?: unknown;
   id: string;
   video_id: string;
   name: string;
@@ -145,4 +149,49 @@ export interface AdInsights {
   source?: unknown;
   attribution?: unknown;
   note?: string;
+}
+
+export interface TeamTask {
+  id: string;
+  role: string;
+  label: string;
+  kind: "agent" | "tool";
+  status: string;
+  iteration: number;
+  input_refs: string[];
+  output: JsonObject | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+export interface TeamRun {
+  id: string;
+  video_id: string;
+  mode: "team" | "baseline";
+  model_id: string;
+  objective: string;
+  status: string;
+  job_id: string;
+  revision_budget: number;
+  revision_count: number;
+  stop_reason: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  elapsed_seconds: number | null;
+  resource_observations: unknown;
+  clip_ids: string[];
+  plan: unknown;
+  context: unknown;
+  permissions: { publish: false; ads: false };
+  tasks: TeamTask[];
+}
+export interface TeamComparison {
+  video_id: string;
+  runs: Array<Pick<TeamRun, "id" | "mode" | "status" | "model_id" | "objective" | "elapsed_seconds" | "clip_ids" | "resource_observations"> & {
+    feedback: unknown;
+    outcomes: unknown;
+    comparable: boolean | null;
+  }>;
+  notes: string[];
 }

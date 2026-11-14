@@ -7,6 +7,7 @@ import { Empty, Field, Section, ReadOnlyValue } from "../components/ui";
 export function editableSettings(s: Settings): Settings {
   return {
     brand: s.brand ?? "",
+    production_strategy: s.production_strategy === "baseline" ? "baseline" : "team",
     objective: s.objective ?? "discovery",
     language: s.language ?? "en",
     autonomy: s.autonomy ?? "review",
@@ -95,6 +96,12 @@ export function SettingsPage({ state }: { state: FactoryState }) {
                   {o}
                 </option>
               ))}
+            </select>
+          </Field>
+          <Field label="Production strategy" hint="Team is the backend default. Explicit Factory buttons can override this for a run.">
+            <select value={draft.production_strategy ?? "team"} onChange={(e) => update("production_strategy", e.target.value as "team" | "baseline")}>
+              <option value="team">Team — bounded collaborative review</option>
+              <option value="baseline">Baseline — existing variant pipeline</option>
             </select>
           </Field>
           <Field

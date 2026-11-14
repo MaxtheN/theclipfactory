@@ -1295,3 +1295,12 @@ textarea {
   max-width: 320px;
   overflow-wrap: anywhere;
 }
+
+/* Bounded, inspectable team artifacts follow the local studio palette. */
+.ledger-task { border: 1px solid var(--border, #ddd); border-radius: 10px; padding: 16px; margin-top: 16px; min-width: 0; }
+.artifact-data { margin: 8px 0; padding: 8px; max-height: 360px; overflow: auto; border-left: 2px solid var(--border, #ddd); }
+.artifact-data > div { margin: 6px 0; }
+.artifact-data dt { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.artifact-data dd { margin: 4px 0 8px 12px; min-width: 0; }
+.artifact-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ledger-task h4 { margin: 0; }
