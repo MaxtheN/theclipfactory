@@ -45,6 +45,7 @@ export interface Model {
   status?: string;
 }
 export interface Job {
+  context?: unknown;
   id: string;
   kind: string;
   status: string;
@@ -64,6 +65,7 @@ export interface Candidate {
   objective?: string;
 }
 export interface Video {
+  has_audio?: boolean | null;
   id: string;
   name: string;
   duration?: number | null;
@@ -77,7 +79,7 @@ export interface Video {
 }
 export interface Clip {
   team_run_id?: string | null;
-  team_review_status?: "pass" | "fail" | "unknown" | null;
+  team_review_status?: "pass" | "fail" | "unknown" | "not_applicable" | null;
   team_findings?: unknown;
   id: string;
   video_id: string;

@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { endpoint, post, put, remove } from "../api";
-import type { Clip } from "../types";
+import type { Clip, Job } from "../types";
 import type { FactoryState } from "../useFactory";
 import { Badge, Field, duration } from "./ui";
 import { StructuredData } from "./StructuredData";
+import {
+  activeJob,
+  jobContextId,
+  sourceHasActiveJob,
+} from "../productionPreflight";
 export function ClipReview({
   state,
   clip,
@@ -11,13 +16,84 @@ export function ClipReview({
   state: FactoryState;
   clip: Clip;
 }) {
-  const reviewBlocked =
-    !!clip.team_run_id && clip.team_review_status !== "pass";
+  const teamReviewed =
+    !!clip.team_run_id && clip.team_review_status !== "not_applicable";
   const [caption, setCaption] = useState(clip.caption || "");
   const [hook, setHook] = useState(clip.hook || "");
   const [rating, setRating] = useState("3");
   const [notes, setNotes] = useState("");
   const [coverError, setCoverError] = useState(false);
+  const [recheckJob, setRecheckJob] = useState<Job | null>(null);
+  const [rechecking, setRechecking] = useState(false);
+  const [recheckError, setRecheckError] = useState("");
+  const recheckLock = useRef(false);
+  const dirty = hook !== (clip.hook || "") || caption !== (clip.caption || "");
+  const currentReviewJob =
+    state.data.jobs.find((job) => job.id === recheckJob?.id) ?? recheckJob;
+  const sourceBusy = sourceHasActiveJob(state.data.jobs, clip.video_id);
+  const clipBusy = state.data.jobs.some(
+    (job) => activeJob(job) && jobContextId(job, "clip_id") === clip.id,
+  );
+  const reviewActive =
+    rechecking || (currentReviewJob != null && activeJob(currentReviewJob));
+  useEffect(() => {
+    setRecheckJob(null);
+    setRecheckError("");
+  }, [clip.id]);
+  const reviewStale =
+    state.loading || !!state.errors.clips || !!state.errors.jobs;
+  const reviewBlocked =
+    teamReviewed &&
+    (clip.team_review_status !== "pass" ||
+      dirty ||
+      reviewActive ||
+      clipBusy ||
+      sourceBusy ||
+      reviewStale);
+  const recheckReady =
+    teamReviewed &&
+    !dirty &&
+    !reviewActive &&
+    !sourceBusy &&
+    !clipBusy &&
+    !reviewStale &&
+    !state.errors.system &&
+    !state.errors.models &&
+    !state.errors.videos &&
+    state.data.system?.model_runtime === true;
+  async function recheck() {
+    if (!recheckReady || recheckLock.current) return;
+    recheckLock.current = true;
+    setRechecking(true);
+    setRecheckError("");
+    try {
+      await state.run(async () => {
+        try {
+          const job = await post<Job>(
+            endpoint("clips", clip.id, "team-review"),
+            {},
+          );
+          if (
+            !job ||
+            typeof job.id !== "string" ||
+            typeof job.status !== "string"
+          )
+            throw new Error(
+              "Invalid critique job response. Refresh the queue to check whether the request was accepted.",
+            );
+          setRecheckJob(job);
+        } catch (e) {
+          setRecheckError(
+            e instanceof Error ? e.message : "Critique request failed.",
+          );
+          throw e;
+        }
+      }, "Team critique recheck queued for saved content using the run model. No verdict or approval is implied; inspect job progress and refreshed critic findings.");
+    } finally {
+      recheckLock.current = false;
+      setRechecking(false);
+    }
+  }
   useEffect(() => {
     setCaption(clip.caption || "");
     setHook(clip.hook || "");
@@ -62,11 +138,94 @@ export function ClipReview({
               Team run: {clip.team_run_id} · Critic review:{" "}
               {clip.team_review_status ?? "unknown"}
             </p>
-            {reviewBlocked && (
+            {teamReviewed && clip.team_review_status !== "pass" && (
               <p role="alert">
                 Unresolved critic warnings: failed or unknown review prevents
                 approval. Review the ledger’s checks, evidence and revisions.
               </p>
+            )}
+            {teamReviewed && dirty && (
+              <p role="alert">
+                Hook or caption differs from the reviewed content. Save edits,
+                then recheck team critique before approval.
+              </p>
+            )}
+            {clip.team_review_status === "not_applicable" && (
+              <p className="muted">
+                Baseline output: team critique is not applicable. Human approval
+                is still required.
+              </p>
+            )}
+            {teamReviewed && (
+              <>
+                <button
+                  className="secondary small"
+                  disabled={state.busy || !recheckReady}
+                  onClick={() => void recheck()}
+                >
+                  {rechecking
+                    ? "Requesting critique…"
+                    : "Recheck team critique"}
+                </button>
+                <p className="muted">
+                  Recheck runs one explicit critic on saved clip content using
+                  the run model. Backend verifies model installation and ledger
+                  eligibility; there is no automatic pass or approval.
+                </p>
+                {dirty && (
+                  <p className="muted">
+                    Save edits before requesting a recheck.
+                  </p>
+                )}
+                {!recheckReady && !dirty && (
+                  <p className="muted">
+                    Recheck requires a ready local runtime, fresh
+                    source/model/clip/queue data and no active task for this
+                    source or clip. Backend also requires a finished, cancelled
+                    or interrupted ledger.
+                  </p>
+                )}
+                {recheckError && (
+                  <p role="alert" className="error-text">
+                    {recheckError}
+                  </p>
+                )}
+                {currentReviewJob && (
+                  <div role="status">
+                    <p>
+                      Critique job: {currentReviewJob.status} ·{" "}
+                      {currentReviewJob.id}
+                    </p>
+                    {activeJob(currentReviewJob) && (
+                      <progress
+                        aria-label="Team critique progress"
+                        max="100"
+                        value={
+                          typeof currentReviewJob.progress === "number" &&
+                          Number.isFinite(currentReviewJob.progress)
+                            ? Math.min(
+                                100,
+                                Math.max(0, currentReviewJob.progress),
+                              )
+                            : undefined
+                        }
+                      />
+                    )}
+                    {currentReviewJob.message && (
+                      <p>{currentReviewJob.message}</p>
+                    )}
+                    {currentReviewJob.error && (
+                      <p role="alert" className="error-text">
+                        {currentReviewJob.error}
+                      </p>
+                    )}
+                    <p>
+                      Only refreshed critic findings determine review status.
+                      Every clip still needs human approval.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
             <details>
               <summary>Team critic findings</summary>
@@ -123,11 +282,13 @@ export function ClipReview({
         <div className="actions">
           <button
             className="secondary small"
-            disabled={state.busy}
+            disabled={state.busy || clipBusy || reviewActive}
             onClick={() =>
               void state.run(
                 () => put(endpoint("clips", clip.id), { hook, caption }),
-                "Clip edits saved.",
+                teamReviewed
+                  ? "Clip edits saved. Changed content invalidates team critique; recheck before approval."
+                  : "Clip edits saved.",
               )
             }
           >
@@ -135,16 +296,21 @@ export function ClipReview({
           </button>
           <button
             className="small"
-            disabled={state.busy || (!clip.approved && reviewBlocked)}
+            disabled={
+              state.busy || clipBusy || (!clip.approved && reviewBlocked)
+            }
             onClick={() => {
               if (!clip.approved && reviewBlocked) return;
               void state.run(
                 () =>
-                  put(endpoint("clips", clip.id), {
-                    hook,
-                    caption,
-                    approved: !clip.approved,
-                  }),
+                  put(
+                    endpoint("clips", clip.id),
+                    clip.approved
+                      ? { approved: false }
+                      : teamReviewed
+                        ? { approved: true }
+                        : { hook, caption, approved: true },
+                  ),
                 clip.approved
                   ? "Approval removed."
                   : "Clip approved. Publishing still requires explicit setup.",

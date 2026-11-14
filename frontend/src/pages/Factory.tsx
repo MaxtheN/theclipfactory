@@ -8,6 +8,7 @@ import { Jobs } from "../components/Jobs";
 import { ClipReview } from "../components/ClipReview";
 import { TeamLedger } from "../components/TeamLedger";
 import { TeamComparisons } from "../components/TeamComparisons";
+import { hasTranscript, sourceHasActiveJob } from "../productionPreflight";
 export function getCandidates(analysis: unknown): Candidate[] {
   let value = analysis;
   if (typeof value === "string") {
@@ -67,14 +68,25 @@ function Editor({
     (m) =>
       m.installed === true && (m.id.startsWith("qwen") || m.kind === "llm"),
   );
-  const productionReady =
+  const sourceBusy = sourceHasActiveJob(state.data.jobs, video.id);
+  const analysisReady =
     !state.loading &&
     !state.errors.models &&
-    !state.errors.settings &&
     !state.errors.videos &&
+    !state.errors.jobs &&
     !state.errors.system &&
+    !sourceBusy &&
     state.data.system?.model_runtime === true &&
     installed.some((m) => m.id === model);
+  const needsWhisper =
+    video.has_audio === true && !hasTranscript(video.transcript);
+  const whisperInstalled = state.data.models.some(
+    (m) => m.id === "whisper-turbo" && m.installed === true,
+  );
+  const productionReady =
+    analysisReady &&
+    !state.errors.settings &&
+    (!needsWhisper || whisperInstalled);
   const analysisJob = state.data.jobs.find(
     (job) =>
       job.kind === "analyze" &&
@@ -160,20 +172,17 @@ function Editor({
             </select>
           </Field>
           <button
-            disabled={
-              state.busy ||
-              !!state.errors.models ||
-              !installed.some((m) => m.id === model)
-            }
-            onClick={() =>
+            disabled={state.busy || !analysisReady}
+            onClick={() => {
+              if (!analysisReady) return;
               void state.run(
                 () =>
                   post(endpoint("videos", video.id, "analyze"), {
                     model_id: model,
                   }),
                 "Analysis queued. Candidates appear after the local model finishes.",
-              )
-            }
+              );
+            }}
           >
             Analyze video
           </button>
@@ -252,10 +261,29 @@ function Editor({
           analysis model and ready runtime; audio transcription also requires
           Whisper. Clips still need your review.
         </p>
-        {!productionReady && (
+        {!analysisReady && (
           <p className="muted">
-            Set up the runtime and install the selected analysis model in Models
-            to enable variant production.
+            Analysis and production require fresh source, queue and model data,
+            a ready runtime, an installed selected model, and no active job for
+            this source.
+          </p>
+        )}
+        {sourceBusy && (
+          <p className="render-warning">
+            This source already has a queued or running task. Wait for its final
+            state before starting another.
+          </p>
+        )}
+        {needsWhisper && !whisperInstalled && (
+          <p className="render-warning">
+            Audio source has no transcript. Install whisper-turbo in Models
+            before production.
+          </p>
+        )}
+        {typeof video.has_audio !== "boolean" && (
+          <p className="muted">
+            Audio prerequisites checked by backend. Source audio availability is
+            not reported.
           </p>
         )}
         <h3>Suggested moments</h3>
