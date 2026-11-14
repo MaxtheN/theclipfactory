@@ -124,10 +124,10 @@ describe("WebsiteBrief", () => {
   it("offers the website read and a skip", () => {
     const onSkip = vi.fn();
     render(<WebsiteBrief onApply={vi.fn()} onSkip={onSkip} client={client([])} />);
-    expect(screen.getByRole("heading", { name: /Got a website\? We’ll draft your brand/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Drop your website — we’ll draft your brand brief/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Read my website" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Enter your website address");
-    fireEvent.click(screen.getByRole("button", { name: "Skip — I’ll type it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip, I’ll type it" }));
     expect(onSkip).toHaveBeenCalledOnce();
   });
 
@@ -284,7 +284,7 @@ describe("onboarding step 1: your website", () => {
       setProfileId: vi.fn(),
     } as unknown as Workspace;
     render(<Onboarding w={w} onComplete={vi.fn()} />);
-    expect(screen.getByRole("heading", { name: /Got a website\?/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Drop your website/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText("yourshow.com"), { target: { value: "allin.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Read my website" }));
@@ -327,7 +327,7 @@ describe("onboarding step 1: your website", () => {
         onComplete={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Skip — I’ll type it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip, I’ll type it" }));
     expect(screen.getByRole("heading", { name: "Who are we making this for?" })).toHaveFocus();
     expect(screen.getByRole("textbox", { name: "Name your brand / podcast" })).toHaveValue("");
   });

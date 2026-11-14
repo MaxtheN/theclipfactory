@@ -233,7 +233,7 @@ export function WebsiteBrief({
   }
 
   const titles: Record<Phase, string> = {
-    input: "Got a website? We’ll draft your brand for you",
+    input: "Drop your website — we’ll draft your brand brief and learn who you are.",
     reading: `Reading ${host}`,
     review: "Here’s your brand, drafted from your site",
     error: "We couldn’t draft it this time",
@@ -254,6 +254,7 @@ export function WebsiteBrief({
       data-motion={reduced ? "reduced" : "full"}
       aria-labelledby={`${id}-title`}
     >
+      {phase === "input" && <WebsiteIllustration />}
       <span className="gf-website-brief-kicker">
         <Sparkles size={14} strokeWidth={1.8} aria-hidden="true" />
         Brand from your website
@@ -299,7 +300,7 @@ export function WebsiteBrief({
           )}
           <div className="gf-wb-actions">
             <button type="button" className="gf-button ghost" disabled={disabled} onClick={skip}>
-              Skip — I’ll type it
+              Skip, I’ll type it
             </button>
             <button
               type="button"
@@ -724,5 +725,49 @@ function DraftField({
       <span className="gf-wb-control">{children(id)}</span>
       {hint && <small>{hint}</small>}
     </div>
+  );
+}
+
+/** Browser window with a spark: drawn in the app's own frost-and-sand language. */
+function WebsiteIllustration() {
+  return (
+    <svg
+      className="gf-wb-illustration"
+      width="168"
+      height="112"
+      viewBox="0 0 168 112"
+      fill="none"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="gf-wb-glass" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.22" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0.06" />
+        </linearGradient>
+        <linearGradient id="gf-wb-sand" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#e2c49d" />
+          <stop offset="1" stopColor="#f3e2c9" />
+        </linearGradient>
+        <radialGradient id="gf-wb-glow" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#f3e2c9" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#f3e2c9" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect x="10" y="18" width="128" height="86" rx="12" fill="url(#gf-wb-glass)" stroke="#ffffff" strokeOpacity="0.32" />
+      <path d="M10 38h128" stroke="#ffffff" strokeOpacity="0.22" />
+      <circle cx="24" cy="28" r="3" fill="#f0b9ac" fillOpacity="0.8" />
+      <circle cx="34" cy="28" r="3" fill="#f9e1bf" fillOpacity="0.8" />
+      <circle cx="44" cy="28" r="3" fill="#9bd3b0" fillOpacity="0.8" />
+      <rect x="58" y="24" width="64" height="8" rx="4" fill="#ffffff" fillOpacity="0.12" />
+      <rect className="gf-wb-line l1" x="24" y="52" width="70" height="8" rx="4" fill="url(#gf-wb-sand)" />
+      <rect className="gf-wb-line l2" x="24" y="68" width="98" height="6" rx="3" fill="#ffffff" fillOpacity="0.28" />
+      <rect className="gf-wb-line l3" x="24" y="80" width="82" height="6" rx="3" fill="#ffffff" fillOpacity="0.2" />
+      <rect className="gf-wb-line l4" x="24" y="92" width="54" height="6" rx="3" fill="#ffffff" fillOpacity="0.14" />
+      <g className="gf-wb-spark">
+        <circle cx="138" cy="22" r="22" fill="url(#gf-wb-glow)" />
+        <path d="M138 8l4.2 9.8L152 22l-9.8 4.2L138 36l-4.2-9.8L124 22l9.8-4.2z" fill="url(#gf-wb-sand)" />
+        <path d="M156 42l1.6 3.4L161 47l-3.4 1.6L156 52l-1.6-3.4L151 47l3.4-1.6z" fill="#f3e2c9" fillOpacity="0.8" />
+      </g>
+    </svg>
   );
 }
