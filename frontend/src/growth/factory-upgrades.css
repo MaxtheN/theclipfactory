@@ -1,0 +1,80 @@
+/* Factory upgrades (Results / Factory): same frosted glass as the Strategist, learn-lane accent. */
+.gf-upgrades {
+  --up-ink: var(--material-ink, #f3f1ec);
+  --up-muted: var(--material-metadata, #dedbd3);
+  --up-line: rgba(255, 255, 255, 0.16);
+  --up-accent: #ff9f88;
+  --up-good: #7fe0b6;
+  --up-bad: #f0b9ac;
+  --up-demo: #f3c66f;
+  margin-top: 22px;
+  padding: 22px 24px;
+  border: 1px solid var(--up-line);
+  border-radius: 24px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: var(--up-ink);
+  min-width: 0;
+}
+.gf-upgrades h3 { margin: 2px 0 6px; font-size: 18px; }
+.gf-upgrades-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
+.gf-upgrades-overline {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--up-accent); font-weight: 600;
+}
+.gf-upgrades-muted { color: var(--up-muted); font-size: 13px; line-height: 1.45; margin: 0; }
+.gf-upgrades-error { color: var(--up-bad); font-size: 13px; margin: 8px 0 0; }
+.gf-upgrades-empty { display: grid; gap: 8px; justify-items: start; margin-top: 14px; }
+.gf-upgrades-empty p { margin: 0; font-size: 14px; }
+.gf-upgrades-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+.gf-upgrade {
+  border: 1px solid var(--up-line);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  min-width: 0;
+}
+.gf-upgrade.is-ready_for_review { border-color: rgba(127, 224, 182, 0.55); }
+.gf-upgrade.is-building { border-color: rgba(255, 159, 136, 0.6); }
+.gf-upgrade-summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%;
+  background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.gf-upgrade-summary strong { font-size: 15px; }
+.gf-upgrade-status {
+  font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--up-line); color: var(--up-muted);
+}
+.gf-upgrade-status.is-building { color: var(--up-accent); border-color: var(--up-accent); }
+.gf-upgrade-status.is-ready_for_review, .gf-upgrade-status.is-merged { color: var(--up-good); border-color: var(--up-good); }
+.gf-upgrade-evidence { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; }
+.gf-upgrade-chip {
+  font-size: 12px; line-height: 1.35; padding: 3px 9px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07); border: 1px solid var(--up-line); max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.gf-upgrade-chip b { color: var(--up-accent); font-weight: 600; margin-right: 4px; }
+.gf-upgrade-chip.is-demo { color: var(--up-demo); border-color: var(--up-demo); }
+.gf-upgrade-body { display: grid; gap: 10px; margin-top: 12px; min-width: 0; }
+.gf-upgrade-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.gf-upgrade-order summary { cursor: pointer; font-size: 13px; color: var(--up-muted); }
+.gf-upgrade-order pre, .gf-upgrade-commands {
+  max-height: 320px; overflow: auto; margin: 8px 0 0; padding: 10px 12px; border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28); font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.gf-upgrade-build {
+  border-top: 1px solid var(--up-line); padding-top: 10px; display: grid; gap: 8px; font-size: 13px; min-width: 0;
+}
+.gf-upgrade-build p { margin: 0; }
+.gf-upgrade-build code { font-size: 12px; overflow-wrap: anywhere; }
+.gf-upgrade-steps { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
+.gf-upgrade-steps li { font-size: 12px; padding: 2px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.06); }
+.gf-upgrade-steps .is-ok { color: var(--up-good); }
+.gf-upgrade-steps .is-fail { color: var(--up-bad); }
+.gf-upgrade-sample { width: 160px; aspect-ratio: 9 / 16; border-radius: 12px; background: #000; }
+.gf-upgrade-review { display: grid; gap: 8px; }
+.gf-upgrades.is-compact { padding: 16px 18px; }
+@media (max-width: 640px) {
+  .gf-upgrades { padding: 18px 16px; }
+  .gf-upgrades-head { flex-direction: column; }
+}
+.gf-upgrade-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; }

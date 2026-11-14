@@ -16,6 +16,7 @@ import type {
   TeamTask,
 } from "../types";
 import type { StrategistView } from "./strategistApi";
+import { builderStatus, STATUS_LABEL, type FactoryBuilderView } from "./factoryBuilderApi";
 
 export type StationId =
   | "footage"
@@ -29,7 +30,8 @@ export type StationId =
   | "post"
   | "measure"
   | "strategist"
-  | "rules";
+  | "rules"
+  | "builder";
 export type Family = "understand" | "create" | "judge" | "ship" | "learn";
 /** idle = resting with data; empty = nothing has reached it yet; waiting = needs a person. */
 export type StationState =
@@ -103,6 +105,8 @@ export interface MapInput {
   /** null = unavailable (not "zero"). */
   automation: AutomationSnapshot | null;
   strategist: StrategistView | null;
+  /** Factory builder (capability requests → reviewed code); undefined/null = unavailable. */
+  builder?: FactoryBuilderView | null;
   now: number;
 }
 
@@ -124,6 +128,7 @@ export const STATIONS: {
   { id: "measure", title: "Measure", agent: "3 or 6-day window", family: "ship" },
   { id: "strategist", title: "Strategist", agent: "Craft · clip picking · timing", family: "learn" },
   { id: "rules", title: "Style rules update", agent: "Proposals you approve", family: "learn" },
+  { id: "builder", title: "Factory builder", agent: "Upgrade ideas → reviewed code", family: "learn" },
 ];
 export const FAMILY_LABEL: Record<Family, string> = {
   understand: "Understand",
@@ -864,6 +869,28 @@ export function deriveFactoryMap(input: MapInput): FactoryMapModel {
         ? [{ title: "Campaign proposals", note: `${campaignProposals} waiting in Results.` }]
         : []),
     ],
+  });
+
+  // ── Factory builder (the factory that improves itself)
+  const builder = builderStatus(input.builder ?? null);
+  const upgrades = (input.builder?.requests ?? []).filter((r) => r.status !== "rejected");
+  put("builder", {
+    ...builder,
+    last: upgrades[0] ? `${upgrades[0].label}${upgrades[0].demo ? " (demo)" : ""}` : "",
+    sheet: input.builder
+      ? [
+          {
+            title: "Upgrade ideas (craft the renderer lacks)",
+            rows: upgrades.slice(0, 10).map((r) => ({
+              label: `${r.label}${r.demo ? " · demo" : ""}`,
+              value: `${STATUS_LABEL[r.status]} · ${r.demand_count} signal${r.demand_count === 1 ? "" : "s"}`,
+            })),
+            note: upgrades.length
+              ? "Nothing is built, pushed or merged without your click. Review in Results → Factory upgrades."
+              : "Ideas appear when references, critic notes or change requests name missing craft.",
+          },
+        ]
+      : [{ title: "Unavailable", note: "The Factory builder could not be read. Nothing is assumed." }],
   });
 
   const ordered = STATIONS.map((s) => stations.get(s.id)!);

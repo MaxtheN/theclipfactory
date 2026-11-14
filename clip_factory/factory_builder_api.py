@@ -8,6 +8,7 @@ and discarding. Nothing runs on a schedule; a scan only reads saved records.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -19,6 +20,7 @@ from .capabilities import model_classifier
 from .extensions import registry
 from .jobs import WorkError
 
+SCAN_INTERVAL = 30.0
 Identifier = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
 
 
@@ -94,8 +96,14 @@ def install(app: FastAPI, builder: fb.FactoryBuilder):
         except ValueError as exc:
             raise HTTPException(422, str(exc)[:400]) from None
 
+    last_scan = [0.0]
+
     @app.get("/api/factory-builder")
     def view():
+        # Detection is automatic but cheap: a deterministic keyword scan of saved records, at most every 30 s.
+        if time.monotonic() - last_scan[0] > SCAN_INTERVAL:
+            last_scan[0] = time.monotonic()
+            builder.requests.scan()
         return builder.view()
 
     @app.get("/api/extensions")

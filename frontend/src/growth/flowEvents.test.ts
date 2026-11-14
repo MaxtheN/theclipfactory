@@ -128,7 +128,7 @@ const station = (model: ReturnType<typeof deriveFactoryMap>, id: StationId) =>
 describe("deriveFactoryMap: honest empty states", () => {
   it("shows nothing as working and says plainly what is missing", () => {
     const model = deriveFactoryMap(input());
-    expect(model.stations).toHaveLength(12);
+    expect(model.stations).toHaveLength(13);
     expect(model.live).toBe(false);
     expect(model.edges.every((e) => !e.flowing)).toBe(true);
     expect(station(model, "footage").status).toBe("No footage yet — add an episode");

@@ -37,6 +37,7 @@ import {
 } from "./flowEvents";
 import { prefersReducedMotion } from "./StrategistPanel";
 import { strategistApi, type StrategistView } from "./strategistApi";
+import { factoryBuilderApi, type FactoryBuilderView } from "./factoryBuilderApi";
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { workspaceApi } from "./workspaceApi";
 import { Icon } from "./Icon";
@@ -68,6 +69,7 @@ function useMapData(w: Workspace, factory: FactoryState, active: boolean) {
   const [runs, setRuns] = useState<TeamRun[]>([]);
   const [automation, setAutomation] = useState<AutomationSnapshot | null>(null);
   const [strategist, setStrategist] = useState<StrategistView | null>(null);
+  const [builder, setBuilder] = useState<FactoryBuilderView | null>(null);
   const working = (factory.data.factory?.sources ?? []).some((s) =>
     ["working", "queued"].includes(s.state),
   );
@@ -76,11 +78,12 @@ function useMapData(w: Workspace, factory: FactoryState, active: boolean) {
     if (!active) return;
     let live = true;
     const load = async () => {
-      const [r, state, accounts, view] = await Promise.all([
+      const [r, state, accounts, view, upgrades] = await Promise.all([
         workspaceApi.teamRuns().catch(() => null),
         api<unknown>("/api/automation/state").catch(() => null),
         api<unknown>("/api/automation/accounts").catch(() => null),
         profileId ? strategistApi.view(profileId).catch(() => null) : null,
+        factoryBuilderApi.view().catch(() => null),
       ]);
       if (!live) return;
       if (r) setRuns(r);
@@ -102,6 +105,7 @@ function useMapData(w: Workspace, factory: FactoryState, active: boolean) {
         setAutomation(null);
       }
       setStrategist(view);
+      setBuilder(upgrades);
     };
     void load();
     const timer = window.setInterval(() => {
@@ -112,7 +116,7 @@ function useMapData(w: Workspace, factory: FactoryState, active: boolean) {
       window.clearInterval(timer);
     };
   }, [active, working, profileId]);
-  return { runs, automation, strategist };
+  return { runs, automation, strategist, builder };
 }
 
 type Point = { x: number; y: number };
@@ -492,6 +496,7 @@ export function FactoryMap({
         activeRulesId: activeRulesId(w),
         automation: scopeAutomation(data.automation, w.campaign?.id, w.profileId),
         strategist: data.strategist,
+        builder: data.builder,
         now,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

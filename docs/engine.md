@@ -109,7 +109,8 @@ request; each resolved decision is stored in the clip's `craft` record and rende
 | B-roll, split screen, graphics | ❌ | The strategist prompt explicitly forbids them. |
 | Brand kit, CTA end card | ✅ | `Profile.brand_kit` (font family/file, colours, PNG logo), `Brief.cta` or `end_card=cta` + `cta_text`; last 1.6 s dimmed with CTA and logo |
 | A/B variants of one moment | ✅ | `variants={variable, values}` (2–3; hook, opening_treatment, caption_style, hook_format or structure): separate versions sharing `variant_group` |
-| Progress bar | ❌ | |
+| Progress bar | ❌ | Tracked as a Factory builder capability request (see below). |
+| Renderer extensions (merged, reviewed modules) | ✅ | `CraftOptions.extensions` (empty = off); `media.render_crafted` draws them last and records `craft.extensions` with provenance; only modules committed in this checkout load (`clip_factory/extensions`). See `docs/factory-builder.md`. |
 
 ## 5. Review and critic
 

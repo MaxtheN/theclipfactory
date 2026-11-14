@@ -382,3 +382,12 @@ def test_merged_extension_is_drawn_last_and_recorded_on_the_render(tmp_path, mon
     finally:
         for name in [n for n in sys.modules if n.startswith("clip_factory.extensions.zz_")]:
             sys.modules.pop(name)
+
+
+def test_merged_extensions_are_strategist_variables(monkeypatch):
+    from clip_factory import strategist
+
+    monkeypatch.setattr(strategist, "EXTENSIONS", ("progress_bar",))
+    plan = {"start": 0, "end": 20, "extensions": {"progress_bar": {}}}
+    assert strategist.tag_clip({"edit_plan": plan})["ext_progress_bar"] == "on"
+    assert strategist.tag_clip({"edit_plan": {"start": 0, "end": 20}})["ext_progress_bar"] == "off"

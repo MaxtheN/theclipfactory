@@ -11,6 +11,7 @@ import {
 import { pendingRules, scopeAutomation, type Row } from "./flowEvents";
 import { postedRows, resultsStory, type PostedRow } from "./resultsModel";
 import { StrategistPanel } from "./StrategistPanel";
+import { FactoryUpgrades } from "./FactoryUpgrades";
 import type { StrategistView } from "./strategistApi";
 import "./results-story.css";
 import {
@@ -1211,6 +1212,7 @@ export function Results({
           }
         />
       )}
+      {visible && <FactoryUpgrades />}
       <div ref={accounts} className="gf-results-accounts">
         <AutomationPanel
           w={w}

@@ -1,10 +1,12 @@
 import { Field } from "./parts";
 import type { CraftRequest } from "./productionContracts";
+import { ExtensionToggles } from "./FactoryUpgrades";
 
 /** Editing-craft options for a manual render (backend: clip_factory/craft.py). One line each. */
 export type CraftValues = Required<Pick<CraftRequest, "structure" | "jump_cuts" | "loudness" | "hook_format" | "caption_emphasis" | "punch_in" | "cover" | "crop_focus">> & { cta_text: string };
 export type AbVariable = "" | "structure" | "hook_format" | "caption_style";
-export interface CraftState { values: CraftValues; touched: (keyof CraftValues)[]; ab: AbVariable }
+/** extensions: merged renderer extensions to draw; undefined until the person toggles one (revisions inherit). */
+export interface CraftState { values: CraftValues; touched: (keyof CraftValues)[]; ab: AbVariable; extensions?: Record<string, Record<string, unknown>> }
 
 export const CRAFT_DEFAULTS: CraftValues = {
   structure: "auto", jump_cuts: "silences", loudness: "normalize", hook_format: "title_card",
@@ -42,6 +44,7 @@ export function craftPlan(state: CraftState): CraftRequest {
     } else out[key] = state.values[key];
   }
   if (state.ab) out.variants = { variable: state.ab, values: AB_VALUES[state.ab] };
+  if (state.extensions) out.extensions = state.extensions;
   return out as CraftRequest;
 }
 
@@ -61,6 +64,7 @@ export function CraftControls({ value, onChange }: { value: CraftState; onChange
     {toggle("cover", "best_frame", "first_frame", "Pick the best cover frame")}
     {toggle("crop_focus", "auto_face", "fixed", "Follow the speaker's face (9:16 crop)")}
     <Field label="End card call to action">{id => <input id={id} type="text" maxLength={80} placeholder="None" value={v.cta_text} onChange={e => set("cta_text", e.target.value)} />}</Field>
+    <ExtensionToggles value={value.extensions ?? {}} onChange={extensions => onChange({ ...value, extensions })} />
     <Field label="A/B variants">{id => <select id={id} value={value.ab} onChange={e => onChange({ ...value, ab: e.target.value as AbVariable })}><option value="">One version</option><option value="structure">Hook first vs in order</option><option value="hook_format">Title card vs text strip</option><option value="caption_style">Word-pop vs plain captions</option></select>}</Field>
   </>;
 }

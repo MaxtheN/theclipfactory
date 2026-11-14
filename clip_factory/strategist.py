@@ -60,6 +60,20 @@ VOCAB: dict[str, dict[str, tuple[str, ...]]] = {
         "day_type": ("weekday", "weekend"),
     },
 }
+
+
+def _extension_variables() -> tuple[str, ...]:
+    """Merged renderer extensions (clip_factory/extensions) are testable craft variables: ext_<name>."""
+    try:
+        from .extensions import registry
+
+        return tuple(registry().extensions)
+    except Exception:  # noqa: BLE001 - a broken extension never blocks the Strategist
+        return ()
+
+
+EXTENSIONS = _extension_variables()
+VOCAB["craft"].update({f"ext_{name}": ("off", "on") for name in EXTENSIONS})
 VARIABLE_LAYER = {variable: layer for layer, variables in VOCAB.items() for variable in variables}
 # Fixed, documented prior weights for "how much would knowing this change the next batch".
 IMPORTANCE = {"hook_style": 1.0, "moment_type": 1.0, "duration_bucket": 0.8, "opening_type": 0.8,
@@ -175,6 +189,8 @@ def tag_clip(clip: dict, publication: dict | None = None) -> dict:
         "speaker_role": pick("selection", "speaker_role", clip.get("speaker_role")),
         "posting_window": window,
         "day_type": day,
+        # As planned: a merged extension named in the edit plan was drawn (plans before it existed were not).
+        **{f"ext_{name}": "on" if name in (plan.get("extensions") or {}) else "off" for name in EXTENSIONS},
     }
 
 
