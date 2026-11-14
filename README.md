@@ -131,7 +131,7 @@ Keychain storage, token expiry, API behavior, and actual integration limitations
 
 ## Packaged Mac `.app`
 
-The manual GitHub Actions workflow **Build Mac desktop artifact (not notarized)**
+The GitHub Actions workflow **Build Mac desktop artifact (not notarized)**
 uses `macos-15` (arm64 in the current [official runner table](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)),
 asserts native OS/Python architecture, builds the frontend, copies it into
 `clip_factory/ui`, runs backend/launcher tests, and uses PyInstaller to build a
@@ -141,7 +141,10 @@ that this file and **every built UI asset** match the bundle. It uploads a ZIP
 **CI artifact**, not a published release. The installed UI package path is preferred by the parent server over
 `frontend/dist`. No source-repository path should be required at runtime.
 
-Dispatch only after the final core/team verification commits are pushed. Select
+A push that changes the Mac workflow on an `8090/**` working branch starts a
+branch-specific build without merging to `master`. Manual dispatch remains
+available once GitHub registers the workflow. Dispatch only after the final
+core/team verification commits are pushed. Select
 the intended branch explicitly; no automatic merge or release occurs. GitHub
 requires a dispatchable workflow on the default branch. If `mac-app.yml` exists
 only on the working branch, it may not yet appear or be dispatchable—registration
