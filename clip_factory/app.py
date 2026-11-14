@@ -637,6 +637,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         jobs().update(job_id, progress=10, message="Extracting audio locally")
         try:
             media.extract_audio(jobs(), job_id, source_path(video), audio)
+            jobs().update(job_id, progress=12, message="Listening: transcribing speech locally")
             result = media.classify_speech(
                 media.clean_transcript(
                     models().run(
@@ -938,6 +939,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         body: Render,
         team_metadata: dict | None = None,
         lineage: dict | None = None,
+        report: bool = True,
     ) -> dict:
         identifier = new_id()
         target = root / "clips" / f"{identifier}.mp4"
@@ -963,6 +965,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             options["has_audio"] = bool(video.get("has_audio"))
         if video.get("hdr"):
             options["hdr"] = True
+        if not report:
+            options["report"] = False
         result = media.render(
             jobs(),
             job_id,
@@ -1082,6 +1086,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         # Swarm clips carry their hypothesis on screen for the first seconds.
         if metadata.pop("burn_hook", False) and body.hook.strip():
             body.hook_overlay = True
+        report = not metadata.pop("parallel", False)
         if metadata.get("strategy_snapshot"):
             direction = metadata["strategy_snapshot"]
             body.framing = direction["framing"]
@@ -1095,7 +1100,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         if not media.caption_entries(video.get("transcript"), [{"start": body.start, "end": body.end}]):
             # Nothing meaningful is said in this range: a clean picture, no captions to check.
             body.subtitles = False
-        return render_task(job_id, video, body, team_metadata=metadata)
+        return render_task(job_id, video, body, team_metadata=metadata, report=report)
 
     def wide(video: dict) -> bool:
         return (video.get("width") or 0) > (video.get("height") or 0)

@@ -792,7 +792,9 @@ def render(
     has_audio: bool | None = None,
     hdr: bool | None = None,
     crop_width: float | None = None,
+    report: bool = True,
 ) -> dict:
+    """report=False: the caller owns the job's progress line (several clips rendering at once)."""
     output.parent.mkdir(parents=True, exist_ok=True)
     # "fit" and "blur" keep the complete source frame instead of silently cropping subjects/products.
     if framing not in {"fit", "fill", "blur"} or caption_style not in {"standard", "high_contrast"}:
@@ -952,7 +954,8 @@ def render(
             *(["-map", "[aout]"] if has_audio else []),
             *encode,
         ]
-    jobs.update(job_id, progress=20, message="Rendering 1080 × 1920 H.264 clip")
+    if report:
+        jobs.update(job_id, progress=20, message="Rendering 1080 × 1920 H.264 clip")
     completed = False
     try:
         jobs.process(
@@ -962,7 +965,8 @@ def render(
             failure="FFmpeg render failed. Check disk space and source compatibility.",
         )
         actual = probe(temporary)
-        jobs.update(job_id, progress=80, message="Checking playback, format and captions")
+        if report:
+            jobs.update(job_id, progress=80, message="Checking playback, format and captions")
         checks = verify(
             jobs,
             job_id,

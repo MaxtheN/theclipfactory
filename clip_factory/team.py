@@ -82,6 +82,7 @@ SWARM_CLIPS_PER_MINUTE = 1.2
 SWARM_MAX_CLIPS = 150
 SWARM_BATCH = 8
 SWARM_CLIP_SECONDS = 45.0
+SWARM_MIN_SECONDS = 8.0
 DEFAULT_ASSIGNMENTS = {
     "footage_analyst": "Find the strongest self-contained moments in the storyboard.",
     "performance_analyst": "Recommend changes only from recorded observations and feedback.",
@@ -1121,6 +1122,7 @@ class TeamEngine:
                             "moment_summary": scene.get("visual") or scene.get("said") or "",
                             "scene_refs": [boards.scene_ref(scene["index"])],
                             "burn_hook": hooks_burn,
+                            "parallel": True,
                         },
                     },
                 )
@@ -1161,6 +1163,11 @@ class TeamEngine:
                             start, end = snap_to_speech(
                                 start, end, transcript, scene["start"], scene["end"], SWARM_CLIP_SECONDS
                             )
+                            if end - start < SWARM_MIN_SECONDS:
+                                # Too brief to register: widen around it, inside the stretch.
+                                length = min(12.0, scene["end"] - scene["start"])
+                                start = min(max(scene["start"], (start + end - length) / 2), scene["end"] - length)
+                                start, end = round(start, 3), round(start + length, 3)
                             # Two ideas on (nearly) the same footage are one clip, whatever they are called.
                             if idea["hypothesis"] in seen_here or any(
                                 min(end, b) - max(start, a) > 0.7 * min(end - start, b - a) for a, b in taken

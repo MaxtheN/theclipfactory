@@ -8,6 +8,51 @@ model fits or every pipeline has been hardware-validated**. See
 [API_CONTRACT.md](API_CONTRACT.md) for the current integration contract and
 [Mac testing](docs/mac-testing.md) for the release checklist.
 
+## How the factory works
+
+Open the app on **Factory**, drop footage in, and review what comes out. With
+**Autopilot** on (the default), imported footage goes into production by itself
+as soon as a model is ready; clips always wait for your approval.
+
+1. **Listen.** Speech is transcribed locally. Recognizer output over noise is
+   filtered (looping phrases, impossible timing, low confidence), and the source
+   is classified: where there is no meaningful speech, background chatter is
+   ignored everywhere, including captions.
+2. **Watch.** FFmpeg measures picture change and loudness across the whole
+   source and splits it into scenes. The local vision model then looks at
+   timestamped frames of every scene, together with what is said in it, and
+   records what it saw, on-screen text it read, and whether the footage is
+   usable. This **storyboard** is built once per source, reused by every run,
+   and shown under *What the factory saw*. Covered-lens and blurred stretches
+   are excluded.
+3. **Make clips.** Three strategies (Settings → Production strategy):
+   - **Swarm** (default): one short prompt per scene asks for clip ideas, each
+     on a different hypothesis about why a viewer would stop scrolling. Clips
+     render in parallel while the next ideas are written, so they start
+     arriving within seconds. Target: about 1.2 clips per minute of usable
+     footage. A talk is cut from its words without waiting for the vision pass.
+   - **Team**: a few clips (1–6) with planning, moment selection, a close look
+     at each moment's peak, a self-check, and optional revision rounds.
+   - **Baseline**: a single analysis pass.
+4. **Render.** 1080 × 1920 H.264. Landscape sources are framed around the
+   measured action over a blurred backdrop instead of black bars; HDR (HLG/PQ)
+   footage is tone-mapped; captions are burned only where someone is actually
+   speaking.
+5. **Review.** Approve, edit, download or discard on **Clips**. Swarm clips
+   can be filtered by hypothesis and approved in bulk. Where a self-check
+   flagged something you can still approve explicitly; the decision is recorded.
+
+Models choose and describe; code measures. Roles refer to storyboard scenes by
+ID, source ranges are computed from those scenes, and model output is
+grammar-constrained to each step's schema. Output that is slightly off (a range
+a second outside its scene, a duplicate label) is repaired rather than failing
+the run.
+
+What this does not do: it does not track a ball or recognise who won a point.
+On a static wide shot of continuous similar action, scenes look alike to the
+model, and selection leans on measured motion. Hooks in swarm mode are not
+self-checked. Review before publishing.
+
 ## Team mode
 
 Team production uses producer, footage analyst, creative strategist, editor,
