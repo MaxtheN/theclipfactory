@@ -24,10 +24,15 @@ graph = offline_graph_fixture
 
 
 @pytest.fixture
-def scripted(client, monkeypatch):
+def scripted(client, monkeypatch, watched):
+    # These tests start production explicitly; autopilot has its own test below.
+    assert client.patch("/api/settings", json={"autonomy": "review"}).status_code == 200
+    watched(client)
     models = ScriptedModels([])
     monkeypatch.setattr(client.app.state.models, "require", models.require)
     monkeypatch.setattr(client.app.state.models, "run", models.run)
+    monkeypatch.setattr(client.app.state.models, "vision", models.vision)
+    monkeypatch.setattr(client.app.state.models, "run_batch", models.run_batch)
     return models
 
 
@@ -337,6 +342,7 @@ def test_baseline_produce_uses_queued_snapshot_and_comparison_api(
                 "objective": "sales",
                 "language": "en",
                 "custom_event": "",
+                "clip_count": 3,
                 "_previous_observations": [],
                 "_team_run_id": baseline_run["id"],
             },
@@ -407,7 +413,11 @@ def test_silent_two_second_source_real_ffmpeg_team_render_cover_ledger_and_close
     assert len(scripted.calls) == 5
     assert run["permissions"] == {"publish": False, "ads": False}
     assert run["plan"]["summary"] == "Make a source-backed draft"
-    assert any(key.startswith("frame:") for key in run["context"]["evidence"])
+    assert {"scene:0", "scene:1"} <= set(run["context"]["evidence"])
+    watch = next(task for task in run["tasks"] if task["role"] == "watch")
+    assert watch["status"] == "completed" and watch["output"]["scenes"] == 2
+    # Editor and critic looked at real stills extracted from inside their ranges.
+    assert all(Path(image).name.endswith(".jpg") for call in scripted.calls[3:] for image in call["images"])
     clip_id = run["clip_ids"][0]
     clip = client.app.state.store.get("clips", clip_id)
     assert persisted_clips[0]["team_run_id"] == run["id"]  # Metadata is present on FIRST persistence.
@@ -504,7 +514,10 @@ def test_changed_passed_content_blocks_release_until_single_critic_recheck_and_h
     call = scripted.calls[-1]
     assert call["schema"]["title"] == "Critique" and call["data"]["manual_recheck"] is True
     assert call["data"]["candidates"][0][field] == "New creative text"
-    assert call["data"]["evidence"] == run["context"]["evidence"]
+    # The recheck sees the evidence for this clip's own range, and what is said inside it.
+    assert set(call["data"]["evidence"]) == {f"source:{video['id']}", "scene:0"}
+    assert call["data"]["evidence"]["scene:0"] == run["context"]["evidence"]["scene:0"]
+    assert call["data"]["clip_speech"] == [""]
     current = client.app.state.store.get("clips", clip_id)
     assert current["team_review_status"] == "pass" and current["approved"] is False
     critics = [
@@ -535,7 +548,8 @@ def test_unknown_or_invalid_manual_critic_keeps_dirty_content_unapproved(client,
     response = client.post(f"/api/clips/{clip_id}/team-review", json={})
     assert response.status_code == 202
     job = wait_job(client, response.json()["id"], timeout=10)
-    assert job["status"] == ("completed" if case == "unknown" else "failed"), job
+    # A "pass" that lists unknown checks is read as unknown, not thrown away.
+    assert job["status"] == ("completed" if case in {"unknown", "pass_with_unknown"} else "failed"), job
     clip = client.app.state.store.get("clips", clip_id)
     assert clip["team_review_status"] == "unknown" and clip["approved"] is False
     assert client.put(f"/api/clips/{clip_id}", json={"approved": True}).status_code == 409
@@ -671,8 +685,6 @@ def test_team_cancel_after_first_clip_persistence_retains_completed_render_task_
 def install_baseline_media_doubles(client, monkeypatch, *, candidates=1):
     """Keep actual admission, baseline prompt, render_task persistence, and ledger code."""
     calls, rendered = [], []
-    frames = [{"time": 0.5, "path": "baseline-frame-0.jpg"}, {"time": 1.5, "path": "baseline-frame-1.jpg"}]
-    monkeypatch.setattr(media, "sample_frames", lambda *_: frames)
     monkeypatch.setattr(media, "ffmpeg", lambda: "ffmpeg")
 
     def model_run(job, model, action, **payload):
@@ -688,11 +700,12 @@ def install_baseline_media_doubles(client, monkeypatch, *, candidates=1):
         )
         rows = [
             {
+                "scene": "scene:0",
                 "start": index,
                 "end": index + 1,
                 "hook": f"Actual draft {index}",
                 "caption": "Source-backed baseline caption",
-                "reason": "Sampled source frames",
+                "reason": "Seen in the storyboard",
                 "objective": "sales",
             }
             for index in range(candidates)
@@ -750,8 +763,9 @@ def test_actual_baseline_prompt_uses_frozen_observations_intent_model_and_proven
     assert call["model"] == "qwen-large" and call["action"] == "generate"
     assert call["data"]["brand"] == "Original brand" and call["data"]["objective"] == "sales"
     assert call["data"]["previous_observations"] == frozen
-    assert call["data"]["frame_timestamps"] == [0.5, 1.5]
-    assert call["images"] == ["baseline-frame-0.jpg", "baseline-frame-1.jpg"]
+    assert [row["ref"] for row in call["data"]["storyboard"]] == ["scene:0", "scene:1"]
+    assert "images" not in call and call["schema"]["properties"]["candidates"]["maxItems"] == 3
+    assert rendered[0]["framing"] == "blur"  # a landscape source keeps its whole frame, without black bars
     previous = call["data"]["previous_observations"][0]
     assert previous["feedback"][0]["notes"] == "Too long"
     assert previous["media_observation"]["account_id"] == "account"
@@ -765,6 +779,7 @@ def test_actual_baseline_prompt_uses_frozen_observations_intent_model_and_proven
     clip = store.get("clips", run["clip_ids"][0])
     assert clip["objective"] == "sales" and clip["team_run_id"] == run["id"]
     assert clip["team_review_status"] == "not_applicable" and clip["approved"] is False
+    assert clip["reason"] == "Seen in the storyboard"
     assert not scripted.calls
 
 
@@ -820,3 +835,90 @@ def test_explicit_recheck_of_human_approved_clip_always_requires_fresh_human_app
     assert client.put(f"/api/clips/{clip_id}", json={"approved": True}).status_code == (
         200 if verdict == "pass" else 409
     )
+
+
+def test_autopilot_starts_production_on_import_and_the_line_reports_each_stage(
+    client, monkeypatch, scripted, worker_block
+):
+    assert client.patch("/api/settings", json={"autonomy": "auto"}).status_code == 200
+    scripted.outputs = script()
+    renders = install_mock_render(client, monkeypatch)
+    video = upload_mock(client, monkeypatch)
+    # No button was pressed: importing the footage queued its production.
+    job = client.get("/api/jobs").json()[0]
+    assert job["kind"] == "team" and job["context"]["video_id"] == video["id"]
+    line = client.get("/api/factory").json()
+    assert line["autopilot"] is True and line["ready"] is True and line["model_id"] == "qwen-small"
+    source = line["sources"][0]
+    assert source["state"] == "queued" and source["job_id"] == job["id"]
+    assert source["can_produce"] is False and "already being worked on" in source["blocked_reason"]
+    worker_block.set()
+    assert wait_job(client, job["id"], timeout=20)["status"] == "completed"
+    source = client.get("/api/factory").json()["sources"][0]
+    assert source["state"] == "needs_review" and source["headline"] == "1 clip ready for review"
+    assert source["unreviewed"] == 1 and source["approved"] == 0 and len(source["clip_ids"]) == 1
+    assert {stage["key"]: stage["status"] for stage in source["stages"]} == {
+        "import": "done", "listen": "skipped", "watch": "done", "select": "done", "edit": "done", "render": "done",
+    }
+    assert next(s for s in source["stages"] if s["key"] == "render")["detail"] == "1 clip"
+    assert source["can_produce"] is True and source["progress"] is None and source["error"] is None
+    assert len(renders) == 1
+    clip_id = source["clip_ids"][0]
+    assert client.put(f"/api/clips/{clip_id}", json={"approved": True}).status_code == 200
+    source = client.get("/api/factory").json()["sources"][0]
+    assert source["state"] == "done" and source["headline"] == "1 clip approved"
+
+
+def test_failed_production_is_reported_in_plain_words_and_can_be_retried(client, monkeypatch, scripted):
+    video = upload_mock(client, monkeypatch)
+    scripted.outputs = ['{"summary":']  # the plan never arrives
+    job = client.post(f"/api/videos/{video['id']}/produce", json={}).json()
+    assert wait_job(client, job["id"], timeout=10)["status"] == "failed"
+    source = client.get("/api/factory").json()["sources"][0]
+    assert source["state"] == "failed" and source["error"] and source["can_produce"] is True
+    assert next(s for s in source["stages"] if s["key"] == "watch")["status"] == "done"
+    assert next(s for s in source["stages"] if s["key"] == "select")["status"] == "failed"
+    scripted.outputs = script()
+    install_mock_render(client, monkeypatch)
+    retry = client.post(f"/api/videos/{video['id']}/produce", json={}).json()
+    assert wait_job(client, retry["id"], timeout=10)["status"] == "completed"
+    assert client.get("/api/factory").json()["sources"][0]["state"] == "needs_review"
+
+
+@pytest.mark.parametrize("verdict", ["revise", "unknown"])
+def test_reviewer_can_approve_over_an_unresolved_self_check_explicitly(
+    client, monkeypatch, scripted, graph, verdict
+):
+    video = upload_mock(client, monkeypatch)
+    scripted.outputs = script(f"source:{video['id']}", verdict=verdict)
+    install_mock_render(client, monkeypatch)
+    run = terminal_run(client, submit(client, video, revision_budget=0))
+    clip_id = run["clip_ids"][0]
+    # Without the acknowledgement the self-check still holds the clip back.
+    assert client.put(f"/api/clips/{clip_id}", json={"approved": True}).status_code == 409
+    # Acknowledging cannot be combined with unsaved edits.
+    assert (
+        client.put(
+            f"/api/clips/{clip_id}", json={"approved": True, "acknowledge_findings": True, "caption": "New"}
+        ).status_code
+        == 409
+    )
+    response = client.put(f"/api/clips/{clip_id}", json={"approved": True, "acknowledge_findings": True})
+    assert response.status_code == 200, response.text
+    clip = response.json()
+    assert clip["approved"] is True and clip["approved_at"]
+    assert clip["approval_override"]["review_status"] == ("fail" if verdict == "revise" else "unknown")
+    assert clip["team_review_status"] != "pass" and clip["team_findings"]  # the findings stay on record
+    assert "acknowledge_findings" not in clip
+    # The recorded decision opens the same gates a passed self-check would.
+    assert client.put("/api/settings", json={"publishing_enabled": True}).status_code == 200
+    assert client.post("/api/instagram/connect", json={"access_token": USER_TOKEN}).status_code == 200
+    at = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    scheduled = client.post(
+        f"/api/clips/{clip_id}/schedule", json={"public_video_url": PUBLIC_URL, "publish_at": at}
+    )
+    assert scheduled.status_code == 201, scheduled.text
+    # Editing the text afterwards withdraws both the approval and the override.
+    edited = client.put(f"/api/clips/{clip_id}", json={"caption": "Different caption"}).json()
+    assert edited["approved"] is False and edited["approval_override"] is None
+    assert client.put(f"/api/clips/{clip_id}", json={"approved": False}).status_code == 200

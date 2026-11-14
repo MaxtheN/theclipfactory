@@ -503,8 +503,59 @@ class Models:
                 "Not enough currently available memory. Close other apps or use the smaller model."
             )
 
+    def vision(self, identifier: str) -> bool:
+        """Whether this LLM can read frames. Both MLX shelf models are vision-language models."""
+        if is_ollama(identifier):
+            try:
+                info = self.ollama.model(model_name(identifier))
+            except OllamaError:
+                return False
+            return bool(info and info["vision"])
+        return any(m["id"] == identifier and m["kind"] == "llm" for m in CATALOG)
+
+    def run_batch(self, job_id: str, identifier: str, requests: list[dict]) -> list[dict]:
+        """Several generations with one model load. Each result is {"output": text} or {"error": ...}."""
+        if not requests:
+            return []
+        if is_ollama(identifier):
+            from .inference_worker import validate_generation
+
+            try:
+                for request in requests:
+                    validate_generation(request)
+            except (ValueError, TypeError, KeyError) as exc:
+                raise WorkError("Inference input exceeds limits or is invalid.") from exc
+            self.require(identifier, "llm")
+            name = model_name(identifier)
+            results = []
+            for index, request in enumerate(requests):
+                self.jobs.check(job_id)
+                try:
+                    text = self.ollama.generate(
+                        name,
+                        request["prompt"],
+                        images=request.get("images", []),
+                        image_labels=request.get("image_labels"),
+                        schema=request.get("schema"),
+                        temperature=request.get("temperature", 0.3),
+                        max_tokens=request.get("max_tokens", 1500),
+                        keep_loaded=index + 1 < len(requests),
+                        check=lambda: self.jobs.check(job_id),
+                    )
+                    results.append({"output": text})
+                except OllamaError as exc:
+                    if index == 0:
+                        raise WorkError(f"{exc} No output was fabricated.") from exc
+                    results.append({"error": str(exc)[:300]})
+            return results
+        result = self.run(job_id, identifier, "batch", requests=requests)
+        outputs = result.get("outputs")
+        if not isinstance(outputs, list) or len(outputs) != len(requests):
+            raise WorkError("Inference worker returned an incomplete batch.")
+        return [o if isinstance(o, dict) else {"error": "Invalid result"} for o in outputs]
+
     def run(self, job_id: str, identifier: str, action: str, **payload) -> dict:
-        if action not in {"generate", "transcribe", "narrate"}:
+        if action not in {"generate", "batch", "transcribe", "narrate"}:
             raise WorkError("Unsupported inference action.")
         from .inference_worker import validate_request
 
@@ -513,8 +564,12 @@ class Models:
             validate_request(data)
         except (ValueError, TypeError, KeyError) as exc:
             raise WorkError("Inference input exceeds limits or is invalid.") from exc
-        self.require(identifier, {"generate": "llm", "transcribe": "asr", "narrate": "tts"}[action])
+        self.require(
+            identifier, {"generate": "llm", "batch": "llm", "transcribe": "asr", "narrate": "tts"}[action]
+        )
         if is_ollama(identifier):
+            if action != "generate":
+                raise WorkError("Unsupported inference action.")
             return self._run_ollama(job_id, identifier, data)
         worker = Path(__file__).with_name("inference_worker.py")
         if not worker.is_file():
@@ -532,9 +587,6 @@ class Models:
         )
         request.chmod(0o600)
         env = child_env()
-        self.jobs.update(
-            job_id, progress=35, message=f"Running {identifier} locally; model unloads after this task"
-        )
         try:
             self.jobs.process(
                 job_id,
@@ -567,12 +619,14 @@ class Models:
 
     def _run_ollama(self, job_id: str, identifier: str, data: dict) -> dict:
         name = model_name(identifier)
-        self.jobs.update(job_id, progress=35, message=f"Running {name} through local Ollama")
         try:
             text = self.ollama.generate(
                 name,
                 data["prompt"],
                 images=data.get("images", []),
+                image_labels=data.get("image_labels"),
+                schema=data.get("schema"),
+                temperature=data.get("temperature", 0.3),
                 max_tokens=data.get("max_tokens", 1500),
                 check=lambda: self.jobs.check(job_id),
             )

@@ -37,6 +37,10 @@ class OllamaError(Exception):
     pass
 
 
+class OllamaRefused(OllamaError):
+    """The server answered but rejected this request (for example an unsupported option)."""
+
+
 def is_ollama(identifier: str) -> bool:
     return isinstance(identifier, str) and identifier.startswith(PREFIX)
 
@@ -161,7 +165,11 @@ class Ollama:
         prompt: str,
         *,
         images: list[str] | None = None,
+        image_labels: list[str] | None = None,
+        schema: dict | None = None,
+        temperature: float = 0.3,
         max_tokens: int = 1500,
+        keep_loaded: bool = False,
         check=lambda: None,
     ) -> str:
         """Stream a chat completion so cancellation is honoured between chunks."""
@@ -180,6 +188,10 @@ class Ollama:
             if not path.is_file() or path.stat().st_size > MAX_IMAGE_BYTES:
                 raise OllamaError("Frames must be local image files.")
             encoded.append(base64.b64encode(path.read_bytes()).decode("ascii"))
+        if encoded and image_labels:
+            # The chat API attaches images to the message rather than interleaving them with text.
+            order = "; ".join(f"image {i + 1} is the {label}" for i, label in enumerate(image_labels))
+            prompt = f"The attached images are in order: {order}.\n{prompt}"
         message = {"role": "user", "content": prompt}
         if encoded:
             message["images"] = encoded
@@ -188,11 +200,24 @@ class Ollama:
             "messages": [message],
             "stream": True,
             # Unload after the task, like the MLX worker, so Whisper/Kokoro jobs get the memory.
-            "keep_alive": 0,
-            "options": {"temperature": 0.3, "num_predict": max_tokens},
+            # A batch keeps the model warm between its requests and unloads on the last one.
+            "keep_alive": "5m" if keep_loaded else 0,
+            "options": {"temperature": temperature, "num_predict": max_tokens},
         }
         if info["thinking"]:
             body["think"] = False
+        if schema is not None:
+            body["format"] = schema
+        try:
+            return self._chat(body, check)
+        except OllamaRefused:
+            if schema is None:
+                raise
+            # Older builds or unsupported schema keywords: retry unconstrained, validate downstream.
+            body.pop("format")
+            return self._chat(body, check)
+
+    def _chat(self, body: dict, check) -> str:
         chunks: list[str] = []
         total = 0
         timeout = httpx.Timeout(1800, connect=3)
@@ -200,7 +225,7 @@ class Ollama:
             with self._client(timeout) as client, client.stream("POST", "/api/chat", json=body) as response:
                 if response.status_code != 200:
                     response.read()
-                    raise OllamaError(f"Ollama refused the request (HTTP {response.status_code}).")
+                    raise OllamaRefused(f"Ollama refused the request (HTTP {response.status_code}).")
                 for line in response.iter_lines():
                     check()
                     if not line:

@@ -381,15 +381,36 @@ def test_license_consent_and_missing_models_never_simulate(client):
     assert all(not row["installed"] for row in client.get("/api/models").json())
 
 
-def test_auto_mode_missing_model_fails_truthfully(client, monkeypatch):
-    client.put("/api/settings", json={"autonomy": "auto"})
+def test_autopilot_waits_with_a_reason_when_no_model_is_installed(client, monkeypatch):
+    assert client.get("/api/settings").json()["autonomy"] == "auto"
     video = upload_mock(client, monkeypatch)
-    job = client.get("/api/jobs").json()[0]
-    final = wait_job(client, job["id"])
-    assert final["status"] == "failed"
-    assert "Download and accept" in final["error"]
+    # No failed job is manufactured: the source waits and the factory says what is missing.
+    assert client.get("/api/jobs").json() == []
+    line = client.get("/api/factory").json()
+    assert line["autopilot"] is True and line["ready"] is False and line["model_id"] is None
+    assert any(b["code"] == "model" and b["tab"] == "Models" for b in line["blockers"])
+    source = line["sources"][0]
+    assert source["video_id"] == video["id"] and source["state"] == "idle"
+    assert source["can_produce"] is False and source["blocked_reason"]
+    assert [stage["key"] for stage in source["stages"]] == ["import", "listen", "watch", "select", "edit", "render"]
+    assert source["stages"][0]["status"] == "done" and source["stages"][1]["status"] == "skipped"
     assert client.get("/api/clips").json() == []
     assert client.app.state.store.get("videos", video["id"])["analysis"] is None
+
+
+def test_settings_patch_keeps_unspecified_fields_and_validates(client):
+    assert client.put("/api/settings", json={"brand": "Kept brand", "objective": "sales"}).status_code == 200
+    patched = client.patch("/api/settings", json={"autonomy": "review", "clip_count": 5})
+    assert patched.status_code == 200, patched.text
+    saved = client.get("/api/settings").json()
+    assert saved == patched.json()
+    assert (saved["brand"], saved["objective"], saved["autonomy"], saved["clip_count"]) == (
+        "Kept brand", "sales", "review", 5,
+    )
+    assert saved["default_model"] == ""
+    for invalid in [{"clip_count": 7}, {"clip_count": 0}, {"default_model": "gpt-4"}, {"unknown": 1}]:
+        assert client.patch("/api/settings", json=invalid).status_code == 422
+    assert client.get("/api/settings").json() == saved
 
 
 def test_manual_events_are_separate_unknown_is_not_zero(client):
@@ -611,19 +632,19 @@ def test_candidate_parser_preserves_valid_rows_when_other_rows_are_invalid():
 
 
 @pytest.mark.parametrize("repair_succeeds", [True, False])
-def test_analysis_repairs_invalid_long_ranges_once(client, monkeypatch, repair_succeeds):
-    video = upload_mock(client, monkeypatch, duration=5094.64381)
-    frames = [{"time": 212.28, "path": "observed-frame.jpg"}]
-    monkeypatch.setattr(media, "sample_frames", lambda *_: frames)
+def test_analysis_selects_storyboard_scenes_and_repairs_once(client, monkeypatch, watched, repair_succeeds):
+    video = upload_mock(client, monkeypatch, duration=600.0)
+    watched(client, scenes=10)
     monkeypatch.setattr(client.app.state.models, "require", lambda *_: None)
-    prompts = []
+    prompts, schemas = [], []
 
     def generate(job, model, action, **payload):
         prompts.append(payload["prompt"])
-        assert payload["images"] == ["observed-frame.jpg"]
-        short_range = len(prompts) == 2 and repair_succeeds
+        schemas.append(payload["schema"])
+        assert "images" not in payload  # the storyboard already carries what the vision model saw
+        known = len(prompts) == 2 and repair_succeeds
         return {"output": json.dumps({"candidates": [{
-            "start": 212.28, "end": 242.28 if short_range else 636.83,
+            "scene": "scene:3" if known else "scene:99", "start": 200, "end": 260,
             "hook": "Source-backed moment", "caption": "Review this source range",
         }]})}
 
@@ -632,14 +653,16 @@ def test_analysis_repairs_invalid_long_ranges_once(client, monkeypatch, repair_s
     assert response.status_code == 202
     job = wait_job(client, response.json()["id"])
     assert len(prompts) == 2
-    assert '"suggested_windows":' in prompts[0]
-    assert '"start": 182.28' in prompts[0]
+    assert '"storyboard":' in prompts[0] and "Visible source scene 3" in prompts[0]
+    scene = schemas[0]["properties"]["candidates"]["items"]["properties"]["scene"]
+    assert scene["enum"] == [f"scene:{index}" for index in range(10)]
     assert "Your previous response had no valid candidates" in prompts[1]
     stored = client.app.state.store.get("videos", video["id"])
     if repair_succeeds:
         assert job["status"] == "completed", job
-        assert stored["analysis"]["candidates"][0]["end"] == 242.28
-        assert stored["analysis"]["candidates"][0]["start"] == 212.28
+        # Scene 3 covers 180-240s: the proposal is fitted inside the scene it names.
+        assert stored["analysis"]["candidates"][0]["start"] == 200
+        assert stored["analysis"]["candidates"][0]["end"] == 240
     else:
         assert job["status"] == "failed"
         assert "no valid clip ranges" in job["error"]
