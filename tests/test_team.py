@@ -428,6 +428,19 @@ def test_strategy_keeps_valid_angles_when_another_cannot_be_used(harness, invali
     assert len(harness.rendered) == 1
 
 
+def test_editor_receives_only_accepted_moment_evidence_and_explicit_angle_ranges(harness):
+    harness.store.patch("videos", "source", transcript={"segments": [
+        {"start": 0, "end": 1, "text": "Unselected speech"}
+    ]})
+    run, _ = harness.execute()
+    editor = harness.models.calls[3]["data"]
+    assert set(run["context"]["evidence"]) >= {"frame:0", "frame:1", "transcript:0", "source:source"}
+    assert editor["evidence"] == {"frame:0": {"time": 0.5, "type": "sampled_frame"}}
+    assert editor["allowed_source_ranges"] == {
+        "angle-1": {"start": 0, "end": 2, "objective": "sales", "evidence_refs": ["frame:0"]}
+    }
+
+
 @pytest.mark.parametrize("role_index", [1, 3])
 def test_grounding_correction_stops_after_one_rejected_retry(harness, role_index):
     outputs = script()[:role_index + 1]

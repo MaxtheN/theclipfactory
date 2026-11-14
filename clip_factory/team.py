@@ -440,7 +440,7 @@ class TeamEngine:
             "footage_analyst": "Identify 1-3 source-backed moments of 30-60 seconds, never more than 180 seconds. Cite only 1-4 representative evidence reference IDs per moment. Every cited transcript segment must overlap that moment's start/end; every cited frame time must lie inside it. Sampled frames do not prove unseen action or exact quotes.",
             "creative_strategist": "Propose distinct angles from validated moments. moment_index is a zero-based index into the supplied footage.moments list; multiple angles may reuse a moment. Hooks are short viewer-facing text, not editing instructions. Rendering supports existing source footage, approved framing/text hook settings, and spoken subtitles; do not propose B-roll, illustrative graphics, or split-screen effects. Keep a specified objective; in discovery label distinct intended outcomes without claiming results.",
             "performance_analyst": "Recommend changes using actual observations or feedback, citing their IDs. Missing/zero/stale and manual/platform evidence differ; attribution never proves causal impact.",
-            "editor": "Propose 1-3 source ranges and creative metadata. Each must fit entirely in its angle's validated moment and use its objective. Cite only exact evidence_refs listed in that selected moment, including when revising a caption; do not add references from other moments or critic findings. Hooks are short viewer-facing text, not instructions for unsupported visual effects. Never invent quoted speech.",
+            "editor": "Propose 1-3 source ranges and creative metadata. allowed_source_ranges gives the exact permitted range, objective and evidence_refs for each angle_id. Multiple angles may reuse the same range; never infer sequential ranges from angle order. Each candidate must fit entirely in its angle's permitted range and use its objective. Cite only evidence_refs listed for that angle, including when revising a caption; do not add references from other moments or critic findings. Hooks are short viewer-facing text, not instructions for unsupported visual effects. Never invent quoted speech.",
             "critic": "Check source context, factual claims, caption support, and duplicates independently. Use unknown when evidence is insufficient. Report blocking findings, not confidence scores. No approval authority.",
         }[role]
 
@@ -725,6 +725,18 @@ class TeamEngine:
                 validate=validate_strategy,
             )
             angles = {a["id"]: a for a in strategy["angles"]}
+            allowed_source_ranges = {}
+            for angle in strategy["angles"]:
+                moment = footage["moments"][angle["moment_index"]]
+                allowed_source_ranges[angle["id"]] = {
+                    "start": moment["start"],
+                    "end": moment["end"],
+                    "objective": angle["objective"],
+                    "evidence_refs": moment["evidence_refs"],
+                }
+            editor_refs = {
+                ref for source_range in allowed_source_ranges.values() for ref in source_range["evidence_refs"]
+            }
             omitted_edits = []
 
             def validate_edits(output):
@@ -768,7 +780,8 @@ class TeamEngine:
                 "objective": run["objective"],
                 "strategy": strategy,
                 "footage": footage,
-                "evidence": evidence,
+                "evidence": {ref: evidence[ref] for ref in refs if ref in editor_refs},
+                "allowed_source_ranges": allowed_source_ranges,
                 "performance": performance,
                 "approved_campaign_direction": context.get("campaign_snapshot"),
             }
