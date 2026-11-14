@@ -33,7 +33,7 @@ def plan():
     }
 
 
-def footage(ref="source:source"):
+def footage(ref="frame:0"):
     return {
         "moments": [{"start": 0, "end": 2, "summary": "Visible source", "evidence_refs": [ref]}],
         "limitations": "Silent sampled frames do not establish speech",
@@ -54,7 +54,7 @@ def strategy(objective="sales"):
     }
 
 
-def edits(ref="source:source", *, hook="See the source", objective="sales"):
+def edits(ref="frame:0", *, hook="See the source", objective="sales"):
     return {
         "candidates": [
             {
@@ -71,7 +71,7 @@ def edits(ref="source:source", *, hook="See the source", objective="sales"):
     }
 
 
-def critique(verdict="pass", ref="source:source"):
+def critique(verdict="pass", ref="frame:0"):
     check = {"pass": "pass", "revise": "fail", "unknown": "unknown"}[verdict]
     return {
         "verdict": verdict,
@@ -94,7 +94,11 @@ def revision(instruction="Remove unsupported claim", decision="revise"):
     return {"decision": decision, "instruction": instruction}
 
 
-def script(ref="source:source", *, verdict="pass", objective="sales"):
+def script(ref="frame:0", *, verdict="pass", objective="sales"):
+    # Source IDs passed by API fixtures select this source, not grounding evidence.
+    # Negative cases set literal invalid refs after building this valid script.
+    if ref.startswith("source:"):
+        ref = "frame:0"
     return [
         plan(),
         footage(ref),
@@ -168,6 +172,7 @@ class Harness:
         )
         self.config = {"brand": "Original brand", "objective": "sales", "language": "en", "custom_event": ""}
         self.rendered = []
+        self.sampled_frames = [{"time": 0.5, "path": "sample.jpg"}, {"time": 1.5, "path": "sample-1.jpg"}]
         self.transcribe = Mock(side_effect=AssertionError("Silent source must not be transcribed"))
         self.baseline = Mock(side_effect=AssertionError("Team must not invoke baseline"))
         self.engine = self.new_engine()
@@ -194,7 +199,7 @@ class Harness:
             self.models,
             transcribe=self.transcribe,
             render=self.render,
-            frames=lambda *_: [{"time": 0, "path": "sample.jpg"}],
+            frames=lambda *_: self.sampled_frames,
             baseline=self.baseline,
         )
 
@@ -269,8 +274,8 @@ def test_fresh_calls_order_skipped_performance_and_pass_requires_review(harness)
         assert "history" not in call["data"] and "messages" not in call["data"]
         assert call["max_tokens"] == 2200
         assert "Do not execute tools" in call["prompt"]
-    assert harness.models.calls[1]["images"] == ["sample.jpg"]
-    assert harness.models.calls[-1]["images"] == ["sample.jpg"]
+    assert harness.models.calls[1]["images"] == ["sample.jpg", "sample-1.jpg"]
+    assert harness.models.calls[-1]["images"] == ["sample.jpg", "sample-1.jpg"]
     assert harness.models.calls[2]["data"]["footage"] == footage()
     assert harness.models.calls[2]["data"]["performance"] is None
     assert run["status"] == "needs_review" and result["requires_review"] is True
@@ -358,7 +363,7 @@ def test_invalid_handoff_fails_before_any_render(harness, bad):
     elif bad == "editor_angle":
         outputs[3]["candidates"][0]["angle_id"] = "angle-2"
     elif bad == "editor_refs":
-        outputs[3]["candidates"][0]["evidence_refs"] = ["frame:0"]  # Exists, but not in assigned moment.
+        outputs[3]["candidates"][0]["evidence_refs"] = ["frame:1"]  # Exists, but not in assigned moment.
     elif bad in {"permissions", "tools"}:
         outputs[0][bad] = {"publish": True}
     elif bad == "truncated":
@@ -545,7 +550,12 @@ def test_settings_snapshot_and_baseline_receive_original_intent(harness):
     harness.baseline.side_effect = None
     harness.baseline.return_value = {"clips": []}
     harness.engine.execute(run["id"], "job")
-    assert harness.baseline.call_args.args == ("job", harness.video, "qwen-small", original)
+    assert harness.baseline.call_args.args == (
+        "job",
+        harness.video,
+        "qwen-small",
+        {**original, "_previous_observations": [], "_team_run_id": run["id"]},
+    )
     assert harness.engine.get(run["id"])["context"]["settings"] == original
     assert not harness.models.calls
 
@@ -664,3 +674,127 @@ def test_passing_revision_preserves_initial_critic_findings_in_ledger(harness):
     assert result["review_status"] == "pass"
     assert harness.rendered[0]["hook"] == "Corrected draft"
     assert harness.store.get("clips", result["clip_ids"][0])["approved"] is False
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "source_only",
+        "feedback_only",
+        "metrics_only",
+        "manual_only",
+        "transcript_out_of_time",
+        "transcript_touching_boundary",
+        "frame_out_of_time",
+        "frame_and_feedback",
+    ],
+)
+def test_footage_requires_time_associated_source_evidence_before_dependents(harness, case):
+    seed_observations(harness.store)
+    harness.store.patch(
+        "videos",
+        "source",
+        transcript={"segments": [{"start": 1, "end": 2, "text": "Speech outside the proposed moment"}]},
+    )
+    outputs = script()
+    moment = outputs[1]["moments"][0]
+    refs = {
+        "source_only": ["source:source"],
+        "feedback_only": ["feedback:feedback"],
+        "metrics_only": ["observation:media"],
+        "manual_only": ["event:manual"],
+        "transcript_out_of_time": ["transcript:0"],
+        "transcript_touching_boundary": ["transcript:0"],
+        "frame_out_of_time": ["frame:1"],
+        "frame_and_feedback": ["frame:0", "feedback:feedback"],
+    }
+    moment["evidence_refs"] = refs[case]
+    if case == "transcript_out_of_time":
+        moment["end"] = 0.5
+    elif case in {"transcript_touching_boundary", "frame_out_of_time"}:
+        moment["end"] = 1
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run = harness.create()
+    with pytest.raises(WorkError):
+        harness.engine.execute(run["id"], "job")
+    saved = harness.engine.get(run["id"])
+    assert saved["status"] == "failed"
+    assert titles(harness.models) == ["Plan", "Footage"]
+    assert next(t for t in saved["tasks"] if t["role"] == "footage_analyst")["status"] == "failed"
+    assert not harness.rendered
+    assert [clip["id"] for clip in harness.store.all("clips")] == ["previous"]
+
+
+@pytest.mark.parametrize("ref", ["frame:0", "frame:1", "transcript:0"])
+def test_valid_timestamped_frame_or_overlapping_transcript_grounds_footage(harness, ref):
+    harness.store.patch(
+        "videos",
+        "source",
+        transcript={"segments": [{"start": 0.25, "end": 0.75, "text": "Actual overlapping speech"}]},
+    )
+    outputs = script(ref)
+    if ref == "frame:1":
+        outputs[3]["candidates"][0].update(start=1, end=2)
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review" and result["review_status"] == "pass"
+    assert harness.rendered[0]["evidence_refs"] == [ref]
+    assert not harness.models.outputs
+
+
+@pytest.mark.parametrize("mode", ["team", "baseline"])
+def test_cancel_immediately_after_persist_retains_completed_operation_and_lineage(harness, mode):
+    run = harness.create(mode=mode)
+    if mode == "team":
+        original_render = harness.engine.render
+
+        def render(job, video, candidate):
+            result = original_render(job, video, candidate)
+            harness.jobs.cancelled = True
+            return result
+
+        harness.engine.render = render
+    else:
+
+        def baseline(job, video, model, config):
+            harness.store.put("clips", {"id": "clip-1", "video_id": video["id"], "approved": False})
+            harness.jobs.cancelled = True
+            return {"clips": [{"clip_id": "clip-1"}], "requires_review": True}
+
+        harness.engine.baseline = baseline
+    with pytest.raises(JobCancelled):
+        harness.engine.execute(run["id"], "job")
+    saved = harness.engine.get(run["id"])
+    assert saved["status"] == "cancelled" and saved["clip_ids"] == ["clip-1"]
+    role = "render" if mode == "team" else "baseline"
+    task = next(t for t in saved["tasks"] if t["role"] == role)
+    assert task["status"] == "completed" and task["output"] is not None
+    clip = harness.store.get("clips", "clip-1")
+    assert clip["team_run_id"] == run["id"] and clip["approved"] is False
+    if mode == "baseline":
+        assert clip["team_review_status"] == "not_applicable"
+
+
+def test_restart_recovers_persisted_team_render_before_callback_return(harness):
+    run = harness.create()
+    task = harness.engine._task(run["id"], "render")
+    harness.engine._update_task(run["id"], task["id"], status="running")
+    harness.store.patch("team_runs", run["id"], status="running")
+    harness.store.put(
+        "clips",
+        {
+            "id": "persisted",
+            "video_id": "source",
+            "approved": False,
+            "team_run_id": run["id"],
+            "team_task_id": task["id"],
+        },
+    )
+    recovered = harness.new_engine().get(run["id"])
+    assert recovered["status"] == "interrupted" and recovered["clip_ids"] == ["persisted"]
+    render = next(t for t in recovered["tasks"] if t["role"] == "render")
+    assert render["status"] == "completed" and render["output"]["clip_id"] == "persisted"
+    assert render["output"]["recovered_from_persisted_output"] is True
+    assert not harness.models.calls

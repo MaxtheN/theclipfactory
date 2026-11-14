@@ -54,7 +54,11 @@ def install_mock_render(client, monkeypatch):
         return {"clip_id": identifier}
 
     monkeypatch.setattr(client.app.state.team, "render", render)
-    monkeypatch.setattr(client.app.state.team, "frames", lambda *_: [])
+    monkeypatch.setattr(
+        client.app.state.team,
+        "frames",
+        lambda *_: [{"time": 0.5, "path": "fake-frame-0.jpg"}, {"time": 1.5, "path": "fake-frame-1.jpg"}],
+    )
     return calls
 
 
@@ -127,6 +131,7 @@ def test_team_api_and_media_require_token_and_same_origin(client, monkeypatch, s
         ("GET", f"/api/team/comparisons?video_id={video['id']}"),
         ("POST", f"/api/team/runs/{run['id']}/cancel"),
         ("POST", f"/api/videos/{video['id']}/team"),
+        ("POST", f"/api/clips/{clip_id}/team-review"),
         ("GET", f"/api/clips/{clip_id}/media"),
         ("GET", f"/api/clips/{clip_id}/cover"),
     ]
@@ -314,11 +319,19 @@ def test_baseline_produce_uses_queued_snapshot_and_comparison_api(
     )
     worker_block.set()
     assert wait_job(client, baseline_job["id"])["status"] == "completed"
+    baseline_run = client.app.state.store.all("team_runs")[0]
     assert baseline_calls == [
         (
             video["id"],
             "qwen-small",
-            {"brand": "Original", "objective": "sales", "language": "en", "custom_event": ""},
+            {
+                "brand": "Original",
+                "objective": "sales",
+                "language": "en",
+                "custom_event": "",
+                "_previous_observations": [],
+                "_team_run_id": baseline_run["id"],
+            },
         )
     ]
     # Explicit baseline endpoint is independent of the currently selected team strategy.
