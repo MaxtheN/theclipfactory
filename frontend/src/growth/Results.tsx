@@ -13,6 +13,7 @@ import { postedRows, resultsStory, type PostedRow } from "./resultsModel";
 import { StrategistPanel } from "./StrategistPanel";
 import { GrowthLoopPanel } from "./GrowthLoopPanel";
 import { DemoLoopButton } from "./LearningLoopDemo";
+import "./results-minimal.css";
 import { FactoryUpgrades } from "./FactoryUpgrades";
 import { PanelDialog } from "./PanelDialog";
 import type { StrategistView } from "./strategistApi";
@@ -1131,7 +1132,11 @@ export function Results({
     pendingRules: pendingCount,
     now,
   });
-  const [section, setSection] = useState<"posts" | "insights">("posts");
+  const [moreOpen, setMoreOpen] = useState(false);
+  const posted = rows.length + untracked.length;
+  const measuring = rows.filter((r) => r.window < 1).length;
+  const learned = (view?.beliefs ?? []).filter((b) => b.status !== "retired" && b.counts.matching > 0);
+  const connected = (data.scoped?.accounts ?? []).length > 0;
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [upgradesOpen, setUpgradesOpen] = useState(false);
@@ -1153,28 +1158,40 @@ export function Results({
   }, [visible, toAccounts]);
 
   return (
-    <div className="gf-results-page">
-      <StoryHeader story={story} />
-      <div className="gf-results-workspace-bar">
-        <div className="gf-results-workspace-switch" role="group" aria-label="Results view">
-          <button type="button" aria-pressed={section === "posts"} onClick={() => setSection("posts")}>
-            <Icon name="play" size={15} /> Posted clips
-            {rows.length + untracked.length > 0 && <span>{rows.length + untracked.length}</span>}
+    <div className="gf-results-page is-minimal">
+      <header className="gf-results-top">
+        <dl className="gf-results-strip">
+          <div><dt>Posted</dt><dd>{posted}</dd></div>
+          <div><dt>Measuring</dt><dd>{measuring}</dd></div>
+          <div><dt>Learned</dt><dd>{learned.length}</dd></div>
+        </dl>
+        <div className="gf-results-top-actions">
+          <button type="button" className={`gf-results-ig${connected ? " is-on" : ""}`} onClick={toAccounts}>
+            <i aria-hidden="true" /> Instagram: {connected ? "connected" : "connect"}
           </button>
-          <button type="button" aria-pressed={section === "insights"} onClick={() => setSection("insights")}>
-            <Icon name="results" size={15} /> Insights
-            {pendingCount + drafts.length > 0 && <span>{pendingCount + drafts.length} to review</span>}
-          </button>
+          {onRehearse && <DemoLoopButton compact onClick={onRehearse} />}
         </div>
-        {onRehearse && <DemoLoopButton compact onClick={onRehearse} />}
-        <button type="button" className="gf-button secondary compact" onClick={toAccounts}>
-          <Icon name="link" size={15} /> Accounts & tracking
-        </button>
-      </div>
-      <div className="gf-results-workspace-view" hidden={section !== "posts"}>
-        <PostedClips rows={rows} untracked={untracked} error={data.error} onAccounts={toAccounts} />
-      </div>
-      <div className="gf-results-workspace-view" hidden={section !== "insights"}>
+      </header>
+      <p id="gf-results-now" className="gf-results-now" role="status">{story.headline}</p>
+      <section className="gf-results-learned" aria-labelledby="gf-results-learned-title">
+        <h2 id="gf-results-learned-title">What we learned</h2>
+        {learned.length ? (
+          <div className="gf-results-learned-grid">
+            {learned.map((belief) => (
+              <article key={belief.id} className="gf-results-belief">
+                <strong>{belief.statement}</strong>
+                <span className="gf-results-belief-bar" aria-hidden="true"><i style={{ width: `${Math.round(belief.confidence * 100)}%` }} /></span>
+                <small>{Math.round(belief.confidence * 100)}% sure · {belief.counts.matching} posts</small>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="gf-results-empty">No measured posts yet.{onRehearse && <> <button type="button" className="gf-strategist-link" onClick={onRehearse}>See the learning loop</button></>}</p>
+        )}
+      </section>
+      {posted > 0 && <PostedClips rows={rows} untracked={untracked} error={data.error} onAccounts={toAccounts} />}
+      <details className="gf-results-more" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
+        <summary>Strategist and tools{pendingCount + drafts.length > 0 ? ` · ${pendingCount + drafts.length} to review` : ""}</summary>
       {visible && w.profileId && (
         <StrategistPanel
           key={w.profileId}
@@ -1234,18 +1251,16 @@ export function Results({
         campaignId={w.campaign.id}
         strategyVersionId={activeRulesId(w) || w.campaign.active_strategy_id || null}
         clips={clips}
-        visible={visible && section === "insights"}
+        visible={visible && moreOpen}
         onReview={onReview}
         onEditingRules={onEditingRules}
         onRehearse={onRehearse}
       />}
-      </div>
-      <footer className="gf-results-workspace-tools">
-        <div>
+        <div className="gf-results-workspace-tools">
           <button type="button" onClick={() => setManualOpen(true)}><Icon name="upload" size={15} /> Add a result by hand</button>
           <button type="button" onClick={() => setUpgradesOpen(true)}><Icon name="settings" size={15} /> Factory upgrades</button>
         </div>
-      </footer>
+      </details>
       <PanelDialog open={accountsOpen && visible} onClose={() => setAccountsOpen(false)} title="Instagram accounts" description="Connect an account, track a post, or set its measurement window.">
         <div className="gf-results-accounts">
           <AutomationPanel

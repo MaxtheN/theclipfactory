@@ -1,0 +1,26 @@
+/* Results, minimal: three numbers, learnings, everything else folded away. */
+.gf-results-page.is-minimal { display: grid; gap: 20px; }
+.gf-results-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.gf-results-strip { display: flex; gap: 32px; margin: 0; }
+.gf-results-strip div { display: grid; gap: 2px; }
+.gf-results-strip dt { font-size: 12px; color: var(--material-secondary, #616a6e); order: 2; }
+.gf-results-strip dd { margin: 0; font-size: 32px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; order: 1; }
+.gf-results-top-actions { display: flex; gap: 10px; align-items: center; }
+.gf-results-ig {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--material-line, #dad6ce); background: transparent; font: inherit; font-size: 13px; color: inherit;
+}
+.gf-results-ig i { width: 7px; height: 7px; border-radius: 50%; background: #9aa0a3; }
+.gf-results-ig.is-on i { background: #2f7d4f; }
+.gf-results-page.is-minimal .gf-results-now { margin: 0; font-size: 15px; color: var(--material-secondary, #616a6e); }
+.gf-results-learned h2 { margin: 0 0 10px; font-size: 18px; }
+.gf-results-learned-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.gf-results-belief { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--material-line, #dad6ce); border-radius: 10px; background: #fff; }
+.gf-results-belief strong { font-size: 15px; font-weight: 600; }
+.gf-results-belief small { font-size: 12px; color: var(--material-secondary, #616a6e); }
+.gf-results-belief-bar { height: 5px; border-radius: 2px; background: #eeebe5; overflow: hidden; }
+.gf-results-belief-bar i { display: block; height: 100%; background: #e8590c; }
+.gf-results-empty { margin: 0; color: var(--material-secondary, #616a6e); }
+.gf-results-more { border-top: 1px solid var(--material-line, #dad6ce); padding-top: 12px; }
+.gf-results-more > summary { cursor: pointer; font-size: 14px; color: var(--material-secondary, #616a6e); }
+.gf-results-more[open] > summary { margin-bottom: 16px; }

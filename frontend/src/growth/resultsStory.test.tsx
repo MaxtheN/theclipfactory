@@ -160,20 +160,20 @@ describe("Results page", () => {
     const next = vi.fn();
     const onRehearse = vi.fn();
     const { rerender } = render(<Results w={w} factory={factory} next={next} onRehearse={onRehearse} />);
-    const header = screen.getByRole("list", { name: "Post, measure, learn" });
-    expect(within(header).getByText("Post")).toBeTruthy();
+    expect(screen.getByText("Posted")).toBeTruthy();
+    expect(screen.getByText("Measuring")).toBeTruthy();
+    expect(screen.getByText("Learned")).toBeTruthy();
     expect(screen.getByText("Nothing posted yet — approve a clip and post it")).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "What we've learned" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Insights" }));
-    expect(await screen.findByRole("heading", { name: "What we've learned" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Rehearse the loop" }));
+    expect(screen.getByRole("heading", { name: "What we learned" })).toBeTruthy();
+    expect(screen.getByText(/No measured posts yet/)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Posted clips" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Run the learning loop/ }));
     expect(onRehearse).toHaveBeenCalledOnce();
     expect(document.querySelector("iframe")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Next experiment" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Waiting for you" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "What we've learned" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "See how it learns (simulated data)" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Accounts & tracking" }));
+    fireEvent.click(screen.getByRole("button", { name: /Instagram: connect/ }));
     const accounts = screen.getByRole("dialog", { name: "Instagram accounts" });
     expect(within(accounts).getByRole("heading", { name: "Connect, track and measure" })).toBeTruthy();
     fireEvent(accounts, new Event("cancel", { cancelable: true }));
@@ -185,10 +185,7 @@ describe("Results page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add a result by hand" }));
     expect(within(screen.getByRole("dialog", { name: "Add a result by hand" })).getByLabelText("What would we like to learn?")).toHaveValue("Does a direct opening help?");
     fireEvent.click(screen.getByRole("button", { name: "Close Add a result by hand" }));
-    fireEvent.click(screen.getByRole("button", { name: "Posted clips" }));
-    expect(screen.getByRole("heading", { name: "Posted clips" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "What we've learned" })).toBeNull();
-    const text = screen.getByRole("list", { name: "Post, measure, learn" }).textContent ?? "";
+    const text = document.querySelector(".gf-results-top")?.textContent ?? "";
     for (const word of [/No winner/i, /\bpolicy\b/i, /snapshot/i, /publication mapping/i, /PLAN THE NEXT/])
       expect(text).not.toMatch(word);
     for (const hash of ["#gf-accounts", "#connections"]) {

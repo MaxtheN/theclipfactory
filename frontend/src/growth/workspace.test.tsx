@@ -485,7 +485,7 @@ describe("approval transition regressions", () => {
     });
     localStorage.setItem("growth-view-v2", "results");
     render(<GrowthApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Insights/ }));
+    fireEvent.click(await screen.findByText(/^Strategist and tools/));
     fireEvent.click(screen.getByRole("button", { name: "Add a result by hand" }));
     await screen.findByRole("button", { name: /^Approve next test\b/ });
     fireEvent.change(screen.getByLabelText("Proposed source-selection rule"), {
