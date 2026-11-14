@@ -537,6 +537,22 @@ def test_invalid_revision_retains_validated_draft_with_unresolved_review(harness
     assert any(t["role"] == "editor" and t["iteration"] == 1 and t["status"] == "failed" for t in run["tasks"])
 
 
+def test_invalid_editor_candidate_does_not_discard_other_validated_drafts(harness):
+    outputs = script()
+    invalid = copy.deepcopy(outputs[3]["candidates"][0])
+    invalid.update(end=3, hook="Rejected out-of-range candidate")
+    outputs[3]["candidates"].insert(0, invalid)
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, result = harness.execute()
+    assert run["status"] == "needs_review"
+    assert "Omitted 1 invalid editor candidates" in run["stop_reason"]
+    assert result["review_status"] == "pass"
+    assert len(harness.rendered) == 1
+    assert harness.rendered[0]["hook"] == "See the source"
+    assert harness.store.get("clips", result["clip_ids"][0])["approved"] is False
+
+
 @pytest.mark.parametrize("stop", ["repeated_edit", "repeated_instruction", "producer_stop"])
 def test_non_progress_stops_dependent_calls(harness, stop):
     outputs = script(verdict="revise")

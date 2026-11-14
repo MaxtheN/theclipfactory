@@ -658,21 +658,33 @@ class TeamEngine:
                 validate=validate_strategy,
             )
             angles = {a["id"]: a for a in strategy["angles"]}
+            omitted_edits = []
 
             def validate_edits(output):
+                valid = []
+                rejected = None
                 for candidate in output["candidates"]:
-                    angle = angles.get(candidate["angle_id"])
-                    if not angle:
-                        raise WorkError("Editor referenced an unavailable creative angle.")
-                    moment = footage["moments"][angle["moment_index"]]
-                    if not moment["start"] <= candidate["start"] < candidate["end"] <= moment["end"]:
-                        raise WorkError("Editor range is outside its validated source moment.")
-                    if (
-                        candidate["end"] - candidate["start"] > 180
-                        or candidate["objective"] != angle["objective"]
-                    ):
-                        raise WorkError("Editor changed the assigned outcome or exceeded clip limits.")
-                    self._refs(candidate["evidence_refs"], {k: evidence[k] for k in moment["evidence_refs"]})
+                    try:
+                        angle = angles.get(candidate["angle_id"])
+                        if not angle:
+                            raise WorkError("Editor referenced an unavailable creative angle.")
+                        moment = footage["moments"][angle["moment_index"]]
+                        if not moment["start"] <= candidate["start"] < candidate["end"] <= moment["end"]:
+                            raise WorkError("Editor range is outside its validated source moment.")
+                        if (
+                            candidate["end"] - candidate["start"] > 180
+                            or candidate["objective"] != angle["objective"]
+                        ):
+                            raise WorkError("Editor changed the assigned outcome or exceeded clip limits.")
+                        self._refs(candidate["evidence_refs"], {k: evidence[k] for k in moment["evidence_refs"]})
+                    except WorkError as exc:
+                        rejected = exc
+                        continue
+                    valid.append(candidate)
+                if not valid:
+                    raise rejected
+                omitted_edits.append(len(output["candidates"]) - len(valid))
+                output["candidates"] = valid
 
             def validate_critique(output):
                 for finding in output["findings"]:
@@ -805,6 +817,8 @@ class TeamEngine:
                 clip_ids.append(result["clip_id"])
                 self.store.patch("team_runs", run_id, clip_ids=list(clip_ids))
 
+            if sum(omitted_edits):
+                stop = f"{stop or 'Human review is required.'} Omitted {sum(omitted_edits)} invalid editor candidates."
             self._finish(run_id, "needs_review", stop)
             return {
                 "team_run_id": run_id,
