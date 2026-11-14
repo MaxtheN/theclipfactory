@@ -64,7 +64,9 @@ client object internals, full httpx request/response, or raw exception locals.
   `code="processing_timeout"`; ownership failure uses `code="ownership"`.
 - `MetaClient(access_token: str, graph_version: str = "v22.0", transport=None)`
   supports a context manager and `close()`; clients are intended per operation/job.
-  No logging is performed. Normal Graph authentication is a **Bearer header**, never
+  No logging is performed. Context-local filters suppress httpx/httpcore request
+  logging during adapter IO (including OAuth URL logging at INFO), without silencing
+  unrelated concurrent requests. Normal Graph authentication is a **Bearer header**, never
   an access-token query parameter. Redirects and environment HTTP proxies are disabled.
 - `discover_account(account_id: str | None = None) -> dict` reads `/me/accounts`
   with Page access tokens and linked `instagram_business_account` fields. A Page
@@ -151,8 +153,8 @@ Official POST support for this Facebook authorization-code flow could not be
 verified (do not confuse it with Instagram Login's POST endpoint). The helper uses
 that documented GET, sends **no access token**, disables retries, and redacts errors.
 **The app secret and code necessarily occur in this one server-side request URL**:
-do not enable httpx/httpcore debug logs or proxy URL capture, and never log OAuth
-request objects. There is no speculative POST or insecure fallback.
+the adapter suppresses httpx/httpcore library logs in its IO context, but also
+disable proxy URL capture/custom transport tracing and never log OAuth request objects. There is no speculative POST or insecure fallback.
 
 ## Official references checked November 14, 2026
 

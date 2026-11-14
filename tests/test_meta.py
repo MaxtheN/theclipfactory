@@ -460,3 +460,88 @@ def test_invalid_ids_do_not_reach_graph():
             meta.discover_account("../../me")
         with pytest.raises(MetaError):
             meta.fetch_paid_insights("act_../me")
+
+
+def test_library_logging_cannot_leak_oauth_url_or_headers(caplog):
+    import logging
+
+    import clip_factory.meta as module
+
+    def handler(request):
+        # Covers library debug records as well as HTTPX's own automatic INFO URL record.
+        logging.getLogger("httpcore.http11").debug("request=%s token=%s", request.url, TOKEN)
+        return httpx.Response(200, json={"access_token": TOKEN})
+
+    caplog.set_level(logging.DEBUG)
+    oauth = MetaOAuth(
+        "1", "app-secret", "https://app.creator.com/callback", transport=httpx.MockTransport(handler)
+    )
+    _, state = oauth.authorization_url()
+    assert oauth.exchange_code("code-secret", state) == TOKEN
+    assert "app-secret" not in caplog.text
+    assert "code-secret" not in caplog.text
+    assert TOKEN not in caplog.text
+    assert module._sensitive_io.get() is False
+    logging.getLogger("httpx").info("unrelated request still logged")
+    assert "unrelated request still logged" in caplog.text
+
+
+@pytest.mark.parametrize("status,code", [(400, 190), (403, 200), (400, 100), (302, None)])
+def test_nontransient_or_redirect_not_retried(status, code):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(
+            status, headers={"Location": "https://evil.com"}, json={"error": {"code": code}}
+        )
+
+    with client(handler) as meta, pytest.raises(MetaError):
+        meta.discover_account("30")
+    # Code 100 permits exactly the ownership-safe Page-token fallback, not a retry.
+    assert len(calls) == (2 if code == 100 else 1)
+    assert all(r.url.host == "graph.facebook.com" for r in calls)
+
+
+@pytest.mark.parametrize("state", [None, {}, []])
+def test_malformed_processing_status_is_safe_error(state):
+    handler, calls = publish_handler([state])
+    with client(handler) as meta, pytest.raises(MetaError, match="unknown container status"):
+        meta.publish_reel("30", "https://cdn.creator.com/reel.mp4", "")
+    assert not any(r.url.path.endswith("/media_publish") for r in calls)
+
+
+def test_pagination_loop_is_bounded():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "data": [],
+                "paging": {"next": "https://graph.facebook.com/next", "cursors": {"after": "same-cursor"}},
+            },
+        )
+
+    with client(handler) as meta, pytest.raises(MetaError, match="pagination"):
+        meta.discover_account()
+    assert len(calls) == 2
+
+
+def test_malformed_insights_collection_is_not_fake_success():
+    def handler(request):
+        if request.url.path.endswith("/accounts"):
+            return httpx.Response(200, json=discovery())
+        if request.url.path.endswith("/media"):
+            return httpx.Response(200, json={"data": [{"id": "50"}]})
+        return httpx.Response(200, json={"data": None})
+
+    with client(handler) as meta, pytest.raises(MetaError, match="invalid insights"):
+        meta.fetch_insights("30")
+
+
+@pytest.mark.parametrize("url", ["https://224.0.0.1/x", "https://[ff02::1]/x"])
+def test_multicast_assets_are_not_public(url):
+    with pytest.raises(MetaError):
+        validate_public_video_url(url)

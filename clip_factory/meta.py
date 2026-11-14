@@ -9,16 +9,42 @@ from __future__ import annotations
 
 import hmac
 import ipaddress
+import logging
 import math
 import re
 import secrets
 import time
 from collections.abc import Callable, Iterator
+from contextvars import ContextVar
 from typing import Any, ClassVar, Self
 from urllib.parse import urlencode, urlsplit
 
 import httpx
 import keyring
+
+_sensitive_io: ContextVar[bool] = ContextVar("meta_sensitive_io", default=False)
+
+
+class _CredentialLogFilter(logging.Filter):
+    """Suppress library request/debug records only in this adapter's IO context.
+
+    HTTPX logs full URLs at INFO, including the documented OAuth exchange query.
+    ContextVars prevent suppression of unrelated requests in concurrent workers.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not _sensitive_io.get()
+
+
+for _logger_name in (
+    "httpx",
+    "httpcore.connection",
+    "httpcore.http11",
+    "httpcore.http2",
+    "httpcore.proxy",
+    "httpcore.socks",
+):
+    logging.getLogger(_logger_name).addFilter(_CredentialLogFilter())
 
 
 class MetaError(RuntimeError):
@@ -179,13 +205,17 @@ class MetaClient:
         safe_get = method == "GET" and retry_safe
         for attempt in range(3 if safe_get else 1):
             try:
-                response = self._http.request(
-                    method,
-                    f"{self._base}/{path}",
-                    params=params,
-                    data=data,
-                    headers={"Authorization": f"Bearer {token or self._token}"} if authenticated else {},
-                )
+                log_context = _sensitive_io.set(True)
+                try:
+                    response = self._http.request(
+                        method,
+                        f"{self._base}/{path}",
+                        params=params,
+                        data=data,
+                        headers={"Authorization": f"Bearer {token or self._token}"} if authenticated else {},
+                    )
+                finally:
+                    _sensitive_io.reset(log_context)
             except httpx.TransportError:
                 if safe_get and attempt < 2:
                     time.sleep(0.5 * (2**attempt))
@@ -277,7 +307,12 @@ class MetaClient:
         for page in pages:
             ig = page.get("instagram_business_account")
             page_token = page.get("access_token")
-            if not isinstance(ig, dict) or not isinstance(page_token, str) or not page_token:
+            if (
+                not isinstance(ig, dict)
+                or not isinstance(page_token, str)
+                or not page_token
+                or any(ord(c) < 33 or ord(c) > 126 for c in page_token)
+            ):
                 continue
             ig_id, page_id = ig.get("id"), page.get("id")
             if not isinstance(ig_id, str) or not isinstance(page_id, str):
@@ -352,7 +387,13 @@ class MetaClient:
                 break
             status = self._request("GET", container_id, token=token, params={"fields": "status_code"})
             state = status.get("status_code")
-            if state not in {"FINISHED", "IN_PROGRESS", "ERROR", "EXPIRED", "PUBLISHED"}:
+            if not isinstance(state, str) or state not in {
+                "FINISHED",
+                "IN_PROGRESS",
+                "ERROR",
+                "EXPIRED",
+                "PUBLISHED",
+            }:
                 raise MetaError("Meta returned an unknown container status; publishing stopped.")
             if poll_callback:
                 poll_callback({"container_id": container_id, "status_code": state, "attempt": attempt})
@@ -417,7 +458,7 @@ class MetaClient:
                     )
                     if value is None and isinstance(entry.get("total_value"), dict):
                         value = entry["total_value"].get("value")
-                    if type(value) in (int, float) and math.isfinite(value):
+                    if type(value) is int or (type(value) is float and math.isfinite(value)):
                         metrics[metric] = value
             rows.append(
                 {
