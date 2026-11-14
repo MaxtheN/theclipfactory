@@ -96,3 +96,62 @@ def test_readiness_runs_only_the_read_only_quota_tool(api):
     result = session.get("/api/publish/accounts/acct-1/readiness").json()
     assert result["status"] == "ready" and result["quota_total"] == 50
     assert fakes["client"].slugs() == ["INSTAGRAM_GET_IG_USER_CONTENT_PUBLISHING_LIMIT"]
+
+
+def test_post_package_cover_frames_and_schedule_endpoints(api, tmp_path):
+    from datetime import UTC, datetime, timedelta
+
+    from clip_factory.post_package import Covers
+
+    session, app, fakes, sha = api
+    publisher = app.state.publisher
+    publisher.storage_factory = lambda: fakes["storage"]
+    app.state.store.patch("clips", "clip-1", duration=12.0, craft={"cover": {"mode": "best_frame", "time": 3.0}})
+
+    def extract(_clip, time_ms, output):
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"\xff\xd8" + str(time_ms).encode())
+
+    publisher.covers = Covers(tmp_path, extract=extract)
+    view = session.get("/api/clips/clip-1/post-package").json()
+    assert view["limits"] == {"caption_chars": 2200, "hashtags": 30, "mentions": 20, "collaborators": 3,
+                              "collaborators_supported": False, "cover_bytes": 8 * 1024 * 1024}
+    assert len(view["candidates"]) == 6 and any(c["auto"] and c["time_ms"] == 3000 for c in view["candidates"])
+    frame = session.get(view["candidates"][0]["url"])
+    assert frame.status_code == 200 and frame.headers["content-type"] == "image/jpeg"
+    assert session.get("/api/clips/clip-1/cover-frames/99000").status_code == 422
+    collab = session.post("/api/clips/clip-1/post", json={"account_id": "acct-1", "caption": "Hi", "sha256": sha,
+                                                         "collaborators": ["friend"]})
+    assert collab.status_code == 422 and "collaborator" in collab.json()["detail"].lower()
+
+    when = (datetime.now(UTC) + timedelta(hours=3)).isoformat()
+    made = session.post("/api/clips/clip-1/schedule-post", json={
+        "account_ids": ["acct-1"], "captions": {"acct-1": "Later #reel"}, "sha256": sha, "publish_at": when,
+        "timezone": "Europe/London", "cover_time_ms": 6000, "share_to_feed": False})
+    assert made.status_code == 201, made.text
+    row = made.json()
+    assert row["attempts"][0]["state"] == "scheduled"
+    assert row["attempts"][0]["package"]["cover"]["source"] == "chosen_frame"
+    assert row["attempts"][0]["package"]["share_to_feed"] is False
+    targets = session.get("/api/clips/clip-1/post-targets").json()
+    assert targets["schedules"][0]["id"] == row["id"]
+    # The legacy direct-Meta schedule runner ignores this lane; archive guard still sees it.
+    assert app.state.store.get("schedules", row["id"])["lane"] == "instagram_post"
+    bad = session.post(f"/api/post-schedules/{row['id']}/decision", json={"action": "explode"})
+    assert bad.status_code == 422
+    cancelled = session.post(f"/api/post-schedules/{row['id']}/decision", json={"action": "cancel"}).json()
+    assert cancelled["status"] == "cancelled" and cancelled["attempts"][0]["state"] == "cancelled"
+    assert session.get("/api/post-schedules", params={"clip_id": "clip-1"}).json()[0]["status"] == "cancelled"
+    assert fakes["client"].calls == []
+
+
+def test_legacy_direct_meta_runner_ignores_post_lane_schedules(api):
+    import time
+
+    session, app, fakes, sha = api
+    app.state.store.put("schedules", {"id": "s-lane", "lane": "instagram_post", "clip_id": "clip-1",
+                                      "status": "scheduled", "publish_at": "2026-01-01T00:00:00+00:00",
+                                      "attempt_ids": [], "overdue_at": None})
+    time.sleep(2.6)  # the legacy runner wakes every 2 s inside the app lifespan
+    row = app.state.store.get("schedules", "s-lane")
+    assert row["status"] == "scheduled" and "error" not in row and "job_id" not in row

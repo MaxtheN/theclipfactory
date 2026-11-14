@@ -2138,7 +2138,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def run_schedules():
         while not app.state.schedule_stop.wait(2):
             for entry in store.all("schedules"):
-                if entry["status"] != "scheduled" or datetime.fromisoformat(
+                # Approve & post schedules run on their own lane (post_schedule.PostScheduler).
+                if entry.get("lane") or entry["status"] != "scheduled" or datetime.fromisoformat(
                     entry["publish_at"]
                 ) > datetime.now(UTC):
                     continue

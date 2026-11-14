@@ -148,6 +148,43 @@ Verdict `pass` only when no check fails and no critic hold applies; otherwise
 `hold` with reasons. Posting a held clip requires an explicit override reason,
 recorded on the attempt.
 
+## Post package (cover, caption, schedule)
+
+Verified 2026-11-14 against the pinned `INSTAGRAM_POST_IG_USER_MEDIA` `20261112_00` schema
+(tool metadata read only; nothing executed). It is `additionalProperties: false` and accepts
+`ig_user_id` (required), `caption`, `media_type`, `video_url`, `video_file`, `image_url`,
+`image_file`, `cover_url` (`^https?://`), `thumb_offset` (integer ms), `share_to_feed`,
+`location_id`, `user_tags` (Reels: username only), `audio_name`, `alt_text` (not for Reels),
+`children`, `is_carousel_item`, `graph_api_version`. **There is no `collaborators` field**, so
+collaborator invites (Graph API: up to 3) cannot be sent; the API refuses them with
+`collaborators_unsupported` and the panel says to @mention instead. Graph API Reels rules:
+cover JPEG ≤ 8 MB, 9:16 recommended, `cover_url` wins over `thumb_offset` (ms, default 0).
+
+- **Cover** (`clip_factory/post_package.py`): the render's own `<clip>.jpg` (craft cover,
+  `auto_best_frame`/`auto_first_frame`) or a frame the person picks from six candidates
+  (`GET /api/clips/{id}/post-package`, `GET /api/clips/{id}/cover-frames/{ms}`, 1080×1920 JPEG
+  under `publish_covers/`). During the upload step the still goes to `gf-publish` at
+  `<uid>/<sha256 of the jpg>.jpg` and is sent as `cover_url` after a public `HEAD`
+  (`image/jpeg`, exact size). If hosting is refused (migration `202611140003` not applied) or the
+  URL is unreadable at container time, the attempt sends `thumb_offset` = that frame's time and
+  records `cover_upload_failed` / `cover_url_unavailable`. Cover objects are deleted with the MP4.
+- **Caption**: the text is sent verbatim; limits 2,200 chars / 30 hashtags / 20 mentions are
+  enforced in the UI (live counters) and the API. `share_to_feed` defaults on.
+- **Record**: each attempt stores `package` (`caption_sha256`, `caption_chars`, `hashtags`,
+  `mentions`, `cta`, `share_to_feed`, `collaborators`, `location_id` (always null; location is
+  skipped), `cover {source, time_ms, sha256, bytes}`), `cover_mode`, `container_arguments`
+  (everything sent except the caption), `scheduled_for`, `schedule_id`, `posted_at`.
+- **Schedule** (`clip_factory/post_schedule.py`): `POST /api/clips/{id}/schedule-post
+  {account_ids, captions{account: text}, sha256, publish_at (with offset), timezone, ...}`
+  validates every account (all-or-nothing) and stores a `schedules` row with
+  `lane = "instagram_post"` plus one attempt per account in state `scheduled` (nothing external).
+  The legacy direct-Meta runner skips that lane; campaign archive and draft cleanup guards see it.
+  While the app is open the scheduler re-checks everything at the time and moves the attempts to
+  `created` on the normal publish lane. **The app must be open at that time.** A time that passed
+  while the app was closed or asleep (> 2 min late) is marked `overdue_at` and is never posted
+  without a click: `POST /api/post-schedules/{id}/decision {action: post_now|reschedule|cancel}`.
+  Cancelled attempts end `cancelled` and do not block a new post.
+
 ## Batch
 
 `POST /api/campaigns/{id}/post-batch {account_ids, clip_ids, captions?, override_reasons?}`
@@ -157,7 +194,9 @@ clip × account on the same sequential lane, with a short gap between items.
 ## First real post procedure
 
 1. Apply `supabase/migrations/202611140002_publish_bucket.sql` in the Supabase SQL
-   editor (review it first). Confirm bucket `gf-publish` is public, 50 MB limit.
+   editor (review it first). Confirm bucket `gf-publish` is public, 50 MB limit. Then
+   apply `202611140003_publish_bucket_covers.sql` (adds `image/jpeg` and `<uid>/<sha>.jpg`
+   inserts) so custom covers go out as `cover_url`; without it posts use `thumb_offset`.
 2. In Composio, confirm the Instagram auth config requests
    `instagram_business_content_publish`; reconnect the account if it was added
    later.
