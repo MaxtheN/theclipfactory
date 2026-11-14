@@ -1,0 +1,10 @@
+{
+  "name": "growth-factory-landing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Growth Factory marketing site. No build step or runtime dependencies.",
+  "scripts": {
+    "dev": "python3 -m http.server 4174 --bind 127.0.0.1",
+    "check": "node --check app.js"
+  }
+}
