@@ -1,7 +1,24 @@
 import type { Clip, Job, JsonObject, TeamRun, Video } from "../types";
 
 export type OpeningTreatment = "text_overlay" | "cold_open";
-export interface CampaignRenderRequest {
+/** Editing-craft options (clip_factory/craft.py CraftOptions); omitted ones use server defaults. */
+export interface CraftRequest {
+  loudness?: "off" | "normalize";
+  jump_cuts?: "off" | "silences" | "silences_and_fillers";
+  hook_format?: "overlay" | "title_card";
+  caption_emphasis?: "off" | "keywords";
+  emphasis_words?: string[];
+  punch_in?: "off" | "emphasis";
+  cover?: "first_frame" | "best_frame";
+  end_card?: "none" | "cta";
+  cta_text?: string;
+  structure?: "auto" | "linear" | "hook_first";
+  payoff_start?: number | null;
+  payoff_end?: number | null;
+  transition?: "cut" | "zoom" | "flash";
+  variants?: { variable: "hook" | "opening_treatment" | "caption_style" | "hook_format" | "structure"; values: string[] } | null;
+}
+export interface CampaignRenderRequest extends CraftRequest {
   expected_strategy_version_id?: string | null;
   video_id: string;
   profile_id: string;

@@ -10,6 +10,7 @@ import { Disclosure, Empty, Field, Pill, Poster, PrimaryAction, formatTime } fro
 import { Icon } from "./Icon";
 import { ClipEvidence } from "./ClipEvidence";
 import { SourceTranscript } from "./SourceTranscript";
+import { CraftControls, craftFromPlan, craftPlan, freshCraft } from "./CraftControls";
 import { JourneyProgress } from "./JourneyProgress";
 import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
@@ -36,6 +37,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const [opening, setOpening] = useState<"text_overlay" | "cold_open">("text_overlay");
   const [coldStart, setColdStart] = useState("0"), [coldEnd, setColdEnd] = useState("3");
   const [focusX, setFocusX] = useState(.5), [subtitles, setSubtitles] = useState(true);
+  const [craft, setCraft] = useState(freshCraft);
   const [feedback, setFeedback] = useState(""), [revisionParent, setRevisionParent] = useState<ProductionClip>();
   const [modelId, setModelId] = useState(""), [budget, setBudget] = useState(1);
   // Optional per-run guidance for the agents ("what to look for"), sent with this run only.
@@ -63,7 +65,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const busy = w.busy || factory.busy || pending;
   const ready = readiness({ source, system: factory.errors.system ? null : factory.data.system, models: factory.errors.models ? [] : factory.data.models, jobs: factory.data.jobs, modelId, approved: !!direction, sourceAttached: !!source, subtitles, stale });
   const edits = editErrors({ start, end, hook, opening, coldStart, coldEnd, focusX }, source?.duration);
-  const plan = { start: +start, end: +end, hook: hook.trim(), subtitles, opening_treatment: opening, hook_overlay: opening === "text_overlay", cold_open_start: opening === "cold_open" ? +coldStart : null, cold_open_end: opening === "cold_open" ? +coldEnd : null, focus_x: focusX, framing: direction?.framing, caption_style: direction?.caption_style };
+  const plan = { start: +start, end: +end, hook: hook.trim(), subtitles, opening_treatment: opening, hook_overlay: opening === "text_overlay", cold_open_start: opening === "cold_open" ? +coldStart : null, cold_open_end: opening === "cold_open" ? +coldEnd : null, focus_x: focusX, framing: direction?.framing, caption_style: direction?.caption_style, ...craftPlan(craft) };
   const delta = revisionParent ? changedEditFields(revisionParent.edit_plan, plan) : [];
   const revisionError = revisionParent && (!feedback.trim() ? "Describe why this version needs to change." : !delta.length ? "Change an actual edit setting; feedback alone does not change the render." : "");
   const reviewReason = selected ? reviewBlocker(selected, factory.data.jobs, stale) : "Select a clip first.";
@@ -190,6 +192,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     setOpening(p.opening_treatment === "cold_open" ? "cold_open" : "text_overlay");
     setColdStart(String(p.cold_open_start ?? 0)); setColdEnd(String(p.cold_open_end ?? 3));
     setFocusX(p.focus_x ?? .5); setSubtitles(p.subtitles ?? clip.subtitles_burned === true);
+    setCraft(craftFromPlan(p as Record<string, unknown>));
   }
   function savedRetryBlocker(job: Job) {
     const context = object(job.context), p = object(context?.plan);
@@ -249,6 +252,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
       {opening === "cold_open" && <div className="gf-form-pair"><Field label="Cold open start (seconds)">{id => <input id={id} type="number" min="0" step="0.1" value={coldStart} onChange={e => setColdStart(e.target.value)} />}</Field><Field label="Cold open end (seconds)">{id => <input id={id} type="number" min="0" step="0.1" value={coldEnd} onChange={e => setColdEnd(e.target.value)} />}</Field></div>}
       <Field label="Crop focus">{id => <input id={id} type="range" min="0" max="1" step="0.01" value={focusX} onChange={e => setFocusX(+e.target.value)} />}</Field>
       <Field label="Include captions">{id => <input id={id} type="checkbox" checked={subtitles} onChange={e => setSubtitles(e.target.checked)} />}</Field>
+      <CraftControls value={craft} onChange={setCraft} />
       <div className="gf-spec-row"><span>FORMAT</span><strong>9:16 · {direction?.framing || "Unknown framing"}</strong><span>CAPTIONS</span><strong>{direction?.caption_style || "Unknown"}</strong></div>
     </>}
   </Disclosure>;

@@ -82,7 +82,7 @@ export function retryBlocker(job: Job, jobs: Job[], scope: ProductionScope, dire
   return null;
 }
 
-const EDIT_FIELDS = ["start", "end", "hook", "subtitles", "framing", "caption_style", "hook_overlay", "opening_treatment", "cold_open_start", "cold_open_end", "focus_x"];
+const EDIT_FIELDS = ["start", "end", "hook", "subtitles", "framing", "caption_style", "hook_overlay", "opening_treatment", "cold_open_start", "cold_open_end", "focus_x", "loudness", "jump_cuts", "hook_format", "caption_emphasis", "punch_in", "cover", "end_card", "cta_text", "structure"];
 export function changedEditFields(before: unknown, after: unknown) {
   const a = object(before), b = object(after);
   if (!a || !b) return [];
