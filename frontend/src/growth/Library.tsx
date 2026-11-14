@@ -8,8 +8,10 @@ import type { FactoryState } from "../useFactory";
 import { reviewPreview } from "./workspaceApi";
 import { Icon } from "./Icon";
 import { Pill, formatTime } from "./parts";
-import type { OpenProduction } from "./FactoryHome";
+import type { LibraryView, OpenProduction } from "./FactoryHome";
 import { SourceDetails, sourceLabel } from "./sourcePresentation";
+import { ClipPreview, QuickLook } from "./ClipPreview";
+import { undirected } from "./productionState";
 
 export function Library({
   w,
@@ -17,14 +19,24 @@ export function Library({
   onReview,
   onProduce,
   onFactory,
+  view,
+  onView,
 }: {
   w: Workspace;
   factory: FactoryState;
   onReview: (clip: Clip) => void;
   onProduce: OpenProduction;
   onFactory: () => void;
+  /** The open tab, when the shell drives it (another screen can open the wall directly). */
+  view?: LibraryView;
+  onView?: (view: LibraryView) => void;
 }) {
-  const [tab, setTab] = useState<"edits" | "wall" | "footage">("edits");
+  const [own, setOwn] = useState<LibraryView>("edits");
+  const tab = view ?? own;
+  const setTab = (next: LibraryView) => {
+    setOwn(next);
+    onView?.(next);
+  };
   const [query, setQuery] = useState("");
   const ids = w.campaign?.video_ids || [];
   const sources = factory.data.videos.filter((v) => ids.includes(v.id));
@@ -34,6 +46,8 @@ export function Library({
       c.profile_id === w.profileId &&
       ids.includes(c.video_id),
   );
+  // Made from this footage by the engine with no direction: reviewed on the wall, not in the Studio.
+  const loose = factory.data.clips.filter((c) => undirected(c, ids));
   const normalized = query.trim().toLocaleLowerCase();
   const edits = clips.filter((c) =>
     `${c.name} ${c.hook} ${sourceLabel(c.video_id, ids)} ${sources.find((s) => s.id === c.video_id)?.name || ""}`
@@ -61,7 +75,10 @@ export function Library({
             aria-pressed={tab === "wall"}
             onClick={() => setTab("wall")}
           >
-            Review wall<span>{clips.filter((c) => !c.approved).length}</span>
+            Review wall
+            <span>
+              {[...clips, ...loose].filter((c) => !c.approved).length}
+            </span>
           </button>
           <button
             type="button"
@@ -86,7 +103,7 @@ export function Library({
         <div className="gf-review-wall">
           <ReviewWall
             factory={factory}
-            clips={clips}
+            clips={[...clips, ...loose]}
             sourceIds={ids}
             onReview={onReview}
             onFactory={onFactory}
@@ -97,35 +114,33 @@ export function Library({
           {edits.length ? (
             <div className="gf-library-edits">
               {edits.map((clip) => (
-                <button
-                  type="button"
-                  className="gf-library-edit"
-                  key={clip.id}
-                  onClick={() => onReview(clip)}
-                  aria-label={`Review ${clip.name}`}
-                >
-                  <span className="gf-library-edit-art">
-                    <Icon name="play" size={24} />
-                    <small>
-                      {reviewPreview ||
-                      clip.provenance_mode === "preview_fixture"
-                        ? "Illustrative edit"
-                        : formatTime(clip.end - clip.start)}
-                    </small>
-                  </span>
-                  <span className="gf-library-edit-copy">
-                    <strong>{clip.name}</strong>
-                    <span>{clip.hook || "Clip"}</span>
-                    <small>
-                      {formatTime(clip.start)}–{formatTime(clip.end)} ·{" "}
-                      {sourceLabel(clip.video_id, ids)}
-                    </small>
-                  </span>
-                  <Pill tone={clip.approved ? "approved" : ""}>
-                    {clip.approved ? "Approved" : "Needs review"}
-                  </Pill>
-                  <Icon name="arrow" size={16} />
-                </button>
+                <div className="gf-library-edit" key={clip.id}>
+                  <ClipPreview
+                    clip={clip}
+                    className="gf-library-edit-art"
+                    iconSize={24}
+                    onReview={() => onReview(clip)}
+                  />
+                  <button
+                    type="button"
+                    className="gf-library-edit-open"
+                    onClick={() => onReview(clip)}
+                    aria-label={`Review ${clip.name}`}
+                  >
+                    <span className="gf-library-edit-copy">
+                      <strong>{clip.name}</strong>
+                      <span>{clip.hook || "Clip"}</span>
+                      <small>
+                        {formatTime(clip.start)}–{formatTime(clip.end)} ·{" "}
+                        {sourceLabel(clip.video_id, ids)}
+                      </small>
+                    </span>
+                    <Pill tone={clip.approved ? "approved" : ""}>
+                      {clip.approved ? "Approved" : "Needs review"}
+                    </Pill>
+                    <Icon name="arrow" size={16} />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
@@ -137,18 +152,30 @@ export function Library({
               <p>
                 {normalized
                   ? "Try a different name or opening."
-                  : "Add an episode in Factory to get your first clips."}
+                  : loose.length
+                    ? `${loose.length} clip${loose.length === 1 ? " was" : "s were"} made from this footage before a direction was approved. Play and approve them on the review wall.`
+                    : "Add an episode in Factory to get your first clips."}
               </p>
-              {!normalized && (
-                <button
-                  type="button"
-                  className="gf-button secondary"
-                  onClick={onFactory}
-                >
-                  Go to Factory
-                  <Icon name="arrow" size={15} />
-                </button>
-              )}
+              {!normalized &&
+                (loose.length ? (
+                  <button
+                    type="button"
+                    className="gf-button secondary"
+                    onClick={() => setTab("wall")}
+                  >
+                    Open the review wall
+                    <Icon name="arrow" size={15} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="gf-button secondary"
+                    onClick={onFactory}
+                  >
+                    Go to Factory
+                    <Icon name="arrow" size={15} />
+                  </button>
+                ))}
             </div>
           )}
         </>
@@ -374,7 +401,14 @@ function ReviewWall({
               key={clip.id}
               clip={clip}
               source={sourceLabel(clip.video_id, sourceIds)}
-              onReview={() => onReview(clip)}
+              // Clips made with no direction cannot open in the Studio; they play here and are approved here.
+              onReview={clip.campaign_id ? () => onReview(clip) : undefined}
+              onApprove={() =>
+                void factory.run(
+                  () => put(endpoint("clips", clip.id), { approved: true }),
+                  "Clip approved.",
+                )
+              }
             />
           ))}
         </div>
@@ -408,12 +442,16 @@ function WallCard({
   clip,
   source,
   onReview,
+  onApprove,
 }: {
   clip: Clip;
   source: string;
-  onReview: () => void;
+  /** Absent for clips with no direction: those open a quick look instead of the Studio. */
+  onReview?: () => void;
+  onApprove: () => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
+  const [looking, setLooking] = useState(false);
   const status = clipStatus(clip);
   const illustrative =
     reviewPreview || clip.provenance_mode === "preview_fixture";
@@ -432,53 +470,64 @@ function WallCard({
     }
   }
   return (
-    <button
-      type="button"
-      className="gf-wall-card"
-      aria-label={`Review ${clip.name}`}
-      onClick={onReview}
-      onMouseEnter={() => preview(true)}
-      onMouseLeave={() => preview(false)}
-      onFocus={() => preview(true)}
-      onBlur={() => preview(false)}
-    >
-      <span className="gf-wall-media">
-        {illustrative ? (
-          <span className="gf-wall-placeholder">
-            <Icon name="play" size={26} />
-          </span>
-        ) : (
-          <video
-            ref={video}
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            src={`${clipMediaUrl(clip.id)}#t=0.5`}
-            aria-hidden="true"
-            tabIndex={-1}
-          />
-        )}
-        <span className="gf-wall-chips">
-          {typeof score === "number" ? (
-            <span className="gf-pill gf-wall-score" title="Agent score out of 100">
-              {Math.round(score)}
+    <>
+      <button
+        type="button"
+        className="gf-wall-card"
+        aria-label={onReview ? `Review ${clip.name}` : `Play ${clip.hook || clip.name}`}
+        onClick={onReview ?? (() => setLooking(true))}
+        onMouseEnter={() => preview(true)}
+        onMouseLeave={() => preview(false)}
+        onFocus={() => preview(true)}
+        onBlur={() => preview(false)}
+      >
+        <span className="gf-wall-media">
+          {illustrative ? (
+            <span className="gf-wall-placeholder">
+              <Icon name="play" size={26} />
             </span>
           ) : (
-            <span />
+            <video
+              ref={video}
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              src={`${clipMediaUrl(clip.id)}#t=0.5`}
+              aria-hidden="true"
+              tabIndex={-1}
+            />
           )}
-          <span className={`gf-pill ${status.tone}`}>{status.label}</span>
+          <span className="gf-wall-chips">
+            {typeof score === "number" ? (
+              <span className="gf-pill gf-wall-score" title="Agent score out of 100">
+                {Math.round(score)}
+              </span>
+            ) : (
+              <span />
+            )}
+            <span className={`gf-pill ${status.tone}`}>{status.label}</span>
+          </span>
+          <span className="gf-wall-duration">
+            {illustrative ? "Illustrative" : formatTime(clip.end - clip.start)}
+          </span>
         </span>
-        <span className="gf-wall-duration">
-          {illustrative ? "Illustrative" : formatTime(clip.end - clip.start)}
+        <span className="gf-wall-copy">
+          <strong>{clip.hook || clip.name}</strong>
+          <small>
+            {clip.name} · {source}
+          </small>
         </span>
-      </span>
-      <span className="gf-wall-copy">
-        <strong>{clip.hook || clip.name}</strong>
-        <small>
-          {clip.name} · {source}
-        </small>
-      </span>
-    </button>
+      </button>
+      {looking && (
+        <QuickLook
+          clip={clip}
+          title={clip.hook || clip.name}
+          onClose={() => setLooking(false)}
+          onReview={clip.approved ? undefined : onApprove}
+          reviewLabel="Approve"
+        />
+      )}
+    </>
   );
 }

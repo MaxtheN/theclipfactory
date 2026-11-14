@@ -11,7 +11,11 @@ import { Research } from "./Research";
 import { Studio } from "./Studio";
 import { Results } from "./Results";
 import { Onboarding, OFFLINE_KEY } from "./Onboarding";
-import { FactoryHome, type OpenProduction } from "./FactoryHome";
+import {
+  FactoryHome,
+  type LibraryView,
+  type OpenProduction,
+} from "./FactoryHome";
 import { FactoryTabs } from "./FactoryMap";
 import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
@@ -105,6 +109,7 @@ export function GrowthApp() {
   const [preferredSource, setPreferredSource] = useState<string>();
   const [preferredMode, setPreferredMode] = useState<"manual" | "agent">();
   const [preferredClip, setPreferredClip] = useState<string>();
+  const [libraryView, setLibraryView] = useState<LibraryView>("edits");
   const [quickOpen, setQuickOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
@@ -627,7 +632,10 @@ export function GrowthApp() {
                     active={!tools && !onboarding && stage === "factory"}
                     onProduce={openProduction}
                     onReview={reviewClip}
-                    onLibrary={() => go("library")}
+                    onLibrary={(view) => {
+                      if (view) setLibraryView(view);
+                      go("library");
+                    }}
                     onDirection={() => go("research")}
                   />
                 </FactoryTabs>
@@ -643,6 +651,8 @@ export function GrowthApp() {
                   onReview={reviewClip}
                   onProduce={openProduction}
                   onFactory={() => go("factory")}
+                  view={libraryView}
+                  onView={setLibraryView}
                 />
               </div>
               <div

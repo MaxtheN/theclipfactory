@@ -1,9 +1,10 @@
 # Assets
 
-- The alpine sample photograph is generated with the built-in image-generation tool for this landing page. It is illustrative and does not represent customer footage, real campaign output, or an endorsement. The original is retained as `assets/alpine-story-original.png`; the optimized website asset is `assets/alpine-story.webp`. The original is excluded from deployment.
-- `assets/social-card.jpg` is a browser capture of this site's opening screen, optimized for link previews.
-- The Growth Factory mark and product illustrations are project-native SVG, HTML, and CSS.
-- DM Sans and Instrument Serif are self-hosted from Google Fonts. Both use the SIL Open Font License; full license texts are retained alongside the font files.
+- The alpine photograph was generated with the built-in image-generation tool for this landing page. It is illustrative and does not represent customer footage, real campaign output, or an endorsement. The original is retained as `assets/alpine-story-original.png` (excluded from deployment); `assets/alpine-story.webp` is the optimized full frame.
+- `assets/peaks.webp`, `valley.webp`, `hiker.webp`, `hiker-close.webp`, `towers.webp` and `summit.webp` are crops of that same photograph, used as sample 9:16 clips and scene thumbnails.
+- `assets/icon.svg`, `mark.svg`, `mark-white.svg` and `favicon.svg` are the Growth Factory mark: a play triangle cut into three clips. Project-native SVG.
+- `assets/social-card.jpg` is a capture of this site's opening screen, used for link previews.
+- Type is Bricolage Grotesque (headings) and Inter (body), loaded from Google Fonts. Both use the SIL Open Font License.
 
 ## Image prompt
 

@@ -10,7 +10,7 @@ import type { FactoryState } from "../useFactory";
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, reviewPreview } from "./workspaceApi";
 import { productionApi } from "./productionApi";
-import { jobInScope, object } from "./productionState";
+import { jobInScope, object, undirected } from "./productionState";
 import { activeJob } from "../productionPreflight";
 import { Icon } from "./Icon";
 import { Pill, formatTime } from "./parts";
@@ -23,6 +23,7 @@ export type OpenProduction = (
   mode?: "manual" | "agent",
   clipId?: string,
 ) => void;
+export type LibraryView = "edits" | "wall" | "footage";
 
 // Metadata only, never File objects or footage bytes. A profile/route remount
 // must not lose a confirmed import whose campaign attachment still needs retry.
@@ -45,7 +46,7 @@ export function FactoryHome({
   factory: FactoryState;
   onProduce: OpenProduction;
   onReview: (clip: Clip) => void;
-  onLibrary: () => void;
+  onLibrary: (view?: LibraryView) => void;
   onDirection: () => void;
   active?: boolean;
 }) {
@@ -165,7 +166,13 @@ export function FactoryHome({
       c.profile_id === w.profileId &&
       campaign?.video_ids.includes(c.video_id),
   );
-  const review = clips.filter((c) => !c.approved);
+  // Clips made from this footage without a direction belong on this screen too.
+  const loose = factory.data.clips.filter((c) =>
+    undirected(c, campaign?.video_ids || []),
+  );
+  /** Directed edits are reviewed in the Studio; the rest on the Library's review wall. */
+  const openReview = (clip: Clip) =>
+    clip.campaign_id ? onReview(clip) : onLibrary("wall");
   // Every campaign inherits its workspace's approved Style rules.
   const rulesId = activeRulesId(w);
   const direction = w.versions.find((v) => v.id === rulesId)?.directions[
@@ -857,8 +864,11 @@ export function FactoryHome({
                 !!status?.can_produce &&
                 !w.busy &&
                 !w.loading;
-              // Counts are for this workspace: clips made elsewhere from the same file do not belong here.
-              const own = clips.filter((c) => c.video_id === source.id);
+              // Counts cover this workspace's edits and what the engine made from this file with no direction;
+              // another workspace's edits of the same file do not belong here.
+              const own = [...clips, ...loose].filter(
+                (c) => c.video_id === source.id,
+              );
               // Best first; clips under the quality floor stay saved but are not counted here.
               const ordered = reviewOrder(own.filter((c) => !c.approved));
               const unreviewed = ordered.above;
@@ -896,7 +906,7 @@ export function FactoryHome({
                   <button
                     type="button"
                     className="gf-button primary compact"
-                    onClick={() => onReview(unreviewed[0])}
+                    onClick={() => openReview(unreviewed[0])}
                   >
                     Review {unreviewed.length} clip
                     {unreviewed.length === 1 ? "" : "s"}
