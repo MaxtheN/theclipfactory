@@ -365,6 +365,21 @@ def test_footage_keeps_grounded_moments_when_other_citations_are_outside_the_ran
     assert len(harness.rendered) == 1
 
 
+def test_footage_keeps_valid_moments_when_another_row_violates_the_schema(harness):
+    outputs = script()
+    rejected = copy.deepcopy(outputs[1]["moments"][0])
+    rejected["evidence_refs"] = ["frame:0"] * 17
+    outputs[1]["moments"].append(rejected)
+    harness.models = ScriptedModels(outputs)
+    harness.engine.models = harness.models
+    run, _ = harness.execute()
+    accepted = next(t for t in run["tasks"] if t["role"] == "footage_analyst")["output"]
+    assert accepted["moments"] == footage()["moments"]
+    assert "structured fields were invalid" in accepted["limitations"]
+    assert titles(harness.models) == ["Plan", "Footage", "Strategy", "Edits", "Critique"]
+    assert len(harness.rendered) == 1
+
+
 def test_schema_correction_honors_cancellation_before_retry(harness):
     oversized = footage()
     oversized["moments"][0]["evidence_refs"] = ["frame:0"] * 17

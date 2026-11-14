@@ -72,6 +72,31 @@ class Footage(TypedOutput):
     moments: list[Moment] = Field(min_length=1, max_length=6)
     limitations: str = Field(min_length=1, max_length=1500)
 
+    @model_validator(mode="before")
+    @classmethod
+    def retain_valid_moments(cls, value):
+        if not isinstance(value, dict):
+            return value
+        moments, limitations = value.get("moments"), value.get("limitations")
+        if (
+            not isinstance(moments, list) or not 1 <= len(moments) <= 6
+            or not isinstance(limitations, str) or not 1 <= len(limitations) <= 1500
+        ):
+            return value
+        valid = []
+        for moment in moments:
+            try:
+                valid.append(Moment.model_validate(moment).model_dump())
+            except ValidationError:
+                continue
+        if valid and len(valid) < len(moments):
+            return {
+                **value,
+                "moments": valid,
+                "limitations": limitations[:1300] + " Some proposed moments were omitted because their structured fields were invalid.",
+            }
+        return value
+
 
 class Angle(TypedOutput):
     id: str = Field(pattern=r"^angle-[1-3]$")
