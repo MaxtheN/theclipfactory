@@ -224,6 +224,77 @@ def test_title_card_flash_and_end_card_scripts():
     assert "Dialogue: 1,0:00:00.00,0:00:03.00,Hook,,0,0,0,,Plain" in overlay
 
 
+def test_title_card_falls_back_to_the_top_band_without_face_data():
+    card = craft.place_title_card("Revenue grew 300%", None, caption_style="standard")
+    assert card["band"] == "top" and card["top"] == 260 and card["top"] >= craft.IG_SAFE_TOP
+    assert abs(card["y"] - card["card_height"] / 2 - 260) <= 1 and card["bottom"] - card["top"] == card["card_height"]
+    # Wraps inside the left margin and the right action rail, centred between them.
+    assert card["x"] == (craft.CARD_MARGIN_X + craft.OUT_W - craft.IG_SAFE_RIGHT) // 2
+    script = craft.overlay_ass(hook="Revenue grew 300%", hook_format="title_card", hook_seconds=2.0, font="Inter",
+                               primary="#112233", accent="#FFD400", flash_at=None, end_card=None)
+    assert f"\\pos({card['x']},{card['y']})" in script and ",90,140,0,1" in script
+
+
+def test_title_card_takes_the_top_band_when_the_face_is_low():
+    face = {"left": 380, "top": 900, "right": 700, "bottom": 1250}  # centre at 56% of the height
+    card = craft.place_title_card("A short hook", [face], caption_style="standard")
+    assert card["band"] == "top" and card["bottom"] + craft.CARD_GAP <= face["top"]
+    assert card["face_overlap_px"] == 0
+
+
+def test_title_card_sits_between_a_high_face_and_the_captions():
+    face = {"left": 380, "top": 300, "right": 700, "bottom": 700}  # eyes in the top band
+    card = craft.place_title_card("Four panels, one call, and the hardest question", [face], caption_style="pop")
+    assert card["band"] == "below_face"
+    assert card["top"] >= face["bottom"] + craft.CARD_GAP
+    captions = craft.caption_top("pop", True)
+    assert card["bottom"] <= captions - craft.CARD_GAP and card["bottom"] <= craft.OUT_H - craft.IG_SAFE_BOTTOM
+
+
+def test_title_card_never_enters_the_instagram_bands_or_captions():
+    for top in range(0, 1900, 60):
+        for size in (200, 500, 900):
+            face = {"left": 300, "top": top, "right": 780, "bottom": min(1920, top + size)}
+            for style in ("standard", "pop"):
+                card = craft.place_title_card("Why the Fed is late again", [face], caption_style=style)
+                assert card["top"] >= craft.IG_SAFE_TOP
+                assert card["bottom"] <= craft.caption_top(style, True) - craft.CARD_GAP
+                if card["band"] in {"top", "below_face"}:
+                    assert card["face_overlap_px"] == 0
+                    assert card["bottom"] <= face["top"] or card["top"] >= face["bottom"]
+
+
+def test_face_boxes_map_from_the_source_to_the_output_frame():
+    # 16:9 source, fill: a full-height 9:16 slice centred at x = 0.5.
+    box = craft.map_face_box({"x": 0.45, "y": 0.2, "w": 0.1, "h": 0.2}, width=1920, height=1080, framing="fill")
+    assert box == {"left": 540 - 171, "top": 384, "right": 540 + 171, "bottom": 768}
+    # Following a speaker on the right moves the face toward the frame centre.
+    right = craft.map_face_box({"x": 0.7, "y": 0.2, "w": 0.1, "h": 0.2}, width=1920, height=1080, framing="fill",
+                               crop_x=0.75)
+    assert 300 < (right["left"] + right["right"]) / 2 < 800
+    # Off-crop faces are dropped; fit letterboxes the whole frame in the middle band.
+    assert craft.map_face_box({"x": 0.0, "y": 0.2, "w": 0.05, "h": 0.2}, width=1920, height=1080, framing="fill") is None
+    fit = craft.map_face_box({"x": 0.45, "y": 0.0, "w": 0.1, "h": 1.0}, width=1920, height=1080, framing="fit")
+    assert fit["top"] == round((1920 - 607.5) / 2) and fit["bottom"] == round((1920 + 607.5) / 2)
+
+
+def test_hook_face_boxes_use_the_sampled_frames_and_never_raise(monkeypatch):
+    from clip_factory import reframe
+
+    monkeypatch.setattr(reframe, "sample", lambda *a, **k: ([(0.0, b"a"), (0.4, b"b")], []))
+    faces = [{"x": 0.45, "y": 0.1, "w": 0.1, "h": 0.2}, {"x": 0.9, "y": 0.1, "w": 0.01, "h": 0.02}]
+    boxes, status = craft.hook_face_boxes("ffmpeg", Path("s.mp4"), 1.0, 2.0, width=1920, height=1080,
+                                          framing="fill", crop_x=craft.path_centre([[0, 0.5], [2, 0.5]]),
+                                          detector=lambda jpeg: faces)
+    assert status == "faces" and len(boxes) == 2  # the tiny background face is ignored
+    def broken(*a, **k):
+        raise OSError("no ffmpeg")
+    monkeypatch.setattr(reframe, "sample", broken)
+    assert craft.hook_face_boxes("ffmpeg", Path("s.mp4"), 0, 2, width=1920, height=1080, framing="fill", crop_x=0.5,
+                                 detector=lambda jpeg: faces) == ([], "sampling failed: OSError")
+    assert craft.path_centre([[0, 0.2], [2, 0.6]])(1.0) == pytest.approx(0.4)
+
+
 def test_hook_grounding_lists_numbers_the_source_never_says():
     grounding = craft.hook_grounding("Revenue grew 900% in Chicago", "We grew revenue 300% in Chicago.")
     assert grounding["unsupported_numbers"] == ["900%"] and grounding["found_in_source"] == 3

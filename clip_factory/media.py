@@ -1408,6 +1408,19 @@ def render_crafted(
                     style += ",BorderStyle=3,BackColour=&H80000000"
                 overlays.append(f"subtitles={srt.name}:force_style='{style}'")
         flash_at = transition_at if options["transition"] == "flash" else None
+        card = None
+        if hook and options["hook_format"] == "title_card":
+            # Keep the title card off the speaker's face: faces seen while it shows, on the output frame.
+            first = segments[0]
+            path = (record.get("reframe") or {}).get("path") if reframe_filters else None
+            faces, face_status = craft.hook_face_boxes(
+                ffmpeg(), source, first["start"], min(hook_seconds, first["end"] - first["start"]),
+                width=info["width"], height=info["height"], framing=framing,
+                crop_x=craft.path_centre(path[0]) if path else focus_x, crop_width=crop_width,
+            )
+            card = craft.place_title_card(hook, faces, caption_style=caption_style, captions=bool(entries)) | {
+                "face_source": face_status, "crop": "reframe_path" if path else "fixed",
+            }
         if hook or flash_at is not None or end_card:
             hook_file.write_text(
                 craft.overlay_ass(
@@ -1419,6 +1432,7 @@ def render_crafted(
                     accent=kit.accent_color,
                     flash_at=flash_at,
                     end_card=end_card,
+                    card=card,
                 ),
                 encoding="utf-8",
             )
@@ -1570,6 +1584,7 @@ def render_crafted(
             "text": hook or None,
             "seconds": round(hook_seconds, 3) if hook else 0.0,
             "grounding": craft.hook_grounding(hook, " ".join(e["text"] for e in timeline)) if hook else None,
+            "placement": card,
         },
         caption_emphasis={
             "mode": options["caption_emphasis"],

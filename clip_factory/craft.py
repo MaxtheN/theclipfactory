@@ -53,6 +53,20 @@ TRANSITION_SECONDS = 0.25
 FLASH_SECONDS = 0.15
 END_CARD_SECONDS = 1.6
 
+# Title-card placement on the 1080x1920 output. Instagram draws its own UI over Reels: the top
+# bar, the caption/handle/audio block at the bottom and the action rail on the right.
+OUT_W, OUT_H = 1080, 1920
+IG_SAFE_TOP = 220
+IG_SAFE_BOTTOM = 420
+IG_SAFE_RIGHT = 140
+CARD_MARGIN_X = 90          # left margin; the right margin also clears the action rail
+CARD_BOX = 26               # ASS BorderStyle 3 box padding around the card text
+CARD_GAP = 40               # breathing room from faces and captions
+CARD_TOP_BAND = (260, 420)  # fallback band (card top .. preferred bottom) when no face data
+FACE_LOW_SHARE = 0.4        # a face centre below 40% of the height leaves the top band clear
+CAPTION_MARGIN_V = {"standard": 144, "high_contrast": 144, "pop": 380}
+CAPTION_SIZE = {"standard": 52, "high_contrast": 60, "pop": 78}
+
 DEFAULT_PRIMARY = "#111111"
 DEFAULT_ACCENT = "#FFD400"
 POP_EMPHASIS = "#5CF2A0"     # pop already lights the spoken word yellow
@@ -766,6 +780,197 @@ def title_card_size(text: str) -> int:
     return 96 if len(text) <= 24 else 84 if len(text) <= 48 else 72 if len(text) <= 90 else 60
 
 
+def title_card_height(text: str) -> int:
+    """Estimated rendered height (px) of the card box for `text`, wrapped to the card width."""
+    size = title_card_size(text)
+    width = OUT_W - CARD_MARGIN_X - max(CARD_MARGIN_X, IG_SAFE_RIGHT)  # libass wrap width
+    per_line = max(1, int(width / (size * 0.5)))  # bold sans averages about half an em per character
+    lines, line = 1, 0
+    for word in text.split():
+        need = len(word) + (1 if line else 0)
+        if line and line + need > per_line:
+            lines, line = lines + 1, len(word)
+        else:
+            line += need
+    return round(lines * size * 1.2 + 2 * CARD_BOX)
+
+
+def caption_top(caption_style: str | None, captions: bool) -> int:
+    """Top edge (px) of the burned-caption block (two lines), or the IG bottom band without captions."""
+    ig_floor = OUT_H - IG_SAFE_BOTTOM
+    if not captions:
+        return ig_floor
+    style = caption_style if caption_style in CAPTION_MARGIN_V else "standard"
+    top = OUT_H - CAPTION_MARGIN_V[style] - round(2 * CAPTION_SIZE[style] * 1.25)
+    return min(ig_floor, top)
+
+
+def map_face_box(box: dict, *, width: int, height: int, framing: str, crop_x: float = 0.5,
+                 crop_width: float | None = None) -> dict | None:
+    """One source face box (normalised, top-left origin: x, y, w, h) on the 1080x1920 output.
+
+    fill: the source covers the frame and a full-height 9:16 slice is kept, centred at `crop_x`
+    (the reframe path or the fixed focus). fit/blur: the (optionally zoomed) source is contained
+    and centred. Returns pixel {left, top, right, bottom} clipped to the frame, or None if off-frame.
+    """
+    if width <= 0 or height <= 0:
+        return None
+    if framing == "fill":
+        scale = max(OUT_W / width, OUT_H / height)
+        scaled_w, scaled_h = width * scale, height * scale
+        offset_x = min(max(crop_x * scaled_w - OUT_W / 2, 0.0), scaled_w - OUT_W)
+        offset_y = (scaled_h - OUT_H) / 2
+        left = box["x"] * scaled_w - offset_x
+        right = (box["x"] + box["w"]) * scaled_w - offset_x
+        top = box["y"] * scaled_h - offset_y
+        bottom = (box["y"] + box["h"]) * scaled_h - offset_y
+    else:
+        kept = crop_width if crop_width is not None and crop_width < 0.999 else 1.0
+        kept_left = (1 - kept) * crop_x
+        scale = min(OUT_W / (width * kept), OUT_H / height)
+        pad_x = (OUT_W - width * kept * scale) / 2
+        pad_y = (OUT_H - height * scale) / 2
+        left = (box["x"] - kept_left) * width * scale + pad_x
+        right = (box["x"] + box["w"] - kept_left) * width * scale + pad_x
+        top = box["y"] * height * scale + pad_y
+        bottom = (box["y"] + box["h"]) * height * scale + pad_y
+    left, right = max(0.0, left), min(float(OUT_W), right)
+    top, bottom = max(0.0, top), min(float(OUT_H), bottom)
+    if right - left < 4 or bottom - top < 4:
+        return None
+    return {"left": round(left), "top": round(top), "right": round(right), "bottom": round(bottom)}
+
+
+def place_title_card(hook: str, faces: list[dict] | None, *, caption_style: str | None = None,
+                     captions: bool = True) -> dict:
+    """Where the hook title card goes: off the subject's face, inside Instagram's safe areas,
+    clear of burned captions.
+
+    faces: output-pixel boxes ({left, top, right, bottom}) seen during the card's on-screen time.
+    With a face low in the frame (centre below 40% of the height) the card takes the top band;
+    otherwise it sits between the face's bottom and the caption block. Without face data the
+    card takes the top band (y 260..420). Returns the card centre (x, y) and a receipt.
+    """
+    height = title_card_height(hook)
+    left_edge, right_edge = CARD_MARGIN_X, OUT_W - max(CARD_MARGIN_X, IG_SAFE_RIGHT)
+    x = round((left_edge + right_edge) / 2)
+    floor = caption_top(caption_style, captions) - CARD_GAP
+    top_band = CARD_TOP_BAND[0]
+    receipt: dict = {
+        "x": x, "card_height": height, "faces_seen": len(faces or []),
+        "safe_area": {"top": IG_SAFE_TOP, "bottom": IG_SAFE_BOTTOM, "right": IG_SAFE_RIGHT},
+        "caption_top": floor + CARD_GAP,
+    }
+
+    def at(top: float, band: str, reason: str, face: dict | None = None, overlap: int = 0) -> dict:
+        top = max(IG_SAFE_TOP, min(round(top), floor - height))
+        return receipt | {"y": round(top + height / 2), "top": top, "bottom": top + height, "band": band,
+                          "reason": reason, "face": face, "face_overlap_px": overlap}
+
+    if not faces:
+        return at(top_band, "top", "No face data; the card uses the top band.")
+    face = {"left": min(f["left"] for f in faces), "top": min(f["top"] for f in faces),
+            "right": max(f["right"] for f in faces), "bottom": max(f["bottom"] for f in faces)}
+    centre = (face["top"] + face["bottom"]) / 2
+
+    def overlap(top: float) -> int:
+        top = max(IG_SAFE_TOP, min(top, floor - height))
+        return max(0, round(min(top + height, face["bottom"]) - max(top, face["top"])))
+
+    top_fits = top_band + height <= face["top"] - CARD_GAP
+    below = face["bottom"] + CARD_GAP
+    below_fits = below + height <= floor
+    if centre >= FACE_LOW_SHARE * OUT_H and top_fits:
+        return at(top_band, "top", "The face is low in the frame; the card takes the top band.", face)
+    if below_fits:
+        # Centre the card in the free band between the face and the captions.
+        return at((below + floor - height) / 2, "below_face", "The card sits between the face and the captions.", face)
+    if top_fits:
+        return at(top_band, "top", "No room below the face; the card takes the top band above it.", face)
+    # Neither band is fully clear: tuck the card against the top safe edge or above the captions,
+    # whichever covers less of the face.
+    candidates = [(overlap(IG_SAFE_TOP), IG_SAFE_TOP, "top_edge"), (overlap(floor - height), floor - height, "above_captions")]
+    least, top, band = min(candidates)
+    return at(top, band, "The face fills the frame; the card covers as little of it as possible.", face, least)
+
+
+def hook_face_boxes(ffmpeg: str, source: Path, start: float, span: float, *, width: int, height: int,
+                    framing: str, crop_x, crop_width: float | None = None, detector=None) -> tuple[list[dict], str]:
+    """Face boxes on the output frame while the title card shows, from Apple Vision samples.
+
+    Samples the card's source window with the reframe sampler (read-only use). `crop_x` is a
+    number or a callable t -> crop centre (the reframe path). Returns (boxes, status) and never
+    raises: a missing detector or failed sample means no boxes and the fallback placement.
+    """
+    from . import reframe
+
+    if detector is None:
+        ok, reason = reframe.available()
+        if not ok:
+            return [], f"unavailable: {reason}"
+        detector = face_rectangles
+    try:
+        frames, _ = reframe.sample(ffmpeg, source, start, max(0.4, span))
+    except Exception as exc:  # noqa: BLE001 - placement must never fail the render
+        return [], f"sampling failed: {type(exc).__name__}"
+    boxes = []
+    for t, jpeg in frames:
+        try:
+            found = detector(jpeg)
+        except Exception as exc:  # noqa: BLE001
+            return [], f"detection failed: {type(exc).__name__}"
+        if not found:
+            continue
+        largest = max(f["w"] * f["h"] for f in found)
+        centre = crop_x(t) if callable(crop_x) else float(crop_x)
+        for face in found:
+            if face["w"] * face["h"] < 0.5 * largest:
+                continue  # background faces do not decide placement
+            mapped = map_face_box(face, width=width, height=height, framing=framing,
+                                  crop_x=centre, crop_width=crop_width)
+            if mapped:
+                boxes.append(mapped)
+    return boxes, ("faces" if boxes else "no faces in the card window")
+
+
+def face_rectangles(jpeg: bytes) -> list[dict]:
+    """Face boxes (normalised, top-left origin: x, y, w, h) in one image via Apple Vision."""
+    import Foundation
+    import objc
+    import Vision
+
+    faces = []
+    with objc.autorelease_pool():
+        data = Foundation.NSData.dataWithBytes_length_(jpeg, len(jpeg))
+        handler = Vision.VNImageRequestHandler.alloc().initWithData_options_(data, {})
+        request = Vision.VNDetectFaceRectanglesRequest.alloc().init()
+        ok, _ = handler.performRequests_error_([request], None)
+        for item in (request.results() or []) if ok else []:
+            if float(item.confidence()) < 0.5:
+                continue
+            box = item.boundingBox()  # Vision: normalised, bottom-left origin
+            w, h = float(box.size.width), float(box.size.height)
+            faces.append({"x": float(box.origin.x), "y": 1.0 - float(box.origin.y) - h, "w": w, "h": h})
+    return faces
+
+
+def path_centre(keys: list) -> object:
+    """t -> crop centre from reframe keyframes [[t, x], ...] (linear between keys)."""
+    points = [(float(t), float(x)) for t, x in keys]
+
+    def centre(t: float) -> float:
+        if not points:
+            return 0.5
+        if t <= points[0][0]:
+            return points[0][1]
+        for (t0, x0), (t1, x1) in zip(points, points[1:]):
+            if t <= t1:
+                return x0 if t1 <= t0 else x0 + (x1 - x0) * (t - t0) / (t1 - t0)
+        return points[-1][1]
+
+    return centre
+
+
 def overlay_ass(
     *,
     hook: str,
@@ -776,16 +981,20 @@ def overlay_ass(
     accent: str,
     flash_at: float | None,
     end_card: tuple[float, float, str] | None,
+    card: dict | None = None,
 ) -> str:
     """Hook (plain strip or title card), teaser flash and CTA end card in one ASS script.
 
-    The title card sits in the upper-middle of the 9:16 safe area (clear of the top bar and the
-    bottom caption/UI band), on a brand-coloured box, and pops in over 160 ms.
+    The title card goes where `card` (from `place_title_card`) says: off the speaker's face,
+    inside Instagram's safe areas and clear of burned captions; without it, the top band. It sits
+    on a brand-coloured box and pops in over 160 ms.
     """
+    card = card or place_title_card(hook, None)
     box = ass_color(primary)
     styles = [
         f"Style: Hook,{font},54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,3,3,0,8,80,80,140,1",
-        f"Style: Card,{font},{title_card_size(hook)},&H00FFFFFF,&H00FFFFFF,{box},{box},1,0,0,0,100,100,0,0,3,26,0,5,90,90,0,1",
+        f"Style: Card,{font},{title_card_size(hook)},&H00FFFFFF,&H00FFFFFF,{box},{box},1,0,0,0,100,100,0,0,3,{CARD_BOX},0,5,"
+        f"{CARD_MARGIN_X},{max(CARD_MARGIN_X, IG_SAFE_RIGHT)},0,1",
         f"Style: Flash,{font},10,&H00FFFFFF,&H00FFFFFF,&H00FFFFFF,&H00FFFFFF,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
         f"Style: Dim,{font},10,&H60000000,&H60000000,&H60000000,&H60000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
         f"Style: Cta,{font},76,&H00FFFFFF,&H00FFFFFF,{ass_color(accent)},{ass_color(accent)},1,0,0,0,100,100,0,0,3,24,0,5,90,90,0,1",
@@ -795,7 +1004,7 @@ def overlay_ass(
         if hook_format == "title_card":
             events.append(
                 f"Dialogue: 2,0:00:00.00,{ass_stamp(hook_seconds)},Card,,0,0,0,,"
-                f"{{\\an5\\pos(540,700)\\fad(0,180)\\fscx88\\fscy88\\t(0,160,\\fscx100\\fscy100)}}{hook}"
+                f"{{\\an5\\pos({card['x']},{card['y']})\\fad(0,180)\\fscx88\\fscy88\\t(0,160,\\fscx100\\fscy100)}}{hook}"
             )
         else:
             events.append(f"Dialogue: 1,0:00:00.00,{ass_stamp(hook_seconds)},Hook,,0,0,0,,{hook}")
