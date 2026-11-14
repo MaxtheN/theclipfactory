@@ -259,108 +259,58 @@ export function PostToInstagram({
     ? (clip.approved ? "Schedule post" : "Approve & schedule")
     : (clip.approved ? "Post to Instagram" : "Approve & post");
 
-  return <section className="gf-form-fields gf-post-instagram" aria-label="Post to Instagram">
-    <h3>Post to Instagram</h3>
-    {signInRequired && <div className="gf-post-signin">
-      <div>
-        <p role="status"><strong>Sign in required.</strong> We host the approved video briefly so Instagram can fetch it.</p>
-        {targets?.cloud_configured && !signingIn && <button type="button" className="gf-button compact" onClick={() => setSigningIn(true)}>Sign in</button>}
+  const verdict = !report ? "" : held
+    ? `Held: ${report.reasons[0] ? report.reasons[0].charAt(0).toLowerCase() + report.reasons[0].slice(1) : "check the details before posting"}`
+    : "Passed: ready to post";
+  const pickedCover = pkg?.candidates.find(c => (coverMs === null ? c.auto : coverMs === c.time_ms));
+
+  return <div className="gf-post-instagram">
+    <section className="gf-review-section gf-quality" aria-label="Quality gate">
+      <div className="gf-review-section-head">
+        <h3>Quality</h3>
+        {report && <Pill tone={held ? "sand" : "mint"}>{held ? "Quality gate: hold" : "Quality gate: pass"}</Pill>}
       </div>
-      {!targets?.cloud_configured && <p>Accounts aren't set up on this Mac yet, so posting is off. Everything else still works.</p>}
-      {signingIn && <CloudSignIn skipLabel="Cancel" onSkip={() => setSigningIn(false)} onDone={() => {
-        setSigningIn(false);
-        // Re-read targets so posting unlocks as soon as the session exists. The password is never kept here.
-        void refresh().catch(e => live.current && setError(message(e)));
-      }} />}
-    </div>}
-    {pending.length > 0 && <ul className="gf-schedule-list" aria-label="Scheduled posts">{pending.map(row => <li key={row.id}>
-      {row.overdue_at
-        ? <p role="status"><strong>Missed while the app was closed.</strong> Was set for {localTime(row.publish_at)} · {row.account_ids.map(accountName).join(", ")}. Nothing was posted.</p>
-        : <p>Scheduled for <strong>{localTime(row.publish_at)}</strong> · {row.account_ids.map(accountName).join(", ")}. The app must be open at that time.</p>}
-      <div className="gf-schedule-actions">
-        {row.overdue_at && <button type="button" className="gf-button compact" disabled={busy} onClick={() => void decide(row, "post_now")}>Post now</button>}
-        {row.overdue_at && <button type="button" className="gf-button secondary compact" disabled={busy} onClick={() => void decide(row, "reschedule")}>Reschedule</button>}
-        <button type="button" className="gf-button ghost compact" disabled={busy} onClick={() => void decide(row, "cancel")}>Cancel</button>
-      </div>
-    </li>)}</ul>}
-    <div className="gf-post-layout">
-      <div className="gf-form-fields">
-        {report ? <div aria-label="Quality gate">
-          <Pill tone={held ? "quiet" : "mint"}>{held ? "Quality gate: hold" : "Quality gate: pass"}</Pill>
-          <p className="gf-help">{rubricLabels.map(([key, label]) => `${label} ${report.rubric[key] ?? "–"}/5`).join(" · ")}</p>
-          {report.reasons.length > 0 && <ul>{report.reasons.map(r => <li key={r}>{r}</li>)}</ul>}
-        </div> : !error && <p className="gf-help">Checking quality…</p>}
+      {report ? <>
+        <ul className="gf-score-pills" aria-label="Quality scores">
+          {rubricLabels.map(([key, label]) => {
+            const value = report.rubric[key];
+            const tone = value === null || value === undefined ? "is-unknown" : value >= 4 ? "is-good" : value <= 2 ? "is-low" : "";
+            return <li key={key} className={tone}><span>{label}</span><strong>{value ?? "–"}<small>/5</small></strong></li>;
+          })}
+        </ul>
+        <p className={`gf-quality-verdict${held ? " is-held" : ""}`}>{verdict}</p>
+        {report.reasons.length > 0 && <details className="gf-quality-details">
+          <summary>Details</summary>
+          <ul>{report.reasons.map(r => <li key={r}>{r}</li>)}</ul>
+        </details>}
         {held && <Field label="Override reason (required to post a held clip)">{id => <AutoTextarea id={id} rows={2} value={override} onChange={e => setOverride(e.target.value)} placeholder="Why is it fine to post anyway?" />}</Field>}
-        {targets && (targets.accounts.length === 0
-          ? <p className="gf-help">Connect an Instagram account for this brand first.</p>
-          : <fieldset><legend>Accounts</legend>{targets.accounts.map(account => <label key={account.id}>
-            <input type="checkbox" checked={chosen.includes(account.id)} disabled={blocked.has(account.id) || busy}
-              onChange={e => setChosen(old => e.target.checked ? [...old, account.id] : old.filter(id => id !== account.id))} />
-            {" "}{account.display_name || account.id}{blocked.has(account.id) ? " · already has a post attempt" : ""}
-          </label>)}</fieldset>)}
-        <Field label="Caption" hint={copy ? `${copy.label}${copy.fallback_reason ? ` · ${copy.fallback_reason}` : ""}` : undefined}>{id => <AutoTextarea id={id} rows={4} value={caption} onChange={e => editCaption(e.target.value)} />}</Field>
-        <Counters text={caption} limits={limits} />
-        <div className="gf-chip-row" aria-label="Caption extras">
-          {suggested.map(tag => <button key={tag} type="button" className="gf-chip" aria-pressed={present.has(tag.toLowerCase())}
-            onClick={() => editCaption(toggleHashtag(caption, tag))}>#{tag}</button>)}
-          <button type="button" className="gf-chip" aria-pressed={hasLinkInBio(caption)} disabled={hasLinkInBio(caption)}
-            onClick={() => editCaption(addLinkInBio(caption))}>{hasLinkInBio(caption) ? "“Link in bio” added" : "Add “Link in bio”"}</button>
+      </> : !error && <p className="gf-help">Checking quality…</p>}
+    </section>
+
+    <section className="gf-review-section gf-post-section" aria-label="Post to Instagram">
+      <div className="gf-review-section-head"><h3>Post to Instagram</h3></div>
+      {signInRequired && <div className="gf-post-signin">
+        <div>
+          <p role="status"><strong>Sign in required.</strong> We host the approved video briefly so Instagram can fetch it.</p>
+          {targets?.cloud_configured && !signingIn && <button type="button" className="gf-button compact" onClick={() => setSigningIn(true)}>Sign in</button>}
         </div>
-        <button type="button" className="gf-button ghost" disabled={!!writing || busy} onClick={() => void regenerate()}>{writing || "Regenerate caption"}</button>
-        {chosen.length > 1 && <div aria-label="Per-account captions">
-          {chosen.map(account => overrides[account] === undefined
-            ? <button key={account} type="button" className="gf-chip" onClick={() => { setOverrides(old => ({ ...old, [account]: caption })); setPreviewAccount(account); }}>Own caption for {accountName(account)}</button>
-            : <div key={account}>
-              <Field label={`Caption for ${accountName(account)}`}>{id => <AutoTextarea id={id} rows={3} value={overrides[account]} onFocus={() => setPreviewAccount(account)} onChange={e => setOverrides(old => ({ ...old, [account]: e.target.value }))} />}</Field>
-              <Counters text={overrides[account]} limits={limits} label={`Caption limits for ${accountName(account)}`} />
-              <button type="button" className="gf-button ghost compact" onClick={() => setOverrides(old => { const next = { ...old }; delete next[account]; return next; })}>Use the shared caption</button>
-            </div>)}
-        </div>}
-        <label><input type="checkbox" checked={shareToFeed} onChange={e => setShareToFeed(e.target.checked)} /> Also show in the main feed (not only Reels)</label>
-        <p className="gf-help">{pkg?.collaborators_note ?? "Mention people with @ in the caption."} No location is added.</p>
-        {pkg && pkg.candidates.length > 1 && <fieldset>
-          <legend>Cover</legend>
-          <div className="gf-cover-strip" role="group" aria-label="Cover frames">
-            {pkg.candidates.map(c => {
-              const selected = coverMs === null ? c.auto : coverMs === c.time_ms;
-              return <button key={c.time_ms} type="button" aria-pressed={selected} aria-label={`Cover at ${seconds(c.time_ms)}${c.auto ? " (suggested)" : ""}`}
-                onClick={() => setCoverMs(c.auto ? null : c.time_ms)}>
-                <img src={c.url} alt="" loading="lazy" /><small>{c.auto ? "Suggested" : seconds(c.time_ms)}</small>
-              </button>;
-            })}
-          </div>
-        </fieldset>}
-        <fieldset className="gf-post-when">
-          <legend>When</legend>
-          <div className="gf-post-when-modes">
-            <label><input type="radio" name={`when-${clip.id}`} checked={mode === "now"} onChange={() => setMode("now")} /> Post now</label>
-            <label><input type="radio" name={`when-${clip.id}`} checked={mode === "schedule"} onChange={() => { setMode("schedule"); if (!when) setWhen(localInputValue(scheduleSuggestions(now())[0].at)); }} /> Schedule</label>
-          </div>
-          {mode === "schedule" && <>
-            <div className="gf-chip-row">{scheduleSuggestions(now()).map(s => <button key={s.label} type="button" className="gf-chip"
-              aria-pressed={when === localInputValue(s.at)} onClick={() => setWhen(localInputValue(s.at))}>{s.label}</button>)}</div>
-            <Field label="Date and time" hint={`Times are in ${zone}.`}>{id => <input id={id} type="datetime-local" value={when} min={localInputValue(now())} onChange={e => setWhen(e.target.value)} />}</Field>
-            <p className="gf-help"><strong>The app must be open at that time.</strong> If it is closed then, you'll be asked to post, reschedule or cancel when you reopen it. Nothing posts late on its own.</p>
-            {scheduleProblem && when && <p className="gf-help">{scheduleProblem}</p>}
-          </>}
-        </fieldset>
-        {captionProblems.length > 0 && <div className="gf-inline-error" role="alert">{[...new Set(captionProblems)].join(" ")}</div>}
-        <button className="gf-button full" disabled={!ready} onClick={() => void submit()}>{submitLabel}</button>
-        {notice && <p role="status">{notice}</p>}
-        {error && <div className="gf-inline-error" role="alert">{error}</div>}
-        {attempts.length > 0 && <ul aria-label="Post attempts">{attempts.map(a => <li key={a.id}>
-          <strong>{a.account_name || a.account_id}</strong> · <span>{stateLabel[a.state]}</span>
-          {a.state === "scheduled" && a.scheduled_for && <> · {localTime(a.scheduled_for)}</>}
-          {a.permalink && <> · <a href={a.permalink} target="_blank" rel="noreferrer noopener">Open reel</a></>}
-          {a.error && <p className="gf-help">{a.error.message}</p>}
-          {a.warnings.includes("caption_readback_mismatch") && <p className="gf-help">Instagram shows a different caption; check the post.</p>}
-          {(a.warnings.includes("cover_upload_failed") || a.warnings.includes("cover_url_unavailable")) && <p className="gf-help">Custom cover couldn't be hosted; Instagram used the same frame from the video instead.</p>}
-          {(a.state === "unknown" || (a.state === "container_created" && !a.active)) &&
-            <button className="gf-button secondary" disabled={busy} onClick={() => void act(a, "reconcile")}>Check status</button>}
-          {a.state !== "unknown" && canResume(a) &&
-            <button className="gf-button ghost" disabled={busy} onClick={() => void act(a, "resume")}>Continue</button>}
-        </li>)}</ul>}
-      </div>
+        {!targets?.cloud_configured && <p>Accounts aren't set up on this Mac yet, so posting is off. Everything else still works.</p>}
+        {signingIn && <CloudSignIn skipLabel="Cancel" onSkip={() => setSigningIn(false)} onDone={() => {
+          setSigningIn(false);
+          // Re-read targets so posting unlocks as soon as the session exists. The password is never kept here.
+          void refresh().catch(e => live.current && setError(message(e)));
+        }} />}
+      </div>}
+      {pending.length > 0 && <ul className="gf-schedule-list" aria-label="Scheduled posts">{pending.map(row => <li key={row.id}>
+        {row.overdue_at
+          ? <p role="status"><strong>Missed while the app was closed.</strong> Was set for {localTime(row.publish_at)} · {row.account_ids.map(accountName).join(", ")}. Nothing was posted.</p>
+          : <p>Scheduled for <strong>{localTime(row.publish_at)}</strong> · {row.account_ids.map(accountName).join(", ")}. The app must be open at that time.</p>}
+        <div className="gf-schedule-actions">
+          {row.overdue_at && <button type="button" className="gf-button compact" disabled={busy} onClick={() => void decide(row, "post_now")}>Post now</button>}
+          {row.overdue_at && <button type="button" className="gf-button secondary compact" disabled={busy} onClick={() => void decide(row, "reschedule")}>Reschedule</button>}
+          <button type="button" className="gf-button ghost compact" disabled={busy} onClick={() => void decide(row, "cancel")}>Cancel</button>
+        </div>
+      </li>)}</ul>}
       <PostPreview
         videoUrl={clipMediaUrl(clip.id)}
         coverUrl={coverUrl}
@@ -369,6 +319,82 @@ export function PostToInstagram({
         shareToFeed={shareToFeed}
         when={mode === "schedule" && scheduledAt ? `Posts ${localTime(scheduledAt)} (${zone})` : null}
       />
-    </div>
-  </section>;
+      {targets && (targets.accounts.length === 0
+        ? <p className="gf-help">Connect an Instagram account for this brand first.</p>
+        : <fieldset className="gf-post-group gf-post-accounts"><legend>Account</legend>{targets.accounts.map(account => <label key={account.id} className="gf-post-account">
+          <input type="checkbox" checked={chosen.includes(account.id)} disabled={blocked.has(account.id) || busy}
+            onChange={e => setChosen(old => e.target.checked ? [...old, account.id] : old.filter(id => id !== account.id))} />
+          <span className="gf-post-account-avatar" aria-hidden="true">{(account.display_name || account.id).replace(/^@/, "").slice(0, 1).toUpperCase()}</span>
+          <span className="gf-post-account-name">{account.display_name || account.id}{blocked.has(account.id) ? " · already has a post attempt" : ""}</span>
+        </label>)}</fieldset>)}
+      <div className="gf-post-group">
+        <Field label="Caption" hint={copy ? `${copy.label}${copy.fallback_reason ? ` · ${copy.fallback_reason}` : ""}` : undefined}>{id => <AutoTextarea id={id} rows={4} value={caption} onChange={e => editCaption(e.target.value)} />}</Field>
+        <Counters text={caption} limits={limits} />
+        <div className="gf-chip-row" aria-label="Caption extras">
+          {suggested.map(tag => <button key={tag} type="button" className="gf-chip" aria-pressed={present.has(tag.toLowerCase())}
+            onClick={() => editCaption(toggleHashtag(caption, tag))}>#{tag}</button>)}
+          <button type="button" className="gf-text-button" aria-pressed={hasLinkInBio(caption)} disabled={hasLinkInBio(caption)}
+            onClick={() => editCaption(addLinkInBio(caption))}>{hasLinkInBio(caption) ? "“Link in bio” added" : "Add “Link in bio”"}</button>
+          <button type="button" className="gf-text-button" disabled={!!writing || busy} onClick={() => void regenerate()}>{writing || "Regenerate caption"}</button>
+        </div>
+        {chosen.length > 1 && <div className="gf-post-overrides" aria-label="Per-account captions">
+          {chosen.map(account => overrides[account] === undefined
+            ? <button key={account} type="button" className="gf-chip" onClick={() => { setOverrides(old => ({ ...old, [account]: caption })); setPreviewAccount(account); }}>Own caption for {accountName(account)}</button>
+            : <div key={account} className="gf-post-group">
+              <Field label={`Caption for ${accountName(account)}`}>{id => <AutoTextarea id={id} rows={3} value={overrides[account]} onFocus={() => setPreviewAccount(account)} onChange={e => setOverrides(old => ({ ...old, [account]: e.target.value }))} />}</Field>
+              <Counters text={overrides[account]} limits={limits} label={`Caption limits for ${accountName(account)}`} />
+              <button type="button" className="gf-text-button" onClick={() => setOverrides(old => { const next = { ...old }; delete next[account]; return next; })}>Use the shared caption</button>
+            </div>)}
+        </div>}
+      </div>
+      <label className="gf-toggle-row">
+        <span>Also show in the main feed<small>Off posts to Reels only</small></span>
+        <input type="checkbox" role="switch" checked={shareToFeed} onChange={e => setShareToFeed(e.target.checked)} />
+      </label>
+      <p className="gf-post-note">{pkg?.collaborators_note ?? "Mention people with @ in the caption."} No location is added.</p>
+      {pkg && pkg.candidates.length > 1 && <fieldset className="gf-post-group">
+        <legend>Cover</legend>
+        <div className="gf-cover-strip" role="group" aria-label="Cover frames">
+          {pkg.candidates.map(c => {
+            const selected = coverMs === null ? c.auto : coverMs === c.time_ms;
+            return <button key={c.time_ms} type="button" aria-pressed={selected} aria-label={`Cover at ${seconds(c.time_ms)}${c.auto ? " (suggested)" : ""}`}
+              title={c.auto ? `Suggested · ${seconds(c.time_ms)}` : seconds(c.time_ms)} onClick={() => setCoverMs(c.auto ? null : c.time_ms)}>
+              <img src={c.url} alt="" loading="lazy" />{c.auto && <span className="gf-cover-auto" aria-hidden="true" />}
+            </button>;
+          })}
+        </div>
+        {pickedCover && <small className="gf-cover-picked">{pickedCover.auto ? "Suggested frame" : "Your pick"} · {seconds(pickedCover.time_ms)}</small>}
+      </fieldset>}
+      <fieldset className="gf-post-group gf-post-when">
+        <legend>When</legend>
+        <div className="gf-segmented" role="radiogroup" aria-label="When to post">
+          <label><input type="radio" name={`when-${clip.id}`} checked={mode === "now"} onChange={() => setMode("now")} /><span>Post now</span></label>
+          <label><input type="radio" name={`when-${clip.id}`} checked={mode === "schedule"} onChange={() => { setMode("schedule"); if (!when) setWhen(localInputValue(scheduleSuggestions(now())[0].at)); }} /><span>Schedule</span></label>
+        </div>
+        {mode === "schedule" && <div className="gf-post-schedule">
+          <div className="gf-chip-row">{scheduleSuggestions(now()).map(s => <button key={s.label} type="button" className="gf-chip"
+            aria-pressed={when === localInputValue(s.at)} onClick={() => setWhen(localInputValue(s.at))}>{s.label}</button>)}</div>
+          <Field label="Date and time" hint={`Times are in ${zone}.`}>{id => <input id={id} type="datetime-local" value={when} min={localInputValue(now())} onChange={e => setWhen(e.target.value)} />}</Field>
+          <p className="gf-help"><strong>The app must be open at that time.</strong> If it is closed then, you'll be asked to post, reschedule or cancel when you reopen it. Nothing posts late on its own.</p>
+          {scheduleProblem && when && <p className="gf-help">{scheduleProblem}</p>}
+        </div>}
+      </fieldset>
+      {captionProblems.length > 0 && <div className="gf-inline-error" role="alert">{[...new Set(captionProblems)].join(" ")}</div>}
+      <button className="gf-button full gf-post-submit" disabled={!ready} onClick={() => void submit()}>{submitLabel}</button>
+      {notice && <p role="status">{notice}</p>}
+      {error && <div className="gf-inline-error" role="alert">{error}</div>}
+      {attempts.length > 0 && <ul className="gf-post-attempts" aria-label="Post attempts">{attempts.map(a => <li key={a.id}>
+        <strong>{a.account_name || a.account_id}</strong> · <span>{stateLabel[a.state]}</span>
+        {a.state === "scheduled" && a.scheduled_for && <> · {localTime(a.scheduled_for)}</>}
+        {a.permalink && <> · <a href={a.permalink} target="_blank" rel="noreferrer noopener">Open reel</a></>}
+        {a.error && <p className="gf-help">{a.error.message}</p>}
+        {a.warnings.includes("caption_readback_mismatch") && <p className="gf-help">Instagram shows a different caption; check the post.</p>}
+        {(a.warnings.includes("cover_upload_failed") || a.warnings.includes("cover_url_unavailable")) && <p className="gf-help">Custom cover couldn't be hosted; Instagram used the same frame from the video instead.</p>}
+        {(a.state === "unknown" || (a.state === "container_created" && !a.active)) &&
+          <button className="gf-button secondary" disabled={busy} onClick={() => void act(a, "reconcile")}>Check status</button>}
+        {a.state !== "unknown" && canResume(a) &&
+          <button className="gf-button ghost" disabled={busy} onClick={() => void act(a, "resume")}>Continue</button>}
+      </li>)}</ul>}
+    </section>
+  </div>;
 }

@@ -6,7 +6,7 @@ import {
   publishApi, withOffset, type PostPackageView, type PostSchedule, type PostTargets, type PublishAttempt,
   type QualityReport,
 } from "./publishApi";
-import { truncateForFeed } from "./PostPreview";
+import { PostPreview, truncateForFeed } from "./PostPreview";
 
 vi.mock("./publishApi", async (original) => {
   const actual = await original<typeof import("./publishApi")>();
@@ -160,12 +160,12 @@ describe("PostToInstagram", () => {
     }));
   });
 
-  it("previews the post on a phone with a feed-truncated caption", async () => {
+  it("previews the post on a Reels-style phone with a truncated caption", async () => {
     const long = "First line of the caption that is pretty long\nSecond line keeps going\nThird line is hidden until more";
     api.targets.mockResolvedValue(targets({ default_caption: long }));
     render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} />);
     const preview = await screen.findByLabelText("Post preview");
-    await waitFor(() => expect(within(preview).getByTestId("preview-caption")).toHaveTextContent(/Second line keeps going… more$/));
+    await waitFor(() => expect(within(preview).getByTestId("preview-caption")).toHaveTextContent(/pretty long… more$/));
     expect(within(preview).getByText("brand")).toBeInTheDocument();
     expect(within(preview).getByLabelText("Clip with burned-in captions")).toHaveAttribute("src", "/api/clips/c1/media");
     await userEvent.click(within(preview).getByRole("button", { name: "more" }));
@@ -222,5 +222,56 @@ describe("PostToInstagram", () => {
     await userEvent.click(screen.getByRole("button", { name: "Post now" }));
     expect(api.decide).toHaveBeenCalledWith("s1", "post_now", undefined);
     expect(await screen.findByText("Queued")).toBeInTheDocument();
+  });
+  it("summarises quality as four score pills and a one-line verdict, reasons behind Details", async () => {
+    api.quality.mockResolvedValue({ ...pass, verdict: "hold", reasons: ["No captions burned in"], rubric: { hook_clarity: 4, standalone_context: 3, caption_legibility: 1, technical: null } });
+    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    const gate = await screen.findByLabelText("Quality gate");
+    const pills = within(within(gate).getByLabelText("Quality scores")).getAllByRole("listitem");
+    expect(pills.map(p => p.textContent)).toEqual(["Hook4/5", "Context3/5", "Captions1/5", "Technical–/5"]);
+    expect(pills[2]).toHaveClass("is-low");
+    expect(within(gate).getByText("Held: no captions burned in")).toBeInTheDocument();
+    expect(within(gate).getByText("No captions burned in").closest("details")).not.toBeNull();
+    expect(within(gate).getByLabelText(/Override reason/)).toBeInTheDocument();
+  });
+
+  it("shows the override reason only when the gate holds", async () => {
+    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    expect(await screen.findByText("Passed: ready to post")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Override reason/)).not.toBeInTheDocument();
+  });
+
+  it("uses a switch for feed sharing and a segmented control for timing", async () => {
+    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} now={() => NOW} />);
+    await screen.findByDisplayValue("Default caption");
+    expect(screen.getByRole("switch", { name: /Also show in the main feed/ })).toBeChecked();
+    const when = screen.getByRole("radiogroup", { name: "When to post" });
+    expect(within(when).getByLabelText("Post now")).toBeChecked();
+    expect(screen.queryByLabelText("Date and time")).not.toBeInTheDocument();
+    await userEvent.click(within(when).getByLabelText("Schedule"));
+    expect(screen.getByLabelText("Date and time")).toBeInTheDocument();
+  });
+
+  it("renders a Reels-style screen with the selected account handle", async () => {
+    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    const preview = await screen.findByLabelText("Post preview");
+    await waitFor(() => expect(within(preview).getByText("brand")).toBeInTheDocument());
+    expect(within(preview).getByText("Reels")).toBeInTheDocument();
+    expect(within(preview).getByText("Follow")).toBeInTheDocument();
+    expect(within(preview).getByText("Original audio")).toBeInTheDocument();
+    expect(within(preview).getAllByText("—")).toHaveLength(4);
+    await userEvent.click(screen.getByLabelText(/second/));
+    expect(within(preview).getByText("second")).toBeInTheDocument();
+  });
+  it("keeps the phone preview paused under reduced motion", () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: query.includes("reduce"), media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    try {
+      render(<PostPreview videoUrl="/v.mp4" handle="@brand" caption="Hi" shareToFeed />);
+      expect(screen.getByLabelText("Clip with burned-in captions")).not.toHaveAttribute("autoplay");
+      expect(screen.getByText("brand")).toBeInTheDocument();
+    } finally {
+      window.matchMedia = original;
+    }
   });
 });
