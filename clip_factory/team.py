@@ -26,7 +26,7 @@ from typing import Literal
 import psutil
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_serializer, model_validator
 
-from . import media, scouts
+from . import craft, media, scouts
 from . import storyboard as boards
 from .brief import (
     avoid_label,
@@ -111,15 +111,55 @@ class TypedOutput(BaseModel):
 
 
 class BriefTagged(TypedOutput):
-    """Handoffs that may name campaign-brief tags; empty tags are left out of the saved handoff."""
+    """Handoffs with optional brief tags / craft hints; unset ones are left out of the saved handoff."""
 
     @model_serializer(mode="wrap")
     def _drop_empty_tags(self, handler):
         data = handler(self)
-        for key in ("serves", "avoid"):
-            if key in data and not data[key]:
+        for key in ("serves", "avoid", "emphasis_words", "payoff_start", "payoff_end"):
+            if key in data and (data[key] is None or data[key] == []):
                 del data[key]
         return data
+
+
+class CraftHints(BriefTagged):
+    """Optional editing-craft hints (craft.py): the payoff sentence teased first, words to emphasise."""
+
+    payoff_start: float | None = Field(default=None, ge=0)
+    payoff_end: float | None = Field(default=None, gt=0)
+    emphasis_words: list[str] = Field(default_factory=list, max_length=6)
+
+
+CRAFT_HINTS = (
+    "Optionally name payoff_start/payoff_end: the source seconds of the single sentence that delivers the "
+    "clip's payoff, inside your range and at least 4 seconds after start; it is teased first, so it must be "
+    "spoken words. emphasis_words: up to 6 words actually said that carry the point."
+)
+
+
+def craft_hints(item: dict, transcript: dict | None, start: float, end: float) -> dict:
+    """Keep only source-checked hints: a spoken payoff inside the range, emphasis words actually said.
+
+    Invalid hints are dropped; the clip itself is never rejected for them.
+    """
+    kept = {}
+    a, b = _number(item.get("payoff_start")), _number(item.get("payoff_end"))
+    if (
+        a is not None
+        and b is not None
+        and start + craft.SETUP_MIN <= a < b <= end
+        and b - a <= craft.PAYOFF_MAX
+        and boards.speech_between(transcript, a, b).strip()
+    ):
+        kept.update(payoff_start=a, payoff_end=b)
+    said = {craft.norm(w) for w in re.findall(r"\S+", boards.speech_between(transcript, start, end))} - {""}
+    words = []
+    for word in item.get("emphasis_words") or []:
+        if isinstance(word, str) and craft.norm(word) in said and word.strip() not in words:
+            words.append(word.strip())
+    if words:
+        kept["emphasis_words"] = words[:6]
+    return kept
 
 
 class Assignment(TypedOutput):
@@ -224,7 +264,7 @@ class Performance(TypedOutput):
     recommendations: list[Recommendation] = Field(min_length=1, max_length=4)
 
 
-class Candidate(TypedOutput):
+class Candidate(CraftHints):
     start: float = Field(ge=0)
     end: float = Field(gt=0)
     hook: str = Field(min_length=1, max_length=250)
@@ -290,7 +330,7 @@ class Revision(TypedOutput):
     instruction: str = Field(min_length=1, max_length=1500)
 
 
-class Idea(BriefTagged):
+class Idea(CraftHints):
     hypothesis: Literal["bold_claim", "question", "story", "lesson", "contrast", "emotion", "humor", "spectacle"]
     start: float = Field(ge=0)
     end: float = Field(gt=0)
@@ -741,7 +781,7 @@ class TeamEngine:
             "footage_analyst": f"Pick up to {count} of the strongest moments for short-form clips from the storyboard: a scene-by-scene map of the whole source (seen = what a vision model saw in frames of that scene, text_on_screen = text it read, said = what is spoken, movement = measured picture change, sound = measured loudness where speech matters, interest = the watcher's 0-10 rating). A moment is one scene, or two adjacent scenes when the action or thought runs across them, cited by ref in scenes. Prefer moments that stand on their own: a peak of action, a striking visual, a clear claim, a story beat. For footage with little speech rely on what is seen and on movement. Spread moments across the source rather than clustering them. In summary say what happens and why it works. Timestamps are computed from the scenes you cite; do not state them.",
             "creative_strategist": "Propose one distinct angle for each validated moment, in order of strength, naming the moment by its id. When a moment has seen_up_close, that is the most specific description of what happens in it. Hooks are short viewer-facing text about what is actually seen or said, not editing instructions. Rendering supports existing source footage, a text hook and spoken subtitles; do not propose B-roll, illustrative graphics, or split-screen effects. Keep a specified objective; in discovery label distinct intended outcomes without claiming results.",
             "performance_analyst": "Recommend changes using actual observations or feedback, citing their IDs. Missing/zero/stale and manual/platform evidence differ; attribution never proves causal impact.",
-            "editor": "Turn each angle into one clip. allowed_source_ranges gives, for each angle_id, the permitted source range, its objective, its evidence, the measured peak_time and a suggested_range cut around that peak. Choose start and end in source seconds inside the permitted range: use suggested_range unless an action or a sentence needs a few seconds more; 12-45 seconds unless the range is shorter. For action footage keep peak_time inside the clip with a few seconds of lead-in; when seen_up_close is present it describes that peak. hook: at most 10 words a viewer reads on screen. caption: one or two short sentences for the post, as a person would write them, optionally followed by up to three hashtags. Hook and caption describe what is seen and said; with no speech evidence, describe only what is visible. Never mention timestamps, scenes, measurements, evidence or the transcript in hook or caption (that belongs in reason), and never invent quoted speech, names, scores or outcomes. Cite only evidence_refs listed for that angle. Attached frames, when present, show the footage inside the allowed ranges.",
+            "editor": "Turn each angle into one clip. allowed_source_ranges gives, for each angle_id, the permitted source range, its objective, its evidence, the measured peak_time and a suggested_range cut around that peak. Choose start and end in source seconds inside the permitted range: use suggested_range unless an action or a sentence needs a few seconds more; 12-45 seconds unless the range is shorter. For action footage keep peak_time inside the clip with a few seconds of lead-in; when seen_up_close is present it describes that peak. hook: at most 10 words a viewer reads on screen. caption: one or two short sentences for the post, as a person would write them, optionally followed by up to three hashtags. Hook and caption describe what is seen and said; with no speech evidence, describe only what is visible. Never mention timestamps, scenes, measurements, evidence or the transcript in hook or caption (that belongs in reason), and never invent quoted speech, names, scores or outcomes. Cite only evidence_refs listed for that angle. Attached frames, when present, show the footage inside the allowed ranges. " + CRAFT_HINTS,
             "critic": "Check each candidate independently against its evidence: source context, factual claims, caption support, and duplicates. clip_speech is the verbatim speech inside each candidate (empty means nothing meaningful is said); attached frames, when present, come from inside each candidate's range. Report only what would mislead a viewer: quotes, names, numbers, scores, outcomes or events that the evidence does not show. Wording, tone, emphasis and omissions are not findings, and footage that merely looks similar is not a duplicate (a duplicate repeats the same source range or the same hook). Pass a candidate whose hook and caption are supported. Use unknown only when the evidence cannot settle a factual claim. Report blocking findings, not confidence scores. No approval authority.",
         }[role]
         output_schema = narrowed(schema, limits or {})
@@ -1258,7 +1298,7 @@ class TeamEngine:
                     "of a sentence or just before the action and end on the payoff, with the whole thought inside. hook: at most 10 words shown "
                     "on screen, specific, no emoji. caption: one or two short sentences for the post, then up to "
                     "three hashtags. Never invent quotes, names, numbers or outcomes. With no speech, describe "
-                    "only what is visible and prefer spectacle, emotion or contrast. Return an empty list only if "
+                    "only what is visible and prefer spectacle, emotion or contrast. " + CRAFT_HINTS + " Return an empty list only if "
                     "nothing here could stand alone. Settings.learning_memory, when present, lists earlier measured "
                     "experiments and an account baseline: observational data, not proof; avoid repeating a tested "
                     "hook. Settings.selection_guidance, when present, is approved scouting criteria: prefer the "
@@ -1307,6 +1347,7 @@ class TeamEngine:
                         "hook": idea["hook"],
                         "caption": idea["caption"],
                         "objective": context["objective"],
+                        **{k: idea[k] for k in ("payoff_start", "payoff_end", "emphasis_words") if idea.get(k)},
                         "_team": {
                             **(run["context"].get("campaign_snapshot") or {}),
                             "creator_instructions": "",
@@ -1387,7 +1428,13 @@ class TeamEngine:
                             pending.append(
                                 pool.submit(
                                     render,
-                                    {**idea, "start": start, "end": end},
+                                    {
+                                        **{k: v for k, v in idea.items()
+                                           if k not in ("payoff_start", "payoff_end", "emphasis_words")},
+                                        "start": start,
+                                        "end": end,
+                                        **craft_hints(idea, transcript, start, end),
+                                    },
                                     scene,
                                     treatments[ideas_found % len(treatments)],
                                 )
@@ -1798,11 +1845,12 @@ class TeamEngine:
                     taken.add((start, end))
                     cited = self._known(candidate["evidence_refs"], {k: evidence[k] for k in moment["evidence_refs"]})
                     fitted = {
-                        **candidate,
+                        **{k: v for k, v in candidate.items() if k not in ("payoff_start", "payoff_end", "emphasis_words")},
                         "start": start,
                         "end": end,
                         "objective": angle["objective"],
                         "evidence_refs": (cited or moment["evidence_refs"])[:16],
+                        **craft_hints(candidate, video.get("transcript"), start, end),
                     }
                     if abs(start - candidate["start"]) > 0.5 or abs(end - candidate["end"]) > 0.5:
                         fitted["adjusted"] = (

@@ -1837,3 +1837,63 @@ def test_swarm_prompts_carry_compact_brief_and_drop_must_avoid_ideas(harness):
     assert len(block) <= 1400
     assert request["schema"]["$defs"]["Idea"]["properties"]["serves"]["items"]["enum"] == ["M1", "T1", "none"]
     assert result["ideas"] == 8 and [r["step"] for r in run["brief_rejections"]] == ["swarm"]
+
+
+SPOKEN = {"segments": [
+    {"start": 0.0, "end": 5.0, "text": "Here is the setup for the story."},
+    {"start": 6.0, "end": 9.0, "text": "And the payoff lands right here."},
+]}
+
+
+def test_craft_hints_keep_only_a_spoken_payoff_inside_the_range_and_said_words():
+    from clip_factory.team import craft_hints
+
+    good = {"payoff_start": 6.0, "payoff_end": 9.0, "emphasis_words": ["payoff", "unicorn", "Setup"]}
+    assert craft_hints(good, SPOKEN, 0, 10) == {"payoff_start": 6.0, "payoff_end": 9.0,
+                                               "emphasis_words": ["payoff", "Setup"]}
+    # Too early (setup needs 4 s), outside the range, unspoken, or half-given: dropped, not the clip.
+    for payoff in ((2.0, 5.0), (6.0, 12.0), (5.2, 5.8), (6.0, None)):
+        item = {"payoff_start": payoff[0], "payoff_end": payoff[1]}
+        assert craft_hints(item, SPOKEN, 0, 10) == {}
+    assert craft_hints({"emphasis_words": ["nothing"]}, SPOKEN, 0, 10) == {}
+
+
+def test_editor_payoff_and_emphasis_reach_the_render_and_invalid_hints_are_dropped(harness):
+    harness.video = harness.store.put("videos", {**harness.video, "duration": 10.0, "transcript": SPOKEN})
+    harness.board = board("source", 10.0, scenes=1)
+    hinted = edits()
+    hinted["candidates"][0].update(start=0, end=10, payoff_start=6.0, payoff_end=9.0,
+                                   emphasis_words=["payoff", "invented"])
+    harness.use([plan(), footage(), strategy(), hinted, critique()])
+    harness.execute()
+    rendered = harness.rendered[0]
+    assert (rendered["payoff_start"], rendered["payoff_end"]) == (6.0, 9.0)
+    assert rendered["emphasis_words"] == ["payoff"]
+    assert "payoff_start/payoff_end" in harness.models.calls[3]["prompt"]
+    bad = edits()
+    bad["candidates"][0].update(start=0, end=10, payoff_start=1.0, payoff_end=3.0, emphasis_words=["nope"])
+    harness.rendered.clear()
+    harness.use([plan(), footage(), strategy(), bad, critique()])
+    harness.execute()
+    assert not {"payoff_start", "payoff_end", "emphasis_words"} & set(harness.rendered[0])
+
+
+def test_swarm_ideas_carry_checked_payoff_and_emphasis_to_the_render(harness):
+    segments = [{"start": float(t), "end": float(t + 4), "text": f"point number {t} lands"} for t in range(0, 360, 5)]
+    swarm_source(harness, transcript={"segments": segments, "speech": "throughout"})
+    harness.use([])
+
+    class Hinting(SwarmModels):
+        def run_batch(self, job_id, model_id, requests):
+            replies = super().run_batch(job_id, model_id, requests)
+            first = json.loads(replies[0]["output"])
+            first["ideas"][0].update(payoff_start=10.0, payoff_end=14.0, emphasis_words=["lands", "never"])
+            replies[0] = {"output": json.dumps(first)}
+            return replies
+
+    harness.models = harness.engine.models = Hinting()
+    harness.execute(mode="swarm")
+    assert "payoff_start/payoff_end" in harness.models.batches[0][0]["prompt"]
+    first = harness.rendered[0]
+    assert first["emphasis_words"] == ["lands"]
+    assert (first["start"], first["end"], first["payoff_start"], first["payoff_end"]) == (0.0, 24.2, 10.0, 14.0)
