@@ -47,8 +47,10 @@ serial heavy worker:
 1. Model: OpenRouter through the app's `LlmGateway` (Keychain key, ledger + cost), role
    `factory_builder`, Sonnet-class slug discovered from OpenRouter `/models` and constrained to slugs
    the gateway can price (`anthropic/claude-sonnet-5.5`); local Ollama model as a fallback. The
-   adapter calls the gateway's cloud path with an explicit model because `complete_json` routes by
-   the creator's model setting; switch to it if it gains a `model=` override.
+   adapter uses the gateway's Keychain key, HTTP client and ledger but sends its own request
+   (explicit model, `reasoning: {effort: "low"}`): `complete_json` routes by the creator's model
+   setting and sends `reasoning: {enabled: false}`, which OpenRouter rejects for Sonnet 5.5
+   ("Reasoning is mandatory", HTTP 400, checked 2026-11-14).
 2. Static checks before anything runs: AST allowlist (imports only `math`, `re`, `dataclasses`,
    `typing`, `clip_factory.extensions.base`; no `exec/eval/open/getattr/__import__`, no
    `os/sys/subprocess/socket`, no dunder attributes, no `while`), size/line limits.
@@ -73,3 +75,11 @@ the module — **only** files committed and unmodified in the running checkout's
 Fine-tune toggle (`CraftOptions.extensions`, off by default) and a Strategist craft variable
 `ext_<capability>` (`on`/`off` from the edit plan). The running app never imports builder worktree
 or branch code.
+
+## Verified
+
+2026-11-14, one live build in a temporary clone (not the working tree), demo request
+`progress_bar`: Sonnet 5.5 via OpenRouter, 1 call, 6,050 prompt + 4,135 completion tokens,
+$0.0535 (OpenRouter-reported), 29 s; passed the AST allowlist, ruff, 12 generated tests and the
+sample render (bar fills along the top edge; frame at 1.5 s differs from the plain render) on the
+first attempt. Nothing was pushed or merged.

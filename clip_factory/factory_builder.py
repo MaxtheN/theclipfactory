@@ -289,24 +289,71 @@ def discover_sonnet(fetch: Callable[[str], dict] | None = None) -> str:
 
 
 class GatewayBuilderModel:
-    """OpenRouter through the app's LlmGateway (key in Keychain, ledger + cost recorded per call).
+    """OpenRouter through the app's LlmGateway pieces: Keychain key, its HTTP client (bounded retries,
+    no key in errors) and its ledger (tokens + cost per call). Never prompt text or output in the ledger.
 
-    llm_provider's public ``complete_json`` routes by its ROLES and the creator's model setting; the
-    builder needs its own role and a Sonnet-class model, so this adapter calls the gateway's cloud path
-    with an explicit model. Swap to ``complete_json(ROLE, ..., model=...)`` once that accepts one.
+    ``complete_json`` routes by the creator's role/model settings and disables reasoning, which
+    Sonnet-class models on OpenRouter reject ("Reasoning is mandatory"), so the builder sends its own
+    request with low reasoning effort and an explicit model.
     """
 
-    def __init__(self, gateway, model: str, job_id: str | None = None):
+    provider = "openrouter"
+
+    def __init__(self, gateway, model: str, job_id: str | None = None, *, max_tokens: int = 16000,
+                 timeout: float = 300):
         self.gateway, self.model, self.job_id = gateway, model, job_id
-        self.provider = "openrouter"
+        self.max_tokens, self.timeout = max_tokens, timeout
 
     def available(self) -> bool:
         return bool(self.gateway.key_status().get("present"))
 
     def generate(self, system: str, user: str, schema: dict) -> tuple[str, dict]:
-        result = self.gateway._cloud(ROLE, self.model, system, user, schema, images=None, image_labels=None,
-                                     max_tokens=12000, timeout=300, temperature=0.2, job_id=self.job_id)
-        return result.text, result.provenance()
+        from . import llm_provider
+
+        try:
+            key = self.gateway.secrets.get()
+        except WorkError:
+            key = None
+        if not key:
+            raise BuilderError("No OpenRouter key is saved. Add one in Brand profile → AI model.")
+        body = {
+            "model": self.model,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "max_tokens": self.max_tokens, "temperature": 0.2, "usage": {"include": True},
+            "reasoning": {"effort": "low"},
+            "response_format": {"type": "json_schema", "json_schema": {"name": "extension", "strict": False,
+                                                                       "schema": schema}},
+        }
+        started = time.monotonic()
+        try:
+            data = self.gateway.client.chat(key, body, self.timeout)
+        except llm_provider.CloudError as exc:
+            self.gateway._record(ROLE, self.model, None, self.job_id, time.monotonic() - started, error=exc.kind)
+            raise BuilderError(str(exc)) from None
+        latency = time.monotonic() - started
+        try:
+            text = data["choices"][0]["message"]["content"]
+            if isinstance(text, list):
+                text = "".join(p.get("text", "") for p in text if isinstance(p, dict))
+            if not isinstance(text, str):
+                raise TypeError
+        except (KeyError, IndexError, TypeError):
+            self.gateway._record(ROLE, self.model, None, self.job_id, latency, error="invalid")
+            raise BuilderError("OpenRouter returned no text for the builder.") from None
+        usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+        prompt_tokens, completion_tokens = int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0)
+        reported = usage.get("cost")
+        if isinstance(reported, (int, float)) and reported >= 0:
+            cost, basis = float(reported), "openrouter_reported"
+        else:
+            price = llm_provider.MODELS.get(self.model, llm_provider.MODELS[llm_provider.SONNET])
+            cost = (prompt_tokens * price["input_per_mtok"] + completion_tokens * price["output_per_mtok"]) / 1e6
+            basis = "estimated_from_list_price"
+        completion = llm_provider.Completion(text=text, provider="openrouter", model=self.model,
+                                             prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
+                                             cost_usd=cost, cost_basis=basis, latency_seconds=latency)
+        self.gateway._record(ROLE, self.model, completion, self.job_id, latency)
+        return text, completion.provenance()
 
 
 class LocalBuilderModel:

@@ -391,3 +391,30 @@ def test_merged_extensions_are_strategist_variables(monkeypatch):
     plan = {"start": 0, "end": 20, "extensions": {"progress_bar": {}}}
     assert strategist.tag_clip({"edit_plan": plan})["ext_progress_bar"] == "on"
     assert strategist.tag_clip({"edit_plan": {"start": 0, "end": 20}})["ext_progress_bar"] == "off"
+
+
+def test_gateway_builder_model_uses_keychain_client_and_ledger_with_reasoning_on():
+    from clip_factory import llm_provider
+
+    sent, ledger = {}, []
+
+    class Client:
+        def chat(self, key, body, timeout):
+            sent.update(key=key, body=body)
+            return {"choices": [{"message": {"content": '{"module_source": "x"}'}}],
+                    "usage": {"prompt_tokens": 100, "completion_tokens": 20, "cost": 0.0004}}
+
+    class Gateway:
+        secrets = type("S", (), {"get": staticmethod(lambda: "sk-or-test")})()
+        client = Client()
+
+        def _record(self, role, model, completion, job_id, latency, error=None):
+            ledger.append((role, model, completion.cost_usd if completion else None, error))
+
+    model = fb.GatewayBuilderModel(Gateway(), llm_provider.SONNET, "job1")
+    text, usage = model.generate("sys", "user", fb.SCHEMA)
+    assert text == '{"module_source": "x"}' and usage["cost_usd"] == 0.0004
+    body = sent["body"]
+    assert body["model"] == "anthropic/claude-sonnet-5.5" and body["reasoning"] == {"effort": "low"}
+    assert body["response_format"]["json_schema"]["schema"] == fb.SCHEMA
+    assert ledger == [("factory_builder", "anthropic/claude-sonnet-5.5", 0.0004, None)]
