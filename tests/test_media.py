@@ -102,7 +102,7 @@ def test_real_render_preserves_audio_and_truthful_subtitles(tmp_path, sample, ca
     jobs = Jobs(store)
     transcript = {"segments": [{"start": 0.1, "end": 0.5, "text": "Actual words"}]} if audio else None
     if audio:
-        filters = subprocess.run(["ffmpeg", "-hide_banner", "-filters"], capture_output=True, text=True, timeout=10, check=True)
+        filters = subprocess.run([media.ffmpeg(), "-hide_banner", "-filters"], capture_output=True, text=True, timeout=10, check=True)
         if " subtitles " not in filters.stdout:
             jobs.close()
             pytest.skip("FFmpeg lacks libass")
@@ -167,3 +167,18 @@ def test_render_failure_removes_partial_output(tmp_path, monkeypatch):
         media.render(jobs, "job", tmp_path / "source.mp4", output, start=0, end=1)
     assert not output.exists()
     assert not output.with_name("abc.partial.mp4").exists()
+
+
+def test_find_tool_prefers_keg_only_ffmpeg_full(monkeypatch):
+    present = {"/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg", "/opt/homebrew/bin/ffmpeg", "/opt/homebrew/bin/ffprobe"}
+
+    def which(name):
+        if name in present:
+            return name
+        return f"/opt/homebrew/bin/{name}" if f"/opt/homebrew/bin/{name}" in present else None
+
+    monkeypatch.setattr(media.shutil, "which", which)
+    assert media.find_tool("ffmpeg") == "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg"
+    assert media.find_tool("ffprobe") == "/opt/homebrew/bin/ffprobe"  # falls back to PATH
+    present.clear()
+    assert media.find_tool("ffmpeg") is None

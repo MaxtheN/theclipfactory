@@ -39,7 +39,7 @@ COLD_OPEN_LIMITS = (0.5, 10.0)
 
 
 def probe(path: Path) -> dict:
-    tool = shutil.which("ffprobe")
+    tool = find_tool("ffprobe")
     if not tool:
         raise WorkError("Install FFmpeg (including ffprobe) before importing videos.")
     try:
@@ -93,7 +93,7 @@ def rate(value) -> float | None:
 
 def inspect(path: Path) -> dict:
     """Stream facts used by technical checks; unlike probe(), audio-only or odd files are reported."""
-    tool = shutil.which("ffprobe")
+    tool = find_tool("ffprobe")
     if not tool:
         raise WorkError("Install FFmpeg (including ffprobe) before checking media.")
     try:
@@ -141,8 +141,20 @@ def inspect(path: Path) -> dict:
     }
 
 
+# Homebrew's default ffmpeg ships without libass/drawtext, so it cannot burn captions.
+# The keg-only ffmpeg-full formula can; prefer it (ffmpeg and ffprobe together) when installed.
+FULL_FFMPEG_DIRS = ("/opt/homebrew/opt/ffmpeg-full/bin", "/usr/local/opt/ffmpeg-full/bin")
+
+
+def find_tool(name: str) -> str | None:
+    for directory in FULL_FFMPEG_DIRS:
+        if found := shutil.which(f"{directory}/{name}"):
+            return found
+    return shutil.which(name)
+
+
 def ffmpeg() -> str:
-    tool = shutil.which("ffmpeg")
+    tool = find_tool("ffmpeg")
     if not tool:
         raise WorkError("Install FFmpeg before processing media.")
     return tool
@@ -645,7 +657,7 @@ def render(
         if " subtitles " not in filters.stdout:
             srt.unlink(missing_ok=True)
             raise WorkError(
-                "This FFmpeg build lacks libass subtitles. Install full Homebrew FFmpeg or render without captions."
+                "This FFmpeg build lacks libass, so captions cannot be burned in. Run `brew install ffmpeg-full` and restart Clip Factory, or render without captions."
             )
         # cwd is output directory; filename consists exclusively of generated hexadecimal IDs.
         if caption_text:

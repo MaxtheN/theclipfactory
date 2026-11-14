@@ -45,11 +45,18 @@ fi
 mkdir -p clip_factory/ui
 cp -R frontend/dist/. clip_factory/ui/
 .venv/bin/python -m pip install -e '.[desktop]'
-if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
-  if command -v brew >/dev/null 2>&1 && confirm 'Install ffmpeg using Homebrew for video rendering/transcription?'; then
-    brew install ffmpeg
+# Burned-in captions need libass. Homebrew's default ffmpeg omits it; the keg-only
+# ffmpeg-full formula includes it and the app prefers it automatically.
+caption_ffmpeg() {
+  [[ -x /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg || -x /usr/local/opt/ffmpeg-full/bin/ffmpeg ]] && return 0
+  command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1 &&
+    ffmpeg -hide_banner -filters 2>/dev/null | grep -q ' subtitles '
+}
+if ! caption_ffmpeg; then
+  if command -v brew >/dev/null 2>&1 && confirm 'Install ffmpeg-full using Homebrew for rendering with burned-in captions?'; then
+    brew install ffmpeg-full
   else
-    printf '%s\n' 'ffmpeg/ffprobe unavailable: media operations need them. Install with brew install ffmpeg when ready.'
+    printf '%s\n' 'FFmpeg with caption support (libass) not found. Install it with: brew install ffmpeg-full'
   fi
 fi
 printf '%s\n' 'Setup complete. Open Start Clip Factory.command, or run .venv/bin/clip-factory.' 'Models are not installed by setup. Review licenses and disk space in the app before downloading.'
