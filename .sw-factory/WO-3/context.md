@@ -43,3 +43,9 @@ Blueprints reached through `@…` mentions and links while reading linked bluepr
 
 - Native live interface viewer is open at http://127.0.0.1:5178/; keep the current Vite/viewer processes running for the design continuation.
 - Design continuation: Codex chat 01a1d9ad-95d2-7c60-a340-728d99d8b57c (Refine UI design), user-authorized context handoff.
+
+## November 14 design refinement
+
+Neutral solid surfaces, readable type/controls, forest-green navigation, concise stage headings and persistent sidebar replace the earlier low-contrast glass presentation. All four stages retain their workflow and saved-draft boundaries. Round 4 independent review APPROVED; 148 tests and TypeScript/Vite build passed. Desktop and compact browser review completed with no page overflow at 390px/900px. Existing native viewer/Vite processes remain running; no fresh native visual smoke was obtained in this pass. Screenshot: `/Users/kartikbihani/WIN/design/growth-factory/interface-refined-setup.jpg`.
+
+Latest user branch instruction supersedes the brief frontend-only default-branch authorization: keep all changes on the dedicated feature branch. No default-branch push or merge occurred. Team repository permission remains READ; delivery uses the existing writable fork branch.

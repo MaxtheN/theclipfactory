@@ -96,9 +96,9 @@ export function Setup({
       <section className="gf-card gf-sources">
         <div className="gf-card-header">
           <div>
-            <span className="gf-overline">01 / THE RAW MATERIAL</span>
-            <h2>Start with the footage.</h2>
-            <p>Great ideas are already in the conversation.</p>
+            <span className="gf-overline">SOURCE LIBRARY</span>
+            <h2>Your footage</h2>
+            <p>Select the sources for this campaign.</p>
           </div>
           <span className="gf-count">
             {sourceIds.length.toString().padStart(2, "0")}
@@ -175,7 +175,7 @@ export function Setup({
             <Icon name="upload" size={25} />
           </span>
           <strong>
-            {w.busy ? "Adding your footage…" : "Drop something worth sharing"}
+            {w.busy ? "Adding your footage…" : "Drop your footage here"}
           </strong>
           <span>
             Drag a video here, or <u>browse files</u>
@@ -196,9 +196,9 @@ export function Setup({
       <section className="gf-card gf-brief">
         <div className="gf-card-header">
           <div>
-            <span className="gf-overline">02 / THE INTENTION</span>
-            <h2>A little direction goes far.</h2>
-            <p>Tell the factory what a good outcome looks like.</p>
+            <span className="gf-overline">CAMPAIGN BRIEF</span>
+            <h2>Give it direction</h2>
+            <p>A clear brief makes every edit more intentional.</p>
           </div>
         </div>
         <div className="gf-form-fields">
@@ -207,7 +207,7 @@ export function Setup({
               <input
                 id={id}
                 maxLength={200}
-                placeholder="Something worth talking about"
+                placeholder="e.g. Founder stories · November"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />

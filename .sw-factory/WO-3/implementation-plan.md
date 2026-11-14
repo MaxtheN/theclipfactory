@@ -20,6 +20,12 @@ GrowthApp composes useFactory and useCampaignWorkspace. workspaceApi maps user o
 ## Testing
 Run npm test and npm run build. Verify new journey, reload persistence, failure recovery, explicit approval, no export of pending clips, narrow viewport, reduced motion. Verify normal production build contains no preview seed. Browser test four stages, then native pywebview smoke without models, inference or live social actions. Hosted review is not render-quality evidence.
 
+## Design refinement — November 14
+
+User requested a best-practices visual refinement of the existing interface. Reuse all four mounted screens, API adapters and state boundaries. Refine `growth.css`, shell presentation in `GrowthApp.tsx`, and concise Setup labels only; no workflow, storage, backend, framework or README changes. Use neutral solid surfaces, restrained forest-green selection, a readable type scale, consistent spacing and clear control states. Remove decorative chrome that competes with campaign work. Preserve preview labels, errors, scope, versions, approval gates, keyboard focus and reduced motion.
+
+Steps: inspect current requirements/blueprints and current CSS; refine shared tokens and screen layouts; inspect every stage at desktop and narrow widths in an isolated review browser; run the existing frontend suite and TypeScript/Vite build; obtain an independent review and append evidence. Keep the user's live Vite/native viewer running and never reset their storage. No new tests for cosmetic-only changes; existing journey tests cover persistence and approvals.
+
 ## Delivered additions and handoff
 
 The user additionally requested a native live development window. `scripts/preview-interface.py` and `npm run dev:review` / `desktop:review` supply this on loopback without changing the packaged API boundary. The viewer is open and receiving Vite updates. The installable bundle and ZIP were built and passed packaged assets plus native authenticated window/reopen verification. Shared Vercel preview bytes match the review bundle. Draft PR: https://github.com/MaxtheN/theclipfactory/pull/3 . Full design continuation context is in docs/design-handoff.md.

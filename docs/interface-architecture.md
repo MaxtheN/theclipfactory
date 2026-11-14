@@ -15,7 +15,7 @@ Persistent campaign/profile context → four numbered stages → one editorial h
 
 ## Visual and interaction system
 
-Cloud-blue canvas, readable frosted surfaces, ink typography, restrained mint for selection/success, generous spacing, fine borders. Short stage transitions with reduced-motion support. Review and source identity remain more prominent than decorative chrome. Sources and observations in preview are conspicuously illustrative. Local profiles do not claim connected social accounts.
+Neutral off-white canvas, solid white work surfaces, dark ink typography and restrained forest-green selection. Readable controls and utility text, consistent spacing and borders, and a sticky sidebar keep the campaign easy to navigate. Short stage transitions respect reduced motion. Narrow layouts stack work surfaces without hiding reference or version context. Review and source identity remain more prominent than decorative chrome. Sources and observations in preview are conspicuously illustrative. Local profiles do not claim connected social accounts.
 
 ## Architecture
 

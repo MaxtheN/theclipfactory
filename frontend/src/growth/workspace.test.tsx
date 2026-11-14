@@ -36,13 +36,13 @@ describe("Growth Factory interface", () => {
       screen.getByRole("button", { name: "Save & find direction" }),
     );
     await screen.findByRole("heading", {
-      name: "Find a pattern. Make it yours.",
+      name: "Choose a creative direction.",
     });
     const before = await previewRequest<Campaign>(path);
     expect(before.active_strategy_id).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Approve direction" }));
     await screen.findByRole("heading", {
-      name: "From a good moment to a great edit.",
+      name: "Make the cut.",
     });
     expect((await previewRequest<Campaign>(path)).active_strategy_id).toBe(
       "preview-strategy-v1",
@@ -163,7 +163,7 @@ describe("approval transition regressions", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Approve next test" }));
     await screen.findByRole("heading", {
-      name: "From a good moment to a great edit.",
+      name: "Make the cut.",
     });
     await waitFor(() =>
       expect(screen.getByLabelText("Source footage")).toHaveValue(

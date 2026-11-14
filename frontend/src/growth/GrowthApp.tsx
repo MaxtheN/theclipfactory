@@ -15,29 +15,29 @@ const steps = [
     id: "setup",
     label: "Setup",
     detail: "Set the intention",
-    title: "Good content starts with good intent.",
-    sub: "Your footage. Your audience. A little direction for what comes next.",
+    title: "Set up your campaign.",
+    sub: "Bring your footage, define your audience, and give the next edit a purpose.",
   },
   {
     id: "research",
     label: "Research",
     detail: "Find your direction",
-    title: "Find a pattern. Make it yours.",
-    sub: "One creative hypothesis. Two openings. Something worth testing.",
+    title: "Choose a creative direction.",
+    sub: "Turn a useful reference into one clear idea and two openings to test.",
   },
   {
     id: "studio",
     label: "Studio",
     detail: "Make & refine",
-    title: "From a good moment to a great edit.",
-    sub: "Stay close to the source. Make every creative decision count.",
+    title: "Make the cut.",
+    sub: "Choose a moment, refine the edit, and approve the exact version you want.",
   },
   {
     id: "results",
     label: "Results",
     detail: "Learn & repeat",
-    title: "A little wiser with every edit.",
-    sub: "See the evidence. Choose the next test. Keep the loop moving.",
+    title: "Learn from every edit.",
+    sub: "Review the evidence and decide what to try in the next production.",
   },
 ] as const;
 export type Stage = (typeof steps)[number]["id"];
@@ -128,7 +128,7 @@ export function GrowthApp() {
                 Factory<span className="gf-brand-period">.</span>
               </span>
             </a>
-            <div className="gf-nav-caption">YOUR CREATIVE WORKSPACE</div>
+            <div className="gf-nav-caption">CAMPAIGN WORKSPACE</div>
             <nav aria-label="Campaign stages">
               {steps.map((s, i) => (
                 <button
@@ -151,17 +151,11 @@ export function GrowthApp() {
               ))}
             </nav>
             <div className="gf-sidebar-note">
-              <span className="gf-sidebar-orbit" />
-              <Icon name="spark" size={20} />
-              <strong>
-                A creative department.
-                <br />
-                At your fingertips.
-              </strong>
+              <Icon name="lock" size={16} />
+              <strong>Your creative loop.</strong>
               <p>
-                Make something good.
-                <br />
-                Then make it better.
+                From source footage to a reviewed edit. Your approval at every
+                step.
               </p>
             </div>
             <div className="gf-sidebar-bottom">
@@ -258,9 +252,7 @@ export function GrowthApp() {
                 <div>
                   <div className="gf-eyebrow">
                     <span />
-                    {stage === "setup"
-                      ? "A LITTLE INTENTION. A LOT OF POSSIBILITY."
-                      : `GROWTH FACTORY / ${current.label.toUpperCase()}`}
+                    {`STEP ${String(steps.findIndex((s) => s.id === stage) + 1).padStart(2, "0")} / ${current.label.toUpperCase()}`}
                   </div>
                   <h1 tabIndex={-1} ref={heading}>
                     {current.title}

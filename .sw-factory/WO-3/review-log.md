@@ -77,3 +77,36 @@ Independently ran Ruff on the helper: passed. Independently exercised four rejec
 ### Verdict
 
 **APPROVED** — zero blocking findings for this bounded development helper. This is live interface preview evidence, not a claim of model execution, rendering or signed distribution.
+
+## Round 4 — visual refinement
+
+### Scope, requirements and blueprint alignment
+
+Independent review of the checked-out interface line against its merge base with `origin/master`, prior approved rounds, current implementation plan and interface architecture. The new uncommitted implementation delta is confined to `frontend/src/growth/GrowthApp.tsx`, `Setup.tsx`, `growth.css` and heading expectations in `workspace.test.tsx`; execution records describe the bounded pass. Prior rounds own the unchanged service, launcher and full interface implementation findings.
+
+The refinement retains the four stages, exact-version approval/export gates, persistent campaign/profile context, mounted hidden screens, errors, preview limitations and explicit approvals. The user authorized a new design direction, so solid neutral surfaces and forest-green navigation replace the earlier illustrative sky/frosted treatment without product-scope drift. No acceptance claim is made for real reference research, rendering, audience evaluation or the complete campaign demo.
+
+### Architecture, conventions and security
+
+Inspected the shell state/mounting boundary, updated Setup markup, shared CSS and representative service/hook code. The delta changes presentation/copy only: no dependencies, storage keys, API calls, credentials, external origins, security boundaries or backend workflow changes. README files remain untouched. Keyboard focus rules, accessible stage names and reduced-motion overrides remain present. Responsive layouts now retain reference information instead of hiding the whole reference panel. The sticky sidebar preserves access to navigation and workspace tools, with an overflow path for short windows.
+
+### Tests and build health
+
+Independently ran `npm test`: 9 files / 148 tests passed. Independently ran `npm run build`: TypeScript and Vite single-file production build passed (340.49 kB HTML). `git diff --check` passed. Test edits update three heading expectations; existing persistence/approval/second-source regressions remain intact. No redundant cosmetic tests were added.
+
+### User-facing verification
+
+Reviewed the primary agent's observed Setup, Research, Studio and Results screenshots at desktop width, plus reported 900px and 390px checks with no horizontal page overflow. The primary agent continues final compact/desktop checks. The review delegate could not create a separate IAB browser in its child session, so these browser observations are explicitly credited to the primary agent. No independent fresh native-window or render-quality smoke is claimed. The existing Vite server and native viewer remain running; this review did not interact with the user's drafts or processes.
+
+### Advisory findings
+
+- **Advisory — `growth.css`, user-facing verification:** responsive media sizing overrides target the illustrative `.gf-preview-film`, while real `.gf-studio-media > video` retains the shared 52% maximum width. Apply the same responsive sizing rules to real media so stacked small-window playback uses the available review surface consistently. This is a presentation follow-up, not an approval or media-integrity defect.
+- **Advisory — `docs/interface-architecture.md`, architecture and conventions:** the visual-system paragraph still specifies the preceding cloud-blue/frosted treatment. Update it to describe the delivered solid-neutral/forest-green direction so the handoff matches the UI.
+
+### Verdict
+
+**APPROVED** — no blocking findings for this bounded visual refinement. The two advisories can be resolved without changing workflow behavior. Keep all changes on the dedicated feature branch; this review authorizes no push or merge to the team default branch.
+
+### Round 4 advisory resolution
+
+Both advisories were resolved during the same review pass. Re-inspected the final selectors: real video now shares preview responsive maximum widths at 1190px/980px/520px and the 210px small-layout width. Source thumbnail title sizes also shrink appropriately at 1190px/520px. Re-inspected the architecture paragraph, which now describes the delivered neutral surfaces, forest-green selection, sticky navigation and stacked reference-preserving layout. `git diff --check` remains clean. Final verdict remains **APPROVED**, with no new unresolved findings in this design pass; the pre-existing API response-shape advisory remains separate.
