@@ -594,6 +594,58 @@ def test_candidate_parser_grounds_ranges_and_objective():
             parse_candidates(bad, 5, "discovery")
 
 
+def test_candidate_parser_preserves_valid_rows_when_other_rows_are_invalid():
+    output = json.dumps({"candidates": [
+        {"start": 10, "end": 40, "hook": "Supported moment"},
+        {"start": "invalid", "end": 50},
+        None,
+        {"start": 212.28, "end": 636.83},
+        {"start": 3184.15, "end": 4033.26},
+        {"start": 4457.81, "end": 4882.37},
+        {"start": 100, "end": 161},
+        {"start": 5094.68, "end": 5094.70},
+    ]})
+    assert [item["hook"] for item in parse_candidates(output, 5094.64381, "discovery")] == [
+        "Supported moment"
+    ]
+
+
+@pytest.mark.parametrize("repair_succeeds", [True, False])
+def test_analysis_repairs_invalid_long_ranges_once(client, monkeypatch, repair_succeeds):
+    video = upload_mock(client, monkeypatch, duration=5094.64381)
+    frames = [{"time": 212.28, "path": "observed-frame.jpg"}]
+    monkeypatch.setattr(media, "sample_frames", lambda *_: frames)
+    monkeypatch.setattr(client.app.state.models, "require", lambda *_: None)
+    prompts = []
+
+    def generate(job, model, action, **payload):
+        prompts.append(payload["prompt"])
+        assert payload["images"] == ["observed-frame.jpg"]
+        short_range = len(prompts) == 2 and repair_succeeds
+        return {"output": json.dumps({"candidates": [{
+            "start": 212.28, "end": 242.28 if short_range else 636.83,
+            "hook": "Source-backed moment", "caption": "Review this source range",
+        }]})}
+
+    monkeypatch.setattr(client.app.state.models, "run", generate)
+    response = client.post(f"/api/videos/{video['id']}/analyze", json={"model_id": "qwen-small"})
+    assert response.status_code == 202
+    job = wait_job(client, response.json()["id"])
+    assert len(prompts) == 2
+    assert '"suggested_windows":' in prompts[0]
+    assert '"start": 182.28' in prompts[0]
+    assert "Your previous response had no valid candidates" in prompts[1]
+    stored = client.app.state.store.get("videos", video["id"])
+    if repair_succeeds:
+        assert job["status"] == "completed", job
+        assert stored["analysis"]["candidates"][0]["end"] == 242.28
+        assert stored["analysis"]["candidates"][0]["start"] == 212.28
+    else:
+        assert job["status"] == "failed"
+        assert "no valid clip ranges" in job["error"]
+        assert not stored.get("analysis")
+
+
 def test_parallel_model_downloads_do_not_block_runtime_and_keep_model_locks(client, monkeypatch):
     release = threading.Event()
     identifiers = ["qwen-small", "qwen-large", "whisper-turbo"]

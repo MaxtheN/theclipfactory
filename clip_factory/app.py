@@ -36,6 +36,7 @@ Objective = Literal[
     "discovery", "awareness", "engagement", "followers", "traffic", "leads", "sales", "custom"
 ]
 MAX_UPLOAD = 20 * 1024**3
+MAX_CANDIDATE_SECONDS = 60
 
 
 class Body(BaseModel):
@@ -143,14 +144,24 @@ def parse_candidates(output: str, duration: float, objective: str) -> list[dict]
             raise TypeError()
         valid = []
         for candidate in rows[:8]:
-            item = Render.model_validate(
-                {
-                    key: candidate[key]
-                    for key in ["start", "end", "hook", "caption", "objective"]
-                    if key in candidate
-                }
-            )
-            if item.end <= item.start or item.end > duration + 0.1 or item.end - item.start > 180:
+            if not isinstance(candidate, dict):
+                continue
+            try:
+                item = Render.model_validate(
+                    {
+                        key: candidate[key]
+                        for key in ["start", "end", "hook", "caption", "objective"]
+                        if key in candidate
+                    }
+                )
+            except (ValueError, TypeError):
+                continue
+            if (
+                item.end <= item.start
+                or item.start >= duration
+                or item.end > duration + 0.1
+                or item.end - item.start > MAX_CANDIDATE_SECONDS
+            ):
                 continue
             item.end = min(item.end, duration)
             if objective != "discovery":
@@ -163,7 +174,7 @@ def parse_candidates(output: str, duration: float, objective: str) -> list[dict]
             )
         if not valid:
             raise ValueError()
-        return valid
+        return valid[:3]
     except (ValueError, KeyError, TypeError):
         raise WorkError(
             "Model returned no valid clip ranges. Retry with a shorter source or select a range manually."
@@ -451,6 +462,15 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def analyze_task(job_id: str, video: dict, model_id: str, config: dict | None = None) -> dict:
         work = root / "work" / job_id
         frames = media.sample_frames(jobs(), job_id, source_path(video), work / "frames", video["duration"])
+        windows = [
+            {
+                "frame": index + 1,
+                "time": frame["time"],
+                "start": max(0, frame["time"] - MAX_CANDIDATE_SECONDS / 2),
+                "end": min(video["duration"], frame["time"] + MAX_CANDIDATE_SECONDS / 2),
+            }
+            for index, frame in enumerate(frames)
+        ]
         config = config or settings()
         evidence = config.get("_previous_observations")
         if evidence is None:
@@ -481,6 +501,10 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "You are a video editor proposing source-backed Instagram Reel moments. Return ONLY JSON "
             '{"candidates":[{"start":seconds,"end":seconds,"hook":"text","caption":"text","reason":"evidence and uncertainty","objective":"awareness|engagement|followers|traffic|leads|sales|discovery"}]}. '
             "Propose 1-3 distinct ranges, each at most 60 seconds, entirely within the source. "
+            "Both start and end are absolute source timestamps in seconds, not minutes or durations. "
+            "For every candidate, 0 <= start < end <= duration and end - start <= 60. "
+            "The suggested_windows give short intervals around individual observed frames; select or "
+            "refine these intervals. Never span the gap between widely separated sampled frames. "
             "Do not invent quotes, products, promises, conversions, or footage. Sampled frames are incomplete; "
             "timestamps below are approximate evidence, not frame-perfect grounding. "
             "If objective is discovery, explore distinct measurable outcomes without claiming performance. "
@@ -492,16 +516,30 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                     "brand": config["brand"],
                     "objective": config["objective"],
                     "frame_timestamps": [f["time"] for f in frames],
+                    "suggested_windows": windows,
                     "transcript": transcript,
                     "previous_observations": evidence,
                 },
                 ensure_ascii=False,
             )
         )
-        output = models().run(
-            job_id, model_id, "generate", prompt=prompt, images=[f["path"] for f in frames], max_tokens=2000
-        )
-        candidates = parse_candidates(output["output"], video["duration"], config["objective"])
+        for attempt in range(2):
+            jobs().check(job_id)
+            output = models().run(
+                job_id, model_id, "generate", prompt=prompt, images=[f["path"] for f in frames], max_tokens=2000
+            )
+            try:
+                candidates = parse_candidates(output.get("output", ""), video["duration"], config["objective"])
+                break
+            except WorkError:
+                if attempt:
+                    raise
+                prompt += (
+                    "\nYour previous response had no valid candidates. Correct the response using "
+                    "the suggested_windows above. Return only the requested JSON object. Every range "
+                    "must have numeric start/end values and last at most 60 seconds (end - start <= 60). "
+                    "Do not combine separate windows into a long segment."
+                )
         result = {
             "video_id": video["id"],
             "candidates": candidates,
