@@ -719,6 +719,7 @@ def test_profile_and_brief_use_text_preferences_and_string_arrays():
         "constraints": ["No invented claims"],
         "requested_outputs": ["Vertical clip"],
         "measurement_intent": "",
+        "cta": "",
     }
     for invalid in ([], ["preference"], {"preference": "text"}):
         with pytest.raises(ValidationError):

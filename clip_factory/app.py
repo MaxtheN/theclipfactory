@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from platformdirs import user_data_path
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import media, scouts
+from . import craft, media, scouts
 from .ads import AdsClient
 from .campaign_api import install as install_campaign_api
 from .campaigns import Campaigns, snapshot_goal
@@ -94,7 +94,8 @@ class SettingsPatch(Body):
     replace_drafts: bool | None = None
 
 
-class Render(Body):
+class Render(craft.CraftOptions, Body):
+    # Editing-craft options (loudness, jump cuts, hook-first, cards, emphasis, variants): craft.py.
     start: float = Field(ge=0)
     end: float = Field(gt=0)
     hook: str = Field(default="", max_length=250)
@@ -123,7 +124,7 @@ class Render(Body):
     retry_of_job_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
-PLAN_CONTEXT = {"parent_clip_id", "change_reason", "retry_of_job_id"}
+PLAN_CONTEXT = {"parent_clip_id", "change_reason", "retry_of_job_id", *craft.PLAN_REQUEST_ONLY}
 PLAN_EXTRAS = {
     "opening_treatment",
     "cold_open_start",
@@ -132,6 +133,7 @@ PLAN_EXTRAS = {
     "crop_width",
     "motion",
     "changed_variable",
+    *craft.CRAFT_FIELDS,
     *PLAN_CONTEXT,
 }
 MAX_RENDER_ATTEMPTS = 3
@@ -837,9 +839,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         return body.model_dump(exclude=PLAN_CONTEXT)
 
     def stored_plan(clip: dict) -> dict:
-        raw = clip.get("edit_plan") or {
-            key: clip.get(key) for key in ["start", "end", "hook", "caption", "objective"]
-        }
+        raw = craft.with_legacy(
+            clip.get("edit_plan") or {key: clip.get(key) for key in ["start", "end", "hook", "caption", "objective"]}
+        )
         try:
             return plan_of(Render.model_validate({k: v for k, v in raw.items() if k in Render.model_fields}))
         except ValueError:
@@ -952,6 +954,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         team_metadata: dict | None = None,
         lineage: dict | None = None,
         report: bool = True,
+        max_duration: float | None = None,
     ) -> dict:
         identifier = new_id()
         target = root / "clips" / f"{identifier}.mp4"
@@ -983,6 +986,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             options["hdr"] = True
         if not report:
             options["report"] = False
+        options["edit"] = body.model_dump(include=craft.CRAFT_FIELDS - craft.PLAN_REQUEST_ONLY)
+        if moment := moment_of(video):
+            options["moment"] = moment
+        if max_duration:
+            options["max_duration"] = float(max_duration)
         result = media.render(
             jobs(),
             job_id,
@@ -996,27 +1004,15 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         )
         cover = target.with_suffix(".jpg")
         try:
-            jobs().process(
-                job_id,
-                [
-                    media.ffmpeg(),
-                    "-nostdin",
-                    "-v",
-                    "error",
-                    "-y",
-                    "-ss",
-                    "0",
-                    "-i",
-                    str(target),
-                    "-frames:v",
-                    "1",
-                    "-vf",
-                    "scale=540:960",
-                    str(cover),
-                ],
-                timeout=60,
-                failure="Cover extraction failed.",
-            )
+            craft_record = result.get("craft") or {}
+            avoid = []
+            if (craft_record.get("end_card") or {}).get("start") is not None:
+                avoid.append((craft_record["end_card"]["start"], float(result.get("duration") or 0) + 1))
+            if (craft_record.get("transition") or {}).get("at") is not None:
+                avoid.append((craft_record["transition"]["at"] - 0.1, craft_record["transition"]["at"] + 0.4))
+            cover_choice = media.write_cover(jobs(), job_id, target, cover, mode=body.cover, avoid=avoid)
+            if craft_record:
+                craft_record["cover"] = cover_choice
         except Exception:
             target.unlink(missing_ok=True)
             target.with_suffix(".srt").unlink(missing_ok=True)
@@ -1041,6 +1037,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "retry_of_job_id": lineage.get("retry_of_job_id"),
             "ffmpeg_version": version,
             "encoder": encoder,
+            # Every editing-craft decision as rendered, so each can be tested as one variable.
+            "craft": result.get("craft"),
             "cost": {
                 "status": "known",
                 "amount": 0.0,
@@ -1095,11 +1093,73 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             raise
         return {"clip_id": identifier, "sha256": checksum, **result}
 
+    def moment_of(video: dict) -> dict | None:
+        """Stored storyboard signals that rank a hook-first payoff (None when not watched yet)."""
+        try:
+            board = app.state.storyboards.get(video["id"])
+        except (AttributeError, KeyError, TypeError, ValueError):
+            return None
+        if not board:
+            return None
+        signals = board.get("signals") or {}
+        return {
+            "interval": signals.get("interval"),
+            "loudness": signals.get("loudness") or [],
+            "scenes": [
+                {"start": s.get("start"), "end": s.get("end"), "highlight": s.get("highlight")}
+                for s in board.get("scenes") or []
+            ],
+        }
+
+    def prepare_renders(body: Render, video: dict, campaign: dict | None = None) -> list[tuple[Render, dict]]:
+        """Expand A/B variants (one changed variable each), inherit a parent's craft, validate each."""
+        if body.parent_clip_id and (parent := store.get("clips", body.parent_clip_id)):
+            craft.inherit(body, stored_plan(parent))
+        prepared = []
+        for item in craft.expand_variants(body):
+            validate_opening(item, video)
+            require_transcript(item, video)
+            prepared.append((item, {**revision_fields(item, video, campaign), **retry_fields(item, video)}))
+        return prepared
+
+    def render_prepared(
+        job_id: str, video: dict, prepared: list[tuple[Render, dict]], metadata: dict | None = None
+    ) -> dict:
+        """One clip, or 2-3 variants rendered serially (bounded memory) as separate versions."""
+        if len(prepared) == 1:
+            body, lineage = prepared[0]
+            return render_task(job_id, video, body, metadata, lineage=lineage)
+        results = []
+        for index, (body, lineage) in enumerate(prepared):
+            jobs().update(
+                job_id,
+                progress=10 + 85 * index // len(prepared),
+                message=f"Rendering variant {index + 1} of {len(prepared)}",
+            )
+            extra = {**(metadata or {}), **craft.variant_of(body)}
+            if metadata and "edit_plan" in metadata:
+                extra["edit_plan"] = plan_of(body)
+            results.append(render_task(job_id, video, body, extra, lineage=lineage, report=False))
+        variant = craft.variant_of(prepared[0][0])
+        return {
+            "clip_id": results[0]["clip_id"],
+            "clip_ids": [r["clip_id"] for r in results],
+            "variant_group": variant.get("variant_group"),
+            "variant_variable": variant.get("variant_variable"),
+        }
+
     def render_team(job_id: str, video: dict, candidate: dict) -> dict:
         body = Render.model_validate(
             {k: candidate[k] for k in ["start", "end", "hook", "caption", "objective"]}
+            # A planner may name the payoff to tease and the words to emphasise (source-checked).
+            | {k: candidate[k] for k in ("payoff_start", "payoff_end", "emphasis_words") if candidate.get(k)}
         )
         metadata = candidate["_team"]
+        kit = (metadata.get("profile_snapshot") or {}).get("brand_kit")
+        if kit:
+            body.brand_kit = craft.BrandKit.model_validate(kit)
+        if cta := str((metadata.get("brief_snapshot") or {}).get("cta") or "").strip():
+            body.end_card, body.cta_text = "cta", craft.plain(cta)[:80]
         # Swarm clips carry their hypothesis on screen for the first seconds.
         if metadata.pop("burn_hook", False) and body.hook.strip():
             body.hook_overlay = True
@@ -1137,7 +1197,16 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         if not media.caption_entries(video.get("transcript"), [{"start": body.start, "end": body.end}]):
             # Nothing meaningful is said in this range: a clean picture, no captions to check.
             body.subtitles = False
-        return render_task(job_id, video, body, team_metadata=metadata, report=report)
+        limit = (metadata.get("strategy_snapshot") or {}).get("duration_seconds")
+        # Under a direction, a hook-first teaser must still fit the approved duration.
+        return render_task(
+            job_id,
+            video,
+            body,
+            team_metadata=metadata,
+            report=report,
+            max_duration=max(float(limit), body.end - body.start) if limit else None,
+        )
 
     def wide(video: dict) -> bool:
         return (video.get("width") or 0) > (video.get("height") or 0)
@@ -1708,19 +1777,18 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             )
         body.end = min(body.end, video["duration"])
         with operations_lock:
-            validate_opening(body, video)
-            require_transcript(body, video)
             parent = store.get("clips", body.parent_clip_id) if body.parent_clip_id else None
             if parent and parent.get("campaign_id"):
                 raise HTTPException(
                     422, "Revise campaign clips through their campaign so strategy provenance stays intact."
                 )
-            lineage = {**revision_fields(body, video), **retry_fields(body, video)}
+            prepared = prepare_renders(body, video)
+            lineage = prepared[0][1]
             return submit_source(
                 identifier,
                 "render",
-                lambda job, item: render_task(job, item, body, lineage=lineage),
-                plan=plan_of(body),
+                lambda job, item: render_prepared(job, item, prepared),
+                plan=plan_of(prepared[0][0]),
                 attempt=lineage["attempt"],
                 retry_of_job_id=lineage["retry_of_job_id"],
                 parent_clip_id=lineage["parent_clip_id"],
@@ -2490,10 +2558,19 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 parent_clip_id=body.parent_clip_id,
                 change_reason=body.change_reason,
                 retry_of_job_id=body.retry_of_job_id,
+                **{key: getattr(body, key) for key in body.model_fields_set & craft.CRAFT_FIELDS},
             )
-            validate_opening(render, video)
-            require_transcript(render, video)
-            lineage = {**revision_fields(render, video, snapshot), **retry_fields(render, video)}
+            if not body.parent_clip_id:
+                # Workspace brand kit and campaign CTA apply unless the request decides otherwise;
+                # revisions inherit their parent's craft instead (one changed variable).
+                kit = (snapshot.get("profile_snapshot") or {}).get("brand_kit")
+                if kit and "brand_kit" not in body.model_fields_set:
+                    render.brand_kit = craft.BrandKit.model_validate(kit)
+                cta = str((snapshot.get("brief_snapshot") or {}).get("cta") or "").strip()
+                if cta and not {"end_card", "cta_text"} & body.model_fields_set:
+                    render.end_card, render.cta_text = "cta", craft.plain(cta)[:80]
+            prepared = prepare_renders(render, video, snapshot)
+            lineage = prepared[0][1]
             deviations = []
             if body.end is not None and end - body.start != direction["duration_seconds"]:
                 deviations.append(
@@ -2507,7 +2584,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 "provenance_mode": body.mode,
                 "creator_instructions": body.instructions,
                 "strategy_departures": deviations,
-                "edit_plan": plan_of(render),
+                "edit_plan": plan_of(prepared[0][0]),
                 "selection_rationale": "Creator-selected source range."
                 if body.mode == "direct"
                 else "Deterministic range with approved duration and editing direction; not a claim of visual moment analysis.",
@@ -2515,8 +2592,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             return submit_source(
                 body.video_id,
                 "render",
-                lambda job, item: render_task(job, item, render, metadata, lineage=lineage),
-                plan=plan_of(render),
+                lambda job, item: render_prepared(job, item, prepared, metadata),
+                plan=plan_of(prepared[0][0]),
                 attempt=lineage["attempt"],
                 retry_of_job_id=lineage["retry_of_job_id"],
                 parent_clip_id=lineage["parent_clip_id"],

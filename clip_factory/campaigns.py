@@ -21,6 +21,7 @@ from typing import Annotated, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .craft import BrandKit, CraftOptions
 from .ollama import LlmId
 from .store import Store, new_id, now
 from .team import Objective
@@ -54,6 +55,8 @@ class Profile(Body):
     objective: Objective = "discovery"
     primary_metric: str | None = Field(default=None, max_length=200)
     creative_preferences: str = Field(default="", max_length=4000)
+    # Fonts, colours and logo for title cards, captions and the CTA end card (craft.BrandKit).
+    brand_kit: BrandKit | None = None
 
     @model_validator(mode="after")
     def objective_metric(self):
@@ -69,6 +72,8 @@ class Brief(Body):
     constraints: list[Text] = Field(default_factory=list, max_length=30)
     requested_outputs: list[Text] = Field(default_factory=list, max_length=30)
     measurement_intent: str = Field(default="", max_length=4000)
+    # Call to action for the closing card of every render in this campaign (empty: no end card).
+    cta: str = Field(default="", max_length=80)
 
 
 class Campaign(Body):
@@ -168,7 +173,8 @@ class Learning(Body):
     proposed_direction: Direction
 
 
-class Production(Body):
+class Production(CraftOptions, Body):
+    # Editing-craft options (craft.CraftOptions) are accepted here too, including A/B variants.
     expected_strategy_version_id: Identifier | None = None
     video_id: Identifier
     profile_id: Identifier

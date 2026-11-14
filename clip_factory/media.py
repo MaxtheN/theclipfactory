@@ -11,6 +11,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from . import craft
 from .jobs import Jobs, WorkError
 from .store import now
 
@@ -655,10 +656,16 @@ def verify(
     entries: list[dict],
     captions_requested: bool,
     has_audio: bool | None = None,
+    loudness_target: float | None = None,
 ) -> dict:
-    """Objective playback/format and caption checks, reported separately from creative review."""
+    """Objective playback/format and caption checks, reported separately from creative review.
+
+    loudness_target: LUFS the audio was normalised to; the integrated loudness is then measured
+    (EBU R128) and reported as a warning when it misses by more than craft.LOUDNESS_TOLERANCE.
+    """
     playback: list[dict] = []
     captions: list[dict] = []
+    integrated = None
 
     def add(group, key, label, status, detail):
         group.append({"id": key, "label": label, "status": status, "detail": detail})
@@ -763,6 +770,18 @@ def verify(
                 if level is None
                 else f"Peak {level:.1f} dB" + (" — audio may be silent." if level <= -70 else ""),
             )
+            if loudness_target is not None:
+                lufs = integrated_loudness(jobs, job_id, path)
+                integrated = lufs
+                add(
+                    playback,
+                    "loudness",
+                    f"Loudness {loudness_target:g} LUFS",
+                    "warn" if lufs is None or abs(lufs - loudness_target) > craft.LOUDNESS_TOLERANCE else "pass",
+                    "Integrated loudness could not be measured."
+                    if lufs is None
+                    else f"Integrated {lufs:.1f} LUFS (EBU R128) against a {loudness_target:g} LUFS target.",
+                )
             if audio["duration"] is not None and measured is not None:
                 gap = abs(audio["duration"] - measured)
                 add(
@@ -844,6 +863,7 @@ def verify(
         "playback_format_passed": not any(c["status"] == "fail" for c in playback),
         "caption_issues": [c["id"] for c in captions if c["status"] in {"fail", "warn"}],
         "boundary_tolerance_seconds": round(boundary, 4),
+        **({"integrated_loudness": integrated} if loudness_target is not None else {}),
     }
 
 
@@ -867,8 +887,16 @@ def render(
     crop_width: float | None = None,
     report: bool = True,
     motion: str = "static",
+    edit: dict | None = None,
+    moment: dict | None = None,
+    max_duration: float = 180.0,
 ) -> dict:
-    """report=False: the caller owns the job's progress line (several clips rendering at once)."""
+    """report=False: the caller owns the job's progress line (several clips rendering at once).
+
+    edit: resolved editing-craft options (`craft.CraftOptions` fields). None keeps the legacy
+    single-pass graph exactly; a dict renders through `render_crafted`. moment: the source's
+    storyboard signals ({"interval", "loudness", "scenes"}) used to pick a hook-first payoff.
+    """
     output.parent.mkdir(parents=True, exist_ok=True)
     # "fit" and "blur" keep the complete source frame instead of silently cropping subjects/products.
     if (
@@ -887,13 +915,6 @@ def render(
     segments.append({"role": "main", "start": float(start), "end": float(end)})
     if any(s["start"] < 0 or s["end"] <= s["start"] for s in segments):
         raise WorkError("Each source segment must start at or after 0 and end after it starts.")
-    total = sum(s["end"] - s["start"] for s in segments)
-    srt = output.with_suffix(".srt")
-    hook_file = output.with_suffix(".hook.ass")
-    entries = caption_entries(transcript, segments) if burn_subtitles else []
-    caption_text = srt_text(entries)
-    if caption_text:
-        srt.write_text(caption_text, encoding="utf-8")
     available = filters()
     # Map HLG/PQ sources into SDR after scaling (cheaper than tone mapping full-resolution frames).
     tone_mapped = bool(is_hdr(source) if hdr is None else hdr) and can_tonemap(available)
@@ -924,6 +945,40 @@ def render(
             "crop=1080:1920" if focus_x == 0.5 else f"crop=1080:1920:(iw-ow)*{float(focus_x):.4f}:(ih-oh)/2"
         )
         return f"{cover},{crop},{tone}setsar=1"
+
+    if edit is not None:
+        return render_crafted(
+            jobs,
+            job_id,
+            source,
+            output,
+            start=float(start),
+            end=float(end),
+            transcript=transcript,
+            burn_subtitles=burn_subtitles,
+            framing=framing,
+            caption_style=caption_style,
+            hook=hook,
+            cold_open=cold_open,
+            focus_x=float(focus_x),
+            crop_width=float(crop_width) if zoom else None,
+            has_audio=has_audio,
+            tone_mapped=tone_mapped,
+            available=available,
+            layout_for=layout_for,
+            report=report,
+            motion=motion,
+            edit=edit,
+            moment=moment,
+            max_duration=max_duration,
+        )
+    total = sum(s["end"] - s["start"] for s in segments)
+    srt = output.with_suffix(".srt")
+    hook_file = output.with_suffix(".hook.ass")
+    entries = caption_entries(transcript, segments) if burn_subtitles else []
+    caption_text = srt_text(entries)
+    if caption_text:
+        srt.write_text(caption_text, encoding="utf-8")
 
     overlays = ""
     if caption_text or hook:
@@ -1103,6 +1158,481 @@ def render(
             srt.unlink(missing_ok=True)
             hook_file.unlink(missing_ok=True)
             output.with_suffix(".pop.ass").unlink(missing_ok=True)
+
+
+LOUDNORM_JSON = re.compile(r"\{[^{}]*\"input_i\"[^{}]*\}", re.DOTALL)
+
+
+def loudnorm_filter(measured: dict | None) -> str:
+    target = craft.LOUDNESS_TARGET
+    base = f"loudnorm=I={target['integrated']:g}:TP={target['true_peak']:g}:LRA={target['lra']:g}"
+    if not measured:
+        return base + ",aresample=48000"
+    return (
+        f"{base}:measured_I={measured['input_i']}:measured_TP={measured['input_tp']}"
+        f":measured_LRA={measured['input_lra']}:measured_thresh={measured['input_thresh']}"
+        f":offset={measured['target_offset']}:linear=true,aresample=48000"
+    )
+
+
+def integrated_loudness(jobs: Jobs, job_id: str, path: Path) -> float | None:
+    """EBU R128 integrated loudness (LUFS) of a file's first audio track."""
+    try:
+        raw = jobs.process(
+            job_id,
+            [ffmpeg(), "-nostdin", "-hide_banner", "-nostats", "-i", str(path), "-map", "0:a:0",
+             "-af", "ebur128", "-f", "null", "-"],
+            timeout=600,
+            failure="Loudness measurement failed.",
+        )
+    except WorkError:
+        return None
+    summary = raw.rsplit("Summary:", 1)[-1]
+    match = re.search(r"I:\s*(-?[\d.]+|-inf)\s*LUFS", summary)
+    if not match or match[1] == "-inf":
+        return None
+    return float(match[1])
+
+
+def render_crafted(
+    jobs: Jobs,
+    job_id: str,
+    source: Path,
+    output: Path,
+    *,
+    start: float,
+    end: float,
+    transcript: dict | None,
+    burn_subtitles: bool,
+    framing: str,
+    caption_style: str,
+    hook: str,
+    cold_open: tuple[float, float] | None,
+    focus_x: float,
+    crop_width: float | None,
+    has_audio: bool | None,
+    tone_mapped: bool,
+    available: str,
+    layout_for,
+    report: bool,
+    motion: str,
+    edit: dict,
+    moment: dict | None,
+    max_duration: float,
+) -> dict:
+    """Render with editing craft: hook-first teaser, jump cuts, emphasis, cards, loudness.
+
+    One FFmpeg input per source window (teaser, cold open, main range). Inside a window, kept
+    pieces are chosen with frame-exact `select` on the 30 fps grid (one decoder, bounded memory)
+    and the audio is cut at the same instants with 6 ms fades, so picture and sound stay in sync
+    across every cut. Captions are placed on the re-ordered, cut timeline from measured words.
+    """
+    options = {**craft.LEGACY_PLAN, **edit}
+    info = probe(source)
+    if has_audio is None:
+        has_audio = info["has_audio"]
+    duration = info["duration"]
+    hook = re.sub(r"[\\{}\x00-\x1f]", " ", hook or "").strip()[:250]
+    try:
+        kit = craft.BrandKit.model_validate(options.get("brand_kit") or {})
+        font_file = craft.checked_file(kit.font_file, "font")
+        logo_file = craft.checked_file(kit.logo_file, "logo")
+    except ValueError as exc:
+        raise WorkError(str(exc).splitlines()[-1][:300]) from None
+    font = kit.font_family.strip() or "Arial"
+    record: dict = {"version": "craft-v1"}
+
+    # 1. Structure: linear, or a payoff teaser before the setup.
+    payoff = (
+        (float(options["payoff_start"]), float(options["payoff_end"]))
+        if options.get("payoff_start") is not None and options.get("payoff_end") is not None
+        else None
+    )
+    search_end = min(duration, end + craft.PAYOFF_ADJACENT) if payoff else end
+    structure = craft.plan_structure(
+        craft.range_words(transcript, start, search_end, foreground, usable_words),
+        start,
+        end,
+        requested=options["structure"] if options["structure"] in {"auto", "hook_first"} else "linear",
+        payoff=payoff,
+        moment=moment,
+        key_phrase=hook,
+        planner=options.get("emphasis_words") or [],
+        cold_open=bool(cold_open),
+    )
+    teaser = structure.get("teaser")
+    main_end = end
+    if teaser and structure.get("extend_end"):
+        main_end = min(duration, structure["extend_end"])
+        if main_end - start > max_duration:
+            structure.update(resolved="linear", teaser=None, reason="Including the payoff would exceed the duration limit.")
+            teaser, main_end = None, end
+
+    # 2. Jump cuts inside the main range only.
+    cuts = craft.plan_jump_cuts(
+        craft.range_words(transcript, start, main_end, foreground, usable_words), start, main_end, options["jump_cuts"]
+    )
+
+    def windows(with_teaser: bool) -> list[dict]:
+        groups = []
+        if with_teaser and teaser:
+            span = round((teaser["end"] - teaser["start"]) * OUTPUT_FPS) / OUTPUT_FPS
+            groups.append({"role": "teaser", "start": teaser["start"], "keeps": [(0.0, span)]})
+        if cold_open:
+            span = round((float(cold_open[1]) - float(cold_open[0])) * OUTPUT_FPS) / OUTPUT_FPS
+            groups.append({"role": "cold_open", "start": float(cold_open[0]), "keeps": [(0.0, span)]})
+        groups.append({"role": "main", "start": start, "keeps": craft.snap(cuts["keeps"], start)})
+        return [g for g in groups if g["keeps"]]
+
+    groups = windows(True)
+    total = sum(b - a for g in groups for a, b in g["keeps"])
+    if teaser and total > max_duration + 1e-6:
+        structure.update(resolved="linear", teaser=None, reason="The teaser would push the clip past its duration limit.")
+        teaser = None
+        groups = windows(False)
+        total = sum(b - a for g in groups for a, b in g["keeps"])
+    if options["structure"] == "hook_first" and structure["resolved"] != "hook_first":
+        raise WorkError(f"Hook-first structure was requested but cannot be built: {structure['reason']}")
+    segments = [
+        {"role": g["role"], "start": round(g["start"] + a, 4), "end": round(g["start"] + b, 4)}
+        for g in groups
+        for a, b in g["keeps"]
+    ]
+    teaser_seconds = groups[0]["keeps"][0][1] if teaser else 0.0
+
+    # 3. Captions on the cut timeline, emphasis and punch-ins.
+    timeline = caption_entries(transcript, segments)
+    entries = timeline if burn_subtitles else []
+    key_phrase = hook or ((structure.get("payoff") or {}).get("text") or "")
+    emphasis = (
+        craft.choose_emphasis(timeline, options.get("emphasis_words") or [], key_phrase)
+        if options["caption_emphasis"] == "keywords" or options["punch_in"] == "emphasis"
+        else {"marks": set(), "words": [], "source": None, "ignored": []}
+    )
+    marks = emphasis["marks"] if options["caption_emphasis"] == "keywords" and entries else set()
+    hook_seconds = (
+        teaser_seconds
+        if teaser and options["hook_format"] == "title_card"
+        else min(craft.TITLE_CARD_SECONDS if options["hook_format"] == "title_card" else craft.OVERLAY_SECONDS, total)
+    )
+    punches = (
+        craft.punch_times(timeline, emphasis["marks"], total, after=hook_seconds if hook else teaser_seconds)
+        if options["punch_in"] == "emphasis"
+        else []
+    )
+    transition_at = teaser_seconds if teaser else None
+    zoom = craft.zoom_expression(punches, transition_at if options["transition"] == "zoom" else None)
+    if motion == "push_in":
+        motion_chain = (
+            f"scale=w='trunc(1080*(1+0.07*t/{total:.3f})/2)*2':h='trunc(1920*(1+0.07*t/{total:.3f})/2)*2':eval=frame,"
+            "crop=1080:1920,"
+        )
+    elif zoom:
+        motion_chain = f"scale=w='trunc(1080*({zoom})/2)*2':h='trunc(1920*({zoom})/2)*2':eval=frame,crop=1080:1920,"
+    else:
+        motion_chain = ""
+    end_card = None
+    if options["end_card"] == "cta" and options.get("cta_text"):
+        begin = max(total - craft.END_CARD_SECONDS, total / 2)
+        end_card = (begin, total, re.sub(r"[\\{}\x00-\x1f]", " ", options["cta_text"]).strip())
+
+    # 4. Files the filter graph reads (generated names only; cwd is the output directory).
+    srt = output.with_suffix(".srt")
+    caption_file = output.with_suffix(".captions.ass")
+    hook_file = output.with_suffix(".hook.ass")
+    fonts_dir = output.with_name(output.stem + ".fonts")
+    logo_copy = output.with_name(output.stem + ".logo.png")
+    temporary = output.with_name(output.stem + ".partial.mp4")
+    scratch = [caption_file, hook_file, logo_copy]
+    needs_ass = bool(entries) or bool(hook) or end_card is not None or (teaser and options["transition"] == "flash")
+    if needs_ass and " subtitles " not in available:
+        raise WorkError(
+            "This FFmpeg build lacks libass, so captions and titles cannot be burned in. Install an FFmpeg "
+            "with libass and restart Clip Factory, or render without captions."
+        )
+    completed = False
+    try:
+        fontsdir = ""
+        if font_file:
+            fonts_dir.mkdir(exist_ok=True)
+            shutil.copyfile(font_file, fonts_dir / ("brand" + font_file.suffix.lower()))
+            fontsdir = f":fontsdir={fonts_dir.name}"
+        overlays = []
+        if entries:
+            srt.write_text(srt_text(entries), encoding="utf-8")
+            if marks or caption_style == "pop" or font != "Arial":
+                caption_file.write_text(
+                    craft.caption_ass(
+                        entries,
+                        caption_style,
+                        marks,
+                        font=font,
+                        accent=kit.accent_color
+                        if options.get("brand_kit") or caption_style != "pop"
+                        else craft.POP_EMPHASIS,
+                    ),
+                    encoding="utf-8",
+                )
+                overlays.append(f"subtitles={caption_file.name}{fontsdir}")
+            else:
+                size = 52 if caption_style == "standard" else 60
+                style = (
+                    f"PlayResX=1080,PlayResY=1920,FontName=Arial,FontSize={size},"
+                    "MarginL=72,MarginR=72,MarginV=144,Outline=3,Shadow=0,Alignment=2"
+                )
+                if caption_style == "high_contrast":
+                    style += ",BorderStyle=3,BackColour=&H80000000"
+                overlays.append(f"subtitles={srt.name}:force_style='{style}'")
+        flash_at = transition_at if options["transition"] == "flash" else None
+        if hook or flash_at is not None or end_card:
+            hook_file.write_text(
+                craft.overlay_ass(
+                    hook=hook,
+                    hook_format=options["hook_format"],
+                    hook_seconds=hook_seconds,
+                    font=font,
+                    primary=kit.primary_color,
+                    accent=kit.accent_color,
+                    flash_at=flash_at,
+                    end_card=end_card,
+                ),
+                encoding="utf-8",
+            )
+            overlays.append(f"subtitles={hook_file.name}{fontsdir}")
+
+        # 5. Filter graph.
+        inputs: list[str] = []
+        video_graph: list[str] = []
+        audio_graph: list[str] = []
+        vjoin = ajoin = ""
+        pieces = 0
+        half = 0.5 / OUTPUT_FPS
+        for index, group in enumerate(groups):
+            span = group["keeps"][-1][1]
+            inputs += ["-ss", f"{group['start']:.6f}", "-t", f"{span + 0.05:.6f}", "-i", str(source)]
+            pick = "+".join(f"between(t,{a - half:.6f},{b - half:.6f})" for a, b in group["keeps"])
+            video_graph.append(
+                f"[{index}:v:0]fps={OUTPUT_FPS},select='{pick}',setpts=N/{OUTPUT_FPS}/TB,"
+                f"{layout_for(str(index))}[v{index}]"
+            )
+            vjoin += f"[v{index}]"
+            if has_audio:
+                chain = (
+                    f"[{index}:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                    f"apad,atrim=0:{span:.6f},asetpts=PTS-STARTPTS"
+                )
+                count = len(group["keeps"])
+                labels = [f"[s{index}_{n}]" for n in range(count)]
+                audio_graph.append(chain + (f",asplit={count}" if count > 1 else "") + "".join(labels))
+                for n, (a, b) in enumerate(group["keeps"]):
+                    fade = min(0.006, (b - a) / 4)
+                    audio_graph.append(
+                        f"{labels[n]}atrim={a:.6f}:{b:.6f},asetpts=PTS-STARTPTS,afade=t=in:d={fade:.4f},"
+                        f"afade=t=out:st={b - a - fade:.6f}:d={fade:.4f}[a{index}_{n}]"
+                    )
+                    ajoin += f"[a{index}_{n}]"
+                    pieces += 1
+        video_graph.append(f"{vjoin}concat=n={len(groups)}:v=1:a=0[joined]")
+        if has_audio:
+            audio_graph.append(f"{ajoin}concat=n={pieces}:v=0:a=1[acat]")
+        finish = motion_chain + ",".join(overlays)
+        if logo_file and end_card:
+            shutil.copyfile(logo_file, logo_copy)
+            video_graph.append(f"[joined]{finish.rstrip(',') or 'null'}[base]")
+            video_graph.append(f"movie={logo_copy.name},scale=240:-1,format=rgba[logo]")
+            video_graph.append(f"[base][logo]overlay=(W-w)/2:620:enable='gte(t,{end_card[0]:.3f})'[vout]")
+        else:
+            video_graph.append(f"[joined]{finish.rstrip(',') or 'null'}[vout]")
+
+        # 6. Loudness: measure the cut audio first, then normalise linearly to the target.
+        loud: dict = {"mode": options["loudness"], **({"target": craft.LOUDNESS_TARGET} if options["loudness"] != "off" else {})}
+        audio_out = "anull"
+        if has_audio and options["loudness"] == "normalize":
+            if report:
+                jobs.update(job_id, progress=15, message="Measuring loudness")
+            measured = None
+            try:
+                raw = jobs.process(
+                    job_id,
+                    [ffmpeg(), "-nostdin", "-hide_banner", "-nostats", "-loglevel", "info", *inputs,
+                     "-filter_complex", ";".join([*audio_graph, f"[acat]{loudnorm_filter(None).split(',')[0]}:print_format=json[aout]"]),
+                     "-map", "[aout]", "-f", "null", "-"],
+                    timeout=600,
+                    failure="Loudness measurement failed.",
+                )
+                found = LOUDNORM_JSON.findall(raw)
+                measured = json.loads(found[-1]) if found else None
+            except (WorkError, ValueError):
+                measured = None
+            if measured and str(measured.get("input_i")) in {"-inf", "inf"}:
+                loud.update(method="skipped", reason="The audio is silent; nothing to normalise.")
+            else:
+                audio_out = loudnorm_filter(measured)
+                loud.update(
+                    method="two_pass" if measured else "single_pass",
+                    measured_input_lufs=number((measured or {}).get("input_i")),
+                    measured_input_true_peak=number((measured or {}).get("input_tp")),
+                )
+        elif not has_audio:
+            loud.update(method="skipped", reason="No audio track.")
+        graph = [*video_graph, *([f"[acat]{audio_out},aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=N/SR/TB[aout]"] + audio_graph if has_audio else [])]
+        command = [
+            ffmpeg(), "-nostdin", "-hide_banner", "-loglevel", "error", "-y", *inputs,
+            "-filter_complex", ";".join(graph),
+            "-map", "[vout]", *(["-map", "[aout]"] if has_audio else []),
+            "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-movflags", "+faststart", str(temporary),
+        ]
+        if report:
+            jobs.update(job_id, progress=20, message="Rendering 1080 × 1920 H.264 clip")
+        jobs.process(
+            job_id, command, cwd=output.parent, failure="FFmpeg render failed. Check disk space and source compatibility."
+        )
+        actual = probe(temporary)
+        if report:
+            jobs.update(job_id, progress=80, message="Checking playback, format, captions and loudness")
+        checks = verify(
+            jobs,
+            job_id,
+            temporary,
+            source=source,
+            segments=segments,
+            entries=entries,
+            captions_requested=bool(burn_subtitles),
+            has_audio=has_audio,
+            loudness_target=craft.LOUDNESS_TARGET["integrated"] if loud.get("method") in {"two_pass", "single_pass"} else None,
+        )
+        if not checks["playback_format_passed"]:
+            failed = "; ".join(
+                f"{c['label']}: {c['detail']}" for c in checks["playback_format"] if c["status"] == "fail"
+            )
+            raise WorkError(f"Rendered file failed playback/format checks, so no clip was saved. {failed}"[:1200])
+        loud["output_lufs"] = checks.get("integrated_loudness")
+        jobs.check(job_id)
+        temporary.replace(output)
+        completed = True
+    finally:
+        temporary.unlink(missing_ok=True)
+        logo_copy.unlink(missing_ok=True)
+        shutil.rmtree(fonts_dir, ignore_errors=True)
+        if not completed:
+            for path in [srt, *scratch]:
+                path.unlink(missing_ok=True)
+    main_seconds = cuts["keeps"][-1][1] - cuts["keeps"][0][0] if cuts["keeps"] else 0.0
+    record.update(
+        loudness=loud,
+        jump_cuts={k: v for k, v in cuts.items() if k != "keeps"} | {"pieces": len(cuts["keeps"]), "range_seconds": round(main_seconds, 3)},
+        structure={k: v for k, v in structure.items() if k != "extend_end"} | {"main_end": round(main_end, 3)},
+        hook={
+            "format": options["hook_format"] if hook else None,
+            "text": hook or None,
+            "seconds": round(hook_seconds, 3) if hook else 0.0,
+            "grounding": craft.hook_grounding(hook, " ".join(e["text"] for e in timeline)) if hook else None,
+        },
+        caption_emphasis={
+            "mode": options["caption_emphasis"],
+            "source": emphasis["source"] if marks else None,
+            "words": [entries[e]["timed"][w]["text"] for e, w in sorted(marks)],
+            "ignored_planner_words": emphasis["ignored"],
+        },
+        punch_in={"mode": options["punch_in"], "times": punches},
+        transition={"mode": options["transition"] if teaser else None, "at": round(transition_at, 3) if transition_at else None},
+        end_card={"mode": options["end_card"], "text": end_card[2] if end_card else None,
+                  "start": round(end_card[0], 3) if end_card else None, "logo": bool(logo_file and end_card)},
+        brand_kit={"font_family": font, "font_file": bool(font_file), "primary_color": kit.primary_color,
+                   "accent_color": kit.accent_color, "logo": bool(logo_file)} if options.get("brand_kit") else None,
+        output_seconds=round(total, 3),
+    )
+    return {
+        "subtitles_burned": bool(entries),
+        "hook_rendered": bool(hook),
+        "framing": framing,
+        "caption_style": caption_style,
+        "focus_x": focus_x,
+        "crop_width": crop_width,
+        "motion": "push_in" if motion == "push_in" else ("punch_in" if punches else "static"),
+        "tone_mapped": tone_mapped,
+        "width": actual["width"],
+        "height": actual["height"],
+        "duration": actual["duration"],
+        "source_segments": segments,
+        "caption_cues": len(entries),
+        "technical_checks": checks,
+        "encoder": dict(ENCODER),
+        "ffmpeg_version": ffmpeg_version(),
+        "structure": structure["resolved"],
+        "craft": record,
+        "warning": None
+        if entries or not burn_subtitles or transcript is not None
+        else "No transcript: clip rendered without invented captions.",
+    }
+
+
+def frame_scores(data: bytes, width: int, height: int) -> list[dict]:
+    """Sharpness (mean neighbour difference), stillness and brightness per raw gray frame."""
+    size = width * height
+    scores, previous = [], None
+    for offset in range(0, len(data) - size + 1, size):
+        frame = data[offset : offset + size]
+        horizontal = sum(abs(a - b) for a, b in itertools.pairwise(frame))
+        vertical = sum(abs(a - b) for a, b in zip(frame, frame[width:]))
+        sharp = (horizontal + vertical) / (2 * size)
+        change = sum(abs(a - b) for a, b in zip(frame, previous)) / size if previous else 0.0
+        scores.append({"sharpness": sharp, "change": change, "brightness": sum(frame) / size})
+        previous = frame
+    return scores
+
+
+def write_cover(
+    jobs: Jobs, job_id: str, clip: Path, cover: Path, *, mode: str = "first_frame", avoid: list[tuple[float, float]] | None = None
+) -> dict:
+    """Cover still at 540×960: frame 0, or the sharpest, stillest well-lit candidate frame.
+
+    best_frame samples the rendered clip at 2 fps as tiny grayscale frames (no model) and scores
+    0.65·sharpness + 0.35·stillness, skipping dark frames, the first/last half second and any
+    `avoid` windows (teaser flash, end card).
+    """
+    chosen = {"mode": mode, "time": 0.0}
+    if mode == "best_frame":
+        width, height, step = 108, 192, 0.5
+        raw = cover.with_name(cover.stem + ".frames.gray")
+        try:
+            jobs.process(
+                job_id,
+                [ffmpeg(), "-nostdin", "-v", "error", "-y", "-i", str(clip), "-an", "-sn",
+                 "-vf", f"fps={1 / step:g},scale={width}:{height},format=gray", "-f", "rawvideo", "-pix_fmt", "gray", str(raw)],
+                timeout=120,
+                failure="Cover analysis failed.",
+            )
+            scores = frame_scores(raw.read_bytes(), width, height)
+        except (WorkError, OSError):
+            scores = []
+        finally:
+            raw.unlink(missing_ok=True)
+        length = len(scores) * step
+        candidates = []
+        top_sharp = max((s["sharpness"] for s in scores), default=0) or 1.0
+        for index, score in enumerate(scores):
+            at = index * step + step / 2
+            if at < 0.5 or at > length - 0.5 or score["brightness"] < 24:
+                continue
+            if any(a <= at <= b for a, b in avoid or []):
+                continue
+            value = 0.65 * score["sharpness"] / top_sharp + 0.35 * max(0.0, 1 - score["change"] / 32)
+            candidates.append((round(value, 4), at))
+        if candidates:
+            value, at = max(candidates, key=lambda c: (c[0], -c[1]))
+            chosen.update(time=round(at, 3), score=value, candidates=len(candidates))
+        else:
+            chosen.update(mode="first_frame", reason="No well-lit candidate frame was found.")
+    jobs.process(
+        job_id,
+        [ffmpeg(), "-nostdin", "-v", "error", "-y", "-ss", f"{chosen['time']:.3f}", "-i", str(clip),
+         "-frames:v", "1", "-vf", "scale=540:960", str(cover)],
+        timeout=60,
+        failure="Cover extraction failed.",
+    )
+    return chosen
 
 
 def extract_audio(jobs: Jobs, job_id: str, source: Path, output: Path):
