@@ -136,16 +136,17 @@ Landed and pushed to master:
   title card placed off the face (Apple Vision face box in `craft.py`, IG safe
   areas, receipt `hook.placement`). Verified on a real render.
 
-Still in flight at this update (uncommitted in the working tree, owned by the
-**engine-quality** agent): `clip_factory/team.py`, `ranking.py`, `craft.py`,
-`media.py`, `app.py`, `docs/engine.md`, tests (`test_craft.py`,
-`test_ranking.py`, `test_team.py`), plus `docs/engine-eval.md` when done.
-Goals: honour style duration (30 s ±25%, sentence-snapped, extend across
-scenes), speech-first selection (claims, punchlines, stories, quotables),
-punchline-as-teaser hook-first, hooks ≤8 words from speech, captions required.
-It iterates with REAL Haiku runs in scratch data dirs (≤6 runs, ≤$1). If it did
-not finish: review its diff, run those pytest files one by one + `ruff`, check
-`docs/engine-eval.md`, commit, push.
+- **Engine quality** (`1f40636`, stopped by the coordinator after 6 real runs):
+  new `clip_factory/moments.py`; swarm clips are complete ~30 s thoughts with a
+  quoted, teased payoff; ranking rewards verified payoff, completeness and brief
+  fit; a speech source clip without captions/speech is below the bar. Run 6 on
+  the 10-min All-In test (cloud Haiku, $0.03, 57 calls): 13 clips, top 8 all
+  31–36 s, all `hook_first`, 16–30 caption cues each, scores 69–72, ~7 of 8
+  reference moments hit (pillow talk, Blackwell/wafer, Swalwell, low-level
+  leakers, useful idiot, "why now", leak-is-a-crime). `docs/engine-eval.md` was
+  NOT written (agent stopped). Scratch run DBs/clips:
+  `/private/tmp/claude-501/-Users-kartikbihani--claude-spares-spare-rlRLTC/6f48ede3-19e1-4f92-8c6d-324c91c091c6/scratchpad/engine-runs/{1..6}/`
+  (temporary). All backend/engine files are free for other agents now.
 
 ### Why the founder's first clips showed none of the craft
 All craft is applied at **render time, before review/posting** (not after
