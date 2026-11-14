@@ -442,7 +442,14 @@ export function FactoryHome({
                 className="gf-cut-card"
                 onClick={() => onReview(clip)}
               >
-                <span className="gf-cut-art">
+                <span
+                  className="gf-cut-art"
+                  style={
+                    reviewPreview
+                      ? undefined
+                      : { backgroundImage: `url(${endpoint("clips", clip.id, "cover")})` }
+                  }
+                >
                   <Icon name="play" size={28} />
                   <span>
                     {reviewPreview
@@ -502,6 +509,17 @@ export function FactoryHome({
               const working = status?.state === "queued" || status?.state === "working";
               const ready =
                 !!direction && !!modelId && !!status?.can_produce && !w.busy && !w.loading;
+              // Counts are for this workspace: clips made elsewhere from the same file do not belong here.
+              const own = clips.filter((c) => c.video_id === source.id);
+              const waiting = own.filter((c) => !c.approved).length;
+              const headline =
+                !status || working || status.state === "failed" || status.state === "cancelled"
+                  ? status?.error || status?.headline
+                  : waiting
+                    ? `${waiting} clip${waiting === 1 ? "" : "s"} ready for review`
+                    : own.length
+                      ? `${own.length} clip${own.length === 1 ? "" : "s"} approved`
+                      : "Ready to make clips";
               return (
                 <div className="gf-footage-item" key={source.id}>
                   <div className="gf-footage-row">
@@ -560,7 +578,7 @@ export function FactoryHome({
                       <div className="source-card-body">
                         <Stages source={status} />
                         <p className="gf-footage-status" role="status">
-                          {status.error || status.headline}
+                          {headline}
                         </p>
                         {typeof status.progress === "number" && (
                           <progress

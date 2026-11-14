@@ -678,3 +678,14 @@
     padding-left: 0;
   }
 }
+/* Review cards show the clip's own cover frame behind the play mark. */
+.gf-cut-art[style] {
+  min-height: 220px;
+  background-size: cover;
+  background-position: center 30%;
+}
+.gf-cut-art[style] > svg,
+.gf-cut-art[style] > span {
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7));
+  color: #fff;
+}

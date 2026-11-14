@@ -1105,6 +1105,12 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             body.hook_overlay = True
             body.end = min(body.end, body.start + direction["duration_seconds"])
             metadata["provenance_mode"] = "strategy"
+            # "fit" asks for the whole picture, not for black bars: on landscape footage it is kept
+            # over a blurred backdrop, moved in on the action only when nothing is lost.
+            if direction["framing"] == "fit" and frame_action(job_id, video, body, allow_fill=False):
+                metadata["strategy_departures"] = [
+                    "Whole frame kept over a blurred backdrop, framed on the action, instead of black bars."
+                ]
         else:
             frame_action(job_id, video, body)
         # Presentation is a hypothesis too: the swarm varies it across clips and records which was
@@ -1113,7 +1119,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         if treatment.get("captions") in {"standard", "pop"} and treatment["captions"] != body.caption_style:
             if metadata.get("strategy_snapshot") and treatment["captions"] == "pop":
                 metadata["strategy_departures"] = [
-                    "Swarm treatment: word-by-word captions instead of the saved caption style."
+                    *metadata.get("strategy_departures", []),
+                    "Swarm treatment: word-by-word captions instead of the saved caption style.",
                 ]
             if treatment["captions"] == "pop" or not metadata.get("strategy_snapshot"):
                 body.caption_style = treatment["captions"]
@@ -1129,14 +1136,16 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def wide(video: dict) -> bool:
         return (video.get("width") or 0) > (video.get("height") or 0)
 
-    def frame_action(job_id: str, video: dict, body: Render):
+    def frame_action(job_id: str, video: dict, body: Render, *, allow_fill: bool = True) -> bool:
         """Automatic framing for landscape sources: follow the movement instead of shrinking it.
 
         The tightest crop that still holds the action fills the screen (9:16) or sits large over a
         blurred backdrop (3:4, 1:1, 4:3). When movement spans the frame, the whole frame is kept.
+        allow_fill=False never switches to the cropping layout: the picture stays over its backdrop.
+        Returns whether the framing was changed.
         """
         if not wide(video):
-            return
+            return False
         body.framing = "blur"
         try:
             window = media.action_window(
@@ -1152,12 +1161,13 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         except (HTTPException, KeyError, TypeError, ValueError):
             window = None
         if not window:
-            return
+            return True
         body.focus_x = window["focus_x"]
-        if window["crop_width"] <= (9 / 16) / (video["width"] / video["height"]) + 0.001:
+        if allow_fill and window["crop_width"] <= (9 / 16) / (video["width"] / video["height"]) + 0.001:
             body.framing = "fill"
         else:
             body.crop_width = window["crop_width"]
+        return True
 
     def pipeline_task(job_id: str, video: dict, model_id="qwen-small", config: dict | None = None) -> dict:
         config = config or settings()
