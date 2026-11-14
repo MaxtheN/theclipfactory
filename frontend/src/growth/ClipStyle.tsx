@@ -187,7 +187,6 @@ export function ClipStyleSheet({
       <header>
         <div>
           <h2>Pick your clip style</h2>
-          <p>Agents use this for every clip. You can change it any time in Style rules.</p>
         </div>
       </header>
       <ClipStylePicker value={style} onChange={setStyle} disabled={blocked} />

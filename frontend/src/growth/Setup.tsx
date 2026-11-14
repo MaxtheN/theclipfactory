@@ -12,7 +12,7 @@ import {
   formatTime,
 } from "./parts";
 import { Icon } from "./Icon";
-import { CloudAccountRow } from "./CloudSignIn";
+import { CloudAccountRow, useCloudStatusLabel } from "./CloudSignIn";
 import { AiModelCard } from "./AiModelCard";
 import { PanelDialog } from "./PanelDialog";
 import { EngineSetup } from "./EngineSetup";
@@ -170,6 +170,7 @@ export function Setup({
   /** A new positive value opens local Engine & models maintenance. */
   engineRequest?: number;
 }) {
+  const accountStatus = useCloudStatusLabel();
   const campaign = creating ? undefined : w.campaign;
   // The brand being edited is fixed for this mount (GrowthApp keys Setup by
   // campaign and profile). It is never silently replaced by another one.
@@ -1044,7 +1045,7 @@ export function Setup({
             </nav>
             <section className="gf-profile-summary" id={summaryId} key={section} aria-label={section === "identity" ? "Brand and voice summary" : section === "goals" ? "Goals and brief summary" : section === "kit" ? "Brand kit summary" : "Account and model summary"}>
               {section === "identity" && <>
-                <header><h2>Brand, audience & voice</h2><p>The foundation behind every edit.</p></header>
+                <header><h2>Brand, audience & voice</h2></header>
                 <dl>
                   <div><dt>Brand name</dt><dd>{brandName || "Add your brand name"}</dd></div>
                   <div><dt>Who it’s for</dt><dd>{audience.trim() || "Define who you’re speaking to."}</dd></div>
@@ -1073,10 +1074,10 @@ export function Setup({
                 <button type="button" className="gf-button secondary compact gf-profile-edit" onClick={() => setEditor("kit")}>Edit brand kit<Icon name="arrow" size={15} /></button>
               </>}
               {section === "account" && <>
-                <header><h2>Account & model</h2><p>Your account and the way this factory processes footage.</p></header>
+                <header><h2>Account & model</h2></header>
                 <dl>
                   <div><dt>This workspace</dt><dd>{brandName || "Your brand"}</dd></div>
-                  <div><dt>Account access</dt><dd>Manage sign-in and device access.</dd></div>
+                  <div><dt>Account access</dt><dd>{accountStatus ?? "Checking…"}</dd></div>
                   <div><dt>Model routing</dt><dd>Choose local or cloud processing and manage your model key.</dd></div>
                 </dl>
                 <button type="button" className="gf-button secondary compact gf-profile-edit" onClick={() => setEditor("account")}>Manage account & model<Icon name="arrow" size={15} /></button>

@@ -164,8 +164,9 @@ describe("Results page", () => {
     expect(screen.getByText("Measuring")).toBeTruthy();
     expect(screen.getByText("Learned")).toBeTruthy();
     expect(screen.getByText("Nothing posted yet — approve a clip and post it")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "What we learned" })).toBeTruthy();
-    expect(screen.getByText(/No measured posts yet/)).toBeTruthy();
+    // One empty state: the headline. No second "nothing yet" section.
+    expect(screen.queryByRole("heading", { name: "What we learned" })).toBeNull();
+    expect(screen.queryByText(/No measured posts yet/)).toBeNull();
     expect(screen.queryByRole("heading", { name: "Posted clips" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Run the learning loop/ }));
     expect(onRehearse).toHaveBeenCalledOnce();

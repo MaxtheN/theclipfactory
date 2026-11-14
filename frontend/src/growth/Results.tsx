@@ -1262,7 +1262,8 @@ export function Results({
       )}
       {demo && <DemoOutcome demo={demo} onReset={onResetDemo} simulatedOnly={!posted} />}
       <p id="gf-results-now" className="gf-results-now" role="status">{story.headline}</p>
-      {(!demo || learned.length > 0) && <section className="gf-results-learned" aria-labelledby="gf-results-learned-title">
+      {/* With nothing posted, the headline above is the one empty state. */}
+      {(learned.length > 0 || (!demo && posted > 0)) && <section className="gf-results-learned" aria-labelledby="gf-results-learned-title">
         <h2 id="gf-results-learned-title">What we learned</h2>
         {learned.length ? (
           <div className="gf-results-learned-grid">

@@ -342,6 +342,33 @@ export function CloudSignIn({
 }
 
 /** "Signed in as … / Sign out" row for Brand profile and the post panel. Renders nothing when not configured. */
+/** One line of real account status for summaries; never guesses a signed-in state. */
+export function useCloudStatusLabel(): string | null {
+  const [label, setLabel] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    Promise.resolve()
+      .then(() => cloudApi.status())
+      .then(
+        (s) => {
+          if (!live || !s) return;
+          setLabel(
+            !s.configured
+              ? "This Mac only"
+              : s.signed_in
+                ? `Signed in as ${s.email}`
+                : "Not signed in",
+          );
+        },
+        () => live && setLabel("Account status unavailable"),
+      );
+    return () => {
+      live = false;
+    };
+  }, []);
+  return label;
+}
+
 export function CloudAccountRow({
   onSignIn,
   showLocal = false,
