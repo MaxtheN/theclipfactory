@@ -361,18 +361,19 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
     @app.post("/api/runtime/setup", status_code=202)
     def runtime_setup():
-        if jobs().busy("runtime", "setup"):
-            raise HTTPException(409, "Runtime setup is already queued or running.")
-        return jobs().submit("runtime", models().setup, runtime="setup")
+        with operations_lock:
+            if jobs().busy("runtime", "setup"):
+                raise HTTPException(409, "Runtime setup is already queued or running.")
+            return jobs().submit("runtime", models().setup, runtime="setup")
 
     @app.post("/api/models/{identifier}/download", status_code=202)
     def download_model(identifier: str, body: License):
-        item = models().item(identifier)
         if not body.accept_license:
             raise HTTPException(422, "Accept the model license before downloading.")
         with operations_lock:
             if jobs().busy("model_id", identifier):
                 raise HTTPException(409, "A job already uses this model.")
+            item = models().item(identifier)
             if item["installed"]:
                 raise HTTPException(409, "Model is already installed.")
             if shutil.disk_usage(root).free < (item["estimated_gb"] + 3) * 1e9:

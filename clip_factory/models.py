@@ -10,6 +10,8 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
 import psutil
@@ -185,6 +187,8 @@ class Models:
         self.logs = directory / "logs"
         self.model_dir.mkdir(exist_ok=True)
         self.logs.mkdir(exist_ok=True)
+        self._download_lock = threading.RLock()
+        self._download_reservations: dict[str, int] = {}
 
     @property
     def python(self) -> Path:
@@ -297,6 +301,22 @@ class Models:
             raise WorkError("Runtime verification failed. Native Apple Silicon Python 3.12 is required.")
         return {"runtime": "ready", "path": str(self.runtime)}
 
+    @contextmanager
+    def _download_space(self, job_id: str, target: Path, needed: int):
+        # Other concurrent transfers may not yet have written their reserved bytes.
+        with self._download_lock:
+            if (
+                shutil.disk_usage(target).free
+                < needed + sum(self._download_reservations.values()) + 64 * 1024**2
+            ):
+                raise WorkError("Not enough free disk space for concurrent model downloads.")
+            self._download_reservations[job_id] = needed
+        try:
+            yield
+        finally:
+            with self._download_lock:
+                self._download_reservations.pop(job_id, None)
+
     def download(self, job_id: str, identifier: str) -> dict:
         from huggingface_hub import HfApi, constants, hf_hub_download
         from tqdm.auto import tqdm
@@ -378,18 +398,17 @@ class Models:
                 for cache in (target / ".cache", target / ".cache" / "huggingface"):
                     if cache.is_symlink():
                         raise ValueError("Unsafe download cache")
-                if shutil.disk_usage(target).free < needed + 64 * 1024**2:
-                    raise WorkError("Not enough disk space to download the next model file.")
-                self.jobs.update(
-                    job_id, progress=round(completed / total * 95), message=f"Downloading {entry['name']}"
-                )
-                hf_hub_download(
-                    item["repo"],
-                    entry["name"],
-                    revision=info.sha,
-                    local_dir=target,
-                    tqdm_class=CancelProgress,
-                )
+                with self._download_space(job_id, target, needed):
+                    self.jobs.update(
+                        job_id, progress=round(completed / total * 95), message=f"Downloading {entry['name']}"
+                    )
+                    hf_hub_download(
+                        item["repo"],
+                        entry["name"],
+                        revision=info.sha,
+                        local_dir=target,
+                        tqdm_class=CancelProgress,
+                    )
                 completed += entry["size"]
                 self.jobs.update(
                     job_id, progress=round(completed / total * 95), message="Verifying downloaded model files"

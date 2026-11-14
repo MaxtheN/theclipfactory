@@ -23,10 +23,14 @@ class WorkError(RuntimeError):
     """An actionable, credential-free error safe to display."""
 
 
+DOWNLOAD_WORKERS = 3
+
+
 class Jobs:
     def __init__(self, store: Store):
         self.store = store
         self.pending: queue.Queue = queue.Queue()
+        self.download_pending: queue.Queue = queue.Queue()
         self.stopping = threading.Event()
         self.lock = store.lock
         self.cancellations: dict[str, threading.Event] = {}
@@ -40,8 +44,20 @@ class Jobs:
                     message="Interrupted",
                     updated_at=now(),
                 )
-        self.thread = threading.Thread(target=self._run, name="factory-heavy-worker", daemon=True)
-        self.thread.start()
+        self.thread = threading.Thread(
+            target=self._run, args=(self.pending,), name="factory-heavy-worker", daemon=True
+        )
+        self.download_threads = [
+            threading.Thread(
+                target=self._run,
+                args=(self.download_pending,),
+                name=f"factory-download-worker-{i + 1}",
+                daemon=True,
+            )
+            for i in range(DOWNLOAD_WORKERS)
+        ]
+        for worker in [self.thread, *self.download_threads]:
+            worker.start()
 
     def submit(self, kind: str, operation: Callable, **context) -> dict:
         with self.lock:
@@ -51,6 +67,7 @@ class Jobs:
             item = {
                 "id": identifier,
                 "kind": kind,
+                "lane": "download" if kind == "download" else "heavy",
                 "status": "queued",
                 "progress": 0,
                 "message": "Queued",
@@ -62,7 +79,8 @@ class Jobs:
             }
             self.cancellations[identifier] = threading.Event()
             self.store.put("jobs", item)
-            self.pending.put((identifier, operation))
+            pending = self.download_pending if kind == "download" else self.pending
+            pending.put((identifier, operation))
             return item
 
     def update(self, identifier: str, **changes):
@@ -95,15 +113,16 @@ class Jobs:
             for j in self.store.all("jobs")
         )
 
-    def _run(self):
+    def _run(self, pending: queue.Queue):
         while not self.stopping.is_set():
             try:
-                identifier, operation = self.pending.get(timeout=0.2)
+                identifier, operation = pending.get(timeout=0.2)
             except queue.Empty:
                 continue
             try:
-                self.check(identifier)
-                self.update(identifier, status="running", message="Starting")
+                with self.lock:
+                    self.check(identifier)
+                    self.update(identifier, status="running", message="Starting")
                 result = operation(identifier)
                 # Do not erase an external success with a late cancellation. Operations check before writes.
                 self.update(identifier, status="completed", progress=100, message="Completed", result=result)
@@ -129,7 +148,7 @@ class Jobs:
             finally:
                 with self.lock:
                     self.cancellations.pop(identifier, None)
-                self.pending.task_done()
+                pending.task_done()
 
     def process(
         self,
@@ -182,7 +201,9 @@ class Jobs:
         with self.lock:
             for event in self.cancellations.values():
                 event.set()
-        self.thread.join(timeout=12)
+        deadline = time.monotonic() + 12
+        for worker in [self.thread, *self.download_threads]:
+            worker.join(timeout=max(0, deadline - time.monotonic()))
         for job in self.store.all("jobs"):
             if job["status"] == "queued":
                 self.update(job["id"], status="cancelled", message="Cancelled on shutdown")
