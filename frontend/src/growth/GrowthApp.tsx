@@ -36,6 +36,8 @@ import "./polish.css";
 import "./pearl-studio.css";
 import "./shell-polish.css";
 import "./website-alignment.css";
+import "@fontsource-variable/bricolage-grotesque";
+import "./identity.css";
 import { cloudApi } from "./cloudApi";
 import { CLOUD_CHANGED } from "./appEvents";
 

@@ -1,0 +1,190 @@
+/* Brand layer, loaded last: typography, focus, selection and the few
+   accents that make the shell read as Growth Factory. Colour comes from
+   material-tokens.css; this file only decides where the brand shows. */
+
+.gf-app,
+.gf-operational,
+.gf-command-dialog {
+  font-family: var(--material-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The canvas grain blends into the bloom (as on the landing page) instead of greying it. */
+.gf-app,
+.gf-operational {
+  background-blend-mode: overlay, normal, normal, normal, normal;
+}
+
+/* Headlines in Bricolage Grotesque; everything you read in the system face. */
+.gf-app h1,
+.gf-app h2,
+.gf-app .gf-brand,
+.gf-onboarding-brand,
+.gf-operational h1,
+.gf-operational h2,
+.gf-command-dialog h2 {
+  font-family: var(--material-display);
+  font-optical-sizing: auto;
+}
+.gf-app h1,
+.gf-operational h1 {
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+}
+.gf-app h2,
+.gf-operational h2 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.gf-app .gf-brand,
+.gf-onboarding-brand {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+.gf-app .gf-brand-period {
+  color: var(--signal);
+}
+
+/* Body copy stays comfortable to read. */
+.gf-app p {
+  text-wrap: pretty;
+}
+
+::selection {
+  background: rgba(255, 90, 31, 0.22);
+}
+
+.gf-app :focus-visible,
+.gf-operational :focus-visible,
+.gf-command-dialog :focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+/* Primary actions glow orange on hover; secondary ones stay calm and white. */
+.gf-app .gf-button:not(.secondary):not(.ghost):hover:not(:disabled) {
+  box-shadow: 0 10px 22px -12px rgba(255, 90, 31, 0.85);
+}
+.gf-app .gf-button.secondary {
+  background: #ffffff;
+  border-color: var(--material-field-line);
+  color: var(--material-ink);
+}
+.gf-app .gf-button.secondary:hover:not(:disabled) {
+  border-color: rgba(23, 18, 14, 0.28);
+  background: #ffffff;
+}
+
+/* Choices you have made are peach, not orange: orange is kept for actions. */
+.gf-app .gf-clip-style-option[aria-pressed="true"],
+.gf-app .gf-wall-filter[aria-pressed="true"] {
+  background: var(--peach);
+  border-color: rgba(255, 90, 31, 0.55);
+  color: var(--ember-deep);
+  font-weight: 600;
+}
+.gf-app .gf-clip-style-option,
+.gf-app .gf-wall-filter {
+  background: #ffffff;
+  border-color: var(--material-field-line);
+}
+
+/* View switchers are a white pill on a quiet track. */
+.gf-app .gf-fmap-segment {
+  background: rgba(23, 18, 14, 0.06);
+  border-color: transparent;
+}
+.gf-app .gf-fmap-segment button[aria-selected="true"],
+.gf-app .gf-fmap-segment button[aria-selected="true"]:hover {
+  color: var(--material-ink);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(23, 18, 14, 0.14);
+}
+
+/* Navigation: the current place is peach with an orange icon. */
+.gf-app .gf-nav-item.active,
+.gf-app .gf-sidebar-bottom > [aria-current="page"] {
+  color: var(--ember-deep);
+  background: var(--peach);
+}
+.gf-app .gf-nav-item.active svg,
+.gf-app .gf-sidebar-bottom > [aria-current="page"] svg {
+  color: var(--signal);
+}
+.gf-app .gf-nav-item {
+  color: var(--material-secondary);
+}
+
+/* The shell's glass reads as frosted white over the bloom. */
+.gf-app .gf-sidebar {
+  border-right: 1px solid rgba(23, 18, 14, 0.07);
+}
+.gf-app .gf-topbar {
+  border-bottom: 1px solid rgba(23, 18, 14, 0.06);
+}
+
+/* Pearl Studio carries a few bronze literals; bring them onto the orange palette.
+   The logo itself (artwork, tint and size) stays as the shell styles define it. */
+.gf-app .gf-button:hover:not(:disabled) {
+  background: #ff7a45;
+  border-color: #ff7a45;
+  color: var(--material-button-ink);
+}
+.gf-app .gf-button.secondary:hover:not(:disabled) {
+  background: #ffffff;
+}
+.gf-app .gf-button.ghost:hover:not(:disabled) {
+  background: var(--material-hover);
+  border-color: transparent;
+}
+.gf-app .gf-upload:hover,
+.gf-app .gf-upload.dragging,
+.gf-app .gf-upload-stage:hover,
+.gf-app .gf-upload-stage.is-over,
+.gf-app .gf-onboarding-choice:hover:not(:has(input:disabled)):not(.is-selected):not(:has(input:checked)) {
+  background: #fff6f0;
+  border-color: var(--signal);
+}
+.gf-app .gf-onboarding-choice.is-selected,
+.gf-app .gf-onboarding-choice:has(input:checked),
+.gf-app .gf-onboarding-choice.is-other.is-selected {
+  background: var(--peach);
+  border-color: var(--signal);
+}
+.gf-app .gf-rule-diff,
+.gf-app .gf-reason-chain > div > span,
+.gf-app .gf-from-site,
+.gf-app .gf-automation .gf-automation-badge,
+.gf-app .gf-speechless-chip,
+.gf-app .gf-system-attention {
+  border-color: rgba(255, 90, 31, 0.35);
+}
+.gf-app .gf-spinner {
+  border-color: rgba(255, 90, 31, 0.2);
+  border-top-color: var(--signal);
+}
+.gf-app .gf-page-heading h1,
+.gf-app .gf-landing-heading h1 {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+/* Quiet, warm scrollbars. */
+.gf-app *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.gf-app *::-webkit-scrollbar-thumb {
+  background: rgba(23, 18, 14, 0.16);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+.gf-app *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(23, 18, 14, 0.28);
+}
+.gf-app *::-webkit-scrollbar-track {
+  background: transparent;
+}

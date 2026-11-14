@@ -410,9 +410,9 @@
   border-color: var(--material-divider, #dad6ce);
   color: var(--material-ink, #293237);
 }
-.gf-app .gf-post-instagram .gf-post-account:has(input:checked) { background: var(--material-selected, #eee8de); border-color: var(--material-accent, #8b6946); }
+.gf-app .gf-post-instagram .gf-post-account:has(input:checked) { background: var(--material-selected, #eee8de); border-color: var(--material-accent, #c2410c); }
 .gf-app .gf-post-instagram .gf-post-account-avatar { background: #e8e1d7; color: #70563b; }
-.gf-app .gf-post-instagram .gf-text-button { color: var(--material-accent, #8b6946); }
+.gf-app .gf-post-instagram .gf-text-button { color: var(--material-accent, #c2410c); }
 .gf-app .gf-post-instagram .gf-toggle-row { background: var(--material-field, #f4f1eb); border-color: var(--material-divider, #dad6ce); }
 .gf-app .gf-post-instagram .gf-toggle-row small { opacity: 1; color: var(--material-secondary, #616a6e); }
 .gf-app .gf-post-instagram .gf-toggle-row input[type="checkbox"][role="switch"]:not(:checked) { background: #c9c5bd; }
