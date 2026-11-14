@@ -13,6 +13,7 @@ import logging
 import math
 import re
 import secrets
+import sys
 import time
 from collections.abc import Callable, Iterator
 from contextvars import ContextVar
@@ -516,7 +517,17 @@ class SecureTokenStore:
         try:
             backend = keyring.get_keyring()
             if type(backend).__module__ not in SecureTokenStore._NATIVE or backend.priority <= 0:
-                raise RuntimeError
+                # A frozen (PyInstaller) app can lack keyring's entry-point metadata, so automatic
+                # discovery falls back to the "fail" backend. Ask for the macOS Keychain directly.
+                # Only when discovery failed outright; an explicitly configured non-native backend is refused.
+                if sys.platform != "darwin" or type(backend).__module__ != "keyring.backends.fail":
+                    raise RuntimeError
+                from keyring.backends import macOS
+
+                backend = macOS.Keyring()
+                if backend.priority <= 0:
+                    raise RuntimeError
+                keyring.set_keyring(backend)
             return backend
         except Exception:  # noqa: BLE001 - native backend failures must not leak credentials
             raise MetaError(

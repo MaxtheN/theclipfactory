@@ -545,3 +545,21 @@ def test_malformed_insights_collection_is_not_fake_success():
 def test_multicast_assets_are_not_public(url):
     with pytest.raises(MetaError):
         validate_public_video_url(url)
+
+
+def test_frozen_app_without_backend_discovery_uses_the_macos_keychain(monkeypatch):
+    import sys as _sys
+
+    from keyring.backends import macOS
+
+    class Fail:
+        __module__ = "keyring.backends.fail"
+        priority = 0
+
+    picked = []
+    monkeypatch.setattr(_sys, "platform", "darwin")
+    monkeypatch.setattr("clip_factory.meta.keyring.get_keyring", lambda: Fail())
+    monkeypatch.setattr("clip_factory.meta.keyring.set_keyring", picked.append)
+    monkeypatch.setattr(macOS.Keyring, "priority", 5, raising=False)
+    backend = SecureTokenStore._backend()
+    assert isinstance(backend, macOS.Keyring) and picked == [backend]

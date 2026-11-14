@@ -37,7 +37,7 @@ test -x "$FFMPEG_BIN" && test -x "$FFPROBE_BIN" || { echo "FFmpeg/ffprobe not fo
   --add-data "$ROOT/clip_factory/inference_worker.py:clip_factory" \
   --add-data "$ROOT/clip_factory/cloud_config.json:clip_factory" \
   --add-binary "$FFMPEG_BIN:bin" --add-binary "$FFPROBE_BIN:bin" \
-  --collect-all webview --collect-all keyring --collect-all uvicorn \
+  --collect-all webview --collect-all keyring --copy-metadata keyring --collect-all uvicorn \
   --collect-submodules clip_factory --collect-submodules platformdirs \
   --hidden-import clip_factory.app --hidden-import clip_factory.main \
   --hidden-import Foundation --hidden-import AppKit --hidden-import WebKit \
