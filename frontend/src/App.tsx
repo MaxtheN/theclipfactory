@@ -74,7 +74,7 @@ export function App() {
             c<span>f</span>
           </span>
           <div>
-            Clip Factory<small>LOCAL STUDIO</small>
+            Growth Factory<small>WORKSPACE TOOLS</small>
           </div>
         </div>
         <nav aria-label="Main navigation">
@@ -103,7 +103,7 @@ export function App() {
             <br />
             Meta actions require your opt-in.
           </p>
-          <small>CLIP FACTORY / MVP</small>
+          <small>GROWTH FACTORY / MVP</small>
         </div>
       </aside>
       <div className="workspace">
