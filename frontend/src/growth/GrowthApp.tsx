@@ -59,14 +59,14 @@ const views = {
   },
   research: {
     label: "Style rules",
-    title: "Style rules",
-    sub: "How agents pick and open clips in this campaign. Save, then approve.",
+    title: "Workspace style rules",
+    sub: "How agents pick and open clips in every campaign in this workspace. Save, then approve.",
     icon: "research",
   },
   campaign: {
     label: "New campaign",
     title: "New campaign",
-    sub: "A focused push inside this workspace, with its own goal and episodes.",
+    sub: "A focused push inside this workspace, with its own goal and episodes. It uses the workspace style rules.",
     icon: "plus",
   },
   studio: {

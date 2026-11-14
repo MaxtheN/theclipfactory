@@ -10,7 +10,7 @@ import {
 } from "./learningState";
 import { object } from "./productionState";
 import type { FactoryState } from "../useFactory";
-import type { Workspace } from "./useCampaignWorkspace";
+import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { reviewPreview, workspaceApi } from "./workspaceApi";
 import { Disclosure, Empty, Field, Pill, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
@@ -200,9 +200,9 @@ export function Results({
       c.profile_id === w.profileId &&
       c.approved,
   );
-  const active = w.versions.find(
-    (v) => v.id === w.campaign?.active_strategy_id,
-  );
+  // The workspace's approved rules, inherited by this campaign.
+  const activeId = activeRulesId(w);
+  const active = w.versions.find((v) => v.id === activeId);
   const activeDirection = active?.directions[w.profileId];
   const pending = [...w.versions]
     .sort((a, b) => b.version - a.version)
@@ -351,7 +351,7 @@ export function Results({
       const mode = nextProductionMode(activeDirection, pendingDirection);
       if (
         await w.run(
-          () => workspaceApi.approve(w.campaign!.id, pending.id),
+          () => workspaceApi.approve(w.profileId, pending.id),
           "Next test approved. Its saved direction will guide the next source.",
         )
       )

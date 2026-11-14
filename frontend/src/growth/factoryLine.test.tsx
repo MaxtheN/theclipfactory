@@ -33,21 +33,21 @@ const direction = {
   limitations: "",
   confidence: "low" as const,
 };
-function campaign(approved = true): Campaign {
+function campaign(): Campaign {
   return {
     id: "c1",
     name: "Founder stories",
     brief: { audience: "Founders", constraints: [], requested_outputs: [], measurement_intent: "" },
     profile_ids: ["p1"],
     video_ids: ["v1"],
-    active_strategy_id: approved ? "s1" : null,
   };
 }
 function workspace(approved = true): Workspace {
   return {
-    campaign: campaign(approved),
+    campaign: campaign(),
     profileId: "p1",
-    profiles: [{ id: "p1", name: "Founders" }],
+    // The campaign inherits its workspace's approved style rules.
+    profiles: [{ id: "p1", name: "Founders", active_strategy_id: approved ? "s1" : null }],
     versions: approved ? [{ id: "s1", status: "approved", directions: { p1: direction } }] : [],
     busy: false,
     loading: false,

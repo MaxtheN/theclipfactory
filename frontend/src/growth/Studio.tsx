@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { activeJob, installedLlms } from "../productionPreflight";
 import type { Job, TeamRun } from "../types";
 import type { FactoryState } from "../useFactory";
-import type { Workspace } from "./useCampaignWorkspace";
+import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { reviewPreview, workspaceApi } from "./workspaceApi";
 import { endpoint } from "../api";
 import { Disclosure, Empty, Field, Pill, Poster, PrimaryAction, formatTime } from "./parts";
@@ -46,7 +46,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const [uncertainExports, setUncertainExports] = useState<Set<string>>(new Set());
   const [cancelId, setCancelId] = useState("");
   const lock = useRef(false), video = useRef<HTMLVideoElement>(null);
-  const active = w.versions.find(v => v.id === w.campaign?.active_strategy_id && v.status === "approved");
+  const active = w.versions.find(v => v.id === activeRulesId(w) && v.status === "approved");
   const direction = active?.directions[w.profileId];
   const source = sources.find(v => v.id === sourceId);
   const clipErrors: string[] = [];

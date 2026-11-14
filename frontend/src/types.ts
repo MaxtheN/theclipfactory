@@ -328,14 +328,24 @@ export interface TeamComparison {
   notes: string[];
 }
 
+/** A workspace: one person, channel or brand. It owns ONE approved Style-rules set. */
 export interface Profile {
   id: string;
   name: string;
   audience: string;
   brand_context: string;
-  objective: string;
-  primary_metric: string | null;
+  /** Legacy workspace-wide goal; only backfills campaigns saved before campaign goals. */
+  objective?: string;
+  primary_metric?: string | null;
   creative_preferences: string;
+  /** The workspace's approved Style-rules version, inherited by every campaign in it. */
+  active_strategy_id?: string | null;
+  /** Set when rules approved on a campaign before workspace rules were adopted. */
+  strategy_migration?: {
+    provenance: "migrated_from_campaign";
+    version_id: string;
+    campaign_id: string;
+  } | null;
 }
 export interface CampaignBrief {
   audience: string;
@@ -343,13 +353,19 @@ export interface CampaignBrief {
   requested_outputs: string[];
   measurement_intent: string;
 }
+/** A goal-scoped push inside a workspace. It inherits the workspace's Style rules. */
 export interface Campaign {
   id: string;
   name: string;
   brief: CampaignBrief;
   profile_ids: string[];
   video_ids: string[];
-  active_strategy_id: string | null;
+  objective?: string;
+  primary_metric?: string | null;
+  /** Campaign-specific guidance appended to production prompts. */
+  notes?: string;
+  /** Legacy: rules approved on this campaign before workspace rules. Not used for production. */
+  active_strategy_id?: string | null;
 }
 export interface Direction {
   angles: string[];
@@ -368,7 +384,10 @@ export interface Direction {
 }
 export interface StrategyVersion {
   id: string;
-  campaign_id: string;
+  /** "workspace" for workspace rules; "campaign" for read-only pre-workspace history. */
+  scope?: "workspace" | "campaign";
+  profile_id?: string;
+  campaign_id: string | null;
   version: number;
   status: "proposed" | "approved" | "rejected";
   base_version_id: string | null;

@@ -1,4 +1,4 @@
-import { objectives, type Direction, type Profile, type Observation, type TeamTask } from "../types";
+import { objectives, type Direction, type Observation, type TeamTask } from "../types";
 import { object } from "./productionState";
 
 export type LearningEdit =
@@ -30,13 +30,12 @@ export function nextProductionMode(before: Direction, after: Direction): "manual
   return ["moment_selection", "pacing", "angles", "editing_preferences"].some(key => JSON.stringify(before[key as keyof Direction]) !== JSON.stringify(after[key as keyof Direction])) ? "agent" : "manual";
 }
 
-export function profileGoalBody(profile: Profile, objective: string, primaryMetric: string) {
+/** A campaign's own goal. Discovery needs no metric; every other goal does. */
+export function campaignGoalBody(objective: string, primaryMetric: string) {
   if (!(objectives as readonly string[]).includes(objective)) throw new Error("Choose a supported production objective.");
   if (objective !== "discovery" && !primaryMetric.trim()) throw new Error("This objective needs a primary metric.");
   if (primaryMetric.trim().length > 200) throw new Error("Keep the metric name within 200 characters.");
-  // GET profiles contain production_history. Strict PUT bodies must never spread
-  // those read-only fields, and changing this profile must not update another.
-  return { name:profile.name,audience:profile.audience,brand_context:profile.brand_context,creative_preferences:profile.creative_preferences,objective,primary_metric:objective === "discovery" ? null : primaryMetric.trim() };
+  return { objective, primary_metric: objective === "discovery" ? null : primaryMetric.trim() };
 }
 
 export interface EvidenceRecommendation { recommendation:string; limitation:string; observationIds:string[]; otherEvidenceRefs:string[] }

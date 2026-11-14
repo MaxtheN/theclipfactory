@@ -9,7 +9,7 @@ import {
 } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { previewRequest, resetPreview } from "./previewApi";
-import type { Campaign, Clip, Job, StrategyVersion } from "../types";
+import type { Campaign, Clip, Job, Profile, StrategyVersion } from "../types";
 
 vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
@@ -25,6 +25,11 @@ vi.mock("../api", async () => {
 });
 import { GrowthApp } from "./GrowthApp";
 const path = "/api/campaigns/preview-campaign";
+// Style rules belong to the workspace (profile), inherited by its campaigns.
+const workspacePath = "/api/profiles/preview-profile-allin";
+const rules = `${workspacePath}/strategies`;
+const activeRules = async () =>
+  (await previewRequest<Profile>(workspacePath)).active_strategy_id ?? null;
 const originalShowModal = HTMLDialogElement.prototype.showModal;
 const originalClose = HTMLDialogElement.prototype.close;
 beforeAll(() => {
@@ -99,7 +104,9 @@ describe("Growth Factory interface", () => {
     const campaigns = await previewRequest<Campaign[]>("/api/campaigns");
     const created = campaigns.find((c) => c.name === "Episode 210 launch")!;
     expect(created.profile_ids).toEqual(["preview-profile-allin"]);
-    expect(created.active_strategy_id).toBeNull();
+    expect(created.objective).toBe("discovery");
+    // No campaign approval chain: it inherits the workspace's rules.
+    expect(created.active_strategy_id).toBeUndefined();
     await waitFor(() => expect(picker).toHaveValue(created.id));
     expect(await previewRequest<Campaign>(path)).toEqual(original);
     expect(await previewRequest<unknown[]>("/api/profiles")).toEqual(profilesBefore);
@@ -125,17 +132,17 @@ describe("Growth Factory interface", () => {
     await waitFor(async () => expect((await previewRequest<Campaign>(path)).brief.audience).toBe("Channel-specific founders"));
     await waitFor(() => expect(screen.getByRole("button", { name: "Save settings" })).toBeEnabled());
     expect(screen.getByRole("heading", { name: "Workspace settings" })).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "Style rules" })).not.toBeInTheDocument();
-    expect((await previewRequest<Campaign>(path)).active_strategy_id).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Workspace style rules" })).not.toBeInTheDocument();
+    expect((await activeRules())).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Style rules" }));
-    expect(screen.getByRole("heading", { name: "Style rules" })).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Workspace style rules" })).toHaveFocus();
     fireEvent.click(screen.getByRole("button", { name: "Back to Workspace settings" }));
     expect(screen.getByRole("heading", { name: "Workspace settings" })).toHaveFocus();
     expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue("Channel-specific founders");
     fireEvent.click(within(daily).getByRole("button", { name: "Factory" }));
     fireEvent.click(screen.getByRole("button", { name: "Approve style rules" }));
-    expect(screen.getByRole("heading", { name: "Style rules" })).toHaveFocus();
-    expect((await previewRequest<Campaign>(path)).active_strategy_id).toBeNull();
+    expect(screen.getByRole("heading", { name: "Workspace style rules" })).toHaveFocus();
+    expect((await activeRules())).toBeNull();
   });
   it("ignores the onboarding preview hash in the ordinary build", async () => {
     const originalUrl = window.location.pathname + window.location.search + window.location.hash;
@@ -250,17 +257,16 @@ describe("Growth Factory interface", () => {
     expect(screen.getByRole("heading", { name: "Workspace settings" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Style rules" }));
     await screen.findByRole("heading", {
-      name: "Style rules",
+      name: "Workspace style rules",
     });
-    const before = await previewRequest<Campaign>(path);
-    expect(before.active_strategy_id).toBeNull();
+    expect(await activeRules()).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: /^Approve style rules\b/ }),
     );
     await screen.findByRole("heading", {
       name: "Studio",
     });
-    expect((await previewRequest<Campaign>(path)).active_strategy_id).toBe(
+    expect((await activeRules())).toBe(
       "preview-strategy-v1",
     );
     expect(screen.getByLabelText("Production mode")).toHaveValue("agent");
@@ -314,18 +320,18 @@ describe("approval transition regressions", () => {
     );
     await screen.findByRole("button", { name: /^Approve style rules\b/ });
     const versions = await previewRequest<StrategyVersion[]>(
-      `${path}/strategies`,
+      rules,
     );
     expect(
       versions.some((v) => v.reason.includes("Episode A, 00:18–00:25")),
     ).toBe(true);
     expect(
-      (await previewRequest<Campaign>(path)).active_strategy_id,
+      (await activeRules()),
     ).toBeNull();
   });
   it("opens fresh production on the second source after exact next-test approval", async () => {
     const v = await send<StrategyVersion>(
-      `${path}/strategies/preview-strategy-v1/approve`,
+      `${rules}/preview-strategy-v1/approve`,
     );
     await send(`${path}/render`, {
       expected_strategy_version_id: v.id,
@@ -413,7 +419,7 @@ describe("approval transition regressions", () => {
 describe("review transport boundaries", () => {
   it("preserves exact version lineage and never exports a simulated media response", async () => {
     const version = await send<StrategyVersion>(
-      `${path}/strategies/preview-strategy-v1/approve`,
+      `${rules}/preview-strategy-v1/approve`,
     );
     const job = await send<Job>(`${path}/render`, {
       expected_strategy_version_id: version.id,
@@ -440,26 +446,29 @@ describe("review transport boundaries", () => {
   });
   it("preserves the other profile when a learned rule is approved and rejects stale renders", async () => {
     const original = await send<StrategyVersion>(
-      `${path}/strategies/preview-strategy-v1/approve`,
+      `${rules}/preview-strategy-v1/approve`,
     );
     const directions = {
       ...original.directions["preview-profile-allin"],
       moment_selection: "Lead with a useful question.",
     };
-    const proposed = await send<StrategyVersion>(`${path}/strategies`, {
+    const proposed = await send<StrategyVersion>(rules, {
       base_version_id: original.id,
       reason: "A creator-provided new test.",
-      directions: { "preview-profile-allin": directions },
+      direction: directions,
     });
-    expect((await previewRequest<Campaign>(path)).active_strategy_id).toBe(
+    expect((await activeRules())).toBe(
       original.id,
     );
     const approved = await send<StrategyVersion>(
-      `${path}/strategies/${proposed.id}/approve`,
+      `${rules}/${proposed.id}/approve`,
     );
-    expect(approved.directions["preview-profile-test"]).toEqual(
-      original.directions["preview-profile-test"],
-    );
+    // The other workspace keeps its own (still unapproved) rule set.
+    expect(approved.directions["preview-profile-test"]).toBeUndefined();
+    expect(
+      (await previewRequest<Profile>("/api/profiles/preview-profile-test"))
+        .active_strategy_id,
+    ).toBeNull();
     await expect(
       send(`${path}/render`, {
         expected_strategy_version_id: original.id,
@@ -529,7 +538,7 @@ describe("approvalStep", () => {
       changed: false,
       draftCurrent: false,
     });
-    expect(stale.message(1)).toMatch(/out of date: a profile was added/);
+    expect(stale.message(1)).toMatch(/out of date: the approved rules changed/);
     const live = approvalStep({
       pending: false,
       active: true,

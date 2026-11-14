@@ -10,8 +10,9 @@ import { objectiveLabels } from "./Setup";
 
 /**
  * A goal-scoped push inside the current workspace. It creates one campaign
- * linked only to the selected workspace (profile); the workspace itself is
- * never changed here.
+ * linked only to the selected workspace (profile) with its own goal and
+ * metric. It inherits the workspace's approved style rules, so there is no
+ * separate approval; the workspace itself is never changed here.
  */
 export function NewCampaign({
   w,
@@ -28,6 +29,8 @@ export function NewCampaign({
   const [name, setName] = useState("");
   const [objective, setObjective] = useState("discovery");
   const [metric, setMetric] = useState("");
+  const [notes, setNotes] = useState("");
+  const rulesApproved = !!workspace?.active_strategy_id;
   const [footage, setFootage] = useState<string[]>([]);
   const metricNeeded = objective !== "discovery";
   const valid = !!name.trim() && (!metricNeeded || !!metric.trim());
@@ -63,6 +66,9 @@ export function NewCampaign({
           },
           profile_ids: [workspace.id],
           video_ids: footage,
+          objective,
+          primary_metric: metricNeeded ? metric.trim() : null,
+          notes: notes.trim(),
         });
         if (
           !saved ||
@@ -72,7 +78,9 @@ export function NewCampaign({
           throw new Error("The new campaign was not confirmed. Refresh before trying again.");
         createdId = saved.id;
       },
-      "Campaign created. Approve its style rules before finding clips.",
+      rulesApproved
+        ? "Campaign created. It uses this workspace's approved style rules."
+        : "Campaign created. Approve the workspace style rules before finding clips.",
     );
     if (!ok || !createdId) return;
     // Open the new campaign; this workspace stays selected because it is linked.
@@ -123,6 +131,21 @@ export function NewCampaign({
             )}
           </Field>
         )}
+        <Field
+          label="Campaign notes"
+          hint="Optional. Added to the agents' instructions for this campaign only."
+        >
+          {(id) => (
+            <AutoTextarea
+              rows={2}
+              id={id}
+              maxLength={2000}
+              placeholder="e.g. Favour the guest's founding story"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          )}
+        </Field>
         {videos.length > 0 && (
           <fieldset className="gf-profile-options">
             <legend>Attach episodes</legend>
@@ -154,7 +177,13 @@ export function NewCampaign({
         )}
       </div>
       <div className="gf-stage-action">
-        <span>For {workspace?.name || "this workspace"}. Nothing is published.</span>
+        <span>
+          For {workspace?.name || "this workspace"}.{" "}
+          {rulesApproved
+            ? "Uses the workspace style rules."
+            : "The workspace style rules still need approval."}{" "}
+          Nothing is published.
+        </span>
         <div className="gf-channel-actions">
           <button
             type="button"

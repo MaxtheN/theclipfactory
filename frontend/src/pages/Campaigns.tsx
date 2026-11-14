@@ -796,7 +796,7 @@ function CampaignWorkspace({
               <VersionCard
                 key={v.id}
                 version={v}
-                activeId={campaign.active_strategy_id}
+                activeId={campaign.active_strategy_id ?? null}
                 profileId={selectedProfile}
                 campaign={campaign}
                 profiles={profiles}

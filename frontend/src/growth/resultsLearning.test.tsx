@@ -39,6 +39,7 @@ function fixture() {
       objective: "discovery",
       primary_metric: null,
       creative_preferences: "Meaning first",
+      active_strategy_id: "version-a",
       production_history: [{ id: "read-only-history" }],
     } as Profile,
     {
@@ -49,6 +50,7 @@ function fixture() {
       objective: "traffic",
       primary_metric: "qualified_visits",
       creative_preferences: "Different direction",
+      active_strategy_id: "version-a",
     },
   ];
   const campaign: Campaign = {
@@ -62,7 +64,8 @@ function fixture() {
     },
     profile_ids: profiles.map((p) => p.id),
     video_ids: ["source-a", "source-b"],
-    active_strategy_id: "version-a",
+    objective: "discovery",
+    primary_metric: null,
   };
   const active: StrategyVersion = {
     id: "version-a",
@@ -177,13 +180,12 @@ describe("selected profile goal control", () => {
       screen.getByRole("button", { name: "Save settings" }),
     );
     await waitFor(() =>
+      // Workspace fields only: the goal is saved on the campaign afterwards.
       expect(update).toHaveBeenCalledWith("profile-a", {
         name: profiles[0].name,
         audience: profiles[0].audience,
         brand_context: profiles[0].brand_context,
         creative_preferences: profiles[0].creative_preferences,
-        objective: "traffic",
-        primary_metric: "full_episode_visits",
       }),
     );
     expect(save).not.toHaveBeenCalled();
@@ -289,7 +291,7 @@ describe("real next-edit decisions", () => {
     await waitFor(() =>
       expect(next).toHaveBeenCalledWith("source-b", "manual"),
     );
-    expect(approve).toHaveBeenCalledWith(w.campaign!.id, "version-b");
+    expect(approve).toHaveBeenCalledWith(w.profileId, "version-b");
   });
   it("routes an approved descriptive selection change through agent planning", async () => {
     const { w, factory, active } = fixture(),

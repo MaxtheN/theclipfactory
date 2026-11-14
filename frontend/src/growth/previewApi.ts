@@ -13,7 +13,7 @@ import type {
 import type { ProductionClip } from "./productionContracts";
 
 /** Explicit review-only transport. Never calls fetch or the desktop service. */
-const STORAGE_KEY = "growth-factory-preview-v1";
+const STORAGE_KEY = "growth-factory-preview-v2";
 type PreviewObservation = Observation & { campaign_id: string };
 type PendingRender = { job_id: string; due_at: number; clip: ProductionClip };
 interface PreviewState {
@@ -66,19 +66,17 @@ function seed(): PreviewState {
       audience: "Builders and founders",
       brand_context:
         "Illustrative All-In example; no affiliation or connected account.",
-      objective: "traffic",
-      primary_metric: "Full-episode visits",
       creative_preferences:
         "Clear claims, preserved context, restrained captions.",
+      active_strategy_id: null,
     },
     {
       id: "preview-profile-test",
       name: "Test profile",
       audience: "A separate test audience",
       brand_context: "Independent local planning profile.",
-      objective: "discovery",
-      primary_metric: null,
       creative_preferences: "Keep this profile's direction separate.",
+      active_strategy_id: null,
     },
   ];
   return {
@@ -98,13 +96,18 @@ function seed(): PreviewState {
         },
         profile_ids: profiles.map((p) => p.id),
         video_ids: ["preview-source-a", "preview-source-b"],
-        active_strategy_id: null,
+        objective: "traffic",
+        primary_metric: "Full-episode visits",
+        notes: "",
       },
     ],
     strategies: [
+      // One workspace rule set per profile; only the All-In workspace has a draft.
       {
         id: "preview-strategy-v1",
-        campaign_id: "preview-campaign",
+        scope: "workspace",
+        profile_id: profiles[0].id,
+        campaign_id: null,
         version: 1,
         status: "proposed",
         base_version_id: null,
@@ -113,10 +116,8 @@ function seed(): PreviewState {
         hypothesis: "",
         created_at: stamp(),
         approved_at: null,
-        changed_profile_ids: profiles.map((p) => p.id),
-        directions: Object.fromEntries(
-          profiles.map((p) => [p.id, direction()]),
-        ),
+        changed_profile_ids: [profiles[0].id],
+        directions: { [profiles[0].id]: direction() },
       },
     ],
     observations: [],
@@ -254,53 +255,39 @@ function validateDirection(value: unknown): Direction {
   return copy(d) as unknown as Direction;
 }
 
+/** Save a PROPOSED workspace rule set. Never approves it. */
 function propose(
   s: PreviewState,
-  campaign: Campaign,
+  profile: Profile,
   body: Record<string, unknown>,
   hypothesis = "",
 ): StrategyVersion {
   const base = body.base_version_id ?? null;
-  if (base !== campaign.active_strategy_id)
-    fail("Strategy changed. Reload before proposing another version.");
+  const active = profile.active_strategy_id ?? null;
+  if (base !== active)
+    fail("Style rules changed. Reload before proposing another version.");
   if (!text(body.reason).trim()) fail("Explain the proposed change.");
-  const active = campaign.active_strategy_id
-    ? requireRecord(s.strategies, campaign.active_strategy_id, "Strategy")
-    : null;
-  const changes = object(body.directions);
-  const directions = copy(active?.directions ?? {});
-  for (const [profileId, raw] of Object.entries(changes)) {
-    if (!campaign.profile_ids.includes(profileId))
-      fail("Direction belongs to another profile.");
-    const d = validateDirection(raw);
-    for (const ref of d.evidence_refs) {
-      const observation = requireRecord(s.observations, ref, "Evidence");
-      if (
-        observation.campaign_id !== campaign.id ||
-        observation.profile_id !== profileId
-      )
-        fail("Evidence belongs to another profile or campaign.");
-    }
-    directions[profileId] = d;
+  const d = validateDirection(body.direction);
+  for (const ref of d.evidence_refs) {
+    const observation = requireRecord(s.observations, ref, "Evidence");
+    if (observation.profile_id !== profile.id)
+      fail("Evidence belongs to another workspace.");
   }
-  if (
-    Object.keys(directions).length !== campaign.profile_ids.length ||
-    campaign.profile_ids.some((p) => !directions[p])
-  )
-    fail("Initial direction is required for every campaign profile.");
-  const versions = s.strategies.filter((v) => v.campaign_id === campaign.id);
+  const versions = s.strategies.filter((v) => v.profile_id === profile.id);
   const version: StrategyVersion = {
     id: id(s, "strategy"),
-    campaign_id: campaign.id,
+    scope: "workspace",
+    profile_id: profile.id,
+    campaign_id: null,
     version: Math.max(0, ...versions.map((v) => v.version)) + 1,
     status: "proposed",
-    base_version_id: campaign.active_strategy_id,
+    base_version_id: active,
     reason: text(body.reason),
     hypothesis,
     created_at: stamp(),
     approved_at: null,
-    changed_profile_ids: Object.keys(changes),
-    directions,
+    changed_profile_ids: [profile.id],
+    directions: { [profile.id]: d },
   };
   s.strategies.unshift(version);
   return version;
@@ -375,26 +362,46 @@ function route(
       (method === "PUT" && identifier && parts.length === 3)
     ) {
       if (!text(body.name).trim()) fail("Name the profile.");
-      const objective = text(body.objective, "discovery");
-      const primary_metric = text(body.primary_metric).trim() || null;
-      if (objective !== "discovery" && !primary_metric)
-        fail("Choose a primary metric.");
+      const old = identifier
+        ? requireRecord(s.profiles, identifier, "Profile")
+        : null;
+      // Workspace fields only; goals live on campaigns.
       const profile: Profile = {
         id: identifier ?? id(s, "profile"),
         name: text(body.name),
         audience: text(body.audience),
         brand_context: text(body.brand_context),
-        objective,
-        primary_metric,
         creative_preferences: text(body.creative_preferences),
+        active_strategy_id: old?.active_strategy_id ?? null,
       };
-      if (identifier)
-        Object.assign(
-          requireRecord(s.profiles, identifier, "Profile"),
-          profile,
-        );
+      if (old) Object.assign(old, profile);
       else s.profiles.push(profile);
       return profile;
+    }
+    if (identifier && action === "strategies") {
+      const profile = requireRecord(s.profiles, identifier, "Profile");
+      if (method === "GET" && !subId)
+        return s.strategies
+          .filter((v) => v.profile_id === identifier)
+          .sort((a, b) => b.version - a.version);
+      if (method === "POST" && !subId) return propose(s, profile, body);
+      if (
+        method === "POST" &&
+        subId &&
+        ["approve", "reject"].includes(decision)
+      ) {
+        const version = requireRecord(s.strategies, subId, "Strategy");
+        if (version.profile_id !== profile.id || version.status !== "proposed")
+          fail("Only this workspace's proposed style rules can be reviewed.");
+        if (decision === "approve") {
+          if (version.base_version_id !== (profile.active_strategy_id ?? null))
+            fail("Style rules changed. Reload and review the conflict.");
+          version.status = "approved";
+          version.approved_at = stamp();
+          profile.active_strategy_id = version.id;
+        } else version.status = "rejected";
+        return version;
+      }
     }
   }
   if (resource === "videos" && !identifier && method === "POST") {
@@ -496,7 +503,15 @@ function route(
         name: text(body.name),
         profile_ids,
         video_ids,
-        active_strategy_id: old?.active_strategy_id ?? null,
+        objective:
+          body.objective === undefined
+            ? (old?.objective ?? "discovery")
+            : text(body.objective, "discovery"),
+        primary_metric:
+          body.primary_metric === undefined
+            ? (old?.primary_metric ?? null)
+            : text(body.primary_metric).trim() || null,
+        notes: body.notes === undefined ? (old?.notes ?? "") : text(body.notes),
         brief: {
           audience: text(brief.audience),
           constraints: strings(brief.constraints ?? []),
@@ -504,6 +519,9 @@ function route(
           measurement_intent: text(brief.measurement_intent),
         },
       };
+      if (campaign.objective !== "discovery" && !campaign.primary_metric)
+        fail("Choose a primary metric.");
+      if (campaign.objective === "discovery") campaign.primary_metric = null;
       if (old) Object.assign(old, campaign);
       else s.campaigns.push(campaign);
       return campaign;
@@ -512,33 +530,8 @@ function route(
     const campaign = requireRecord(s.campaigns, identifier, "Campaign");
     if (method === "GET" && !action) return campaign;
     if (action === "strategies") {
-      if (method === "GET" && !subId)
-        return s.strategies
-          .filter((v) => v.campaign_id === identifier)
-          .sort((a, b) => b.version - a.version);
-      if (method === "POST" && !subId) return propose(s, campaign, body);
-      if (
-        method === "POST" &&
-        subId &&
-        ["approve", "reject"].includes(decision)
-      ) {
-        const version = requireRecord(s.strategies, subId, "Strategy");
-        if (
-          version.campaign_id !== campaign.id ||
-          version.status !== "proposed"
-        )
-          fail("Only this campaign's proposed strategy can be reviewed.");
-        if (decision === "approve") {
-          if (version.base_version_id !== campaign.active_strategy_id)
-            fail("Strategy changed. Reload and review the conflict.");
-          if (campaign.profile_ids.some((p) => !version.directions[p]))
-            fail("Review direction for every profile.");
-          version.status = "approved";
-          version.approved_at = stamp();
-          campaign.active_strategy_id = version.id;
-        } else version.status = "rejected";
-        return version;
-      }
+      if (method === "GET" && !subId) return [];
+      fail("Style rules belong to the workspace now.");
     }
     if (action === "observations" && method === "GET")
       return s.observations.filter((o) => o.campaign_id === campaign.id);
@@ -604,11 +597,11 @@ function route(
       d.evidence_refs = [...new Set([...d.evidence_refs, ...refs])];
       return propose(
         s,
-        campaign,
+        requireRecord(s.profiles, profileId, "Profile"),
         {
           base_version_id: body.base_version_id,
           reason: body.reason,
-          directions: { [profileId]: d },
+          direction: d,
         },
         text(body.hypothesis),
       );
@@ -621,16 +614,11 @@ function route(
         !campaign.profile_ids.includes(profileId)
       )
         fail("Select this campaign's source and profile.");
-      if (
-        !campaign.active_strategy_id ||
-        body.expected_strategy_version_id !== campaign.active_strategy_id
-      )
-        fail("Approve the current strategy before rendering.");
-      const strategy = requireRecord(
-        s.strategies,
-        campaign.active_strategy_id,
-        "Strategy",
-      );
+      const rules = requireRecord(s.profiles, profileId, "Profile")
+        .active_strategy_id;
+      if (!rules || body.expected_strategy_version_id !== rules)
+        fail("The approved workspace style rules changed or are missing. Reload before rendering.");
+      const strategy = requireRecord(s.strategies, rules, "Strategy");
       const d = strategy.directions[profileId];
       const source = requireRecord(s.videos, videoId, "Source");
       const start = Number(body.start ?? 0),
@@ -662,7 +650,7 @@ function route(
         end,
         hook: text(body.hook, d.hooks[0] ?? ""),
         caption: text(body.caption),
-        objective: requireRecord(s.profiles, profileId, "Profile").objective,
+        objective: campaign.objective ?? "discovery",
         approved: false,
         status: "ready",
         created_at: stamp(),
@@ -766,6 +754,23 @@ export async function previewRequest<T>(
       sources: [],
     } as T;
   if (path.startsWith("/api/cloud/")) return previewCloud(path, options) as T;
+  // The Strategist reads real measured posts; the preview has none, so it
+  // shows the honest empty state rather than an unsupported-route error.
+  const strategist = /^\/api\/strategist\/([^/]+)$/.exec(path);
+  if (strategist && (options.method ?? "GET").toUpperCase() === "GET")
+    return {
+      profile_id: decodeURIComponent(strategist[1]),
+      target_metric: null,
+      baseline: { statistic: null, posts: 0, metrics: {} },
+      beliefs: [],
+      portfolio: null,
+      pending_proposals: { style_rules: [], campaign: [] },
+      runs: [],
+      measured_posts: 0,
+      due_layers: [],
+      caveat: "Review preview: no measured posts. The Strategist learns from posts measured in the Mac app.",
+      simulated: false,
+    } as T;
   const s = state();
   advance(s);
   let body: Record<string, unknown> = {};

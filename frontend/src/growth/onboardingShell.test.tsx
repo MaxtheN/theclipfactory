@@ -350,11 +350,9 @@ describe("standalone onboarding shell", () => {
     )!;
     expect(
       profiles.find((profile) => profile.id === saved.profile_ids[0]),
-    ).toMatchObject({
-      objective: "discovery",
-      primary_metric: null,
-      audience: "Independent podcast creators",
-    });
+    ).toMatchObject({ audience: "Independent podcast creators" });
+    // The goal is the campaign's own.
+    expect(saved).toMatchObject({ objective: "discovery", primary_metric: null });
     expect(localStorage.getItem("growth-campaign")).toBe(saved.id);
     expect(
       screen.getByRole("navigation", { name: "Main navigation" }),
@@ -472,10 +470,9 @@ describe("standalone onboarding shell", () => {
     const saved = campaigns.find((c) => c.name === "Producer launch test")!;
     const profile = profiles.find((p) => p.id === saved.profile_ids[0])!;
     expect(profile).toMatchObject({
-      objective: "awareness",
-      primary_metric: "reach",
       audience: "Podcast producers and company marketers",
     });
+    expect(saved).toMatchObject({ objective: "awareness", primary_metric: "reach" });
     expect(profile.creative_preferences).toContain("A strong point of view");
     expect(localStorage.getItem("growth-campaign")).toBe(saved.id);
     expect(

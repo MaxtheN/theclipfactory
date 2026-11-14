@@ -14,10 +14,14 @@ import { validRuns } from "../components/TeamLedger";
 export const reviewPreview = import.meta.env.VITE_REVIEW_PREVIEW === "true";
 export const campaignUrl = (id: string, action = "") =>
   `/api/campaigns/${encodeURIComponent(id)}${action ? `/${action}` : ""}`;
+export const profileUrl = (id: string, action = "") =>
+  `/api/profiles/${encodeURIComponent(id)}${action ? `/${action}` : ""}`;
 export type CampaignInput = Pick<
   Campaign,
   "name" | "brief" | "profile_ids" | "video_ids"
->;
+> &
+  Partial<Pick<Campaign, "objective" | "primary_metric" | "notes">>;
+
 export type ProfileInput = Omit<Profile, "id">;
 export type ObservationInput = Omit<Observation, "id" | "profile_id">;
 export interface RenderInput {
@@ -50,8 +54,9 @@ export async function checkedList<T extends { id: string }>(
 export const workspaceApi = {
   profiles: () => checkedList<Profile>("/api/profiles"),
   campaigns: () => checkedList<Campaign>("/api/campaigns"),
-  strategies: (id: string) =>
-    checkedList<StrategyVersion>(campaignUrl(id, "strategies")),
+  /** Workspace Style-rules history for one profile. */
+  strategies: (profileId: string) =>
+    checkedList<StrategyVersion>(profileUrl(profileId, "strategies")),
   observations: (id: string) =>
     checkedList<Observation>(campaignUrl(id, "observations")),
   profile: (body: ProfileInput) => post<Profile>("/api/profiles", body),
@@ -76,23 +81,23 @@ export const workspaceApi = {
     return api<Video>("/api/videos?autostart=false", { method: "POST", body });
   },
   propose: (
-    id: string,
+    profileId: string,
     base: string | null,
-    directions: Record<string, Direction>,
+    direction: Direction,
     reason: string,
   ) =>
-    post<StrategyVersion>(campaignUrl(id, "strategies"), {
+    post<StrategyVersion>(profileUrl(profileId, "strategies"), {
       base_version_id: base,
-      directions,
+      direction,
       reason,
     }),
-  approve: (id: string, version: string) =>
+  approve: (profileId: string, version: string) =>
     post<StrategyVersion>(
-      campaignUrl(id, `strategies/${encodeURIComponent(version)}/approve`),
+      profileUrl(profileId, `strategies/${encodeURIComponent(version)}/approve`),
     ),
-  reject: (id: string, version: string) =>
+  reject: (profileId: string, version: string) =>
     post<StrategyVersion>(
-      campaignUrl(id, `strategies/${encodeURIComponent(version)}/reject`),
+      profileUrl(profileId, `strategies/${encodeURIComponent(version)}/reject`),
       { reason: "Creator requested a different direction." },
     ),
   render: (id: string, body: RenderInput) =>

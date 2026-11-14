@@ -2,6 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { workspaceApi } from "./workspaceApi";
 import type { Campaign, Observation, Profile, StrategyVersion } from "../types";
 
+/** The selected workspace's approved Style-rules version (inherited by its campaigns). */
+export function activeRulesId(w: {
+  profiles: Profile[];
+  profileId: string;
+}): string | null {
+  return w.profiles.find((p) => p.id === w.profileId)?.active_strategy_id ?? null;
+}
+
 function preference(key: string) {
   try {
     return localStorage.getItem(key) || "";
@@ -28,7 +36,11 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
   const campaign = campaigns.find((c) => c.id === selected);
   const currentId = useRef(selected);
   currentId.current = selected;
-  const load = useCallback(async (id = currentId.current) => {
+  const currentProfile = useRef(profileId);
+  currentProfile.current = profileId;
+  // The workspace whose Style rules are currently loaded.
+  const loadedProfile = useRef("");
+  const load = useCallback(async (id = currentId.current, wanted = currentProfile.current) => {
     const request = ++generation.current;
     setLoading(true);
     try {
@@ -37,12 +49,13 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
         workspaceApi.profiles(),
       ]);
       const target = c.some((v) => v.id === id) ? id : c[0]?.id || "";
-      const [v, o] = target
-        ? await Promise.all([
-            workspaceApi.strategies(target),
-            workspaceApi.observations(target),
-          ])
-        : [[], []];
+      const ids = c.find((row) => row.id === target)?.profile_ids || [];
+      const workspace = ids.includes(wanted) ? wanted : ids[0] || "";
+      // Style rules belong to the workspace (profile); evidence stays with the campaign.
+      const [v, o] = await Promise.all([
+        workspace ? workspaceApi.strategies(workspace) : [],
+        target ? workspaceApi.observations(target) : [],
+      ]);
       if (!mounted.current || request !== generation.current) return;
       setCampaigns(c);
       setProfiles(p);
@@ -50,8 +63,8 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
       setVersions(v);
       setObservations(o);
       setError("");
-      const ids = c.find((row) => row.id === target)?.profile_ids || [];
-      setProfileId((old) => (ids.includes(old) ? old : ids[0] || ""));
+      setProfileId(workspace);
+      loadedProfile.current = workspace;
     } catch (e) {
       if (mounted.current && request === generation.current)
         setError(
@@ -82,6 +95,13 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
     if (busy) return;
     setNotice("");
     await load(id).catch(() => {});
+  }
+  /** Switch workspace: its own Style rules are loaded with it. */
+  function chooseProfile(id: string) {
+    setProfileId(id);
+    currentProfile.current = id;
+    if (id !== loadedProfile.current)
+      void load(currentId.current, id).catch(() => {});
   }
   async function run(
     task: () => Promise<unknown>,
@@ -118,7 +138,7 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
     observations,
     campaign,
     profileId,
-    setProfileId,
+    setProfileId: chooseProfile,
     selected,
     select,
     loading,

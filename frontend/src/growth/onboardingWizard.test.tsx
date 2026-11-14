@@ -237,18 +237,20 @@ describe("guided workspace onboarding", () => {
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());
     expect(workspaceApi.profile).toHaveBeenCalledWith(
       expect.objectContaining({
-        objective: "awareness",
-        primary_metric: "reach",
         creative_preferences: expect.stringContaining(
           "Stories that stay with you",
         ),
       }),
     );
+    // The goal belongs to the first campaign; the workspace keeps audience and voice.
+    expect(vi.mocked(workspaceApi.profile).mock.calls[0][0]).not.toHaveProperty("objective");
     expect(workspaceApi.save).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Founder stories",
         profile_ids: ["new-profile"],
         video_ids: [],
+        objective: "awareness",
+        primary_metric: "reach",
       }),
     );
     expect(w.load).toHaveBeenCalledWith("new-campaign");
@@ -267,7 +269,7 @@ describe("guided workspace onboarding", () => {
       noWrites();
       launch();
       await waitFor(() => expect(complete).toHaveBeenCalledOnce());
-      expect(workspaceApi.profile).toHaveBeenCalledWith(
+      expect(workspaceApi.save).toHaveBeenCalledWith(
         expect.objectContaining({ objective, primary_metric: metric }),
       );
     },
@@ -286,7 +288,7 @@ describe("guided workspace onboarding", () => {
     next();
     launch();
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());
-    expect(workspaceApi.profile).toHaveBeenCalledWith(
+    expect(workspaceApi.save).toHaveBeenCalledWith(
       expect.objectContaining({ objective: "discovery", primary_metric: null }),
     );
   });
@@ -323,14 +325,14 @@ describe("guided workspace onboarding", () => {
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());
     expect(workspaceApi.profile).toHaveBeenCalledWith(
       expect.objectContaining({
-        objective: "custom",
-        primary_metric: "qualified_demo_requests",
         creative_preferences:
           "Thoughtful founder stories, with the original context intact.",
       }),
     );
     expect(workspaceApi.save).toHaveBeenCalledWith(
       expect.objectContaining({
+        objective: "custom",
+        primary_metric: "qualified_demo_requests",
         brief: expect.objectContaining({
           measurement_intent: expect.stringContaining("Book qualified demos"),
         }),

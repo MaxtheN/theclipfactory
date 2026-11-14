@@ -4,7 +4,7 @@ import { ApiError, endpoint, post } from "../api";
 import { Storyboard } from "../components/Storyboard";
 import { Stages } from "../pages/Home";
 import type { FactoryState } from "../useFactory";
-import type { Workspace } from "./useCampaignWorkspace";
+import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, reviewPreview } from "./workspaceApi";
 import { productionApi } from "./productionApi";
 import { jobInScope, object } from "./productionState";
@@ -162,9 +162,11 @@ export function FactoryHome({
       campaign?.video_ids.includes(c.video_id),
   );
   const review = clips.filter((c) => !c.approved);
-  const direction = w.versions.find(
-    (v) => v.id === campaign?.active_strategy_id,
-  )?.directions[w.profileId];
+  // Every campaign inherits its workspace's approved Style rules.
+  const rulesId = activeRulesId(w);
+  const direction = w.versions.find((v) => v.id === rulesId)?.directions[
+    w.profileId
+  ];
   const scope = {
     campaignId: campaign?.id || "",
     profileId: w.profileId,
@@ -236,7 +238,7 @@ export function FactoryHome({
   });
   /** Many clips from one source, each on its own hypothesis, under the approved direction. */
   async function makeClips(source: Video) {
-    const strategyId = campaign?.active_strategy_id;
+    const strategyId = rulesId;
     if (!campaign || !direction || !strategyId || !modelId) return;
     setError("");
     setSuccess("");
@@ -269,7 +271,7 @@ export function FactoryHome({
   }
   /** Autopilot: with a direction approved, confirmed new footage goes straight into production. */
   async function autoProduce(video: Video) {
-    const strategyId = campaign?.active_strategy_id;
+    const strategyId = rulesId;
     if (
       !campaign ||
       !autopilot ||

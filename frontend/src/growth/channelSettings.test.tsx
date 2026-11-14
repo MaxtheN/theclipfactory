@@ -64,6 +64,10 @@ function fixture({ latestVideos }: { latestVideos?: string[] } = {}) {
     },
     profile_ids: ["profile-a", "profile-b"],
     video_ids: ["source-a"],
+    objective: "discovery",
+    primary_metric: null,
+    notes: "",
+    // Legacy pointer from before workspace rules; settings saves must keep it.
     active_strategy_id: "version-a",
   };
   // The saved service state may be newer than the screen (e.g. footage attached
@@ -233,8 +237,6 @@ describe("unified channel settings", () => {
       audience: "Founders shipping AI products",
       brand_context: "Keep meaning",
       creative_preferences: "Meaning first",
-      objective: "traffic",
-      primary_metric: "full_episode_visits",
     });
     expect(api.save).toHaveBeenCalledTimes(1);
     expect(api.save).toHaveBeenCalledWith(
@@ -249,6 +251,10 @@ describe("unified channel settings", () => {
         },
         profile_ids: ["profile-a", "profile-b"],
         video_ids: ["source-a", "source-new", "source-b"],
+        // The goal belongs to this campaign, not the shared workspace.
+        objective: "traffic",
+        primary_metric: "full_episode_visits",
+        notes: "",
       },
       "campaign-a",
     );

@@ -1,6 +1,6 @@
 import { describe,expect,it } from "vitest";
-import { applyLearningEdit,nextProductionMode,performanceRecommendations,profileGoalBody } from "./learningState";
-import type { Direction,Observation,Profile,TeamTask } from "../types";
+import { applyLearningEdit,nextProductionMode,performanceRecommendations,campaignGoalBody } from "./learningState";
+import type { Direction,Observation,TeamTask } from "../types";
 const direction:Direction={angles:["One idea"],moment_selection:"Self-contained point",hooks:["Old opening","Other opening"],pacing:"Keep source context",duration_seconds:30,framing:"fit",caption_style:"standard",editing_preferences:"Readable captions",measurement_questions:[],next_experiments:[],evidence_refs:[],limitations:"Untested",confidence:"low"};
 describe("evidence changes actual production direction",()=>{
   it("makes a concrete new opening without mutating saved direction",()=>{
@@ -14,11 +14,11 @@ describe("evidence changes actual production direction",()=>{
     expect(nextProductionMode(direction,applyLearningEdit(direction,{kind:"duration",value:24}))).toBe("manual");
     expect(()=>applyLearningEdit(direction,{kind:"duration",value:181})).toThrow(/duration/);
   });
-  it("writes the actual profile goal with an explicit metric and no read-only history",()=>{
-    const profile={id:"p-a",name:"All-In demo",audience:"Builders",brand_context:"Context",creative_preferences:"Meaning first",objective:"discovery",primary_metric:null,production_history:[{id:"old-clip"}]} as Profile;
-    expect(profileGoalBody(profile,"traffic","full_episode_visits")).toEqual({name:profile.name,audience:profile.audience,brand_context:profile.brand_context,creative_preferences:profile.creative_preferences,objective:"traffic",primary_metric:"full_episode_visits"});
-    expect(()=>profileGoalBody(profile,"traffic","")).toThrow(/metric/);
-    expect(profile.objective).toBe("discovery");
+  it("builds a campaign's own goal: discovery needs no metric, other goals need one",()=>{
+    expect(campaignGoalBody("traffic"," full_episode_visits ")).toEqual({objective:"traffic",primary_metric:"full_episode_visits"});
+    expect(campaignGoalBody("discovery","ignored")).toEqual({objective:"discovery",primary_metric:null});
+    expect(()=>campaignGoalBody("traffic","")).toThrow(/metric/);
+    expect(()=>campaignGoalBody("invented","x")).toThrow(/objective/);
   });
   it("retains cited recommendations and separates preferences from known audience observations",()=>{
     const task={id:"t",role:"performance_analyst",status:"completed",output:{recommendations:[{recommendation:"Try a direct opening",limitation:"Observational only",evidence_refs:["event:o-a","feedback:f-a","event:unknown","event:o-null","observation:o-a"]}]}} as unknown as TeamTask;

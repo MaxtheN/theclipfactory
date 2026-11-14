@@ -14,7 +14,7 @@ import {
 import { Icon } from "./Icon";
 import { CloudAccountRow } from "./CloudSignIn";
 import { objectives, type Campaign, type Profile } from "../types";
-import { profileGoalBody } from "./learningState";
+import { campaignGoalBody } from "./learningState";
 
 /** Human-readable labels for the existing backend objective enum. */
 export const objectiveLabels: Record<(typeof objectives)[number], string> = {
@@ -28,7 +28,11 @@ export const objectiveLabels: Record<(typeof objectives)[number], string> = {
   custom: "Something else (custom)",
 };
 
-type ProfileBody = ReturnType<typeof profileGoalBody>;
+/** Workspace fields only: goals belong to campaigns and are never sent here. */
+type ProfileBody = Pick<
+  Profile,
+  "name" | "audience" | "brand_context" | "creative_preferences"
+>;
 type Attempt = {
   profileId: string;
   profile: ProfileBody;
@@ -62,9 +66,7 @@ function profileMatches(saved: Profile | undefined, body: ProfileBody) {
     saved.name === body.name &&
     saved.audience === body.audience &&
     saved.brand_context === body.brand_context &&
-    saved.creative_preferences === body.creative_preferences &&
-    saved.objective === body.objective &&
-    (saved.primary_metric ?? null) === body.primary_metric
+    saved.creative_preferences === body.creative_preferences
   );
 }
 function campaignMatches(saved: Campaign | undefined, body: CampaignInput) {
@@ -75,6 +77,9 @@ function campaignMatches(saved: Campaign | undefined, body: CampaignInput) {
     saved.brief.measurement_intent === body.brief.measurement_intent &&
     JSON.stringify(saved.brief.constraints) ===
       JSON.stringify(body.brief.constraints) &&
+    (saved.objective ?? "discovery") === body.objective &&
+    (saved.primary_metric ?? null) === (body.primary_metric ?? null) &&
+    (saved.notes ?? "") === (body.notes ?? "") &&
     body.profile_ids.every((id) => saved.profile_ids.includes(id)) &&
     body.video_ids.every((id) => saved.video_ids.includes(id))
   );
@@ -111,8 +116,12 @@ export function Setup({
   const [audience, setAudience] = useState(
     campaign?.brief.audience || profile?.audience || "",
   );
-  const [objective, setObjective] = useState(profile?.objective || "discovery");
-  const [metric, setMetric] = useState(profile?.primary_metric || "");
+  // The goal belongs to this campaign; each campaign in the workspace has its own.
+  const [objective, setObjective] = useState(
+    campaign?.objective || "discovery",
+  );
+  const [metric, setMetric] = useState(campaign?.primary_metric || "");
+  const [notes, setNotes] = useState(campaign?.notes || "");
   const [voice, setVoice] = useState(
     profile?.brand_context ||
       campaign?.brief.constraints.join("\n") ||
@@ -141,8 +150,8 @@ export function Setup({
       setState({ kind: "idle" });
   }
 
-  function bodies(latestCampaign: Campaign, latestProfile: Profile) {
-    const goal = profileGoalBody(latestProfile, objective, metric);
+  function bodies(latestCampaign: Campaign) {
+    const goal = campaignGoalBody(objective, metric);
     const constraints = lines(voice);
     if (constraints.length > 30)
       throw new Error("Use up to 30 voice and boundary lines.");
@@ -152,7 +161,6 @@ export function Setup({
       );
     // Only writable fields; read-only production_history is never sent.
     const profileBody: ProfileBody = {
-      ...goal,
       name: workspaceName.trim(),
       audience: audience.trim(),
       brand_context: voice.trim(),
@@ -170,6 +178,8 @@ export function Setup({
             ? "Discovery"
             : `${label}: ${goal.primary_metric}`,
       },
+      ...goal,
+      notes: notes.trim(),
       // Membership is a union with the latest saved record, so footage or
       // profiles attached elsewhere since this screen loaded are retained.
       profile_ids: union(latestCampaign.profile_ids, linkProfiles),
@@ -206,10 +216,7 @@ export function Setup({
             "This workspace is no longer linked to this campaign. Refresh and choose again.",
           );
         // 3. Strict writable bodies.
-        const { profileBody, campaignBody } = bodies(
-          latestCampaign,
-          latestProfile,
-        );
+        const { profileBody, campaignBody } = bodies(latestCampaign);
         attempt.current = {
           profileId,
           profile: profileBody,
@@ -351,8 +358,6 @@ export function Setup({
       const created = await workspaceApi.profile({
         name: title,
         audience: audience.trim(),
-        objective: "discovery",
-        primary_metric: null,
         brand_context: voice.trim(),
         creative_preferences: creative.trim(),
       });
@@ -463,7 +468,7 @@ export function Setup({
             </Field>
             <Field
               label="What are we working toward?"
-              hint="Applies to new clips. Shared by this workspace's campaigns for now."
+              hint="This campaign's goal. Other campaigns keep their own."
             >
               {(id) => (
                 <select
@@ -504,6 +509,24 @@ export function Setup({
                   }
                   onChange={(e) => {
                     setMetric(e.target.value);
+                    edited();
+                  }}
+                />
+              )}
+            </Field>
+            <Field
+              label="Campaign notes"
+              hint="Optional. Added to the agents' instructions for this campaign only, within the workspace style rules."
+            >
+              {(id) => (
+                <AutoTextarea
+                  id={id}
+                  rows={2}
+                  maxLength={2000}
+                  placeholder="e.g. Favour the guest's founding story"
+                  value={notes}
+                  onChange={(e) => {
+                    setNotes(e.target.value);
                     edited();
                   }}
                 />

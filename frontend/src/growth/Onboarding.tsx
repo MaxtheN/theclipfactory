@@ -125,13 +125,16 @@ export function onboardingBodies(input: {
     throw new Error("Keep your creative direction within 4,000 characters.");
   if (outcomeLabel.length > 200)
     throw new Error("Describe your outcome within 200 characters.");
+  // The workspace keeps audience, voice and boundaries; the goal belongs to its first campaign.
   const profile: ProfileInput = {
     name,
     audience,
-    objective: input.objective,
-    primary_metric: input.objective === "discovery" ? null : metric,
     brand_context: guardrails,
     creative_preferences: creativePreference,
+  };
+  const goal = {
+    objective: input.objective,
+    primary_metric: input.objective === "discovery" ? null : metric,
   };
   const brief: CampaignInput["brief"] = {
     audience,
@@ -142,7 +145,7 @@ export function onboardingBodies(input: {
         ? "Discovery"
         : `${outcomeLabel}: ${metric}`,
   };
-  return { profile, brief };
+  return { profile, brief, goal };
 }
 
 /** Successful writes are retained separately from refreshes. An ambiguous write
@@ -336,8 +339,6 @@ export function Onboarding({
             (!profileReceipt.current || p.id === profileReceipt.current.id) &&
             p.name === wanted.name &&
             p.audience === wanted.audience &&
-            p.objective === wanted.objective &&
-            p.primary_metric === wanted.primary_metric &&
             p.brand_context === wanted.brand_context &&
             p.creative_preferences === wanted.creative_preferences,
         );
@@ -349,6 +350,8 @@ export function Onboarding({
             c.profile_ids.includes(wanted.profile_ids[0]) &&
             c.brief.audience === wanted.brief.audience &&
             c.brief.measurement_intent === wanted.brief.measurement_intent &&
+            (c.objective ?? "discovery") === (wanted.objective ?? "discovery") &&
+            (c.primary_metric ?? null) === (wanted.primary_metric ?? null) &&
             JSON.stringify(c.brief.constraints) ===
               JSON.stringify(wanted.brief.constraints) &&
             JSON.stringify(c.brief.requested_outputs) ===
@@ -452,6 +455,7 @@ export function Onboarding({
           profile_ids: [savedProfile.id],
           video_ids: [],
           brief: bodies.brief,
+          ...bodies.goal,
         };
         attemptedCampaign.current = body;
         savedCampaign = await workspaceApi.save(body);

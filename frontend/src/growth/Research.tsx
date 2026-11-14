@@ -1,17 +1,25 @@
 import { AutoTextarea } from "../components/AutoTextarea";
 import { useState } from "react";
 import { workspaceApi, initialDirection } from "./workspaceApi";
-import type { Workspace } from "./useCampaignWorkspace";
+import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { Disclosure, Field, Pill, Empty, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
 
+/** The selected workspace's ONE Style-rules set, inherited by every campaign in it. */
 export function Research({ w, next }: { w: Workspace; next: () => void }) {
+  const workspace = w.profiles.find((p) => p.id === w.profileId);
+  const activeId = activeRulesId(w);
+  // Only workspace drafts can be approved; older per-campaign versions are history.
   const pending = [...w.versions]
     .sort((a, b) => b.version - a.version)
-    .find((v) => v.status === "proposed" && v.directions[w.profileId]);
-  const active = w.versions.find(
-    (v) => v.id === w.campaign?.active_strategy_id,
-  );
+    .find(
+      (v) =>
+        v.status === "proposed" &&
+        v.scope === "workspace" &&
+        v.profile_id === w.profileId &&
+        v.directions[w.profileId],
+    );
+  const active = w.versions.find((v) => v.id === activeId);
   const seed =
     pending?.directions[w.profileId] ||
     active?.directions[w.profileId] ||
@@ -37,13 +45,10 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
     proposedReason !== pending?.reason ||
     JSON.stringify(direction) !==
       JSON.stringify(pending?.directions[w.profileId]);
-  // The server only approves a draft built on the current active version that
-  // covers every profile in the campaign; anything else must be saved again.
+  // The server only approves a draft built on the workspace's current active
+  // version; anything else must be saved again.
   const draftCurrent =
-    !!pending &&
-    !!w.campaign &&
-    pending.base_version_id === (w.campaign.active_strategy_id ?? null) &&
-    w.campaign.profile_ids.every((id) => id in pending.directions);
+    !!pending && !!workspace && pending.base_version_id === activeId;
   const canApprove = !!pending && !changed && draftCurrent;
   const changedFromActive =
     !active ||
@@ -55,38 +60,28 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
     changed: pending ? changed : changedFromActive,
     draftCurrent,
   });
-  const blocked = w.busy || w.loading || !!w.error || !w.campaign;
+  const blocked = w.busy || w.loading || !!w.error || !workspace;
   async function primary() {
-    if (!w.campaign || blocked) return;
+    if (!workspace || blocked) return;
     if (canApprove) {
       if (
         await w.run(
-          () => workspaceApi.approve(w.campaign!.id, pending!.id),
-          "Style rules approved. New clips will follow them.",
+          () => workspaceApi.approve(workspace.id, pending!.id),
+          "Workspace style rules approved. New clips in every campaign will follow them.",
         )
       )
         next();
     } else
       await w.run(
         () =>
-          workspaceApi.propose(
-            w.campaign!.id,
-            w.campaign!.active_strategy_id,
-            Object.fromEntries(
-              (active ? [w.profileId] : w.campaign!.profile_ids).map((id) => [
-                id,
-                id === w.profileId ? direction : initialDirection(),
-              ]),
-            ),
-            proposedReason,
-          ),
+          workspaceApi.propose(workspace.id, activeId, direction, proposedReason),
         "Draft saved. Approve it to use it.",
       );
   }
-  if (!w.campaign)
+  if (!workspace)
     return (
-      <Empty title="No campaign yet" icon="research">
-        Create a campaign first.
+      <Empty title="No workspace yet" icon="research">
+        Create a workspace first.
       </Empty>
     );
   return (
@@ -94,7 +89,10 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
       <section className="gf-card gf-hypothesis">
         <div className="gf-card-header">
           <div>
-            <h2>Rules for the next clips</h2>
+            <h2>Rules for every campaign</h2>
+            <p className="gf-help">
+              Every campaign in {workspace.name} uses these rules.
+            </p>
           </div>
           <Pill tone={pending ? "sand" : active ? "mint" : "quiet"}>
             {pending
@@ -205,9 +203,8 @@ export function Research({ w, next }: { w: Workspace; next: () => void }) {
         </div>
         <div className="gf-card-action">
           <span>
-            <Icon name="lock" size={13} /> For{" "}
-            {w.profiles.find((p) => p.id === w.profileId)?.name ||
-              "this workspace"}
+            <Icon name="lock" size={13} /> For every campaign in{" "}
+            {workspace.name}
           </span>
           <PrimaryAction
             label={
@@ -247,7 +244,7 @@ export function approvalStep(state: {
       saved: false,
       approved: false,
       message: (draft?: number) =>
-        `Draft v${draft} is out of date: a profile was added or the approved rules changed. Save again, then approve.`,
+        `Draft v${draft} is out of date: the approved rules changed. Save again, then approve.`,
     };
   if (pending && changed)
     return {
