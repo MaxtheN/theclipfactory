@@ -436,6 +436,38 @@ describe("review wall in the Library", () => {
       expect(outcome).toHaveTextContent("0 clips discarded. 1 kept: This exact version was exported.");
     });
 
+    it("selects several clips on the wall and deletes them together", async () => {
+      const clips = [made("a"), made("b", { approved: true }), made("c")];
+      render(<Library w={workspace()} factory={factory({}, { clips })} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="wall" />);
+      fireEvent.click(screen.getByRole("button", { name: "Select" }));
+      fireEvent.click(screen.getByRole("button", { name: "Select Hook a" }));
+      fireEvent.click(screen.getByRole("button", { name: "Select Hook b" }));
+      expect(screen.getByRole("button", { name: "Select Hook a" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Delete 2" }));
+      expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Delete 2 clips (1 approved)?"));
+      expect(await screen.findByText("2 clips discarded.")).toBeInTheDocument();
+      expect(deleted().sort()).toEqual(["/api/clips/a", "/api/clips/b"]);
+      expect(screen.getByRole("button", { name: "Select" })).toBeInTheDocument();
+    });
+
+    it("selects every shown clip at once and keeps the selection when the question is declined", async () => {
+      confirm.mockReturnValue(false);
+      const clips = [made("a"), made("b"), made("c")];
+      render(<Library w={workspace()} factory={factory({}, { clips })} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="wall" />);
+      fireEvent.click(screen.getByRole("button", { name: "Select" }));
+      fireEvent.click(screen.getByRole("button", { name: "Select all shown (3)" }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete 3" }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(deleted()).toEqual([]);
+      expect(screen.getByText("3 selected")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Clear shown" }));
+      expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+      expect(screen.getByRole("button", { name: "Select" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Select Hook a" })).not.toBeInTheDocument();
+    });
+
     it("discards one clip from its quick look", async () => {
       library(workspace(), factory({}, { clips: [made("a"), made("b")] }));
       fireEvent.click(screen.getByRole("button", { name: "Play Hook a" }));

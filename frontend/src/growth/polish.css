@@ -1309,3 +1309,53 @@
   padding: 14px 16px;
   text-align: left;
 }
+
+/* Batch selection on the review wall: tick cards, then delete them together. */
+.gf-wall-batch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gf-s2);
+}
+.gf-wall-batch-count {
+  font: 600 13px/1 var(--material-font);
+  color: var(--material-ink);
+  font-variant-numeric: tabular-nums;
+  padding-right: 4px;
+}
+.gf-app .gf-wall-batch-delete:not(:disabled) {
+  background: #b42318;
+  border-color: #b42318;
+  color: #fff;
+}
+.gf-app .gf-wall-batch-delete:hover:not(:disabled) {
+  background: #912018;
+  border-color: #912018;
+  color: #fff;
+}
+.gf-wall-check {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(23, 18, 14, 0.35);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.gf-app .gf-wall-card.is-selected {
+  border-color: var(--signal, var(--material-focus));
+  box-shadow: 0 0 0 2px var(--signal, var(--material-focus)), var(--gf-card-shadow);
+}
+.gf-app .gf-wall-card.is-selected .gf-wall-check {
+  background: var(--signal, var(--material-focus));
+  border-color: var(--signal, var(--material-focus));
+}
+.gf-wall-grid.is-selecting .gf-wall-card:hover {
+  transform: none;
+}

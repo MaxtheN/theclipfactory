@@ -96,13 +96,16 @@ export function Library({
     }
   }
   const count = (n: number) => `${n} clip${n === 1 ? "" : "s"}`;
-  function discard(targets: Clip[]) {
-    if (!targets.length) return;
+  function discard(targets: Clip[], picked = false): boolean {
+    if (!targets.length) return false;
     const one = targets.length === 1 ? targets[0] : undefined;
+    const approved = targets.filter((c) => c.approved).length;
     const question = one
       ? `Discard “${one.hook || one.name}”? The clip file is deleted from this Mac.`
-      : `Discard ${count(targets.length)} that were not approved? Their files are deleted from this Mac. This cannot be undone.`;
-    if (!window.confirm(question)) return;
+      : picked
+        ? `Delete ${count(targets.length)}${approved ? ` (${approved} approved)` : ""}? Their files are deleted from this Mac. This cannot be undone.`
+        : `Discard ${count(targets.length)} that were not approved? Their files are deleted from this Mac. This cannot be undone.`;
+    if (!window.confirm(question)) return false;
     void clear(async () => {
       const result = await discardClips(targets);
       return result.kept
@@ -112,6 +115,7 @@ export function Library({
           }
         : { ok: true, text: `${count(result.discarded)} discarded.` };
     });
+    return true;
   }
   function deleteSource(sourceId: string) {
     if (locked || sourceHasActiveJob(factory.data.jobs, sourceId)) return;
@@ -397,11 +401,14 @@ function ReviewWall({
   sourceIds: string[];
   onReview: (clip: Clip) => void;
   onFactory: () => void;
-  /** Deletes the given clips' files after asking. */
-  onDiscard: (clips: Clip[]) => void;
+  /** Deletes the given clips' files after asking; false when the person declined. */
+  onDiscard: (clips: Clip[], picked?: boolean) => boolean;
   locked: boolean;
 }) {
   const [filter, setFilter] = useState<WallFilter>("All clips");
+  // Batch mode: cards toggle a selection instead of opening review.
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [hypothesis, setHypothesis] = useState("");
   const hypotheses = [
     ...new Set(clips.map((c) => c.hypothesis).filter((h): h is string => !!h)),
@@ -411,6 +418,23 @@ function ReviewWall({
   );
   const matches = (c: Clip, f: WallFilter) => f === "All clips" || (f === "Posted" ? posted(c) : !!c.rank?.below_bar || !!c.made_without_speech);
   const shown = scoped.filter((c) => matches(c, filter));
+  // Only clips that still exist count; deleted or refreshed-away ids drop out on their own.
+  const chosen = clips.filter((c) => picked.has(c.id));
+  const allShown = shown.length > 0 && shown.every((c) => picked.has(c.id));
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const stopSelecting = () => {
+    setSelecting(false);
+    setPicked(new Set());
+  };
+  const deleteChosen = () => {
+    if (!locked && onDiscard(chosen, true)) stopSelecting();
+  };
   if (!clips.length)
     return (
       <div className="gf-flow-empty">
@@ -453,9 +477,59 @@ function ReviewWall({
           </select>
         )}
         <span className="gf-wall-spacer" />
+        {selecting ? (
+          <div className="gf-wall-batch" role="group" aria-label="Selected clips">
+            <span className="gf-wall-batch-count" aria-live="polite">
+              {chosen.length} selected
+            </span>
+            <button
+              type="button"
+              className="gf-button ghost compact"
+              disabled={!shown.length}
+              onClick={() =>
+                setPicked((prev) => {
+                  const next = new Set(prev);
+                  for (const c of shown) {
+                    if (allShown) next.delete(c.id);
+                    else next.add(c.id);
+                  }
+                  return next;
+                })
+              }
+            >
+              {allShown ? "Clear shown" : `Select all shown (${shown.length})`}
+            </button>
+            <button
+              type="button"
+              className="gf-button compact gf-wall-batch-delete"
+              disabled={locked || !chosen.length}
+              onClick={deleteChosen}
+            >
+              <Icon name="trash" size={14} />
+              {chosen.length ? `Delete ${chosen.length}` : "Delete"}
+            </button>
+            <button type="button" className="gf-button secondary compact" onClick={stopSelecting}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="gf-button secondary compact"
+            disabled={locked}
+            onClick={() => setSelecting(true)}
+          >
+            Select
+          </button>
+        )}
       </div>
       {shown.length ? (
-        <div className="gf-wall-grid">
+        <div
+          className={`gf-wall-grid${selecting ? " is-selecting" : ""}`}
+          onKeyDown={(e) => {
+            if (selecting && e.key === "Escape") stopSelecting();
+          }}
+        >
           {shown.map((clip) => (
             <WallCard
               key={clip.id}
@@ -463,7 +537,9 @@ function ReviewWall({
               source={sourceLabel(clip.video_id, sourceIds)}
               // Clips without saved direction stay playable here without borrowing another workspace’s edit context.
               onReview={clip.campaign_id ? () => onReview(clip) : undefined}
-              onDiscard={locked ? undefined : () => onDiscard([clip])}
+              onDiscard={locked ? undefined : () => void onDiscard([clip])}
+              selected={selecting ? picked.has(clip.id) : undefined}
+              onToggle={() => toggle(clip.id)}
             />
           ))}
         </div>
@@ -490,14 +566,20 @@ function WallCard({
   source,
   onReview,
   onDiscard,
+  selected,
+  onToggle,
 }: {
   clip: Clip;
   source: string;
   /** Absent for clips with no direction: those open a quick look instead of the Studio. */
   onReview?: () => void;
   onDiscard?: () => void;
+  /** Set while the wall is in batch mode: the card toggles instead of opening. */
+  selected?: boolean;
+  onToggle?: () => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
+  const selecting = selected !== undefined;
   const [looking, setLooking] = useState(false);
   const status = clipStatus(clip);
   const illustrative =
@@ -520,9 +602,16 @@ function WallCard({
     <>
       <button
         type="button"
-        className="gf-wall-card"
-        aria-label={onReview ? `Edit ${clip.name}` : `Play ${clip.hook || clip.name}`}
-        onClick={onReview ?? (() => setLooking(true))}
+        className={`gf-wall-card${selected ? " is-selected" : ""}`}
+        aria-label={
+          selecting
+            ? `Select ${clip.hook || clip.name}`
+            : onReview
+              ? `Edit ${clip.name}`
+              : `Play ${clip.hook || clip.name}`
+        }
+        aria-pressed={selecting ? selected : undefined}
+        onClick={selecting ? onToggle : (onReview ?? (() => setLooking(true)))}
         onMouseEnter={() => preview(true)}
         onMouseLeave={() => preview(false)}
         onFocus={() => preview(true)}
@@ -544,6 +633,11 @@ function WallCard({
               aria-hidden="true"
               tabIndex={-1}
             />
+          )}
+          {selecting && (
+            <span className="gf-wall-check" aria-hidden="true">
+              {selected && <Icon name="check" size={14} />}
+            </span>
           )}
           <span className="gf-wall-chips">
             {typeof score === "number" ? (

@@ -20,6 +20,7 @@ const paths: Record<string, string> = {
   settings: "M4 7h16 M4 17h16 M8 4v6 M16 14v6",
   menu: "M4 6h16 M4 12h16 M4 18h16",
   close: "M6 6l12 12 M18 6L6 18",
+  trash: "M4 7h16 M10 11v6 M14 11v6 M6 7l1 13h10l1-13 M9 7V4h6v3",
   info: "M12 11v6 M12 7h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
   clock: "M12 6v6l4 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
   file: "M5 2h9l5 5v15H5z M14 2v6h5 M9 13h6 M9 17h6",
