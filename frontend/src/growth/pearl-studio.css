@@ -8,7 +8,6 @@
 .gf-app .gf-window, .gf-app .gf-workspace { background: transparent; }
 .gf-app .gf-sidebar { background: var(--material-shell); border-right: 1px solid var(--material-line); backdrop-filter: var(--gf-frost); -webkit-backdrop-filter: var(--gf-frost); }
 .gf-app .gf-topbar { background: rgba(30, 30, 30, .88); border-color: var(--material-line); backdrop-filter: var(--gf-frost); -webkit-backdrop-filter: var(--gf-frost); }
-.gf-app .gf-brand-logo { filter: brightness(0) saturate(100%) invert(17%) sepia(8%) saturate(852%) hue-rotate(157deg) brightness(94%) contrast(91%); }
 .gf-app .gf-brand, .gf-app .gf-nav-item, .gf-app .gf-sidebar-bottom > button { color: var(--material-ink); }
 .gf-app .gf-nav-item:hover:not(:disabled), .gf-app .gf-sidebar-bottom > button:hover { color: var(--material-ink); background: var(--material-hover); }
 .gf-app .gf-nav-item.active, .gf-app .gf-nav-item.active:hover:not(:disabled), .gf-app .gf-channel-settings[aria-current="page"] { color: var(--material-ink); background: var(--material-selected); box-shadow: none; }

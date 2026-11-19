@@ -5,7 +5,6 @@
 
 /* Let light and orange seep through the chrome without tinting content cards. */
 .gf-app .gf-topbar { background: rgba(30, 30, 30, .88); }
-.gf-app .gf-brand-logo { filter: brightness(0) saturate(100%) invert(44%) sepia(99%) saturate(3674%) hue-rotate(349deg) brightness(103%) contrast(101%); }
 .gf-app .gf-avatar { color: #df77e4; }
 .gf-app .gf-button:hover:not(:disabled) { background: #a75de3; border-color: #a75de3; color: var(--material-button-ink); box-shadow: 0 2px 6px rgba(0, 0, 0, .328); }
 .gf-app .gf-button.secondary { background: var(--material-pane); border-color: #434343; color: var(--material-ink); }

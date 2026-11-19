@@ -1,190 +1,565 @@
-/* Brand layer, loaded last: typography, focus, selection and the few
-   accents that make the shell read as Growth Factory. Colour comes from
-   tokens.css; this file only decides where the brand shows. */
+/* Studio layer, loaded last. It decides how the shell and the shared
+   primitives look; colour values come from tokens.css.
+
+   Direction: a darkroom. Graphite neutrals carry the interface, one
+   typeface (Instrument Sans) carries the voice, and violet is a tally light:
+   it marks the primary action, the current place, focus and the brand mark,
+   and nothing else. Choices you have made are shown in neutral tones. */
+
+/* ── Type ─────────────────────────────────────────────────────────────── */
 
 .gf-app,
 .gf-operational,
 .gf-command-dialog {
   font-family: var(--material-font);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* The canvas grain blends into the bloom (as on the landing page) instead of greying it. */
 .gf-app,
 .gf-operational {
-  background-blend-mode: overlay, normal, normal, normal, normal;
+  background: var(--background);
 }
 
-/* Headlines in Bricolage Grotesque; everything you read in the system face. */
 .gf-app h1,
 .gf-app h2,
+.gf-app h3,
 .gf-app .gf-brand,
 .gf-onboarding-brand,
 .gf-operational h1,
 .gf-operational h2,
 .gf-command-dialog h2 {
   font-family: var(--material-display);
-  font-optical-sizing: auto;
+  text-wrap: balance;
 }
 .gf-app h1,
 .gf-operational h1 {
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
+  font-weight: 600;
+  font-stretch: var(--title-stretch);
+  letter-spacing: -0.028em;
+  line-height: 1.05;
 }
 .gf-app h2,
 .gf-operational h2 {
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  letter-spacing: -0.012em;
 }
-.gf-app .gf-brand,
-.gf-onboarding-brand {
-  font-weight: 800;
+.gf-app .gf-page-heading h1,
+.gf-app .gf-landing-heading h1 {
+  font-size: 30px;
+  font-weight: 600;
+  font-stretch: 88%;
   letter-spacing: -0.03em;
-  line-height: 0.95;
 }
-.gf-app .gf-brand-period {
-  color: var(--signal);
+.gf-app .gf-page-heading p,
+.gf-app .gf-landing-heading p {
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.gf-app main h2 {
+  font-size: 16px;
+  line-height: 1.3;
 }
 
-/* Body copy stays comfortable to read. */
 .gf-app p {
   text-wrap: pretty;
 }
 
+/* Figures line up wherever numbers are compared. */
+.gf-app .gf-results-strip,
+.gf-app .gf-inline-count,
+.gf-app .gf-ratio-chips,
+.gf-app .gf-posted-window,
+.gf-app .gf-library-tabs button > span,
+.gf-app time {
+  font-variant-numeric: tabular-nums;
+}
+
 ::selection {
-  background: rgba(175, 133, 243, .22);
+  background: var(--selection);
 }
 
 .gf-app :focus-visible,
 .gf-operational :focus-visible,
 .gf-command-dialog :focus-visible {
-  outline: 2px solid var(--signal);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
-/* Primary actions glow orange on hover; secondary ones stay calm and white. */
-.gf-app .gf-button:not(.secondary):not(.ghost):hover:not(:disabled) {
-  box-shadow: 0 10px 22px -12px rgba(0, 0, 0, .6);
+/* ── Shell ────────────────────────────────────────────────────────────── */
+
+/* Sidebar, top bar and canvas share one surface; hairlines separate them. */
+.gf-app .gf-sidebar {
+  background: var(--background);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-right: 1px solid var(--divider);
 }
-.gf-app .gf-button.secondary {
-  background: #1f1f1f;
-  border-color: var(--material-field-line);
-  color: var(--material-ink);
-}
-.gf-app .gf-button.secondary:hover:not(:disabled) {
-  border-color: rgba(19, 19, 19, .28);
-  background: #1f1f1f;
+.gf-app .gf-topbar {
+  background: var(--surface-topbar);
+  border-bottom: 1px solid var(--divider);
 }
 
-/* Choices you have made are peach, not orange: orange is kept for actions. */
-.gf-app .gf-clip-style-option[aria-pressed="true"],
-.gf-app .gf-wall-filter[aria-pressed="true"] {
-  background: var(--peach);
-  border-color: rgba(175, 133, 243, .55);
-  color: var(--ember-deep);
-  font-weight: 600;
+/* The brand mark is the one constant violet object on screen. */
+.gf-app .gf-brand-logo,
+.gf-onboarding-brand .gf-brand-logo,
+.gf-operational .gf-brand-logo {
+  filter: none;
+  color: var(--gf-violet-400);
 }
-.gf-app .gf-clip-style-option,
-.gf-app .gf-wall-filter {
-  background: #1f1f1f;
-  border-color: var(--material-field-line);
+.gf-app .gf-brand,
+.gf-onboarding-brand {
+  color: var(--foreground);
+  font-weight: 650;
+  font-stretch: 82%;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
 }
-
-/* View switchers are a white pill on a quiet track. */
-.gf-app .gf-fmap-segment {
-  background: rgba(19, 19, 19, .06);
-  border-color: transparent;
-}
-.gf-app .gf-fmap-segment button[aria-selected="true"],
-.gf-app .gf-fmap-segment button[aria-selected="true"]:hover {
-  color: var(--material-ink);
-  background: #1f1f1f;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .376);
+.gf-app .gf-brand-period {
+  color: var(--gf-violet-400);
 }
 
-/* Navigation: the current place is peach with an orange icon. */
+/* Navigation: quiet rows; the current place gets a violet tally mark. */
+.gf-app .gf-nav-item,
+.gf-app .gf-sidebar-bottom > button {
+  position: relative;
+  min-height: 36px;
+  padding-block: 8px;
+  border-radius: var(--radius-control);
+  color: var(--muted-foreground);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+.gf-app .gf-nav-item strong {
+  font-weight: 500;
+}
+.gf-app .gf-nav-item,
+.gf-app .gf-sidebar-bottom > button {
+  gap: 12px;
+  padding-inline: 12px;
+}
+.gf-app .gf-sidebar-bottom {
+  gap: 2px;
+}
+.gf-app .gf-sidebar-bottom > .gf-channel-settings > svg {
+  width: 19px;
+  height: 19px;
+  flex-basis: 19px;
+}
+.gf-app.gf-flow-app .gf-sidebar-bottom > .gf-channel-settings {
+  min-height: 36px;
+  margin-bottom: 0;
+}
+.gf-app .gf-nav-item svg,
+.gf-app .gf-sidebar-bottom > button svg {
+  color: currentColor;
+  opacity: 0.85;
+}
+.gf-app .gf-nav-item:hover:not(:disabled),
+.gf-app .gf-sidebar-bottom > button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--foreground);
+}
 .gf-app .gf-nav-item.active,
 .gf-app .gf-sidebar-bottom > [aria-current="page"] {
-  color: var(--ember-deep);
-  background: var(--peach);
+  background: rgba(255, 255, 255, .06);
+  color: var(--foreground);
+}
+.gf-app .gf-nav-item.active strong {
+  font-weight: 600;
 }
 .gf-app .gf-nav-item.active svg,
 .gf-app .gf-sidebar-bottom > [aria-current="page"] svg {
-  color: var(--signal);
+  color: var(--foreground);
+  opacity: 1;
 }
-.gf-app .gf-nav-item {
-  color: var(--material-secondary);
+.gf-app .gf-nav-item.active::before,
+.gf-app .gf-sidebar-bottom > [aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--gf-violet-400);
+}
+.gf-app .gf-active-dot {
+  display: none;
 }
 
-/* The shell's glass reads as frosted white over the bloom. */
-.gf-app .gf-sidebar {
-  border-right: 1px solid rgba(19, 19, 19, .07);
+/* Top bar controls are compact and borderless until you point at them. */
+.gf-app .gf-workspace-switcher > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
-.gf-app .gf-topbar {
-  border-bottom: 1px solid rgba(19, 19, 19, .06);
+.gf-app .gf-workspace-switcher select {
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background-color: transparent;
+  background-position: right 10px center;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+.gf-app .gf-workspace-switcher select:hover:not(:disabled) {
+  background-color: var(--hover);
+}
+.gf-app .gf-command-trigger {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: none;
+  transition: background-color var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
+}
+.gf-app .gf-command-trigger:hover:not(:disabled) {
+  background: var(--surface-raised);
+  border-color: var(--border-control);
+  color: var(--foreground);
+}
+.gf-app .gf-activity-trigger {
+  width: auto;
+  min-width: 0;
+  border-color: transparent;
+  background: transparent;
+}
+.gf-app .gf-command-trigger kbd {
+  border: 1px solid var(--border-control);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--subtle-foreground);
+  font: 500 11px/1 var(--font-ui);
+  padding: 3px 5px;
 }
 
-/* Pearl Studio carries a few bronze literals; bring them onto the orange palette.
-   The logo itself (artwork, tint and size) stays as the shell styles define it. */
-.gf-app .gf-button:hover:not(:disabled) {
-  background: #df77e4;
-  border-color: #df77e4;
-  color: var(--material-button-ink);
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+
+.gf-app .gf-button {
+  min-height: 36px;
+  border-radius: var(--radius-control);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  box-shadow: none;
+  transition: background-color var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+.gf-app .gf-button.compact {
+  min-height: 30px;
+  font-size: 13px;
+}
+.gf-app .gf-button:not(.secondary):not(.ghost) {
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--action-foreground);
+}
+.gf-app .gf-button:not(.secondary):not(.ghost):hover:not(:disabled) {
+  background: #b678ea;
+  border-color: #b678ea;
+  color: var(--action-foreground);
+  box-shadow: none;
+}
+/* Disabled actions go neutral rather than dimming the violet. */
+.gf-app .gf-button:disabled:not(.secondary):not(.ghost),
+.gf-app .gf-button:disabled:not(.secondary):not(.ghost):hover {
+  background: var(--surface-raised);
+  border-color: var(--border-control);
+  color: var(--subtle-foreground);
+  opacity: 1;
+}
+.gf-app .gf-button.secondary {
+  background: var(--surface-raised);
+  border-color: var(--border-control);
+  color: var(--foreground);
 }
 .gf-app .gf-button.secondary:hover:not(:disabled) {
-  background: #1f1f1f;
+  background: #272727;
+  border-color: #474747;
+  color: var(--foreground);
+}
+.gf-app .gf-button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted-foreground);
 }
 .gf-app .gf-button.ghost:hover:not(:disabled) {
-  background: var(--material-hover);
+  background: var(--hover);
   border-color: transparent;
+  color: var(--foreground);
+}
+.gf-app .gf-button:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+/* ── Surfaces ─────────────────────────────────────────────────────────── */
+
+.gf-app .gf-card {
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-card);
+  box-shadow: none;
+}
+
+/* Drop zones are dashed until something is over them. */
+.gf-app .gf-upload,
+.gf-app .gf-upload-stage {
+  background: transparent;
+  border: 1px dashed var(--border-field);
 }
 .gf-app .gf-upload:hover,
+.gf-app .gf-upload-stage:hover {
+  background: var(--gf-grey-850);
+  border-color: #5a5a5a;
+}
 .gf-app .gf-upload.dragging,
-.gf-app .gf-upload-stage:hover,
-.gf-app .gf-upload-stage.is-over,
+.gf-app .gf-upload-stage.is-over {
+  background: rgba(167, 93, 227, .06);
+  border-color: var(--gf-violet-400);
+}
+.gf-app .gf-upload-stage-icon {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+/* ── Choices ──────────────────────────────────────────────────────────── */
+
+.gf-app .gf-clip-style-option,
+.gf-app .gf-wall-filter {
+  min-height: 30px;
+  background: transparent;
+  border: 1px solid var(--border-control);
+  color: var(--muted-foreground);
+  font-weight: 500;
+  transition: background-color var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+.gf-app .gf-clip-style-option:hover:not(:disabled),
+.gf-app .gf-wall-filter:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: #4a4a4a;
+  color: var(--foreground);
+}
+.gf-app .gf-clip-style-option[aria-pressed="true"],
+.gf-app .gf-wall-filter[aria-pressed="true"],
+.gf-app .gf-clip-style-option[aria-pressed="true"]:hover:not(:disabled),
+.gf-app .gf-wall-filter[aria-pressed="true"]:hover:not(:disabled) {
+  background: #2b2b2b;
+  border-color: #6b6b6b;
+  color: #fafafa;
+  font-weight: 600;
+}
+
 .gf-app .gf-onboarding-choice:hover:not(:has(input:disabled)):not(.is-selected):not(:has(input:checked)) {
-  background: #232323;
-  border-color: var(--signal);
+  background: var(--surface-raised);
+  border-color: #4a4a4a;
 }
 .gf-app .gf-onboarding-choice.is-selected,
 .gf-app .gf-onboarding-choice:has(input:checked),
 .gf-app .gf-onboarding-choice.is-other.is-selected {
-  background: var(--peach);
-  border-color: var(--signal);
+  background: var(--selected);
+  border-color: var(--gf-grey-200);
 }
+
+/* View switchers: a raised neutral tab on a quiet track. */
+.gf-app .gf-fmap-segment,
+.gf-app .gf-library-tabs {
+  background: var(--surface);
+  border: 1px solid var(--divider);
+}
+.gf-app .gf-fmap-segment-selection {
+  background: #2a2a2a;
+  box-shadow: none;
+}
+.gf-app .gf-fmap-segment button,
+.gf-app.gf-flow-app .gf-library-tabs button {
+  color: var(--muted-foreground);
+}
+.gf-app .gf-fmap-segment button[aria-selected="true"],
+.gf-app .gf-fmap-segment button[aria-selected="true"]:hover,
+.gf-app.gf-flow-app .gf-library-tabs button[aria-pressed="true"] {
+  color: var(--foreground);
+  background: #2a2a2a;
+  box-shadow: none;
+}
+
+/* Settings sections read as a left-aligned list, like the sidebar. */
+.gf-app .gf-settings-sections button {
+  justify-content: flex-start;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.gf-app .gf-settings-sections button[aria-current="page"] {
+  background: rgba(255, 255, 255, .06);
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.gf-app .gf-library-tabs {
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+}
+.gf-app.gf-flow-app .gf-library-tabs button {
+  padding: 6px 12px;
+  border-radius: 7px;
+}
+.gf-app #gf-results-learned-title {
+  margin: 0 0 14px;
+}
+
+/* ── Meters and marks ─────────────────────────────────────────────────── */
+
+/* Confidence and time meters are measurements, not actions: neutral ink. */
+.gf-app .gf-results-belief-bar,
+.gf-app .gf-results-page.is-minimal .gf-results-belief-bar,
+.gf-app .gf-posted-window-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: #2a2a2a;
+}
+.gf-app .gf-results-belief-bar i {
+  background: var(--gf-grey-200);
+}
+.gf-app .gf-posted-window-bar i {
+  background: var(--gf-grey-400);
+}
+
+/* Native progress bars: dark track, violet fill while work is running. */
+.gf-app progress,
+.gf-activity progress {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border: 0;
+  border-radius: 2px;
+  background: #2a2a2a;
+  overflow: hidden;
+}
+.gf-app progress::-webkit-progress-bar,
+.gf-activity progress::-webkit-progress-bar {
+  background: #2a2a2a;
+  border-radius: 2px;
+}
+.gf-app progress::-webkit-progress-value,
+.gf-activity progress::-webkit-progress-value {
+  background: var(--gf-violet-400);
+  border-radius: 2px;
+}
+.gf-app progress::-moz-progress-bar,
+.gf-activity progress::-moz-progress-bar {
+  background: var(--gf-violet-400);
+  border-radius: 2px;
+}
+
 .gf-app .gf-rule-diff,
 .gf-app .gf-reason-chain > div > span,
 .gf-app .gf-from-site,
 .gf-app .gf-automation .gf-automation-badge,
 .gf-app .gf-speechless-chip,
 .gf-app .gf-system-attention {
-  border-color: rgba(175, 133, 243, .35);
+  border-color: var(--border-control);
 }
 .gf-app .gf-spinner {
-  border-color: rgba(175, 133, 243, .2);
-  border-top-color: var(--signal);
-}
-.gf-app .gf-page-heading h1,
-.gf-app .gf-landing-heading h1 {
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  border-color: rgba(255, 255, 255, .12);
+  border-top-color: var(--gf-violet-400);
 }
 
-/* Quiet, warm scrollbars. */
+/* ── Scrollbars ───────────────────────────────────────────────────────── */
+
 .gf-app *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 .gf-app *::-webkit-scrollbar-thumb {
-  background: rgba(19, 19, 19, .16);
+  background: rgba(255, 255, 255, .1);
   border: 3px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
 }
 .gf-app *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(19, 19, 19, .28);
+  background-color: rgba(255, 255, 255, .18);
 }
 .gf-app *::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* The command dialog and operational tools render outside .gf-app. */
+.gf-command-dialog h2 {
+  font-weight: 600;
+}
+.gf-operational h1 {
+  font-size: 26px;
+}
+.gf-onboarding-brand {
+  font-weight: 650;
+}
+
+/* ── Narrow windows: the sidebar becomes an icon rail ───────────────────────────────── */
+
+@media (max-width: 760px) {
+  .gf-app .gf-nav-item {
+    min-height: 56px;
+    padding: 8px 2px;
+    gap: 4px;
+  }
+  .gf-app .gf-sidebar-bottom > button {
+    min-height: 40px;
+    margin-bottom: 4px;
+    padding-inline: 0;
+    gap: 0;
+    font-size: 0;
+  }
+  .gf-app .gf-sidebar-bottom > button > span {
+    display: none;
+  }
+  .gf-app .gf-nav-item.active::before,
+  .gf-app .gf-sidebar-bottom > [aria-current="page"]::before {
+    left: -8px;
+    top: 14px;
+    bottom: 14px;
+  }
+  .gf-app .gf-page-heading h1,
+  .gf-app .gf-landing-heading h1 {
+    font-size: 26px;
+  }
+  .gf-app .gf-brand-row .gf-brand .gf-brand-logo {
+    width: 40px;
+    height: 22px;
+    flex-basis: 40px;
+  }
+  .gf-app .gf-brand-row .gf-brand {
+    width: auto;
+    padding: 0;
+    justify-content: center;
+  }
+  .gf-app.gf-flow-app .gf-factory-home .gf-upload-stage.is-compact {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 14px 16px;
+    padding: 18px;
+    text-align: left;
+  }
+  .gf-app.gf-flow-app .gf-factory-home .gf-upload-stage.is-compact > .gf-button {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+  .gf-app .gf-results-page.is-minimal .gf-results-strip > div {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 10px 14px;
+  }
 }

@@ -39,7 +39,7 @@ import "./polish.css";
 import "./pearl-studio.css";
 import "./shell-polish.css";
 import "./website-alignment.css";
-import "@fontsource-variable/bricolage-grotesque";
+import "@fontsource-variable/instrument-sans/wdth.css";
 import "./identity.css";
 import { cloudApi } from "./cloudApi";
 import { SettingsScreen, type SettingsSection } from "./SettingsScreen";
