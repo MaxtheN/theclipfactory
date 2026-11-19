@@ -9,6 +9,7 @@ import { Icon } from "./Icon";
 import { objectiveLabels } from "./Setup";
 import { BriefFields } from "./CampaignBrief";
 import { briefBody, briefProblem, emptyBrief } from "./briefModel";
+import { UnsavedNote, useUnsavedDraft } from "./unsavedDrafts";
 
 /**
  * A goal-scoped push inside the current workspace. It creates one campaign
@@ -38,6 +39,11 @@ export function NewCampaign({
   const [footage, setFootage] = useState<string[]>([]);
   const metricNeeded = objective !== "discovery";
   const valid = !!name.trim() && (!metricNeeded || !!metric.trim()) && !problem;
+  // Leaving closes this form, so anything typed is an Unsaved Draft.
+  const dirty =
+    !!name.trim() || objective !== "discovery" || !!metric.trim() || !!notes.trim() ||
+    footage.length > 0 || JSON.stringify(brief) !== JSON.stringify(emptyBrief());
+  useUnsavedDraft(dirty, { id: "new-campaign", screen: "campaign", label: "New campaign", discard: () => undefined });
   const blocked = w.busy || w.loading || !workspace;
   // Footage already in this workspace's campaigns: attaching reuses it, nothing is uploaded.
   const own = new Set(
@@ -178,6 +184,7 @@ export function NewCampaign({
         )}
       </div>
       <div className="gf-stage-action">
+        {dirty && <UnsavedNote />}
         <span>
           {problem ? `${problem} ` : ""}
           For {workspace?.name || "this brand"}.{" "}

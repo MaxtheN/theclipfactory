@@ -45,6 +45,8 @@ import { cloudApi } from "./cloudApi";
 import { SettingsScreen, type SettingsSection } from "./SettingsScreen";
 import { ActivityCenter, type ActivityTarget } from "./ActivityCenter";
 import { CLOUD_CHANGED } from "./appEvents";
+import { UnsavedDraftProvider, useDraftRegistry, type DraftFilter, type UnsavedDraft } from "./unsavedDrafts";
+import { createLibraryViewStore } from "./libraryViewState";
 
 const views = {
   factory: {
@@ -101,6 +103,9 @@ export type Stage = keyof typeof views;
 const accountHash = () => ["#connections", "#gf-accounts"].includes(window.location.hash);
 /** Where go() lands within a destination. */
 export type GoTarget = { section?: SettingsSection };
+/** The Primary Destination that owns a stage, for the nav's "not saved" marker. */
+const destinationOf = (stage: string): string =>
+  stage === "studio" ? "factory" : stage === "research" || stage === "campaign" ? "setup" : stage;
 function storedView(): Stage {
   if (accountHash()) return "settings";
   try {
@@ -134,6 +139,12 @@ export function GrowthApp() {
   const [preferredMode, setPreferredMode] = useState<"manual" | "agent">();
   const [preferredClip, setPreferredClip] = useState<string>();
   const [libraryView, setLibraryView] = useState<LibraryView>("edits");
+  // Library filters, view and scroll, per campaign, held above the Library stage.
+  const [libraryStore] = useState(createLibraryViewStore);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const drafts = useDraftRegistry();
+  const unsavedIn = (destination: string) =>
+    drafts.drafts.some((d) => destinationOf(d.screen) === destination);
   const [quickOpen, setQuickOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
@@ -156,6 +167,15 @@ export function GrowthApp() {
   const contextKey = `${w.campaign?.id || "empty"}-${w.profileId}`;
   const currentContext = useRef(contextKey);
   currentContext.current = contextKey;
+  useEffect(() => {
+    setLibraryView(libraryStore.get(contextKey).view ?? "edits");
+  }, [contextKey, libraryStore]);
+  function chooseLibraryView(view: LibraryView) {
+    libraryStore.patch(currentContext.current, { view });
+    setLibraryView(view);
+  }
+  const stageRef = useRef(stage);
+  stageRef.current = stage;
   useEffect(() => {
     setGoalsRequest({ context: contextKey, sequence: 0 });
     setDemoOpen(false);
@@ -267,12 +287,41 @@ export function GrowthApp() {
     }
     if (onboarding) {
       setQuickOpen(false);
-    } else heading.current?.focus();
-  }, [stage, onboarding]);
+      return;
+    }
+    // Read the saved position first: focusing the heading can scroll and overwrite it.
+    const restore = stage === "library" ? libraryStore.get(currentContext.current).scrollTop : null;
+    heading.current?.focus();
+    const scroller = workspaceRef.current;
+    if (restore === null || !scroller) return;
+    scroller.scrollTop = restore;
+    // Clips may lay out a frame later; apply again once they have.
+    const frame = typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame(() => { scroller.scrollTop = restore; })
+      : 0;
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [stage, onboarding, libraryStore]);
   const [activityRequest, setActivityRequest] = useState(0);
-  function go(next: Stage, target?: GoTarget) {
-    if (target?.section) setSettingsSection(target.section);
-    setStage(next);
+  /**
+   * Every navigation goes through here. Destinations stay mounted, so their Unsaved Drafts are kept;
+   * only leaving New campaign, whose form closes, asks first.
+   */
+  function go(next: Stage, target?: GoTarget, options?: { keepDrafts?: false; then?: () => void }) {
+    const move = () => {
+      if (target?.section) setSettingsSection(target.section);
+      setStage(next);
+      options?.then?.();
+    };
+    if (stageRef.current !== "campaign" || next === "campaign" || options?.keepDrafts === false) return move();
+    whenSafe("Leaving New campaign closes this form.", move, (d) => d.screen === "campaign");
+  }
+  /** Runs `then` once no matching draft is at risk: at once when none is, after the creator answers otherwise. */
+  function whenSafe(reason: string, then: () => void, filter?: DraftFilter) {
+    const answer = drafts.guard(reason, filter);
+    if (answer === true) then();
+    else void answer.then((ok) => ok && then());
   }
   useEffect(() => {
     function landOnAccounts() {
@@ -289,20 +338,29 @@ export function GrowthApp() {
   }, []);
   function newWorkspace() {
     if (blocked) return;
+    // Onboarding opens over the mounted workspace; cancelling it returns to any draft untouched.
     setOnboardingSession((n) => n + 1);
     setCreating(true);
     setStage("factory");
   }
   const openProduction: OpenProduction = (source, mode, clip) => {
-    setPreferredSource(source);
-    setPreferredMode(mode);
-    setPreferredClip(clip);
-    go("studio");
+    // Studio replaces its change request and caption when it opens another clip or episode.
+    const replaces = (d: UnsavedDraft) =>
+      d.screen === "studio" &&
+      d.record !== clip &&
+      (clip !== preferredClip || source !== preferredSource);
+    whenSafe("Studio is about to open another clip.", () => {
+      setPreferredSource(source);
+      setPreferredMode(mode);
+      setPreferredClip(clip);
+      go("studio");
+    }, replaces);
   };
   /** Open the focused brief editor from navigation and quick actions. */
   function openGoals() {
-    go("setup");
-    setGoalsRequest((request) => ({ context: contextKey, sequence: request.sequence + 1 }));
+    go("setup", undefined, {
+      then: () => setGoalsRequest((request) => ({ context: contextKey, sequence: request.sequence + 1 })),
+    });
   }
   function openRehearsal() {
     if (blocked || onboarding || !usable || currentContext.current !== contextKey) return;
@@ -451,7 +509,7 @@ export function GrowthApp() {
   );
 
   return (
-    <>
+    <UnsavedDraftProvider api={drafts.api}>
       <div
         className={`gf-app gf-flow-app${onboarding ? " is-onboarding" : ""}${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
       >
@@ -494,12 +552,14 @@ export function GrowthApp() {
                     primaryStage === id && !onboarding ? "page" : undefined
                   }
                   disabled={blocked || onboarding || !usable}
+                  aria-describedby={unsavedIn(id) ? "gf-unsaved-description" : undefined}
                   onClick={() => go(id)}
                 >
                   <Icon name={views[id].icon} size={18} />
                   <span>
                     <strong>{views[id].label}</strong>
                   </span>
+                  {unsavedIn(id) && <span className="gf-nav-unsaved" title="Not saved" aria-hidden="true" />}
                   {primaryStage === id && !onboarding && (
                     <span className="gf-active-dot" />
                   )}
@@ -511,13 +571,15 @@ export function GrowthApp() {
                 type="button"
                 className="gf-channel-settings"
                 aria-label="Brand profile"
+                aria-describedby={unsavedIn("setup") ? "gf-unsaved-description" : undefined}
                 aria-current={primaryStage === "setup" ? "page" : undefined}
-                title="Brand profile"
+                title={unsavedIn("setup") ? "Brand profile · Not saved" : "Brand profile"}
                 disabled={blocked || !usable || onboarding}
                 onClick={() => go("setup")}
               >
                 <Palette size={17} strokeWidth={1.6} aria-hidden="true" />
                 <span>Brand profile</span>
+                {unsavedIn("setup") && <span className="gf-nav-unsaved" aria-hidden="true" />}
               </button>
               <button
                 type="button"
@@ -539,7 +601,14 @@ export function GrowthApp() {
               )}
             </div>
           </aside>
-          <div className="gf-workspace">
+          <div
+            className="gf-workspace"
+            ref={workspaceRef}
+            onScroll={(e) => {
+              if (stageRef.current === "library")
+                libraryStore.patch(currentContext.current, { scrollTop: e.currentTarget.scrollTop });
+            }}
+          >
             <header className="gf-topbar" hidden={onboarding}>
               <div className="gf-context-switcher">
                 <label className="gf-workspace-switcher">
@@ -558,15 +627,17 @@ export function GrowthApp() {
                         : w.campaigns.find((c) => c.profile_ids.includes(next))
                             ?.id;
                       if (!target) return;
-                      setCreating(false);
-                      setPreferredClip(undefined);
-                      setPreferredSource(undefined);
-                      setPreferredMode(undefined);
-                      w.setProfileId(next);
-                      if (target !== w.selected) {
-                        setStage("factory");
-                        void w.select(target);
-                      }
+                      whenSafe("Switching brand reloads every screen.", () => {
+                        setCreating(false);
+                        setPreferredClip(undefined);
+                        setPreferredSource(undefined);
+                        setPreferredMode(undefined);
+                        w.setProfileId(next);
+                        if (target !== w.selected) {
+                          setStage("factory");
+                          void w.select(target);
+                        }
+                      });
                     }}
                   >
                     {onboarding && (
@@ -591,14 +662,17 @@ export function GrowthApp() {
                       value={w.selected}
                       disabled={blocked || w.loading}
                       onChange={(e) => {
-                        if (e.target.value === "__new_campaign__")
+                        const next = e.target.value;
+                        if (next === "__new_campaign__")
                           return go("campaign");
-                        if (e.target.value === "__brief__") return openGoals();
-                        setPreferredClip(undefined);
-                        setPreferredSource(undefined);
-                        setPreferredMode(undefined);
-                        setStage("factory");
-                        void w.select(e.target.value);
+                        if (next === "__brief__") return openGoals();
+                        whenSafe("Switching campaign reloads every screen.", () => {
+                          setPreferredClip(undefined);
+                          setPreferredSource(undefined);
+                          setPreferredMode(undefined);
+                          setStage("factory");
+                          void w.select(next);
+                        });
                       }}
                     >
                       {workspaceCampaigns.map((c) => (
@@ -739,8 +813,8 @@ export function GrowthApp() {
                       onProduce={openProduction}
                       onReview={reviewClip}
                       onLibrary={(view) => {
-                        if (view) setLibraryView(view);
-                        go("library");
+                        if (view) chooseLibraryView(view);
+                        void go("library");
                       }}
                       onDirection={() => go("research")}
                       onSettings={() => go("settings", { section: "models" })}
@@ -760,7 +834,8 @@ export function GrowthApp() {
                   onProduce={openProduction}
                   onFactory={() => go("factory")}
                   view={libraryView}
-                  onView={setLibraryView}
+                  onView={chooseLibraryView}
+                  viewState={{ store: libraryStore, key: contextKey }}
                 />
               </div>
               <div
@@ -826,8 +901,8 @@ export function GrowthApp() {
                     key={contextKey}
                     w={w}
                     factory={factory}
-                    onCreated={() => go("factory")}
-                    onCancel={() => go("setup")}
+                    onCreated={() => void go("factory", undefined, { keepDrafts: false })}
+                    onCancel={() => void go("setup", undefined, { keepDrafts: false })}
                   />
                 )}
               </div>
@@ -894,6 +969,10 @@ export function GrowthApp() {
         onDismiss={() => setQuickOpen(false)}
         actions={quickActions}
       />
-    </>
+      <span id="gf-unsaved-description" hidden>
+        Has changes that are not saved
+      </span>
+      {drafts.dialog}
+    </UnsavedDraftProvider>
   );
 }

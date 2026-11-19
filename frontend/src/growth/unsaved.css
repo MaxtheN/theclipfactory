@@ -1,0 +1,27 @@
+.gf-unsaved-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8a4b1f;
+  white-space: nowrap;
+}
+.gf-unsaved-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #b8622a;
+  flex: none;
+}
+.gf-nav-unsaved {
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: #b8622a;
+  flex: none;
+}
+.gf-unsaved-dialog p { margin: 0 0 10px; line-height: 1.5; }
+.gf-unsaved-dialog ul { margin: 0 0 14px; padding-left: 18px; line-height: 1.6; }
+.gf-unsaved-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }

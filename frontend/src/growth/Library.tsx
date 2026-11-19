@@ -13,6 +13,7 @@ import { ClipPreview, QuickLook } from "./ClipPreview";
 import { newestFirst, undirected } from "./productionState";
 import { deleteEpisode, discardClips, exportedClipIds, type Discarded } from "./storage";
 import { sourceHasActiveJob } from "../productionPreflight";
+import type { LibraryViewStore } from "./libraryViewState";
 
 export function Library({
   w,
@@ -22,6 +23,7 @@ export function Library({
   onFactory,
   view,
   onView,
+  viewState,
 }: {
   w: Workspace;
   factory: FactoryState;
@@ -31,21 +33,33 @@ export function Library({
   /** The open tab, when the shell drives it (another screen can open the wall directly). */
   view?: LibraryView;
   onView?: (view: LibraryView) => void;
+  /** Filters kept by the shell for this campaign, so returning to Library restores them. */
+  viewState?: { store: LibraryViewStore; key: string };
 }) {
-  const [own, setOwn] = useState<LibraryView>("edits");
+  const saved = viewState?.store.get(viewState.key);
+  const [own, setOwn] = useState<LibraryView>(saved?.view ?? "edits");
   const tab = view ?? own;
   const setTab = (next: LibraryView) => {
     setOwn(next);
+    viewState?.store.patch(viewState.key, { view: next });
     onView?.(next);
   };
-  const [query, setQuery] = useState("");
-  const [olderTests, setOlderTests] = useState(false);
+  const [query, setQuery] = useState(saved?.query ?? "");
+  const [olderTests, setOlderTests] = useState(saved?.olderTests ?? false);
   const [inspecting, setInspecting] = useState<Clip>();
+  // A different campaign starts from its own filters; the first render keeps the restored ones.
+  const scope = `${w.campaign?.id}|${w.profileId}`;
+  const shownScope = useRef(scope);
   useEffect(() => {
+    if (shownScope.current === scope) return;
+    shownScope.current = scope;
     setInspecting(undefined);
     setOlderTests(false);
     setQuery("");
-  }, [w.campaign?.id, w.profileId]);
+  }, [scope]);
+  useEffect(() => {
+    viewState?.store.patch(viewState.key, { query, olderTests });
+  }, [viewState?.store, viewState?.key, query, olderTests]);
   const ids = w.campaign?.video_ids || [];
   const sources = factory.data.videos.filter((v) => ids.includes(v.id));
   const clips = factory.data.clips.filter(
@@ -208,6 +222,8 @@ export function Library({
             onFactory={onFactory}
             onDiscard={discard}
             locked={locked}
+            initial={saved}
+            onFilters={(part) => viewState?.store.patch(viewState.key, part)}
           />
         </div>
       ) : tab === "edits" ? (
@@ -414,6 +430,8 @@ function ReviewWall({
   onFactory,
   onDiscard,
   locked,
+  initial,
+  onFilters,
 }: {
   clips: Clip[];
   sourceIds: string[];
@@ -422,17 +440,29 @@ function ReviewWall({
   /** Deletes the given clips' files after asking; false when the person declined. */
   onDiscard: (clips: Clip[], picked?: boolean) => Promise<boolean>;
   locked: boolean;
+  /** Filters to restore when the creator returns. */
+  initial?: { filter: string; hypothesis: string };
+  onFilters?: (filters: { filter: WallFilter; hypothesis: string }) => void;
 }) {
-  const [filter, setFilter] = useState<WallFilter>("All clips");
+  const [filter, setFilter] = useState<WallFilter>(() =>
+    wallFilters.find((f) => f === initial?.filter) ?? "All clips",
+  );
   // Batch mode: cards toggle a selection instead of opening review.
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
-  const [hypothesis, setHypothesis] = useState("");
+  const [hypothesis, setHypothesis] = useState(initial?.hypothesis ?? "");
+  const reportFilters = useRef(onFilters);
+  reportFilters.current = onFilters;
+  useEffect(() => {
+    reportFilters.current?.({ filter, hypothesis });
+  }, [filter, hypothesis]);
   const hypotheses = [
     ...new Set(clips.map((c) => c.hypothesis).filter((h): h is string => !!h)),
   ].sort();
+  // A restored hypothesis applies only while it is still offered, so no filter hides clips unseen.
+  const activeHypothesis = hypotheses.length > 1 && hypotheses.includes(hypothesis) ? hypothesis : "";
   const scoped = newestFirst(clips).filter(
-    (c) => !hypothesis || c.hypothesis === hypothesis,
+    (c) => !activeHypothesis || c.hypothesis === activeHypothesis,
   );
   const matches = (c: Clip, f: WallFilter) => f === "All clips" || (f === "Posted" ? posted(c) : !!c.rank?.below_bar || !!c.made_without_speech);
   const shown = scoped.filter((c) => matches(c, filter));
@@ -499,7 +529,7 @@ function ReviewWall({
         {hypotheses.length > 1 && (
           <select
             aria-label="Filter by hypothesis"
-            value={hypothesis}
+            value={activeHypothesis}
             onChange={(e) => setHypothesis(e.target.value)}
           >
             <option value="">All hypotheses</option>

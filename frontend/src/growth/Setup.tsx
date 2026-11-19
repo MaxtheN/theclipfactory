@@ -1,4 +1,5 @@
 import { AutoTextarea } from "../components/AutoTextarea";
+import { UnsavedNote, useUnsavedDraft } from "./unsavedDrafts";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../api";
 import type { FactoryState } from "../useFactory";
@@ -225,6 +226,23 @@ export function Setup({
   const [savedBrandDraft, setSavedBrandDraft] = useState(brandDraft);
   const brandDirty = JSON.stringify(brandDraft) !== JSON.stringify(savedBrandDraft);
   const kitDirty = JSON.stringify(brandDraft.kit) !== JSON.stringify(savedBrandDraft.kit);
+  useUnsavedDraft(part === "brand" && brandDirty, {
+    id: "brand-profile",
+    screen: "setup",
+    label: "Brand profile",
+    save: () => save(),
+    discard: () => {
+      setBrandName(savedBrandDraft.name);
+      setAudience(savedBrandDraft.audience);
+      setVoice(savedBrandDraft.voice);
+      setCreative(savedBrandDraft.creative);
+      setFontFamily(savedBrandDraft.kit.font);
+      setPrimary(savedBrandDraft.kit.primary);
+      setAccent(savedBrandDraft.kit.accent);
+      setLogo(savedBrandDraft.kit.logo);
+      setKitEdited(false);
+    },
+  });
   function confirmBrandDraft() {
     const sent = attempt.current;
     if (sent?.part !== "brand") return;
@@ -320,8 +338,9 @@ export function Setup({
     };
   }
 
-  async function save() {
-    if (blocked || needsReadback || !valid || !campaign || !profile) return;
+  /** Resolves true only when the save was written and confirmed. */
+  async function save(): Promise<boolean> {
+    if (blocked || needsReadback || !valid || !campaign || !profile) return false;
     const campaignId = campaign.id,
       profileId = profile.id;
     // Assigned inside the task; casts stop TypeScript narrowing them here.
@@ -373,7 +392,7 @@ export function Setup({
         ? "Brand profile saved. Style rules and earlier clips are unchanged."
         : "Goals saved. Style rules and earlier clips are unchanged.",
     );
-    if (!started) return;
+    if (!started) return false;
     if (ok) {
       confirmBrandDraft();
       setLinkProfiles([]);
@@ -381,7 +400,7 @@ export function Setup({
       setKitEdited(false);
       setState({ kind: "saved", message: "Saved and confirmed." });
       onSaved();
-      return;
+      return true;
     }
     // 5. Keep every draft and say exactly what may have been written.
     if (!failure)
@@ -413,6 +432,7 @@ export function Setup({
         kind: "unknown",
         message: `${failure} Your changes were sent but could not be confirmed. Check saved state before saving again.`,
       });
+    return false;
   }
 
   /** True when the saved record matches the last attempt exactly. */
@@ -959,6 +979,7 @@ export function Setup({
   const identityNeedsAttention = part === "brand" && !brandName.trim() && editor !== "identity";
   const saveActions = part === "brand" && !brandDirty && state.kind === "idle" ? null : (
       <div className={`gf-stage-action${part === "brand" ? " gf-profile-save-status" : ""}${part === "brand" && !brandDirty ? " is-clean" : ""}`}>
+        {part === "brand" && brandDirty && <UnsavedNote />}
         <span
           role={
             state.kind === "idle"

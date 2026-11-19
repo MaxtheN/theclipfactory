@@ -14,6 +14,7 @@ import { ApiError } from "../api";
 import { workspaceApi } from "./workspaceApi";
 import { FactoryHome } from "./FactoryHome";
 import { Library } from "./Library";
+import { createLibraryViewStore } from "./libraryViewState";
 
 vi.mock("./workspaceApi", () => ({
   reviewPreview: false,
@@ -980,5 +981,48 @@ describe("Factory imports and scoped Library", () => {
     );
     expect(review).toHaveBeenCalledExactlyOnceWith(illustrative);
     expect(illustrative.approved).toBe(false);
+  });
+});
+
+describe("Library view state", () => {
+  const ideas: Clip[] = [
+    { ...clip, id: "h1", name: "Hook idea", hypothesis: "hook_first" },
+    { ...clip, id: "h2", name: "Story idea", hypothesis: "story_first" },
+  ];
+  function library(store = createLibraryViewStore(), key = "c1|p1") {
+    return (
+      <Library
+        w={workspace()}
+        factory={factory(ideas)}
+        onReview={vi.fn()}
+        onProduce={vi.fn()}
+        onFactory={vi.fn()}
+        viewState={{ store, key }}
+      />
+    );
+  }
+  it("restores the tab, search, wall filter and hypothesis when the creator comes back", () => {
+    const store = createLibraryViewStore();
+    const first = render(library(store));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter library" }), { target: { value: "idea" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Clip wall/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Quality holds/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by hypothesis" }), { target: { value: "story_first" } });
+    first.unmount();
+
+    render(library(store));
+    expect(screen.getByRole("searchbox", { name: "Filter library" })).toHaveValue("idea");
+    expect(screen.getByRole("button", { name: /^Quality holds/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("combobox", { name: "Filter by hypothesis" })).toHaveValue("story_first");
+  });
+  it("keeps each campaign's filters apart and ignores a hypothesis that no longer exists", () => {
+    const store = createLibraryViewStore();
+    store.patch("c1|p1", { view: "wall", hypothesis: "retired_idea", query: "" });
+    store.patch("c2|p1", { query: "other campaign" });
+    render(library(store));
+    expect(screen.getByRole("searchbox", { name: "Filter library" })).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Filter by hypothesis" })).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Edit Hook idea" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Story idea" })).toBeInTheDocument();
   });
 });
