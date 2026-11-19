@@ -24,6 +24,7 @@
 }
 .gf-upgrades-muted { color: var(--up-muted); font-size: 13px; line-height: 1.45; margin: 0; }
 .gf-upgrades-error { color: var(--up-bad); font-size: 13px; margin: 8px 0 0; }
+.gf-upgrades-warning { color: var(--up-bad); font-size: 13px; line-height: 1.45; margin: 0; }
 .gf-upgrades-empty { display: grid; gap: 8px; justify-items: start; margin-top: 14px; }
 .gf-upgrades-empty p { margin: 0; font-size: 14px; }
 .gf-upgrades-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
