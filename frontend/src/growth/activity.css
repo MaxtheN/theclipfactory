@@ -1,0 +1,116 @@
+/* Activity Center: shell trigger and panel (WO-17). */
+.gf-activity-trigger {
+  position: relative;
+  flex-shrink: 0;
+}
+.gf-activity-trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.gf-activity-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 18px;
+  text-align: center;
+  color: var(--material-button-ink, #fff);
+  background: var(--material-button, #2f6f5e);
+}
+.gf-activity-alert {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--material-danger, #c2412d);
+  box-shadow: 0 0 0 2px var(--material-shell, #fff);
+}
+.gf-activity-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.gf-activity {
+  display: grid;
+  gap: 16px;
+}
+.gf-activity h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--material-secondary, #62786b);
+}
+.gf-activity ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.gf-activity-item {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--material-line, #8da89b45);
+  border-radius: 10px;
+  background: var(--material-pane, transparent);
+}
+.gf-activity-item.is-failed {
+  border-color: color-mix(in srgb, var(--material-danger, #c2412d) 55%, transparent);
+}
+.gf-activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.gf-activity-status.is-active {
+  color: var(--material-ink);
+}
+.gf-activity-status.is-failed {
+  color: var(--material-danger, #c2412d);
+}
+.gf-activity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--material-secondary, #62786b);
+}
+.gf-activity-progress {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--material-secondary, #62786b);
+}
+.gf-activity-progress progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--material-button, #2f6f5e);
+}
+.gf-activity-failure {
+  margin: 0;
+  font-size: 13px;
+  color: var(--material-ink);
+}
+.gf-activity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gf-activity-empty {
+  margin: 0;
+  color: var(--material-secondary, #62786b);
+}

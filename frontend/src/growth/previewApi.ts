@@ -349,6 +349,7 @@ function route(
       ],
     };
   if (method === "GET" && path === "/api/team/runs") return [];
+  if (method === "GET" && path === "/api/publish-attempts") return [];
   if (method === "GET" && resource === "exports") return [];
   if (
     method === "GET" &&
