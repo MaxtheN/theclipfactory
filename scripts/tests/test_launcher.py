@@ -122,6 +122,32 @@ def test_native_close_cleanup(monkeypatch, parent):
     assert parent["stopped"]
 
 
+def test_windowed_launch_without_console_streams(monkeypatch, parent):
+    """A windowed Windows executable has no stdout or stderr; uvicorn's logging must still start."""
+    class Closed:
+        def __iadd__(self, callback):
+            self.callback = callback
+            return self
+
+    closed = Closed()
+    window = types.SimpleNamespace(events=types.SimpleNamespace(closed=closed), destroy=lambda: None)
+
+    def start(callback, **kwargs):
+        closed.callback()
+        callback()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "webview",
+        types.SimpleNamespace(settings={}, create_window=lambda *a, **k: window, start=start),
+    )
+    monkeypatch.setattr(launcher.sys, "stdout", None)
+    monkeypatch.setattr(launcher.sys, "stderr", None)
+    assert launcher.main([]) == 0
+    assert parent["stopped"]
+    assert sys.stdout is not None and sys.stderr is not None
+
+
 def test_no_implicit_browser_fallback(monkeypatch, parent, capsys):
     def fail(*args, **kwargs):
         raise RuntimeError("sensitive GUI failure")

@@ -48,6 +48,17 @@ def preserve_tool_path() -> None:
     os.environ["PATH"] = os.pathsep.join(filter(None, paths))
 
 
+def ensure_std_streams() -> None:
+    """A windowed Windows executable starts with sys.stdout and sys.stderr set to None.
+
+    uvicorn's logging setup, argparse and engine progress output all write to them, so give
+    a console-less process null streams instead of failing at startup.
+    """
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))  # noqa: SIM115 - lives for the process
+
+
 def stop_signals() -> list[signal.Signals]:
     """Signals that ask the app to stop. Windows delivers Ctrl+Break (SIGBREAK) to a console process group."""
     return [signal.SIGINT, signal.SIGTERM, *([signal.SIGBREAK] if hasattr(signal, "SIGBREAK") else [])]
@@ -152,6 +163,7 @@ def show_launch_error(message: str, log: Path | None = None):
 
 
 def main(argv: list[str] | None = None) -> int:
+    ensure_std_streams()
     parser = argparse.ArgumentParser(description="Clip Factory local desktop")
     parser.add_argument("--host", type=loopback_host, default="127.0.0.1")
     parser.add_argument("--port", type=port_number, default=0, help="0 selects an available local port")
