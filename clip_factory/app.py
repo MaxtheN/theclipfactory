@@ -644,6 +644,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "ffmpeg_captions": media.can_burn_captions(),
             "os": {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux"),
             "whisper": whisper,
+            # Which local speech engine and device this computer transcribes with.
+            "speech": models().speech_status(),
             "model_runtime": runtime_ready,
             # Cheap file checks: files removed from disk after setup show up as "damaged".
             "integrity": models().integrity(),
@@ -703,7 +705,10 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             whisper_needed = health[speech.ASR_MODEL]["state"] != "ok"
             if not runtime_needed and not whisper_needed:
                 raise HTTPException(409, "Speech recognition is already set up.")
-            needed_gb = (2 if runtime_needed else 0) + (
+            plan = speech.steps()
+            if not plan:
+                raise HTTPException(409, speech.UNSUPPORTED)
+            needed_gb = (plan["runtime"]["approx_gb"] if runtime_needed else 0) + (
                 models().item(speech.ASR_MODEL)["estimated_gb"] if whisper_needed else 0
             )
             if shutil.disk_usage(root).free < (needed_gb + 3) * 1e9:
@@ -714,12 +719,12 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 done = []
                 for index, step in enumerate(steps):
                     # Size-weighted share of one progress bar for each step.
-                    weights = [speech.STEPS[s]["approx_gb"] for s in steps]
+                    weights = [plan[s]["approx_gb"] for s in steps]
                     low = round(98 * sum(weights[:index]) / sum(weights))
                     high = round(98 * sum(weights[: index + 1]) / sum(weights))
                     banded = speech.BandedJobs(jobs(), job, low, high, step=step, step_index=index + 1, step_count=len(steps))
                     worker = Models(root, banded)
-                    banded.update(job, progress=0, message=f"Step {index + 1} of {len(steps)}: {speech.STEPS[step]['label']}")
+                    banded.update(job, progress=0, message=f"Step {index + 1} of {len(steps)}: {plan[step]['label']}")
                     if step == "runtime":
                         worker.setup(job)
                     else:
