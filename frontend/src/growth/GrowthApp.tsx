@@ -491,18 +491,6 @@ export function GrowthApp() {
               <button
                 type="button"
                 className="gf-channel-settings"
-                aria-label="Settings"
-                aria-current={primaryStage === "settings" ? "page" : undefined}
-                title="Settings"
-                disabled={blocked || !usable || onboarding}
-                onClick={() => go("settings")}
-              >
-                <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
-                <span>Settings</span>
-              </button>
-              <button
-                type="button"
-                className="gf-channel-settings"
                 aria-label="Brand profile"
                 aria-current={primaryStage === "setup" ? "page" : undefined}
                 title="Brand profile"
@@ -511,6 +499,18 @@ export function GrowthApp() {
               >
                 <Palette size={17} strokeWidth={1.6} aria-hidden="true" />
                 <span>Brand profile</span>
+              </button>
+              <button
+                type="button"
+                className="gf-channel-settings"
+                aria-label="Settings"
+                aria-current={primaryStage === "settings" ? "page" : undefined}
+                title="Settings"
+                disabled={blocked || !usable || onboarding}
+                onClick={() => go("settings")}
+              >
+                <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
+                <span>Settings</span>
               </button>
               {accountEmail && (
                 <p className="gf-sidebar-account" title={`Signed in as ${accountEmail}`}>
