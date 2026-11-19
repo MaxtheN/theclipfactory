@@ -10,6 +10,7 @@ import { cloudApi, type CloudStatus } from "./cloudApi";
 import { announceCloudChange } from "./appEvents";
 import { Field } from "./parts";
 import { Icon } from "./Icon";
+import { platformWords } from "../platform";
 
 export type Mode = "sign-in" | "sign-up";
 type Phase = "checking" | "form" | "signed-in";
@@ -24,7 +25,7 @@ function message(error: unknown) {
 }
 
 /** Shared account state: email + password go straight to the local backend
- * (which keeps the session in the Keychain); the password is never stored and
+ * (which keeps the session in the OS key store); the password is never stored and
  * is cleared after every completed request. */
 export function useCloudAccount(initialMode: Mode = "sign-in") {
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -306,7 +307,7 @@ export function CloudSignIn({
               ? "Sign in to Growth Factory"
               : "Create your Growth Factory account"}
           </h2>
-          <p>Your footage stays on this Mac. An account keeps this brand linked to you.</p>
+          <p>Your footage stays on {platformWords().computer}. An account keeps this brand linked to you.</p>
           <CloudAccountFields account={account} />
           <footer className="gf-cloud-actions">
             <button
@@ -347,7 +348,7 @@ export function CloudAccountRow({
   showLocal = false,
 }: {
   onSignIn?: () => void;
-  /** Say "this Mac only" instead of rendering nothing when accounts are not set up. */
+  /** Say "this computer only" instead of rendering nothing when accounts are not set up. */
   showLocal?: boolean;
 }) {
   const [status, setStatus] = useState<CloudStatus | null>(null);
@@ -369,7 +370,7 @@ export function CloudAccountRow({
   if (!status?.configured && !error)
     return showLocal && status ? (
       <div className="gf-cloud-account-row" aria-label="Growth Factory account">
-        <span>Accounts aren't set up on this Mac. Everything stays local.</span>
+        <span>Accounts aren't set up on {platformWords().computer}. Everything stays local.</span>
       </div>
     ) : null;
 
@@ -417,7 +418,7 @@ export function CloudAccountRow({
       ) : (
         status?.configured && (
           <>
-            <span>Not signed in. Everything stays on this Mac.</span>
+            <span>Not signed in. Everything stays on {platformWords().computer}.</span>
             {
               <button
                 type="button"

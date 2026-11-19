@@ -1,6 +1,8 @@
 export type JsonObject = Record<string, unknown>;
 export interface SystemInfo {
   platform?: string;
+  /** The operating system the local service runs on. */
+  os?: "macos" | "windows" | "linux";
   apple_silicon?: boolean | null;
   memory_gb?: number | null;
   free_disk_gb?: number | null;
@@ -17,6 +19,35 @@ export interface SystemInfo {
   engine?: EngineStatus;
   /** The local speech engine and the device it transcribes on. */
   speech?: SpeechEngine;
+  /** Which engine runs agent roles, Ollama state, the hardware check and any blocker. */
+  agents?: AgentsState;
+}
+/** One model the engine recommends for agent roles off the Mac (pulled through Ollama). */
+export interface AgentModel {
+  id: string;
+  tag: string;
+  name: string;
+  download_gb: number;
+  min_ram_gb: number;
+  min_vram_gb: number;
+  license: string;
+  note: string;
+  fits: boolean;
+  device: "cuda" | "cpu" | null;
+  installed: boolean;
+  recommended: boolean;
+}
+export interface AgentsState {
+  /** "mlx" on Apple Silicon, "ollama" on Windows and Linux. */
+  engine: "mlx" | "ollama";
+  ollama: { installed: boolean; running: boolean; install_url: string };
+  hardware: { ram_gb: number; gpu: string | null; vram_gb: number | null };
+  minimum_ram_gb: number;
+  recommended: { text: string; vision: string } | null;
+  catalogue: AgentModel[];
+  /** Agent roles use the creator's own cloud key, so the local check is skipped. */
+  cloud: boolean;
+  blocker: FactoryBlocker | null;
 }
 export interface SpeechEngine {
   /** "mlx" on Apple Silicon, "faster-whisper" on Windows/Linux x64, null where no local engine runs. */
@@ -259,9 +290,14 @@ export interface FactoryBlocker {
   message: string;
   tab: string | null;
   scope?: string;
-  action?: "speech_setup" | null;
+  /** speech_setup: one-time speech download. check: look for Ollama again. pull: download model_id. */
+  action?: "speech_setup" | "check" | "pull" | null;
   steps?: EngineStep[];
   download_gb?: number;
+  /** Agents blockers: what still works ("openrouter_key", "manual"). */
+  alternatives?: string[];
+  install_url?: string;
+  model_id?: string;
 }
 /** GET /api/factory: the production line, computed by the local service. */
 export interface FactoryLine {

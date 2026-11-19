@@ -58,3 +58,7 @@
 .gf-local-engine-tools-body .field label { font-size: 12px; }
 .gf-app .gf-local-engine-tools-body .panel { background: transparent; border: 0; box-shadow: none; }
 .gf-local-engine-tools-body textarea { width: 100%; max-width: 100%; }
+.gf-agent-alternatives { margin-top: 14px; font-size: 12px; line-height: 1.6; color: var(--material-secondary); }
+.gf-agent-alternatives strong { display: block; color: var(--material-primary, inherit); font-weight: 550; margin-bottom: 4px; }
+.gf-agent-alternatives ul { margin: 0; padding-left: 18px; }
+.gf-agent-setup > p { font-size: 13px; line-height: 1.6; margin: 0 0 12px; }

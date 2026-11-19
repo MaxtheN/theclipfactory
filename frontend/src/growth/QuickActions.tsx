@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { Icon } from "./Icon";
+import { platformWords } from "../platform";
 
 export type QuickAction = {
   id: string;
@@ -280,7 +281,7 @@ export function QuickActions({
           <span><kbd>↵</kbd> open</span>
           <span><kbd>esc</kbd> close</span>
           <span className="gf-command-footer-spacer" />
-          <span><kbd>⌘</kbd><kbd>K</kbd> toggle</span>
+          <span>{platformWords().paletteKeys.map((key) => <kbd key={key}>{key}</kbd>)} toggle</span>
         </div>
       </div>
     </dialog>

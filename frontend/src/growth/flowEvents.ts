@@ -17,6 +17,7 @@ import type {
 } from "../types";
 import type { StrategistView } from "./strategistApi";
 import { builderStatus, STATUS_LABEL, type FactoryBuilderView } from "./factoryBuilderApi";
+import { platformWords } from "../platform";
 
 export type StationId =
   | "footage"
@@ -384,7 +385,7 @@ export function deriveFactoryMap(input: MapInput): FactoryMapModel {
       state = "active";
       status =
         jobLine(jobFor(activeRow.source)) ||
-        (id === "listen" ? "Transcribing on this Mac" : "Watching the footage");
+        (id === "listen" ? `Transcribing on ${platformWords().computer}` : "Watching the footage");
     } else if (failedRow) {
       state = "failed";
       status = failedRow.stage?.detail || "Stopped here";
@@ -472,7 +473,7 @@ export function deriveFactoryMap(input: MapInput): FactoryMapModel {
             rows: [
               { label: "Run ID", value: run.id },
               { label: "Mode", value: run.mode === "swarm" ? "Whole episode, best first" : run.mode === "team" ? "Deep edit" : "Baseline" },
-              { label: "Model", value: `${run.model_id} (on this Mac)` },
+              { label: "Model", value: `${run.model_id} (on ${platformWords().computer})` },
               { label: "Status", value: run.status.replace(/_/g, " ") },
             ],
           },
@@ -985,9 +986,9 @@ export function runLedger(run: TeamRun, clips: Clip[], now: number): RunLedger {
     overrides: mine.filter((c) => c.approval_override).length,
     cost: {
       inference: "$0",
-      note: `Model fees: none. ${run.model_id} runs on this Mac.`,
+      note: `Model fees: none. ${run.model_id} runs on ${platformWords().computer}.`,
       excluded: [
-        "Electricity and the Mac itself",
+        `Electricity and the ${platformWords().device} itself`,
         "Your review time",
         "Instagram and any paid promotion (off)",
       ],

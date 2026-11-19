@@ -774,7 +774,7 @@ export async function previewRequest<T>(
       blockers: [
         {
           code: "preview",
-          message: "Review preview: production runs only in the Mac app.",
+          message: "Review preview: production runs only in the desktop app.",
           tab: null,
         },
       ],
@@ -795,7 +795,7 @@ export async function previewRequest<T>(
       runs: [],
       measured_posts: 0,
       due_layers: [],
-      caveat: "Review preview: no measured posts. The Strategist learns from posts measured in the Mac app.",
+      caveat: "Review preview: no measured posts. The Strategist learns from posts measured in the desktop app.",
       simulated: false,
     } as T;
   const s = state();

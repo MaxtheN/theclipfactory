@@ -18,6 +18,8 @@ import { JourneyProgress } from "./JourneyProgress";
 import { reviewOrder } from "./clipRanking";
 import { sourceLabel, SourceDetails } from "./sourcePresentation";
 import { SpeechSetup, engineOf, speechBlocked } from "./SpeechSetup";
+import { AgentSetup, agentsBlocker } from "./AgentSetup";
+import { platformWords } from "../platform";
 
 export type OpenProduction = (
   sourceId?: string,
@@ -653,7 +655,9 @@ export function FactoryHome({
         <ClipStyleSheet w={w} onFullRules={onDirection} />
       )}
       {/* No local model: name the owning Settings section instead of a dead end. */}
-      {line && !modelId && !!direction && onSettings && (
+      {/* Off the Mac: Ollama, the model download or the hardware check, with alternatives. */}
+      {!!direction && agentsBlocker(factory) && <AgentSetup factory={factory} />}
+      {line && !modelId && !!direction && onSettings && !agentsBlocker(factory) && (
         <p className="gf-message" role="status">
           Finding clips needs a local model.{" "}
           <button type="button" className="gf-link-button" onClick={onSettings}>
@@ -698,7 +702,7 @@ export function FactoryHome({
           }
           message={
             phase === "uploading"
-              ? "Saving the file on this Mac."
+              ? `Saving the file on ${platformWords().computer}.`
               : phase === "attaching"
                 ? "Saved. Adding it to your brand."
                 : "Confirming the episode is attached."

@@ -16,6 +16,7 @@ import { SourceTranscript } from "./SourceTranscript";
 import { CraftControls, craftFromPlan, craftPlan, freshCraft } from "./CraftControls";
 import { JourneyProgress } from "./JourneyProgress";
 import { SpeechSetup, SpeechlessChip } from "./SpeechSetup";
+import { AgentSetup, agentsBlocker } from "./AgentSetup";
 import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
 import { PostToInstagram } from "./PostToInstagram";
@@ -263,7 +264,10 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     await reconcile(clip);
   }
   if (!w.campaign) return <Empty title="Nothing set up yet" icon="studio">Set up your brand to start.</Empty>;
-  const blockers = mode === "agent" ? [...ready.agent, ...(reviewPreview ? ["Agents run in the Mac app, not in this preview."] : []), ...(ledgerError ? ["Agent status is unavailable. Refresh before starting."] : [])] : [...ready.manual, ...edits, ...(revisionError ? [revisionError] : [])];
+  const blockers = mode === "agent" ? [...ready.agent, ...(reviewPreview ? ["Agents run in the desktop app, not in this preview."] : []), ...(ledgerError ? ["Agent status is unavailable. Refresh before starting."] : [])] : [...ready.manual, ...edits, ...(revisionError ? [revisionError] : [])];
+  // The engine's agents blocker shows with its own steps (Ollama, the model download) and alternatives.
+  const agentBlock = mode === "agent" ? agentsBlocker(factory) : null;
+  const agentFirst = !!agentBlock && blockers[0] === agentBlock.message;
   const exportRows = exportsState.clipId === selected?.id ? exportsState.rows : [];
   const making = !selected || !!revisionParent;
   const visibleLabel = sourceLabel(visibleSourceId, w.campaign.video_ids);
@@ -338,7 +342,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
         {revisionDirty && <UnsavedNote>Change request not sent</UnsavedNote>}
         {/* One reason at a time: the first thing to fix. */}
         {mode === "agent" && !revisionParent && <Field label="What should the agents look for? (optional)" hint="Used for this run only, within your style rules.">{id => <AutoTextarea id={id} rows={2} maxLength={DIRECTION_MAX} value={lookFor} disabled={busy} placeholder="e.g. the spiciest takes on AI policy, under 40s" onChange={e => setLookFor(e.target.value)} />}</Field>}
-        {!direction ? <ClipStyleSheet w={w} onFullRules={onDirection} /> : blockers[0] && <p className="gf-help">{blockers[0]}</p>}
+        {!direction ? <ClipStyleSheet w={w} onFullRules={onDirection} /> : agentFirst ? <AgentSetup factory={factory} variant="inline" /> : blockers[0] && <p className="gf-help">{blockers[0]}</p>}
         {mode === "agent" && !!source && source.has_audio !== false && source.transcript == null && <SpeechSetup factory={factory} />}
         <PrimaryAction full label={busy ? "Queuing…" : mode === "agent" ? "Let agents find clips" : revisionParent ? "Render a new revision" : "Make this clip"} intent="produce" disabled={busy || blockers.length > 0} onClick={() => void render()} />
         {revisionParent && <button className="gf-button ghost full" onClick={() => setRevisionParent(undefined)}>Back to review</button>}
@@ -349,7 +353,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
           {reviewReason && <p className="gf-help">{reviewReason}</p>}
           {!reviewPreview && !playbackReady && !playbackError && <p className="gf-help">Play the clip before approving.</p>}
           <div className="gf-inspector-footer">
-            {selected.approved ? <button className="gf-button full" disabled={!reviewReady || reviewPreview || uncertainExports.has(selected.id)} onClick={() => void exportClip(selected)}><Icon name="download" size={16} />{reviewPreview ? "Export · Mac app only" : "Export approved MP4"}</button> : <PrimaryAction full label="Approve this clip" intent="approve" disabled={!reviewReady} onClick={() => void perform(() => productionApi.review(selected, true), reviewPreview ? "Sample accepted; no real approval recorded." : "Approved. You can export it now.")} />}
+            {selected.approved ? <button className="gf-button full" disabled={!reviewReady || reviewPreview || uncertainExports.has(selected.id)} onClick={() => void exportClip(selected)}><Icon name="download" size={16} />{reviewPreview ? "Export · desktop app only" : "Export approved MP4"}</button> : <PrimaryAction full label="Approve this clip" intent="approve" disabled={!reviewReady} onClick={() => void perform(() => productionApi.review(selected, true), reviewPreview ? "Sample accepted; no real approval recorded." : "Approved. You can export it now.")} />}
             <button className="gf-button secondary full" disabled={busy} onClick={() => revise(selected)}>Request a change<Icon name="settings" size={15} /></button>
           </div>
           {/* The hosted preview shows the post package with illustrative data; posting stays off there. */}
@@ -361,7 +365,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
             <ClipEvidence clip={selected} />
             {selected.team_run_id && <button className="gf-button ghost full" disabled={busy || stale || factory.data.jobs.some(j => activeJob(j) && object(j.context)?.video_id === selected.video_id) || reviewPreview} onClick={() => void perform(async () => { const exact = selected.approved ? await productionApi.review(selected, false) : selected; await productionApi.recheck(exact); }, "Recheck queued. This version needs fresh approval afterwards.")}>Recheck technical critique</button>}
             <h3>Exports</h3>
-            {reviewPreview ? <p>Exports run in the Mac app.</p> : <><button className="gf-button ghost" disabled={busy} onClick={() => void reconcile(selected)}>Refresh export history</button>{exportsState.error && <p role="alert">{exportsState.error}</p>}{uncertainExports.has(selected.id) && <p className="gf-help">An export was submitted for this version. Check history before exporting again; it won't be resent automatically.</p>}{!exportRows.length && <p>No exports yet.</p>}{exportRows.map(record => <div key={record.id}><strong>{record.created_at}</strong><p>{record.location}</p><a className="gf-button ghost" href={exportMediaUrl(record.id)} download>Download MP4</a><a className="gf-button ghost" href={exportManifestUrl(record.id)} download>Download manifest</a></div>)}</>}
+            {reviewPreview ? <p>Exports run in the desktop app.</p> : <><button className="gf-button ghost" disabled={busy} onClick={() => void reconcile(selected)}>Refresh export history</button>{exportsState.error && <p role="alert">{exportsState.error}</p>}{uncertainExports.has(selected.id) && <p className="gf-help">An export was submitted for this version. Check history before exporting again; it won't be resent automatically.</p>}{!exportRows.length && <p>No exports yet.</p>}{exportRows.map(record => <div key={record.id}><strong>{record.created_at}</strong><p>{record.location}</p><a className="gf-button ghost" href={exportMediaUrl(record.id)} download>Download MP4</a><a className="gf-button ghost" href={exportManifestUrl(record.id)} download>Download manifest</a></div>)}</>}
           </PanelDialog>
         </div>
       </>}

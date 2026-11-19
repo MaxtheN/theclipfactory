@@ -1,8 +1,9 @@
 import { useEffect, useId, useState } from "react";
 import { api } from "../api";
 import "./ai-model.css";
+import { platformWords } from "../platform";
 
-/** Optional cloud model (OpenRouter, the creator's own key in macOS Keychain). The key never comes back. */
+/** Optional cloud model (OpenRouter, the creator's own key in the OS key store). The key never comes back. */
 export type LlmRole =
   | "brand_research"
   | "post_copy"
@@ -53,7 +54,7 @@ function money(value: number) {
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
 }
 
-/** Paste/replace field. The value lives only in this input until Keychain has it. */
+/** Paste/replace field. The value lives only in this input until the OS key store has it. */
 function KeyForm({
   onSaved,
   onCancel,
@@ -112,7 +113,7 @@ function KeyForm({
           </button>
         )}
       </div>
-      <small>Saved only in your Mac’s Keychain. Create one at openrouter.ai/keys.</small>
+      <small>Saved only in {platformWords().keyStore}. Create one at openrouter.ai/keys.</small>
       {error && <p className="gf-ai-error" role="alert">{error}</p>}
     </form>
   );
@@ -153,7 +154,7 @@ export function AiModelCard() {
     setError("");
     try {
       setView(await llmApi.settings({ speech_provider: provider }));
-      setNote(provider === "groq" ? "Cloud speech selected. Audio for future transcription is sent to Groq." : "Local speech selected. Future transcription runs on this Mac.");
+      setNote(provider === "groq" ? "Cloud speech selected. Audio for future transcription is sent to Groq." : `Local speech selected. Future transcription runs on ${platformWords().computer}.`);
     } catch (e) {
       setError(message(e));
     } finally {
@@ -165,7 +166,7 @@ export function AiModelCard() {
     setError("");
     try {
       setView(await llmApi.removeKey());
-      setNote("OpenRouter key removed from Keychain. Text models now run locally; your speech setting is unchanged.");
+      setNote(`OpenRouter key removed from ${platformWords().keyStoreShort}. Text models now run locally; your speech setting is unchanged.`);
     } catch (e) {
       setError(message(e));
     }
@@ -179,6 +180,7 @@ export function AiModelCard() {
       </section>
     );
 
+  const words = platformWords();
   const cloud = view.settings.provider === "cloud" && view.key.present;
   const chosen = view.models.find(m => m.id === view.settings.model);
   const cloudLabel = `Cloud — ${chosen?.label ?? "Claude Haiku 5.5"} via OpenRouter`;
@@ -200,13 +202,13 @@ export function AiModelCard() {
       </label>
       <p id={speechHelpId} className="gf-ai-muted">
         {view.settings.speech_provider === "groq"
-          ? "Cloud speech is selected. Audio from your footage is sent to Groq for transcription; the audio leaves your Mac."
-          : "Local speech is selected. Transcription audio stays on this Mac and needs free memory. If you choose cloud speech, audio leaves your Mac and is sent to Groq for transcription."} This setting is separate from your text and clip-agent models.
+          ? `Cloud speech is selected. Audio from your footage is sent to Groq for transcription; the audio leaves ${words.yourComputer}.`
+          : `Local speech is selected. Transcription audio stays on ${words.computer} and needs free memory. If you choose cloud speech, audio leaves ${words.yourComputer} and is sent to Groq for transcription.`} This setting is separate from your text and clip-agent models.
       </p>
       <p className="gf-ai-muted">
         {view.groq_configured
-          ? "Groq key configured in macOS Keychain."
-          : <>Cloud speech needs a Groq API key configured in macOS Keychain. <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">Get a Groq key</a>; configure it in macOS Keychain before choosing cloud speech.</>}
+          ? `Groq key configured in ${words.keyStore}.`
+          : <>Cloud speech needs a Groq API key configured in {words.keyStore}. <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">Get a Groq key</a>; configure it in {words.keyStore} before choosing cloud speech.</>}
       </p>
       <div className="gf-ai-choices" role="radiogroup" aria-label="Where the AI runs">
         <label className={`gf-ai-choice${!cloud ? " is-on" : ""}`}>
@@ -233,7 +235,7 @@ export function AiModelCard() {
           />
           <span>
             <strong>{cloudLabel}</strong>
-            <small>Fast, any Mac. Under 1¢ per read.</small>
+            <small>Fast on any computer. Under 1¢ per read.</small>
           </span>
         </label>
       </div>
@@ -241,7 +243,7 @@ export function AiModelCard() {
       <div className="gf-ai-key">
         {view.key.present ? (
           <>
-            <span className="gf-ai-ok">Key saved in Keychain ✓</span>
+            <span className="gf-ai-ok">Key saved in {words.keyStoreShort} ✓</span>
             <button type="button" className="gf-button ghost" onClick={() => setEditingKey(v => !v)}>
               Replace key
             </button>
@@ -268,7 +270,7 @@ export function AiModelCard() {
           onSaved={next => {
             setView(next);
             setEditingKey(false);
-            setNote(next.check?.message ?? "Key saved in Keychain.");
+            setNote(next.check?.message ?? `Key saved in ${platformWords().keyStoreShort}.`);
           }}
         />
       )}
@@ -331,7 +333,7 @@ export function AiModelCard() {
           <p className="gf-ai-muted">
             {cloud
               ? "Website reading, post captions, reference patterns and strategist ideas use the cloud model. They send your website text, clip hooks and short transcript snippets."
-              : "Text and clip-agent models run on this Mac."}{" "}
+              : `Text and clip-agent models run on ${words.computer}.`}{" "}
             Cloud spend so far: {money(view.spend.cost_usd)} over {view.spend.calls} calls.
           </p>
         </>

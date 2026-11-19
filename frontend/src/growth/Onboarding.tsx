@@ -24,6 +24,7 @@ import {
   type ClipStyle,
 } from "./ClipStyle";
 import { goalLabel, type WebsiteBriefResult } from "./websiteBriefApi";
+import { platformWords } from "../platform";
 
 const outcomes = [
   {
@@ -190,7 +191,7 @@ export function Onboarding({
   askAccount?: boolean;
   /** Start by offering to draft the brand from the creator's website (skippable). */
   askWebsite?: boolean;
-  /** First run only: open with the animated welcome (skippable, shown once per Mac). */
+  /** First run only: open with the animated welcome (skippable, shown once per computer). */
   intro?: boolean;
 }) {
   const [showIntro, setShowIntro] = useState(() => intro && !introSeen());
@@ -591,7 +592,7 @@ export function Onboarding({
     "Choose one outcome to guide your first experiments.",
     "Choose how your brand should sound. Your examples and boundaries shape the work.",
     "Your brand, audience, and first goal are ready. Bring the footage; your agents take the next step.",
-    "Your footage stays on this Mac. An account keeps this brand yours.",
+    `Your footage stays on ${platformWords().computer}. An account keeps this brand yours.`,
   ];
   function goToProgress(index: number) {
     if (locked || index > furthest) return;
@@ -1110,7 +1111,7 @@ export function Onboarding({
                 </Disclosure>
                 <p className="gf-onboarding-review-note">
                   {askAccount
-                    ? "Next, save this brand to your account, or keep it on this Mac only."
+                    ? `Next, save this brand to your account, or keep it on ${platformWords().computer} only.`
                     : "Launch saves your choices and opens Factory. You choose when to add footage and start production."}
                 </p>
               </>

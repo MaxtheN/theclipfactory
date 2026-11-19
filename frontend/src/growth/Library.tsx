@@ -14,6 +14,7 @@ import { newestFirst, undirected } from "./productionState";
 import { deleteEpisode, discardClips, exportedClipIds, type Discarded } from "./storage";
 import { sourceHasActiveJob } from "../productionPreflight";
 import type { LibraryViewStore } from "./libraryViewState";
+import { platformWords } from "../platform";
 
 export function Library({
   w,
@@ -115,14 +116,14 @@ export function Library({
     const one = targets.length === 1 ? targets[0] : undefined;
     let question: string;
     if (one) {
-      question = `Discard “${clipTitle(one)}”? The clip file is deleted from this Mac.`;
+      question = `Discard “${clipTitle(one)}”? The clip file is deleted from ${platformWords().computer}.`;
     } else {
       // The count names what is at stake: approved work, and exported versions the service keeps.
       const exported = await exportedClipIds();
       const approved = targets.filter((c) => c.approved).length;
       const kept = exported ? targets.filter((c) => exported.has(c.id)).length : 0;
       const stakes = [approved && `${approved} approved`, kept && `${kept} exported`].filter(Boolean).join(", ");
-      question = `${picked ? "Delete" : "Discard"} ${count(targets.length)}${picked ? "" : " that were not approved"}${stakes ? ` (${stakes})` : ""}? Their files are deleted from this Mac. This cannot be undone.`;
+      question = `${picked ? "Delete" : "Discard"} ${count(targets.length)}${picked ? "" : " that were not approved"}${stakes ? ` (${stakes})` : ""}? Their files are deleted from ${platformWords().computer}. This cannot be undone.`;
       if (kept) question += ` Exported versions are kept so their exports can be verified.`;
       if (!exported) question += " Export history could not be read, so some exported clips may be kept.";
     }
@@ -142,8 +143,8 @@ export function Library({
     const made = factory.data.clips.filter((c) => c.video_id === sourceId);
     const approved = made.filter((c) => c.approved).length;
     const question = made.length
-      ? `Delete ${label} and the ${count(made.length)} made from it${approved ? ` (${approved} approved)` : ""}? The footage and clip files are deleted from this Mac. This cannot be undone.`
-      : `Delete ${label}? The footage file is deleted from this Mac. This cannot be undone.`;
+      ? `Delete ${label} and the ${count(made.length)} made from it${approved ? ` (${approved} approved)` : ""}? The footage and clip files are deleted from ${platformWords().computer}. This cannot be undone.`
+      : `Delete ${label}? The footage file is deleted from ${platformWords().computer}. This cannot be undone.`;
     if (!window.confirm(question)) return;
     void clear(async () => {
       const result = await deleteEpisode(sourceId, made);

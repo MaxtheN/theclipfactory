@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { setPlatformOs } from "./platform";
 import type { Data, Resource } from "./types";
 const initial: Data = {
   system: null,
@@ -64,6 +65,8 @@ export function useFactory() {
             )
               throw new Error(`Invalid ${key} response from local service.`);
             if (mounted.current) {
+              // Wording, shortcuts and setup steps follow the OS the local service reports.
+              if (key === "system") setPlatformOs((value as { os?: unknown }).os);
               setData((old) => ({ ...old, [key]: value }));
               setErrors((old) => {
                 const next = { ...old };

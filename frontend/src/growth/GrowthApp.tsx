@@ -47,6 +47,7 @@ import { ActivityCenter, type ActivityTarget } from "./ActivityCenter";
 import { CLOUD_CHANGED } from "./appEvents";
 import { UnsavedDraftProvider, useDraftRegistry, type DraftFilter, type UnsavedDraft } from "./unsavedDrafts";
 import { createLibraryViewStore } from "./libraryViewState";
+import { platformWords, usePlatform } from "../platform";
 
 /** Pages whose title, selector and content already say what they are; their
     sub stays only as command-palette keywords. */
@@ -80,7 +81,7 @@ const views = {
   settings: {
     label: "Settings",
     title: "Settings",
-    sub: "This Mac, its models, and the accounts the factory connects to.",
+    sub: "This computer, its models, and the accounts the factory connects to.",
     icon: "settings",
   },
   research: {
@@ -121,6 +122,8 @@ function storedView(): Stage {
 }
 
 export function GrowthApp() {
+  // Re-render the tree when /api/system reports an OS other than the browser's guess.
+  usePlatform();
   const factory = useFactory();
   const w = useCampaignWorkspace(factory.refresh);
   const [stage, setStage] = useState<Stage>(storedView);
@@ -491,12 +494,12 @@ export function GrowthApp() {
       className="gf-command-trigger"
       aria-label="Open quick actions"
       aria-haspopup="dialog"
-      aria-keyshortcuts="Meta+K Control+K"
+      aria-keyshortcuts={platformWords().os === "macos" ? "Meta+K Control+K" : "Control+K"}
       onClick={() => setQuickOpen(true)}
     >
       <Icon name="research" size={16} />
       <span>Search or run a command</span>
-      <kbd>⌘K</kbd>
+      <kbd>{platformWords().paletteShortcut}</kbd>
     </button>
   );
   const sidebarToggle = (

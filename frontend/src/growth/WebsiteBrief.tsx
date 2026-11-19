@@ -18,6 +18,7 @@ import {
 } from "./websiteBriefApi";
 import { AiModelHint, llmApi, type LlmView } from "./AiModelCard";
 import "./website-brief.css";
+import { platformWords } from "../platform";
 
 type Phase = "input" | "reading" | "review" | "error";
 
@@ -61,7 +62,7 @@ export function modelRouteText(view: LlmView | null, failed: boolean) {
     const label = view.models.find((m) => m.id === view.settings.model)?.label ?? view.settings.model;
     return `Drafted by ${label} via OpenRouter (page text is sent to OpenRouter).`;
   }
-  return "Drafted by the model on this Mac.";
+  return `Drafted by the model on ${platformWords().computer}.`;
 }
 
 export function WebsiteBrief({
@@ -361,7 +362,7 @@ function Reading({
   const events = research?.events ?? [];
   const last = events[events.length - 1];
   const line = research?.waiting
-    ? "Waiting for other work on this Mac to finish…"
+    ? `Waiting for other work on ${platformWords().computer} to finish…`
     : last
       ? statusLine(last, host)
       : `Opening ${host}…`;
