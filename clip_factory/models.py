@@ -1,11 +1,14 @@
-"""Opt-in model catalogue and isolated Apple Silicon runtime."""
+"""Opt-in model catalogue and the isolated local inference runtime.
+
+Apple Silicon runs the MLX bundle (vision, Whisper, Kokoro). Windows and Linux x64 run a speech-only
+faster-whisper runtime; see speech_backend for which engine a computer gets.
+"""
 
 from __future__ import annotations
 
 import inspect
 import json
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -17,6 +20,7 @@ from pathlib import Path, PurePosixPath
 
 import psutil
 
+from . import speech_backend
 from .jobs import Jobs, WorkError
 from .ollama import Ollama, OllamaError, is_ollama, model_name
 from .python_runtime import bootstrap_python, native_python
@@ -42,6 +46,31 @@ ASR_RUNTIME_PROBE = RUNTIME_PROBE.replace(
     "import mlx.core, mlx_vlm, mlx_whisper, kokoro, spacy\nspacy.load('en_core_web_sm')",
     "import mlx.core, mlx_whisper",
 )
+
+FW_VERSIONS = speech_backend.FW_VERSIONS
+# Windows/Linux runtime: speech only, so the ASR and full probes are the same import check.
+FW_PROBE = """
+import importlib.util, json, platform, sys
+from importlib.metadata import version
+import ctranslate2, faster_whisper
+print(json.dumps({'system': platform.system(), 'machine': platform.machine(),
+                 'python': list(sys.version_info[:2]), 'backend': 'faster-whisper',
+                 'cuda': all(importlib.util.find_spec(n) is not None for n in ('nvidia.cublas', 'nvidia.cudnn')),
+                 'packages': {n: version(n) for n in ('faster-whisper', 'ctranslate2', 'av')}}))
+"""
+
+
+def runtime_marker(cuda: bool = False) -> dict | None:
+    """The .ready marker a healthy runtime has on this computer (the Mac one is unchanged since launch)."""
+    engine = speech_backend.backend()
+    if engine == speech_backend.MLX:
+        return {"python": [3, 12], "machine": "arm64", "packages": RUNTIME_VERSIONS}
+    if engine == speech_backend.FASTER_WHISPER:
+        return {
+            "python": [3, 12], "machine": speech_backend.host()[1], "backend": speech_backend.FASTER_WHISPER,
+            "cuda": cuda, "packages": FW_VERSIONS,
+        }
+    return None
 
 
 def tool_path() -> str:
@@ -144,6 +173,8 @@ def validate_manifest(target: Path, manifest: dict, repo: str, identifier: str, 
         any(n.endswith(".safetensors") for n in names)
         if identifier.startswith("qwen-")
         else bool(names & {"weights.npz", "weights.safetensors"})
+        if identifier == "whisper-turbo" and repo != speech_backend.FW_MODEL["repo"]
+        else "model.bin" in names
         if identifier == "whisper-turbo"
         else "kokoro-v1_0.pth" in names
     )
@@ -203,7 +234,15 @@ CATALOG = [
 
 
 def apple_silicon() -> bool:
-    return platform.system() == "Darwin" and platform.machine() == "arm64"
+    return speech_backend.backend() == speech_backend.MLX
+
+
+def catalog_entry(identifier: str) -> dict | None:
+    """A catalogue entry for this computer: Whisper comes from the faster-whisper repo off the Mac."""
+    item = next((m for m in CATALOG if m["id"] == identifier), None)
+    if item and identifier == "whisper-turbo" and speech_backend.backend() == speech_backend.FASTER_WHISPER:
+        return {**item, **speech_backend.FW_MODEL}
+    return item
 
 
 class Models:
@@ -220,17 +259,26 @@ class Models:
         self._ready_lock = threading.Lock()
         self._ready_cache = None
         self._asr_ready_cache = None
+        # The device the last local transcription really ran on (CUDA can fall back to the CPU).
+        self.last_speech_device: dict | None = None
         self.ollama = Ollama()
 
     @property
     def python(self) -> Path:
+        if speech_backend.host()[0] == "Windows":
+            return self.runtime / "Scripts" / "python.exe"
         return self.runtime / "bin" / "python"
+
+    def site_packages(self) -> list[Path]:
+        return [*self.runtime.glob("lib/python3*/site-packages"), *self.runtime.glob("Lib/site-packages")]
 
     def ready(self, *, force=False, kind=None) -> bool:
         # UI polling and preflight calls share one probe, not dozens of simultaneous
         # MLX/Torch/spaCy imports. Marker/interpreter changes invalidate the cache.
         cache_name = "_asr_ready_cache" if kind == "asr" else "_ready_cache"
         probe_code = ASR_RUNTIME_PROBE if kind == "asr" else RUNTIME_PROBE
+        if speech_backend.backend() == speech_backend.FASTER_WHISPER:
+            probe_code = FW_PROBE
         with self._ready_lock:
             key = None
             try:
@@ -242,7 +290,7 @@ class Models:
                 if marker_stat.st_size > 4096:
                     return False
                 marker = json.loads(marker_path.read_text())
-                if marker != {"python": [3, 12], "machine": "arm64", "packages": RUNTIME_VERSIONS}:
+                if not isinstance(marker, dict) or marker != runtime_marker(marker.get("cuda") is True):
                     setattr(self, cache_name, None)
                     return False
                 key = (
@@ -266,7 +314,7 @@ class Models:
                     check=True,
                 )
                 actual = json.loads(probe.stdout)
-                value = actual == {**marker, "system": "Darwin"}
+                value = actual == {**marker, "system": speech_backend.host()[0]}
                 setattr(self, cache_name, (key, time.monotonic() + (60 if value else 5), value))
                 return value
             except (OSError, ValueError, subprocess.SubprocessError):
@@ -302,7 +350,7 @@ class Models:
             if info is None:
                 raise WorkError("That Ollama model is not available locally. Run `ollama list` to check.")
             return self._ollama_item(info)
-        item = next((m for m in CATALOG if m["id"] == identifier), None)
+        item = catalog_entry(identifier)
         if not item:
             raise WorkError("Unknown model.")
         path = self.model_dir / identifier
@@ -324,6 +372,31 @@ class Models:
             "installed": installed,
             "integrity": "ok" if installed else "damaged" if damaged else "missing",
             "status": "installed" if installed else "damaged" if damaged else "not installed",
+        }
+
+    def cuda_runtime(self) -> bool:
+        """Whether runtime setup installed the NVIDIA libraries (only on a computer with an NVIDIA GPU)."""
+        try:
+            marker = json.loads((self.runtime / ".ready").read_text())
+        except (OSError, ValueError):
+            return False
+        return isinstance(marker, dict) and marker.get("cuda") is True
+
+    def speech_status(self) -> dict:
+        """Which speech engine and device local transcription uses on this computer."""
+        engine = speech_backend.backend()
+        gpu = speech_backend.nvidia_gpu() if engine == speech_backend.FASTER_WHISPER else None
+        if engine == speech_backend.MLX:
+            device, detail = "gpu", "Apple GPU"
+        elif engine == speech_backend.FASTER_WHISPER and gpu and self.cuda_runtime():
+            device, detail = "cuda", f"NVIDIA GPU ({gpu})"
+        elif engine == speech_backend.FASTER_WHISPER:
+            device, detail = "cpu", "CPU"
+        else:
+            device, detail = None, "Not available on this computer"
+        return {
+            "backend": engine, "label": speech_backend.label(engine), "device": device, "detail": detail,
+            "gpu": gpu, "last_run": self.last_speech_device,
         }
 
     def metallibs(self) -> list[Path]:
@@ -348,9 +421,14 @@ class Models:
         elif (self.runtime / ".ready").is_file():
             if not self.python.is_file():
                 problems.append("python")
-            packages = list(self.runtime.glob("lib/python3*/site-packages/mlx"))
-            if packages and not self.metallibs():
-                problems.append("mlx.metallib")
+            if speech_backend.backend() == speech_backend.FASTER_WHISPER:
+                for package in ("ctranslate2", "faster_whisper"):
+                    if not any((site / package).is_dir() for site in self.site_packages()):
+                        problems.append(package)
+            else:
+                packages = list(self.runtime.glob("lib/python3*/site-packages/mlx"))
+                if packages and not self.metallibs():
+                    problems.append("mlx.metallib")
         runtime_state = (
             "damaged" if problems else "ok" if (self.runtime / ".ready").is_file() else "missing"
         )
@@ -361,7 +439,13 @@ class Models:
         return [self.item(m["id"]) for m in CATALOG] + local
 
     def setup(self, job_id: str) -> dict:
-        if not apple_silicon():
+        engine = speech_backend.backend()
+        if engine is None:
+            raise WorkError(
+                "Local inference needs an Apple Silicon Mac, or Windows or Linux on x64. "
+                "Manual editing works on this machine."
+            )
+        if engine == speech_backend.MLX and not apple_silicon():
             raise WorkError(
                 "MLX inference requires native Apple Silicon macOS. Manual editing works on this machine."
             )
@@ -390,23 +474,27 @@ class Models:
             timeout=180,
             failure="Cannot create runtime. Ensure the app data directory is writable and retry setup.",
         )
-        self.jobs.update(
-            job_id, progress=20, message="Installing MLX vision, Whisper, and Kokoro (network download)"
-        )
-        self.jobs.process(
-            job_id,
-            [
-                str(self.python),
-                "-m",
-                "pip",
-                "install",
-                "--disable-pip-version-check",
+        if engine == speech_backend.FASTER_WHISPER:
+            cuda = speech_backend.nvidia_gpu() is not None
+            packages = [*speech_backend.FW_PACKAGES, *(speech_backend.CUDA_PACKAGES if cuda else [])]
+            probe, marker = FW_PROBE, runtime_marker(cuda)
+            message = "Installing the faster-whisper speech engine" + (
+                " and NVIDIA CUDA libraries" if cuda else ""
+            ) + " (network download)"
+        else:
+            packages = [
                 "mlx-vlm==0.7.12",
                 "mlx-whisper==0.4.3",
                 "kokoro==0.9.4",
                 "soundfile>=0.13,<1",
                 "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
-            ],
+            ]
+            probe, marker = RUNTIME_PROBE, runtime_marker()
+            message = "Installing MLX vision, Whisper, and Kokoro (network download)"
+        self.jobs.update(job_id, progress=20, message=message)
+        self.jobs.process(
+            job_id,
+            [str(self.python), "-m", "pip", "install", "--disable-pip-version-check", *packages],
             env={**child_env(), "HF_HUB_OFFLINE": "0", "TRANSFORMERS_OFFLINE": "0"},
             timeout=1800,
             log_path=self.logs / f"{job_id}.log",
@@ -414,17 +502,15 @@ class Models:
         )
         self.jobs.process(
             job_id,
-            [str(self.python), "-c", RUNTIME_PROBE],
+            [str(self.python), "-c", probe],
             env=child_env(),
             timeout=90,
-            failure="Runtime imports failed. Check package compatibility and native Apple Silicon Python.",
+            failure="Runtime imports failed. Check package compatibility and that Python 3.12 is native to this computer.",
         )
-        atomic_json(
-            self.runtime / ".ready", {"python": [3, 12], "machine": "arm64", "packages": RUNTIME_VERSIONS}
-        )
+        atomic_json(self.runtime / ".ready", marker)
         if not self.ready():
             (self.runtime / ".ready").unlink(missing_ok=True)
-            raise WorkError("Runtime verification failed. Native Apple Silicon Python 3.12 is required.")
+            raise WorkError("Runtime verification failed. A native Python 3.12 for this computer is required.")
         return {"runtime": "ready", "path": str(self.runtime)}
 
     @contextmanager
@@ -479,6 +565,9 @@ class Models:
                 selected = name.endswith(
                     (".json", ".safetensors", ".txt", ".model", ".jinja", ".tiktoken", ".npz")
                 )
+                if item.get("format") == "ctranslate2":
+                    # CTranslate2 weights are one model.bin; skip any other publisher binaries.
+                    selected = name == "model.bin" or ("/" not in name and name.endswith((".json", ".txt")))
                 if identifier == "kokoro":
                     selected = name in {"config.json", "kokoro-v1_0.pth", "voices/af_heart.pt"}
                 if selected:
@@ -559,6 +648,11 @@ class Models:
             raise WorkError("Choose a model appropriate to this task.")
         if item.get("source") == "ollama":
             return  # Ollama schedules its own memory and does not need the MLX runtime.
+        # The platform comes first: on a computer that cannot run this model, setting up is no answer.
+        if kind == "asr" and speech_backend.backend() is None:
+            raise WorkError(speech_backend.UNSUPPORTED)
+        if kind != "asr" and not apple_silicon():
+            raise WorkError("This inference runtime requires Apple Silicon macOS.")
         if not item["installed"]:
             if item.get("integrity") == "damaged":
                 raise WorkError("This model's files are damaged or were removed — repair (re-download) it in Models.")
@@ -569,8 +663,6 @@ class Models:
             )
         if not (self.ready(kind="asr") if kind == "asr" else self.ready()):
             raise WorkError("Set up the local inference runtime in Models first.")
-        if not apple_silicon():
-            raise WorkError("This inference runtime requires Apple Silicon macOS.")
         if psutil.virtual_memory().available < (item["estimated_gb"] + 3) * 1e9:
             raise WorkError(
                 "Not enough currently available memory. Close other apps or use the smaller model."
@@ -650,6 +742,11 @@ class Models:
         from .inference_worker import validate_request
 
         data = {**payload, "action": action, "model": str(self.model_dir / identifier)}
+        if action == "transcribe" and not is_ollama(identifier):
+            engine = speech_backend.backend()
+            data["engine"] = engine or speech_backend.MLX
+            if engine == speech_backend.FASTER_WHISPER:
+                data["device"] = self.speech_status()["device"]
         try:
             validate_request(data)
         except (ValueError, TypeError, KeyError) as exc:
@@ -703,6 +800,10 @@ class Models:
             )
             if not isinstance(result, dict):
                 raise TypeError("Invalid response")
+            if action == "transcribe" and "device" in result:
+                self.last_speech_device = {
+                    "device": result.pop("device"), "compute_type": result.pop("compute_type", None),
+                }
             return result
         except (OSError, ValueError, TypeError) as exc:
             raise WorkError("Inference worker returned an invalid result.") from exc
