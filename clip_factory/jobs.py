@@ -13,7 +13,48 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+import psutil
+
 from .store import Store, new_id, now
+
+
+def isolated_group() -> dict:
+    """Popen options that start a tool in its own process group, so stopping it never stops the app."""
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def stop_process_tree(process: subprocess.Popen, grace: float = 3.0) -> None:
+    """Stop a tool and everything it started, politely first, on every operating system.
+
+    The tree is collected before anything is stopped, so grandchildren (FFmpeg under a Python worker)
+    cannot be orphaned. On POSIX the tool's session also gets the signal, which catches processes
+    that left the tree.
+    """
+    if process.poll() is not None:
+        return
+    try:
+        parent = psutil.Process(process.pid)
+        tree = [*parent.children(recursive=True), parent]
+    except psutil.Error:
+        tree = []
+
+    def signal_all(kill: bool) -> None:
+        if os.name != "nt":
+            with contextlib.suppress(OSError):
+                os.killpg(process.pid, signal.SIGKILL if kill else signal.SIGTERM)
+        for member in tree:
+            with contextlib.suppress(psutil.Error):
+                member.kill() if kill else member.terminate()
+
+    signal_all(kill=False)
+    _, alive = psutil.wait_procs(tree, timeout=grace)
+    if alive or process.poll() is None:
+        signal_all(kill=True)
+        psutil.wait_procs(alive, timeout=grace)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        process.wait(timeout=grace)
 
 
 class JobCancelled(Exception):
@@ -177,7 +218,7 @@ class Jobs:
         # File-backed output prevents a verbose tool from deadlocking a pipe or consuming unbounded RAM.
         with tempfile.TemporaryFile() as output:
             process = subprocess.Popen(
-                command, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT, start_new_session=True
+                command, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT, **isolated_group()
             )
             deadline = time.monotonic() + timeout
             try:
@@ -197,16 +238,7 @@ class Jobs:
                 self.check(identifier)
                 return raw
             finally:
-                if process.poll() is None:
-                    try:
-                        os.killpg(process.pid, signal.SIGTERM)
-                        process.wait(timeout=3)
-                    except (ProcessLookupError, subprocess.TimeoutExpired):
-                        try:
-                            os.killpg(process.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                        process.wait(timeout=3)
+                stop_process_tree(process)
 
     def close(self):
         self.stopping.set()

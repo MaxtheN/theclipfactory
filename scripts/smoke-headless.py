@@ -2,6 +2,7 @@
 import argparse
 import os
 import queue
+import signal
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,8 @@ def main():
             [*command, "--headless", "--data-dir", directory],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            # Windows: a separate process group can receive Ctrl+Break, the console's polite stop.
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
         )
         lines = queue.Queue()
 
@@ -60,7 +63,10 @@ def main():
                     assert response.status == 200 and response.read(), "packaged demo viewer asset missing"
             print("Headless bootstrap, redirect, frontend, session cookie and packaged demo viewer passed (not native GUI).")
         finally:
-            process.terminate()
+            if os.name == "nt":
+                process.send_signal(signal.CTRL_BREAK_EVENT)
+            else:
+                process.terminate()
             try:
                 process.wait(timeout=20)
             except subprocess.TimeoutExpired:
@@ -68,9 +74,7 @@ def main():
                 process.wait(timeout=5)
                 raise RuntimeError("headless launcher did not shut down") from None
             process.stdout.close()
-        # On Windows terminate() is TerminateProcess, a hard kill with exit code 1. A graceful stop needs the
-        # app to handle CTRL_BREAK (SIGBREAK), which is WO-28; until then only POSIX checks the clean exit.
-        assert sys.platform == "win32" or process.returncode == 0, "headless shutdown failed"
+        assert process.returncode == 0, "headless shutdown failed"
 
 
 if __name__ == "__main__":

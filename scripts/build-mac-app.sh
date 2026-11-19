@@ -17,6 +17,7 @@ PACKAGE_PYTHON="$PACKAGE_VENV/bin/python"
 test -f frontend/dist/index.html
 test -f clip_factory/inference_worker.py
 test -f clip_factory/demo_ui/index.html
+test -f clip_factory/fonts/LiberationSans-Regular.ttf
 # Run bounded checks separately; the normal development test pass owns the broader suite.
 for test_file in scripts/tests/test_packaging.py tests/test_demo_loop.py; do
   "$PACKAGE_PYTHON" -m pytest "$test_file" -q
@@ -30,6 +31,7 @@ done
   --paths "$ROOT" \
   --add-data "$ROOT/frontend/dist:clip_factory/ui" \
   --add-data "$ROOT/clip_factory/demo_ui:clip_factory/demo_ui" \
+  --add-data "$ROOT/clip_factory/fonts:clip_factory/fonts" \
   --add-data "$ROOT/clip_factory/inference_worker.py:clip_factory" \
   --add-data "$ROOT/clip_factory/cloud_config.json:clip_factory" \
   --collect-all webview --collect-all keyring --copy-metadata keyring --collect-all uvicorn \

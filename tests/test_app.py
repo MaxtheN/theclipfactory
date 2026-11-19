@@ -3,7 +3,6 @@
 import json
 import shutil
 import subprocess
-import sys
 import threading
 import time
 
@@ -288,7 +287,6 @@ def test_token_validation_never_echoes_credentials(client, body):
     assert client.app.state.store.get("config", "instagram") is None
 
 
-@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-28: stored media paths use the OS separator (videos\\...) instead of POSIX")
 def test_upload_mock_probe_public_redaction_and_media(client, monkeypatch):
     video = upload_mock(client, monkeypatch)
     assert video["name"] == "source.mp4"
@@ -326,7 +324,6 @@ def test_invalid_upload_cleans_file_and_library(client, monkeypatch):
     assert not list((client.app.state.root / "videos").iterdir())
 
 
-@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-28: finished media is chmod 0o444, which Windows treats as read-only, so deleting it fails")
 def test_actual_upload_and_manual_render_without_models(client, tmp_path):
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         pytest.skip("FFmpeg/ffprobe not installed")

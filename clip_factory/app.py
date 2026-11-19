@@ -11,6 +11,7 @@ import platform
 import re
 import secrets
 import shutil
+import sys
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -30,7 +31,9 @@ from .ads import AdsClient
 from .brief import brief_block, must_avoid_hits
 from .campaign_api import install as install_campaign_api
 from .campaigns import Campaigns, snapshot_goal
+from .files import remove_file, remove_tree
 from .jobs import Jobs, WorkError
+from .keystore import key_store_name
 from .llm_provider import LlmGateway, RoutedModels
 from .llm_provider import install as install_llm_provider
 from .meta import MetaClient, MetaError, MetaOAuth, SecureTokenStore, validate_public_video_url
@@ -431,7 +434,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
             return None if groq_configured() else {
                 "code": "cloud_speech_unavailable", "scope": "speech", "action": None,
-                "message": "Cloud speech needs your Groq key in macOS Keychain. Choose local speech or configure the key in Brand profile → AI model.",
+                "message": "Cloud speech needs your Groq key. Choose local speech or configure the key in Brand profile → AI model.",
                 "tab": "AI model", "steps": [], "download_gb": 0,
             }
         return speech.check(models())
@@ -486,7 +489,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             found.append(
                 {
                     "code": "ffmpeg",
-                    "message": "FFmpeg is not installed. Install it (for example `brew install ffmpeg`) and reopen the app.",
+                    "message": "FFmpeg is not installed. " + media.install_ffmpeg_help(),
                     "tab": None,
                 }
             )
@@ -637,6 +640,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "free_disk_gb": round(shutil.disk_usage(root).free / 1e9, 1),
             "ffmpeg": bool(media.find_tool("ffmpeg")),
             "ffprobe": bool(media.find_tool("ffprobe")),
+            # Whether the FFmpeg found can burn captions (libass); None when there is no FFmpeg.
+            "ffmpeg_captions": media.can_burn_captions(),
+            "os": {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux"),
             "whisper": whisper,
             "model_runtime": runtime_ready,
             # Cheap file checks: files removed from disk after setup show up as "damaged".
@@ -1275,7 +1281,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "status": "ready",
             "instagram_media_id": None,
             "published_at": None,
-            "path": str(target.relative_to(root)),
+            "path": target.relative_to(root).as_posix(),
             "edit_plan": plan_of(body),
             "opening_treatment": opening_of(body),
             "changed_variable": body.changed_variable.strip() or None,
@@ -1301,7 +1307,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 if clip.get("team_run_id"):
                     app.state.team.record_clip(clip["team_run_id"], identifier)
         except Exception:
-            target.unlink(missing_ok=True)
+            remove_file(target)  # already read-only here
             cover.unlink(missing_ok=True)
             target.with_suffix(".srt").unlink(missing_ok=True)
             raise
@@ -1545,7 +1551,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 "transcript": None,
                 "analysis": None,
                 "status": "imported",
-                "path": str(target.relative_to(root)),
+                "path": target.relative_to(root).as_posix(),
                 **info,
             }
             store.put("videos", video)
@@ -1988,7 +1994,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def discard_clip(clip: dict):
         """Remove a clip's files and records. Callers decide whether it may go."""
         path = root / clip["path"]
-        path.unlink(missing_ok=True)
+        remove_file(path)
         for suffix in [".srt", ".jpg", ".hook.ass", ".pop.ass"]:
             path.with_suffix(suffix).unlink(missing_ok=True)
         store.delete("clips", clip["id"])
@@ -2304,7 +2310,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                     json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
                 )
             except (OSError, WorkError) as exc:
-                shutil.rmtree(folder, ignore_errors=True)
+                remove_tree(folder)  # the copied video may already be read-only
                 raise HTTPException(
                     507 if isinstance(exc, OSError) else 409,
                     str(exc) if isinstance(exc, WorkError) else "Export failed. Check free disk space.",
@@ -2321,7 +2327,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                     "sha256": exported,
                     "bytes": manifest["video"]["bytes"],
                     "file": filename,
-                    "folder": str(folder.relative_to(root)),
+                    "folder": folder.relative_to(root).as_posix(),
                     "checksum_recorded_at_render": bool(recorded),
                     "created_at": manifest["exported_at"],
                 },
@@ -2374,7 +2380,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                     409,
                     "This exact version was exported. It is kept so the export can be verified against it.",
                 )
-            source_path(clip).unlink()
+            remove_file(source_path(clip), missing_ok=False)
             discard_clip(clip)
         return {"deleted": identifier, "note": "Deleting locally does not remove published Instagram media."}
 
@@ -2397,7 +2403,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 {
                     "id": identifier,
                     "text": body.text,
-                    "path": str(path.relative_to(root)),
+                    "path": path.relative_to(root).as_posix(),
                     "created_at": now(),
                 },
             )
@@ -2455,7 +2461,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             raise WorkError("Connect Instagram first.")
         stored_token = app.state.token_store.get_token(account["id"])
         if not stored_token:
-            raise WorkError("Instagram token is missing from Keychain. Reconnect your account.")
+            raise WorkError(f"Instagram token is missing from {key_store_name()}. Reconnect your account.")
         return app.state.meta_factory(stored_token, settings()["graph_version"])
 
     def instagram_status():
@@ -2700,7 +2706,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             raise WorkError("Connect Instagram with a token that also has ads_read first.")
         saved_token = app.state.token_store.get_token(account["id"])
         if not saved_token:
-            raise WorkError("Account token is missing from Keychain.")
+            raise WorkError(f"Account token is missing from {key_store_name()}.")
         return app.state.ads_factory(saved_token, settings()["graph_version"])
 
     @app.get("/api/ads/accounts")

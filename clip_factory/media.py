@@ -189,10 +189,10 @@ def inspect(path: Path) -> dict:
     }
 
 
-# Homebrew's default ffmpeg ships without libass/drawtext, so it cannot burn captions.
+# macOS: Homebrew's default ffmpeg ships without libass/drawtext, so it cannot burn captions.
 # The keg-only ffmpeg-full formula can; prefer it (ffmpeg and ffprobe together) when installed.
 FULL_FFMPEG_DIRS = ("/opt/homebrew/opt/ffmpeg-full/bin", "/usr/local/opt/ffmpeg-full/bin")
-# A double-clicked app gets a bare PATH, so look where Homebrew installs plain `ffmpeg` too.
+# macOS: a double-clicked app gets a bare PATH, so look where Homebrew installs plain `ffmpeg` too.
 HOMEBREW_BIN_DIRS = ("/opt/homebrew/bin", "/usr/local/bin")
 
 
@@ -204,21 +204,100 @@ def bundled_tool_dirs() -> list[str]:
     return dirs
 
 
-INSTALL_FFMPEG = (
-    "Install FFmpeg (includes ffprobe) to process video: open Terminal, run `brew install ffmpeg` "
-    "(get Homebrew from brew.sh first if needed), then retry."
-)
+def install_ffmpeg_help(platform: str | None = None) -> str:
+    """How to install an FFmpeg that can burn captions, written for the creator's operating system."""
+    platform = platform or sys.platform
+    if platform == "darwin":
+        return (
+            "Install FFmpeg (includes ffprobe) to process video: open Terminal, run `brew install ffmpeg-full` "
+            "(get Homebrew from brew.sh first if needed), then retry."
+        )
+    if platform == "win32":
+        return (
+            "Install FFmpeg (includes ffprobe) to process video: open PowerShell, run "
+            "`winget install Gyan.FFmpeg`, then restart Growth Factory."
+        )
+    return (
+        "Install FFmpeg (includes ffprobe) to process video: open a terminal and install it with your package "
+        "manager (for example `sudo apt install ffmpeg` or `sudo dnf install ffmpeg`), then retry."
+    )
+
+
+INSTALL_FFMPEG = install_ffmpeg_help()
+
+
+def tool_dirs() -> list[str]:
+    """Where to look before PATH, in order, for the current operating system.
+
+    macOS: Homebrew ffmpeg-full (libass/drawtext), the copy bundled in the app, then plain Homebrew; a
+    double-clicked macOS app gets a bare PATH. Windows and Linux: the bundled copy, then PATH.
+    """
+    if sys.platform == "darwin":
+        return [*FULL_FFMPEG_DIRS, *bundled_tool_dirs(), *HOMEBREW_BIN_DIRS]
+    return bundled_tool_dirs()
 
 
 def find_tool(name: str) -> str | None:
-    """Homebrew ffmpeg-full first (libass/drawtext), then the copy bundled in the app, then PATH.
-
-    A double-clicked macOS app gets a bare PATH, so the bundled copy is what makes a fresh install work.
-    """
-    for directory in (*FULL_FFMPEG_DIRS, *bundled_tool_dirs(), *HOMEBREW_BIN_DIRS):
+    for directory in tool_dirs():
         if found := shutil.which(f"{directory}/{name}"):
             return found
     return shutil.which(name)
+
+
+_caption_support: dict[str, bool] = {}
+
+
+def can_burn_captions(tool: str | None = None) -> bool | None:
+    """Whether the FFmpeg found can burn captions (libass `subtitles` and `ass` filters); None without FFmpeg."""
+    tool = tool or find_tool("ffmpeg")
+    if not tool:
+        return None
+    if tool not in _caption_support:
+        try:
+            listing = subprocess.run(
+                [tool, "-hide_banner", "-filters"], capture_output=True, text=True, timeout=10, check=False
+            ).stdout or ""
+        except (OSError, subprocess.SubprocessError):
+            return False
+        _caption_support[tool] = " subtitles " in listing and " ass " in listing
+    return _caption_support[tool]
+
+
+def install_captions_help(platform: str | None = None) -> str:
+    platform = platform or sys.platform
+    if platform == "darwin":
+        how = "Run `brew install ffmpeg-full` and restart Growth Factory"
+    elif platform == "win32":
+        how = "Run `winget install Gyan.FFmpeg` in PowerShell and restart Growth Factory"
+    else:
+        how = "Install your distribution's full FFmpeg package (built with libass) and restart Growth Factory"
+    return f"This FFmpeg build lacks libass, so captions and titles cannot be burned in. {how}, or render without captions."
+
+
+# Captions render with the same font on every platform: Liberation Sans (SIL OFL 1.1) is bundled and
+# metric-compatible with Arial, which earlier versions used and which Linux usually lacks.
+CAPTION_FONT = "Liberation Sans"
+BUNDLED_FONTS = Path(__file__).with_name("fonts")
+
+
+def caption_font(family: str = "") -> str:
+    """The brand font family, or the bundled caption font ("Arial", the old default, maps to it too)."""
+    family = family.strip()
+    return CAPTION_FONT if not family or family.lower() == "arial" else family
+
+
+def prepare_fonts(fonts_dir: Path, brand_font: Path | None = None) -> str:
+    """Copy the bundled caption fonts (and a brand font) next to the output; return the `fontsdir` option.
+
+    The directory is named relative to the output directory, which is FFmpeg's working directory, so no
+    drive letter or backslash has to be escaped inside the filter graph on Windows.
+    """
+    fonts_dir.mkdir(exist_ok=True)
+    for font in sorted(BUNDLED_FONTS.glob("*.ttf")):
+        shutil.copyfile(font, fonts_dir / font.name)
+    if brand_font:
+        shutil.copyfile(brand_font, fonts_dir / ("brand" + brand_font.suffix.lower()))
+    return f":fontsdir={fonts_dir.name}"
 
 
 def ffmpeg() -> str:
@@ -454,7 +533,7 @@ def pop_captions(entries: list[dict]) -> str:
             "Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
             "MarginL, MarginR, MarginV, Encoding"
         ),
-        "Style: Pop,Arial,78,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,6,2,2,90,90,380,1",
+        f"Style: Pop,{CAPTION_FONT},78,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,6,2,2,90,90,380,1",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
@@ -1043,6 +1122,7 @@ def render(
     total = sum(s["end"] - s["start"] for s in segments)
     srt = output.with_suffix(".srt")
     hook_file = output.with_suffix(".hook.ass")
+    fonts_dir = output.with_name(output.stem + ".fonts")
     entries = caption_entries(transcript, segments) if burn_subtitles else []
     caption_text = srt_text(entries)
     if caption_text:
@@ -1052,24 +1132,23 @@ def render(
     if caption_text or hook:
         if " subtitles " not in available:
             srt.unlink(missing_ok=True)
-            raise WorkError(
-                "This FFmpeg build lacks libass, so captions cannot be burned in. Run `brew install ffmpeg-full` and restart Clip Factory, or render without captions."
-            )
+            raise WorkError(install_captions_help())
         # cwd is output directory; filename consists exclusively of generated hexadecimal IDs.
+        fontsdir = prepare_fonts(fonts_dir)
         if caption_text and caption_style == "pop":
             pop_file = output.with_suffix(".pop.ass")
             pop_file.write_text(pop_captions(entries), encoding="utf-8")
-            overlays += f",subtitles={pop_file.name}"
+            overlays += f",subtitles={pop_file.name}{fontsdir}"
         elif caption_text:
             # Use output-pixel coordinates instead of libass's small default script canvas.
             font_size = 52 if caption_style == "standard" else 60
             style = (
-                f"PlayResX=1080,PlayResY=1920,FontName=Arial,FontSize={font_size},"
+                f"PlayResX=1080,PlayResY=1920,FontName={CAPTION_FONT},FontSize={font_size},"
                 "MarginL=72,MarginR=72,MarginV=144,Outline=3,Shadow=0,Alignment=2"
             )
             if caption_style == "high_contrast":
                 style += ",BorderStyle=3,BackColour=&H80000000"
-            overlays += f",subtitles={srt.name}:force_style='{style}'"
+            overlays += f",subtitles={srt.name}{fontsdir}:force_style='{style}'"
         if hook:
             # Hook is creator/strategy text, not a fabricated source transcript.
             # Remove ASS control syntax and write only to a generated local filename.
@@ -1080,12 +1159,12 @@ def render(
             hook_file.write_text(
                 "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n"
                 "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
-                "Style: Hook,Arial,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,3,3,0,8,80,80,140,1\n"
+                f"Style: Hook,{CAPTION_FONT},54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,3,3,0,8,80,80,140,1\n"
                 "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
                 f"Dialogue: 1,0:00:00.00,{timestamp},Hook,,0,0,0,,{safe_hook}\n",
                 encoding="utf-8",
             )
-            overlays += f",subtitles={hook_file.name}"
+            overlays += f",subtitles={hook_file.name}{fontsdir}"
     # A slow push toward the centre keeps a static shot alive. Applied under the text, which stays put.
     push = (
         f",scale=w='trunc(1080*(1+0.07*t/{total:.3f})/2)*2':h='trunc(1920*(1+0.07*t/{total:.3f})/2)*2':eval=frame,"
@@ -1222,6 +1301,7 @@ def render(
         }
     finally:
         temporary.unlink(missing_ok=True)
+        shutil.rmtree(fonts_dir, ignore_errors=True)
         if not completed:
             srt.unlink(missing_ok=True)
             hook_file.unlink(missing_ok=True)
@@ -1307,7 +1387,7 @@ def render_crafted(
         logo_file = craft.checked_file(kit.logo_file, "logo")
     except ValueError as exc:
         raise WorkError(str(exc).splitlines()[-1][:300]) from None
-    font = kit.font_family.strip() or "Arial"
+    font = caption_font(kit.font_family)
     record: dict = {"version": "craft-v1"}
 
     # 1. Structure: linear, or a payoff teaser before the setup.
@@ -1438,21 +1518,14 @@ def render_crafted(
     scratch = [caption_file, hook_file, ext_file, logo_copy]
     needs_ass = bool(entries) or bool(hook) or end_card is not None or (teaser and options["transition"] == "flash")
     if needs_ass and " subtitles " not in available:
-        raise WorkError(
-            "This FFmpeg build lacks libass, so captions and titles cannot be burned in. Install an FFmpeg "
-            "with libass and restart Clip Factory, or render without captions."
-        )
+        raise WorkError(install_captions_help())
     completed = False
     try:
-        fontsdir = ""
-        if font_file:
-            fonts_dir.mkdir(exist_ok=True)
-            shutil.copyfile(font_file, fonts_dir / ("brand" + font_file.suffix.lower()))
-            fontsdir = f":fontsdir={fonts_dir.name}"
+        fontsdir = prepare_fonts(fonts_dir, font_file)
         overlays = []
         if entries:
             srt.write_text(srt_text(entries), encoding="utf-8")
-            if marks or caption_style == "pop" or font != "Arial":
+            if marks or caption_style == "pop" or font != CAPTION_FONT:
                 caption_file.write_text(
                     craft.caption_ass(
                         entries,
@@ -1469,12 +1542,12 @@ def render_crafted(
             else:
                 size = 52 if caption_style == "standard" else 60
                 style = (
-                    f"PlayResX=1080,PlayResY=1920,FontName=Arial,FontSize={size},"
+                    f"PlayResX=1080,PlayResY=1920,FontName={CAPTION_FONT},FontSize={size},"
                     "MarginL=72,MarginR=72,MarginV=144,Outline=3,Shadow=0,Alignment=2"
                 )
                 if caption_style == "high_contrast":
                     style += ",BorderStyle=3,BackColour=&H80000000"
-                overlays.append(f"subtitles={srt.name}:force_style='{style}'")
+                overlays.append(f"subtitles={srt.name}{fontsdir}:force_style='{style}'")
         flash_at = transition_at if options["transition"] == "flash" else None
         card = None
         if hook and options["hook_format"] == "title_card":
@@ -1519,7 +1592,7 @@ def render_crafted(
                 if " subtitles " not in available:
                     raise WorkError("This FFmpeg build lacks libass, so the selected renderer extension cannot be drawn.")
                 ext_file.write_text(ext["ass"], encoding="utf-8")
-                overlays.append(f"subtitles={ext_file.name}")
+                overlays.append(f"subtitles={ext_file.name}{fontsdir}")
             overlays.extend(ext["filters"])
             record["extensions"] = ext["applied"]
 

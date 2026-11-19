@@ -25,13 +25,32 @@ class LauncherError(RuntimeError):
     """A credential-free error safe to display in the launcher."""
 
 
+def tool_folders(platform_name: str | None = None) -> list[str]:
+    """Folders where FFmpeg and other tools are commonly installed, for the current operating system."""
+    platform_name = platform_name or sys.platform
+    if platform_name == "darwin":
+        return ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+    if platform_name == "win32":
+        folders = []
+        if local := os.environ.get("LOCALAPPDATA"):
+            folders.append(str(Path(local) / "Microsoft" / "WinGet" / "Links"))  # winget command aliases
+        folders.append(str(Path(os.environ.get("PROGRAMDATA") or r"C:\ProgramData") / "chocolatey" / "bin"))
+        return folders
+    return ["/usr/local/bin", "/usr/bin", "/bin"]
+
+
 def preserve_tool_path() -> None:
-    """Finder does not inherit the user's shell PATH. Keep it, then add brew paths."""
+    """A double-clicked app may not inherit the user's shell PATH. Keep it, then add the usual tool folders."""
     paths = os.environ.get("PATH", "").split(os.pathsep)
-    for path in ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"):
+    for path in tool_folders():
         if path not in paths:
             paths.append(path)
     os.environ["PATH"] = os.pathsep.join(filter(None, paths))
+
+
+def stop_signals() -> list[signal.Signals]:
+    """Signals that ask the app to stop. Windows delivers Ctrl+Break (SIGBREAK) to a console process group."""
+    return [signal.SIGINT, signal.SIGTERM, *([signal.SIGBREAK] if hasattr(signal, "SIGBREAK") else [])]
 
 
 def loopback_host(value: str) -> str:
@@ -109,17 +128,25 @@ def startup_event(root: Path | None, event: str, message: str | None = None):
         pass  # Diagnostics must not introduce a new launch failure.
 
 
-def show_launch_error(message: str):
-    if not getattr(sys, "frozen", False) or platform.system() != "Darwin":
+def show_launch_error(message: str, log: Path | None = None):
+    """A native message for a double-clicked app that has no console. Linux uses stderr and the startup log."""
+    if not getattr(sys, "frozen", False):
         return
+    details = f"{message}\n\nDetails: {log}" if log else message
     try:
-        from AppKit import NSAlert
+        if platform.system() == "Darwin":
+            from AppKit import NSAlert
 
-        alert = NSAlert.alloc().init()
-        alert.setMessageText_("Clip Factory could not start")
-        alert.setInformativeText_(message + "\n\nDetails: Application Support/ClipFactory/logs/startup.log")
-        alert.addButtonWithTitle_("OK")
-        alert.runModal()
+            alert = NSAlert.alloc().init()
+            alert.setMessageText_("Growth Factory could not start")
+            alert.setInformativeText_(details)
+            alert.addButtonWithTitle_("OK")
+            alert.runModal()
+        elif sys.platform == "win32":
+            import ctypes
+
+            MB_ICONERROR = 0x10
+            ctypes.windll.user32.MessageBoxW(None, details, "Growth Factory could not start", MB_ICONERROR)
     except Exception:  # noqa: BLE001 - best-effort native alert must not cause another crash
         return
 
@@ -175,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
                 timeout_graceful_shutdown=10,
             )
         )
-        for sig in (signal.SIGINT, signal.SIGTERM):
+        for sig in stop_signals():
             previous_handlers[sig] = signal.signal(sig, lambda *_: stop.set())
         thread = threading.Thread(
             target=server.run, kwargs={"sockets": [listener]}, name="clip-factory-server", daemon=True
@@ -276,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         if server is not None:
             server.should_exit = True
         if not args.browser and not args.headless and not args.native_smoke:
-            show_launch_error(safe_message)
+            show_launch_error(safe_message, diagnostic_root / "logs" / "startup.log" if diagnostic_root else None)
         return 1
     finally:
         stop.set()

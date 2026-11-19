@@ -117,7 +117,6 @@ def test_durable_interrupted_jobs_fail_without_reexecution(tmp_path):
         jobs.submit("late", lambda _: None)
 
 
-@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-28: jobs.py stops child process groups with os.killpg, which Windows lacks")
 def test_subprocess_output_failure_timeout_and_recovery(worker):
     jobs, store = worker
     result = wait_job(
@@ -153,7 +152,6 @@ def test_subprocess_output_failure_timeout_and_recovery(worker):
     assert wait_job(store, jobs.submit("after", lambda _: True)["id"])["result"] is True
 
 
-@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-28: jobs.py stops child process groups with os.killpg, which Windows lacks")
 def test_cancel_running_child_process(worker):
     jobs, store = worker
     entered = threading.Event()
@@ -166,6 +164,37 @@ def test_cancel_running_child_process(worker):
     assert entered.wait(2)
     jobs.cancel(job["id"])
     assert wait_job(store, job["id"])["status"] == "cancelled"
+
+
+def test_cancel_also_stops_what_the_tool_started(worker, tmp_path):
+    """A worker that runs FFmpeg must not leave FFmpeg running after a cancel, on any OS."""
+    import psutil
+
+    jobs, store = worker
+    marker = tmp_path / "grandchild.pid"
+    script = (
+        "import subprocess, sys, time, pathlib;"
+        "g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']);"
+        f"pathlib.Path({str(marker)!r}).write_text(str(g.pid));"
+        "time.sleep(60)"
+    )
+    job = jobs.submit("tree", lambda identifier: jobs.process(identifier, [sys.executable, "-c", script], timeout=30))
+    deadline = time.monotonic() + 10
+    while not (marker.exists() and marker.read_text()) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    grandchild = int(marker.read_text())
+    jobs.cancel(job["id"])
+    assert wait_job(store, job["id"])["status"] == "cancelled"
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            if psutil.Process(grandchild).status() == psutil.STATUS_ZOMBIE:
+                break
+        except psutil.NoSuchProcess:
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail("the grandchild process is still running")
 
 
 def test_downloads_overlap_heavy_work_with_bounded_concurrency(worker):

@@ -26,4 +26,4 @@ testpaths = ["tests"]
 line-length = 110
 
 [tool.setuptools.package-data]
-clip_factory = ["ui/*", "ui/**/*", "demo_ui/*", "inference_worker.py", "cloud_config.json"]
+clip_factory = ["ui/*", "ui/**/*", "demo_ui/*", "fonts/*", "inference_worker.py", "cloud_config.json"]

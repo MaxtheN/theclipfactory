@@ -35,6 +35,7 @@ import httpx
 from fastapi import HTTPException, Request
 
 from .jobs import WorkError
+from .keystore import key_store_failure
 from .store import new_id, now
 
 KEYCHAIN_SERVICE = "growth-factory-openrouter"
@@ -114,24 +115,24 @@ class OpenRouterSecrets:
     def get(self) -> str | None:
         try:
             value = self._read()
-        except Exception:  # noqa: BLE001 - keychain errors must not expose provider details
-            raise WorkError("Cannot read the OpenRouter key from the macOS Keychain. Unlock it and retry.") from None
+        except Exception as exc:  # noqa: BLE001 - keychain errors must not expose provider details
+            raise WorkError(key_store_failure("Cannot read the OpenRouter key from", exc)) from None
         value = value.strip() if isinstance(value, str) else None
         return value or None
 
     def set(self, value: str) -> None:
         try:
             self._backend().set_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, value)
-        except Exception:  # noqa: BLE001
-            raise WorkError("Cannot save the OpenRouter key to the macOS Keychain. Unlock it and retry.") from None
+        except Exception as exc:  # noqa: BLE001
+            raise WorkError(key_store_failure("Cannot save the OpenRouter key to", exc)) from None
 
     def delete(self) -> None:
         try:
             backend = self._backend()
             if backend.get_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) is not None:
                 backend.delete_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
-        except Exception:  # noqa: BLE001
-            raise WorkError("Cannot remove the OpenRouter key from the macOS Keychain.") from None
+        except Exception as exc:  # noqa: BLE001
+            raise WorkError(key_store_failure("Cannot remove the OpenRouter key from", exc)) from None
 
 
 # ---------------------------------------------------------------------------------------- client
@@ -372,8 +373,8 @@ class LlmGateway:
                temperature, job_id) -> Completion:
         try:
             key = self.secrets.get()
-        except WorkError:
-            raise CloudError("Cannot read the OpenRouter key from the macOS Keychain.", "auth") from None
+        except WorkError as exc:
+            raise CloudError(str(exc), "auth") from None
         if not key:
             self._forget_key_state()
             raise CloudKeyError("No OpenRouter key is saved. Add one in Brand profile → AI model.", "auth")

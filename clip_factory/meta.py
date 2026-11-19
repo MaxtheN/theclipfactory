@@ -8,6 +8,7 @@ Tokens returned by OAuth must go directly to SecureTokenStore, never the browser
 from __future__ import annotations
 
 import hmac
+import importlib
 import ipaddress
 import logging
 import math
@@ -22,6 +23,8 @@ from urllib.parse import urlencode, urlsplit
 
 import httpx
 import keyring
+
+from .keystore import KeyStoreUnavailable, key_store_unavailable
 
 _sensitive_io: ContextVar[bool] = ContextVar("meta_sensitive_io", default=False)
 
@@ -497,6 +500,10 @@ class MetaClient:
         )
 
 
+class KeyStoreUnavailableError(MetaError, KeyStoreUnavailable):
+    """No usable OS key store (for example, Linux without a Secret Service). Never falls back to plain text."""
+
+
 class SecureTokenStore:
     """OS-native keyring only. set_token/get_token/delete_token(account_id, ...) namespace by IG ID.
 
@@ -511,6 +518,10 @@ class SecureTokenStore:
         "keyring.backends.SecretService",
         "keyring.backends.kwallet",
     }
+    _DIRECT: ClassVar[dict[str, tuple[str, str]]] = {
+        "darwin": ("keyring.backends.macOS", "Keyring"),
+        "win32": ("keyring.backends.Windows", "WinVaultKeyring"),
+    }
 
     @staticmethod
     def _backend():
@@ -518,22 +529,20 @@ class SecureTokenStore:
             backend = keyring.get_keyring()
             if type(backend).__module__ not in SecureTokenStore._NATIVE or backend.priority <= 0:
                 # A frozen (PyInstaller) app can lack keyring's entry-point metadata, so automatic
-                # discovery falls back to the "fail" backend. Ask for the macOS Keychain directly.
+                # discovery falls back to the "fail" backend. Ask for the macOS Keychain or Windows
+                # Credential Manager directly. Linux has no such fallback: it needs a Secret Service.
                 # Only when discovery failed outright; an explicitly configured non-native backend is refused.
-                if sys.platform != "darwin" or type(backend).__module__ != "keyring.backends.fail":
+                direct = SecureTokenStore._DIRECT.get(sys.platform)
+                if direct is None or type(backend).__module__ != "keyring.backends.fail":
                     raise RuntimeError
-                from keyring.backends import macOS
-
-                backend = macOS.Keyring()
+                module, name = direct
+                backend = getattr(importlib.import_module(module), name)()
                 if backend.priority <= 0:
                     raise RuntimeError
                 keyring.set_keyring(backend)
             return backend
         except Exception:  # noqa: BLE001 - native backend failures must not leak credentials
-            raise MetaError(
-                "Native OS keychain unavailable. Enable/unlock macOS Keychain, Windows Credential "
-                "Manager, or Linux Secret Service/KWallet; plaintext fallback is forbidden."
-            ) from None
+            raise KeyStoreUnavailableError(key_store_unavailable()) from None
 
     @staticmethod
     def _name(account_id: str) -> str:
