@@ -271,6 +271,7 @@ def test_cover_absent_and_path_escape_are_not_served(client, tmp_path):
     assert client.get("/api/clips/extended/download").status_code == 404
 
 
+@pytest.mark.usefixtures("mac_host")
 def test_inference_job_returns_only_injected_local_output(client, monkeypatch):
     calls = []
     monkeypatch.setattr(client.app.state.models, "require", lambda model, kind: calls.append((model, kind)))

@@ -394,6 +394,7 @@ def test_license_consent_and_missing_models_never_simulate(client):
     assert all(not row["installed"] for row in client.get("/api/models").json())
 
 
+@pytest.mark.usefixtures("mac_host")
 def test_autopilot_waits_with_a_reason_when_no_model_is_installed(client, monkeypatch):
     assert client.get("/api/settings").json()["autonomy"] == "auto"
     video = upload_mock(client, monkeypatch)

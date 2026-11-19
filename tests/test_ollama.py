@@ -125,7 +125,7 @@ def test_run_streams_and_unloads(models, tmp_path):
     frame = tmp_path / "f.jpg"
     frame.write_bytes(b"\xff\xd8jpeg")
     result = models.run("job", "ollama:qwen3.6:35b-a3b", "generate", prompt="pick", images=[str(frame)])
-    assert result == {"output": "hello"}
+    assert result["output"] == "hello" and result["llm"]["provider"] == "ollama"
     body = seen[0]
     assert body["keep_alive"] == 0 and body["think"] is False and body["stream"] is True
     assert body["options"]["num_predict"] == 1500
@@ -139,7 +139,7 @@ def test_text_only_model_refuses_frames(models, tmp_path):
     frame.write_bytes(b"x")
     with pytest.raises(WorkError, match="cannot read images"):
         models.run("job", "ollama:llama3.2:3b", "generate", prompt="p", images=[str(frame)])
-    assert models.run("job", "ollama:llama3.2:3b", "generate", prompt="p") == {"output": "hello"}
+    assert models.run("job", "ollama:llama3.2:3b", "generate", prompt="p")["output"] == "hello"
 
 
 def test_ollama_error_event_is_not_returned_as_output(models):
@@ -228,7 +228,8 @@ def test_a_batch_keeps_the_model_loaded_until_its_last_request(models):
     seen = []
     models.ollama = fake(seen=seen)
     results = models.run_batch("job", "ollama:llama3.2:3b", [{"prompt": "one"}, {"prompt": "two"}, {"prompt": "three"}])
-    assert results == [{"output": "hello"}] * 3
+    assert [r["output"] for r in results] == ["hello"] * 3
+    assert all(r["llm"]["model"].startswith("ollama:") for r in results)
     assert [body["keep_alive"] for body in seen] == ["5m", "5m", 0]
     assert models.run_batch("job", "ollama:llama3.2:3b", []) == []
     with pytest.raises(WorkError, match="invalid"):
@@ -293,7 +294,7 @@ def test_explicit_context_cap_reaches_actual_ollama_chat_json(models, context_to
     models.ollama = fake(seen=seen)
     result = models.run("context-job", "ollama:llama3.2:3b", "generate",
         prompt="A bounded learning prompt", max_tokens=1500, context_tokens=context_tokens)
-    assert result == {"output": "hello"}
+    assert result["output"] == "hello" and result["llm"]["provider"] == "ollama"
     assert len(seen) == 1
     assert seen[0]["options"] == {"temperature": 0.3, "num_predict": 1500, "num_ctx": context_tokens}
     assert "context_tokens" not in seen[0]
