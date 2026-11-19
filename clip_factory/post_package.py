@@ -173,6 +173,6 @@ class Covers:
             path = self.frame(clip, clip_path, choice["time_ms"])
         record = {**choice, "local_path": None, "sha256": None, "bytes": None}
         if path.is_file() and 0 < path.stat().st_size <= COVER_MAX_BYTES:
-            record.update(local_path=str(path.resolve().relative_to(self.root.resolve())),
+            record.update(local_path=path.resolve().relative_to(self.root.resolve()).as_posix(),
                           sha256=media.sha256_file(path), bytes=path.stat().st_size)
         return record
