@@ -392,6 +392,7 @@ def test_find_tool_uses_the_copy_bundled_in_the_packaged_app(tmp_path, monkeypat
     tool.write_text("#!/bin/sh\nexit 0\n")
     tool.chmod(0o755)
     monkeypatch.setattr(_media, "FULL_FFMPEG_DIRS", ())
+    monkeypatch.setattr(_media, "HOMEBREW_BIN_DIRS", ())  # the runner may have Homebrew FFmpeg
     monkeypatch.setenv("PATH", "")  # a double-clicked app gets a bare PATH
     monkeypatch.setattr(_sys, "frozen", True, raising=False)
     monkeypatch.setattr(_sys, "_MEIPASS", str(tmp_path), raising=False)

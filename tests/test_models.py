@@ -319,6 +319,7 @@ def test_child_env_removes_credentials_but_keeps_runtime_settings(monkeypatch):
     for key in ("HF_TOKEN", "API_KEY", "CLIP_META_APP_SECRET", "AWS_ACCESS_KEY_ID", "SERVICE_PASSWORD"):
         monkeypatch.setenv(key, "secret")
     monkeypatch.setenv("PATH", "/local/bin")
+    monkeypatch.setattr("clip_factory.media.find_tool", lambda name: None)  # no FFmpeg dirs to prepend
     env = child_env()
     assert env["PATH"] == "/local/bin"
     assert env["HF_HUB_OFFLINE"] == "1"

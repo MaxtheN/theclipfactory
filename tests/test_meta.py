@@ -1,5 +1,6 @@
 """Contract tests use httpx's transport seam; production always makes real Graph calls."""
 
+import sys
 from urllib.parse import parse_qs
 
 import httpx
@@ -547,6 +548,7 @@ def test_multicast_assets_are_not_public(url):
         validate_public_video_url(url)
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="keyring's macOS backend only loads on macOS")
 def test_frozen_app_without_backend_discovery_uses_the_macos_keychain(monkeypatch):
     import sys as _sys
 

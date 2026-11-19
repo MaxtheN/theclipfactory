@@ -10,8 +10,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15]
+        os: [ubuntu-latest, macos-15, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # Git Bash on Windows, so every platform runs the same commands.
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,14 +33,25 @@ jobs:
           npm ci
           npm test
           npm run build
-      - name: Install FFmpeg (media tests render real clips)
+      - name: Install FFmpeg with libass (media tests burn real captions)
         run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
-          else
-            brew install ffmpeg
-          fi
-          ffmpeg -hide_banner -filters | grep -E ' (ass|subtitles|drawtext|loudnorm) ' || true
+          case "$RUNNER_OS" in
+            Linux)
+              sudo apt-get update -q && sudo apt-get install -y -q ffmpeg ;;
+            macOS)
+              # Homebrew's default ffmpeg has no libass/drawtext; the keg-only ffmpeg-full does,
+              # and it is the build the app prefers (media.FULL_FFMPEG_DIRS).
+              brew install ffmpeg-full
+              echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH" ;;
+            Windows)
+              # Gyan's build (Chocolatey) includes libass and fontconfig.
+              choco install ffmpeg -y --no-progress
+              echo "/c/ProgramData/chocolatey/bin" >> "$GITHUB_PATH" ;;
+          esac
+      - name: Check FFmpeg can burn captions
+        run: |
+          ffmpeg -hide_banner -version | head -1
+          ffmpeg -hide_banner -filters | grep -E ' (ass|subtitles|drawtext|loudnorm) '
       - name: Backend and launcher tests (no native GUI)
         run: |
           python -m pip install '.[test]' 'setuptools>=75' wheel

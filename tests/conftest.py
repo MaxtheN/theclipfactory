@@ -2,6 +2,18 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def git_identity(monkeypatch):
+    """Tests that commit to temporary repositories must not depend on the machine's git identity.
+
+    A CI runner or sandbox may have none (or an empty one injected on the command line); the
+    environment variables take precedence over every config level.
+    """
+    for role in ("AUTHOR", "COMMITTER"):
+        monkeypatch.setenv(f"GIT_{role}_NAME", "Growth Factory Tests")
+        monkeypatch.setenv(f"GIT_{role}_EMAIL", "tests@growth-factory.invalid")
+
+
+@pytest.fixture(autouse=True)
 def no_local_ollama(monkeypatch):
     """Keep tests hermetic even when the developer has Ollama running on 11434."""
     monkeypatch.setenv("OLLAMA_HOST", "127.0.0.1:9")
