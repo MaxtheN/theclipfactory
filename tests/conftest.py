@@ -1,5 +1,9 @@
 import pytest
 
+from clip_factory import speech_backend
+
+REAL_NVIDIA_GPU = speech_backend.nvidia_gpu
+
 
 @pytest.fixture(autouse=True)
 def git_identity(monkeypatch):
@@ -102,3 +106,26 @@ def watched(monkeypatch):
         return made
 
     return install
+
+
+@pytest.fixture(autouse=True)
+def no_gpu_probe(monkeypatch):
+    """Never run the machine's nvidia-smi: tests choose whether a GPU is present."""
+    monkeypatch.setattr(speech_backend, "nvidia_gpu", lambda: None)
+
+
+@pytest.fixture
+def speech_host(monkeypatch):
+    """Pretend to run on another platform: speech_host("Windows", "AMD64", gpu="RTX 4070")."""
+
+    def use(system: str, machine: str, gpu: str | None = None):
+        monkeypatch.setattr(speech_backend, "host", lambda: (system, machine))
+        monkeypatch.setattr(speech_backend, "nvidia_gpu", lambda: gpu)
+
+    return use
+
+
+@pytest.fixture
+def mac_host(speech_host):
+    """The Apple Silicon behaviour the MLX tests describe, on every CI runner."""
+    speech_host("Darwin", "arm64")

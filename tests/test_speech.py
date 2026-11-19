@@ -15,6 +15,9 @@ from clip_factory.models import RUNTIME_VERSIONS, Models
 from clip_factory.store import Store
 from clip_factory.storyboard import VERSION, Storyboards
 
+# These tests describe the Apple Silicon (MLX) engine; the other platforms are in test_speech_backend.
+pytestmark = pytest.mark.usefixtures("mac_host")
+
 client = authenticated_client_fixture
 
 
@@ -43,7 +46,7 @@ def test_fresh_data_dir_reports_speech_as_not_installed(models):
     assert health["runtime"]["state"] == "missing"
     assert health["whisper-turbo"]["state"] == "missing"
     blocker = speech.classify(models)
-    assert blocker["code"] == "asr_missing" and blocker["message"] == speech.MISSING
+    assert blocker["code"] == "asr_missing" and blocker["message"] == speech.missing_message()
     assert [s["id"] for s in blocker["steps"]] == ["runtime", "whisper-turbo"]
     assert blocker["download_gb"] == 3.0 and blocker["action"] == "speech_setup"
 
@@ -136,7 +139,7 @@ def test_factory_reports_asr_missing_and_blocks_only_sources_with_sound(client, 
     line = client.get("/api/factory").json()
     assert not line["ready"]
     [blocker] = line["blockers"]
-    assert blocker["code"] == "asr_missing" and blocker["message"] == speech.MISSING
+    assert blocker["code"] == "asr_missing" and blocker["message"] == speech.missing_message()
     assert blocker["action"] == "speech_setup" and blocker["scope"] == "speech"
     assert line["engine"]["ready"] is False and {s["id"] for s in line["engine"]["steps"]} == {"runtime", "whisper-turbo"}
     sources = {s["video_id"]: s for s in line["sources"]}
@@ -154,7 +157,7 @@ def test_production_with_sound_fails_fast_without_queuing_any_job(client, monkey
     for path in ("produce", "baseline", "team", "storyboard", "analyze"):
         response = client.post(f"/api/videos/{talk['id']}/{path}", json={})
         assert response.status_code == 409, path
-        assert response.json()["detail"] == speech.MISSING
+        assert response.json()["detail"] == speech.missing_message()
     assert client.get("/api/jobs").json() == []
     assert client.app.state.store.all("team_runs") == []
 

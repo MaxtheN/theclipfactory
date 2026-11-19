@@ -13,6 +13,9 @@ from clip_factory import python_runtime as runtime
 from clip_factory.jobs import JobCancelled, WorkError
 from clip_factory.models import RUNTIME_VERSIONS, Models, child_env
 
+# These tests describe the Apple Silicon (MLX) engine; the other platforms are in test_speech_backend.
+pytestmark = pytest.mark.usefixtures("mac_host")
+
 
 def archive_bytes(entries=None):
     entries = entries or [
