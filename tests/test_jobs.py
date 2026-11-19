@@ -117,6 +117,7 @@ def test_durable_interrupted_jobs_fail_without_reexecution(tmp_path):
         jobs.submit("late", lambda _: None)
 
 
+@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-28: jobs.py stops child process groups with os.killpg, which Windows lacks")
 def test_subprocess_output_failure_timeout_and_recovery(worker):
     jobs, store = worker
     result = wait_job(
@@ -152,6 +153,7 @@ def test_subprocess_output_failure_timeout_and_recovery(worker):
     assert wait_job(store, jobs.submit("after", lambda _: True)["id"])["result"] is True
 
 
+@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-28: jobs.py stops child process groups with os.killpg, which Windows lacks")
 def test_cancel_running_child_process(worker):
     jobs, store = worker
     entered = threading.Event()

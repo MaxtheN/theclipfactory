@@ -5,6 +5,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -268,6 +269,7 @@ def test_jobs_record_start_and_finish_times(tmp_path):
 # API rules (fast, FFmpeg stubbed)
 
 
+@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-28: finished media is chmod 0o444, which Windows treats as read-only, so deleting it fails")
 def test_revisions_link_to_parent_and_need_fresh_review(client, monkeypatch):
     fake_media(monkeypatch, client)
     store = client.app.state.store

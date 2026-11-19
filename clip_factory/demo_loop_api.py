@@ -34,7 +34,7 @@ def install(app):
 
     @app.get("/api/demo-loop/viewer", response_class=HTMLResponse)
     def show_viewer():
-        html = (viewer / "index.html").read_text()
+        html = (viewer / "index.html").read_text(encoding="utf-8")
         html = html.replace('href="/styles.css"', 'href="/api/demo-loop/assets/styles.css"')
         html = html.replace('src="/app.js"', 'src="/api/demo-loop/assets/app.js"')
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})

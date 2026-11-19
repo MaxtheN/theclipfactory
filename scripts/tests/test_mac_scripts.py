@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="macOS bash scripts; Windows ships them separately (WO-31)")
+
 REPO = Path(__file__).resolve().parents[2]
 
 

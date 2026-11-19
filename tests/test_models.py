@@ -2,8 +2,10 @@
 
 import inspect
 import json
+import os
 import struct
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -614,9 +616,10 @@ def test_inference_children_get_the_bundled_ffmpeg_on_path(tmp_path, monkeypatch
     tools = tmp_path / "bin"
     tools.mkdir()
     for name in ("ffmpeg", "ffprobe"):
+        name += ".exe" if sys.platform == "win32" else ""
         (tools / name).write_text("#!/bin/sh\nexit 0\n")
         (tools / name).chmod(0o755)
     monkeypatch.setattr(media, "FULL_FFMPEG_DIRS", (str(tools),))
     monkeypatch.setenv("PATH", "")  # a double-clicked app
-    path = models.child_env()["PATH"].split(":")
-    assert path[0] == str(tools)  # MLX Whisper runs `ffmpeg` from PATH to decode audio
+    path = models.child_env()["PATH"].split(os.pathsep)
+    assert Path(path[0]) == tools  # MLX Whisper runs `ffmpeg` from PATH to decode audio

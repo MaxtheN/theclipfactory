@@ -2,6 +2,7 @@
 import json
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -388,7 +389,7 @@ def test_find_tool_uses_the_copy_bundled_in_the_packaged_app(tmp_path, monkeypat
 
     bundled = tmp_path / "bin"
     bundled.mkdir()
-    tool = bundled / "ffprobe"
+    tool = bundled / ("ffprobe.exe" if sys.platform == "win32" else "ffprobe")
     tool.write_text("#!/bin/sh\nexit 0\n")
     tool.chmod(0o755)
     monkeypatch.setattr(_media, "FULL_FFMPEG_DIRS", ())
@@ -396,11 +397,12 @@ def test_find_tool_uses_the_copy_bundled_in_the_packaged_app(tmp_path, monkeypat
     monkeypatch.setenv("PATH", "")  # a double-clicked app gets a bare PATH
     monkeypatch.setattr(_sys, "frozen", True, raising=False)
     monkeypatch.setattr(_sys, "_MEIPASS", str(tmp_path), raising=False)
-    assert _media.find_tool("ffprobe") == str(tool)
+    assert Path(_media.find_tool("ffprobe")) == tool
     monkeypatch.setattr(_sys, "frozen", False, raising=False)
     assert _media.find_tool("ffprobe") is None
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Homebrew does not exist on Windows; per-OS install help is WO-28")
 def test_find_tool_finds_homebrew_ffmpeg_with_a_bare_path(tmp_path, monkeypatch):
     from clip_factory import media as _media
 

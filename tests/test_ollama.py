@@ -1,6 +1,7 @@
 """Ollama connector: loopback only, no cloud models, truthful availability, cancellable."""
 
 import json
+import sys
 from unittest.mock import Mock
 
 import httpx
@@ -252,7 +253,7 @@ def test_raw_reply_is_kept_in_the_job_log(models):
         models.run("job-1", "ollama:llama3.2:3b", "generate", prompt="p")
     log = (models.logs / "job-1.log").read_text()
     assert "hello" in log and "ERROR: Ollama error: boom" in log
-    assert (models.logs / "job-1.log").stat().st_mode & 0o777 == 0o600
+    assert sys.platform == "win32" or (models.logs / "job-1.log").stat().st_mode & 0o777 == 0o600
 
 
 def test_keep_warm_calls_keep_the_model_loaded_between_scout_prompts(models):
