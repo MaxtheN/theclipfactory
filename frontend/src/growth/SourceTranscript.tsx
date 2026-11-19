@@ -252,7 +252,7 @@ export function SourceTranscript({
       <Disclosure title="Transcript & captions" icon="file">
         {reviewPreview ? (
           <p>
-            Available in the Mac app.
+            Available in the desktop app.
           </p>
         ) : (
           <>

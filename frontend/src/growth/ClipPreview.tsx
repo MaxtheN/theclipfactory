@@ -6,6 +6,7 @@ import { formatTime } from "./parts";
 import { clipMediaUrl } from "./productionApi";
 import { reviewPreview } from "./workspaceApi";
 import { ReelsActionRail } from "./PostPreview";
+import { platformWords } from "../platform";
 
 /**
  * A clip's cover tile. Pressing it plays the clip right there, with sound, in a
@@ -121,7 +122,7 @@ export function QuickLook({
       {failed && (
         <p className="gf-inline-error" role="alert">
           This clip could not be played. Its file may have been removed from
-          this Mac.
+          {platformWords().computer}.
         </p>
       )}
       <div className="gf-quicklook-bar">

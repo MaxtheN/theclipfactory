@@ -32,7 +32,7 @@ const parentOf = (clip: Clip) =>
   (clip as { parent_clip_id?: unknown }).parent_clip_id;
 
 /**
- * Deletes clip files to free space on this Mac. The local service keeps a version that was
+ * Deletes clip files to free space on this computer. The local service keeps a version that was
  * exported or that a later revision builds on; those are counted, and the rest still go.
  */
 export async function discardClips(clips: Clip[]): Promise<Discarded> {

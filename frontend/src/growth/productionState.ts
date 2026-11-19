@@ -28,6 +28,12 @@ export function jobInScope(job: Job, scope: ProductionScope, runs: TeamRun[] = [
   return snapshot?.campaign_id === scope.campaignId && snapshot.profile_id === scope.profileId;
 }
 
+/** The fallback speech blocker, with the download size the engine reports for this computer. */
+function speechSetupLine(system: SystemInfo | null) {
+  const total = (system?.engine?.steps ?? []).reduce((sum, step) => sum + step.approx_gb, 0);
+  return `Speech recognition isn't set up yet. Set it up once (${total ? `about ${total.toFixed(1)} GB download` : "a one-time download"}) and run again.`;
+}
+
 export function readiness(input: {
   source?: Video; system: SystemInfo | null; models: Model[]; jobs: Job[];
   modelId: string; approved: boolean; sourceAttached: boolean; subtitles: boolean;
@@ -46,9 +52,12 @@ export function readiness(input: {
   // timing are verified by actual caption checks after rendering, not assumed.
   const missingTranscript = !!source?.has_audio && source.transcript == null;
   if (input.subtitles && missingTranscript) manual.push("Captions need a source transcript. Import one, transcribe locally, or turn captions off.");
+  // Off the Mac the engine checks Ollama, the model and the hardware itself; its reason comes first.
+  const agents = system?.agents?.engine === "ollama" ? system.agents.blocker : null;
   const selected = installedLlms(models, { needsVision: true }).find(m => m.id === modelId);
-  if (!selected) agent.push("Choose an installed model that can inspect video frames.");
-  if (selected && selected.source !== "ollama" && !selected.id.startsWith("ollama:") && system?.model_runtime !== true) agent.push("Set up the local model runtime before using this model.");
+  if (agents) agent.push(agents.message);
+  else if (!selected) agent.push("Choose an installed model that can inspect video frames.");
+  if (!agents && selected && selected.source !== "ollama" && !selected.id.startsWith("ollama:") && system?.model_runtime !== true) agent.push("Set up the local model runtime before using this model.");
   // Agent entry uses Python truthiness: empty legacy containers/strings count
   // as absent, while deterministic render only checks for null/missing.
   const transcript = source?.transcript;
@@ -56,7 +65,7 @@ export function readiness(input: {
     : transcript !== null && typeof transcript === "object" ? Object.keys(transcript).length > 0
     : !!transcript;
   const missingAgentTranscript = !!source?.has_audio && !hasAgentTranscript;
-  if (missingAgentTranscript && (system?.model_runtime !== true || !models.some(m => m.id === "whisper-turbo" && m.installed === true))) agent.push(system?.engine?.blocker?.message || "Speech recognition isn't set up yet. Set it up once (about 1.6 GB download) and run again.");
+  if (missingAgentTranscript && (system?.model_runtime !== true || !models.some(m => m.id === "whisper-turbo" && m.installed === true))) agent.push(system?.engine?.blocker?.message || speechSetupLine(system));
   return { manual, agent, canRender: manual.length === 0, canProduce: agent.length === 0, needsTranscript: missingTranscript };
 }
 

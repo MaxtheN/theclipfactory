@@ -9,6 +9,7 @@ import { CloudAccountRow } from "./CloudSignIn";
 import { EngineSetup } from "./EngineSetup";
 import { Icon } from "./Icon";
 import "./settings.css";
+import { platformWords } from "../platform";
 
 export const settingsSections = [
   ["device", "Device and runtime", "settings"],
@@ -45,11 +46,14 @@ function shown(key: ReadinessKey, value: SystemInfo[ReadinessKey]): string {
 function missing(system: SystemInfo) {
   const rows: { id: string; label: string; fix: string; models?: boolean }[] = [];
   if (system.ffmpeg === false || system.ffprobe === false)
-    rows.push({ id: "ffmpeg", label: "FFmpeg is missing.", fix: "Install it in Terminal with “brew install ffmpeg”, then refresh." });
+    rows.push({ id: "ffmpeg", label: "FFmpeg is missing.", fix: platformWords().installFfmpeg });
   if (system.model_runtime === false)
     rows.push({ id: "runtime", label: "The local model runtime isn’t set up.", fix: "Set up the runtime in Models.", models: true });
   if (system.whisper === false)
     rows.push({ id: "speech", label: "Speech-to-text isn’t installed.", fix: "Install speech in Models.", models: true });
+  const agents = system.agents?.engine === "ollama" ? system.agents.blocker : null;
+  if (agents)
+    rows.push({ id: "agents", label: "Local agents can’t run yet.", fix: `${agents.message} Set them up in Models.`, models: true });
   return rows;
 }
 
@@ -107,7 +111,7 @@ export function SettingsScreen({
       </nav>
       <section className="gf-settings-panel" id={panelId} aria-label={label} key={section}>
         {section === "device" && <>
-          <header><h2>Device and runtime</h2><p>What this Mac has ready for local production.</p></header>
+          <header><h2>Device and runtime</h2><p>What {platformWords().computer} has ready for local production.</p></header>
           {!system ? unavailable : <>
             {gaps.length > 0 ? (
               <ul className="gf-settings-gaps" aria-label="Missing prerequisites">
@@ -120,7 +124,7 @@ export function SettingsScreen({
               </ul>
             ) : <p className="gf-help">Every prerequisite for local production is ready.</p>}
             <dl className="gf-settings-facts">
-              {readiness.map(([key, name]) => <div key={key}><dt>{name}</dt><dd>{shown(key, system[key])}</dd></div>)}
+              {readiness.filter(([key]) => key !== "apple_silicon" || platformWords().os === "macos").map(([key, name]) => <div key={key}><dt>{name}</dt><dd>{shown(key, system[key])}</dd></div>)}
             </dl>
           </>}
           {refresh}
@@ -140,20 +144,20 @@ export function SettingsScreen({
           </div>
         </>}
         {section === "privacy" && <>
-          <header><h2>Privacy and storage</h2><p>Where this Mac keeps your factory’s data.</p></header>
+          <header><h2>Privacy and storage</h2><p>Where {platformWords().computer} keeps your factory’s data.</p></header>
           {!system ? unavailable : (
             <dl className="gf-settings-facts">
               <div><dt>Data folder</dt><dd>{system.data_dir || "Unknown"}</dd></div>
             </dl>
           )}
-          <p className="gf-help">Everything is stored on this Mac. Features that use the internet are marked.</p>
+          <p className="gf-help">Everything is stored on {platformWords().computer}. Features that use the internet are marked.</p>
         </>}
         {section === "jobs" && <>
-          <header><h2>Background jobs</h2><p>Downloads, renders and analysis running on this Mac.</p></header>
+          <header><h2>Background jobs</h2><p>Downloads, renders and analysis running on {platformWords().computer}.</p></header>
           <Jobs state={factory} />
         </>}
         {section === "about" && <>
-          <header><h2>About</h2><p>Growth Factory on this Mac.</p></header>
+          <header><h2>About</h2><p>Growth Factory on {platformWords().computer}.</p></header>
           <dl className="gf-settings-facts">
             <div><dt>App version</dt><dd>{system?.version || "Version unavailable"}</dd></div>
             {system?.platform && <div><dt>Platform</dt><dd>{system.platform}</dd></div>}

@@ -6,6 +6,7 @@ import type { Workspace } from "./useCampaignWorkspace";
 import { reviewPreview } from "./workspaceApi";
 import { ConnectInstagram } from "./ConnectInstagram";
 import "./automation.css";
+import { platformWords } from "../platform";
 
 type Row = Record<string, unknown> & { id: string };
 type Post = {
@@ -432,7 +433,7 @@ export function AutomationPanel({
         <span className="gf-kicker">{full ? "The learning loop" : "Instagram accounts"}</span>
         <h2>{full ? "Every result informs the next draft." : "Connect and track your posts"}</h2>
         <p>
-          Illustrative data. Connect accounts in the Mac app.
+          Illustrative data. Connect accounts in the desktop app.
         </p>
       </section>
     );
@@ -542,7 +543,7 @@ export function AutomationPanel({
                 );
               else await post("/api/automation/policies", body);
               setNotice(
-                "Learning saved. It runs while the Mac app is open and catches up when you reopen it.",
+                "Learning saved. It runs while Growth Factory is open and catches up when you reopen it.",
               );
             })
           }
@@ -601,7 +602,7 @@ export function AutomationPanel({
           onToggle={(e) => setAdvanced(e.currentTarget.open)}
         >
           <summary>Advanced</summary>
-          <p>Your API key stays in macOS Keychain.</p>
+          <p>Your API key stays in {platformWords().keyStore}.</p>
           <div className="gf-automation-controls">
             <label>
               Auth Config ID (starts with ac_)
@@ -619,7 +620,7 @@ export function AutomationPanel({
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
                 autoComplete="off"
-                placeholder={configured ? "Saved in Keychain" : ""}
+                placeholder={configured ? `Saved in ${platformWords().keyStoreShort}` : ""}
               />
             </label>
             <button

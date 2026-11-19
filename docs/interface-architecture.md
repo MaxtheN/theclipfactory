@@ -37,6 +37,8 @@ Contrast audit estimates standard sRGB compositing over the five declared canvas
 
 `useFactory → sources / clips / jobs / runtime`
 
+Platform wording comes from `src/platform.ts`. `/api/system`'s `os` (`macos`, `windows`, `linux`) sets it, and a browser guess stands in until that loads. It names the computer ("this Mac" or "this computer"), the key store (macOS Keychain, Windows Credential Manager, the system keyring), the command-palette shortcut (⌘K or Ctrl+K) and the FFmpeg install step. Components read `platformWords()` while rendering; `GrowthApp` subscribes with `usePlatform()`, so a reported OS re-renders the tree. Review-preview copy says "the desktop app", because a preview has no host OS. Off the Mac, `AgentSetup` shows the engine's `agents` blocker (`agents_hardware`, `ollama_missing`, `ollama_stopped`, `agent_model_missing`) in Factory, Studio and Settings → Models, with the alternatives and Check again (`/api/agents/check`), and the licensed model download (`/api/agents/ollama/pull`).
+
 Keep pywebview, SQLite, loopback bootstrap authentication and Vite's single-file bundle. Retain existing operational pages for model/runtime recovery and advanced controls. No backend rewrite, Electron/Tauri migration or local-service tunnel. No README changes.
 
 ## Small API boundary

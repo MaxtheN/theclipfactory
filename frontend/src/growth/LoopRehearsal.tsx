@@ -66,7 +66,7 @@ export function useLoopRehearsal(w: Workspace, factory: FactoryState, enabled: b
     const ticket = ++serial.current, scope = scopeKey;
     setLoading(true); setError("");
     try {
-      if (reviewPreview) throw new Error("This visual preview does not execute real clip or rehearsal APIs. Open the authenticated Mac app to rehearse.");
+      if (reviewPreview) throw new Error("This visual preview does not execute real clip or rehearsal APIs. Open the authenticated desktop app to rehearse.");
       if (!clip) {
         const value = await post<SyntheticReplay>(`/api/demo-loop/${encodeURIComponent(w.profileId)}/simulate`, { seed: 7, rounds: 2, scenario });
         if (!value.simulated || !Array.isArray(value.loops) || !value.loops[0]?.pairs?.length) throw new Error("The service returned incomplete synthetic plans.");

@@ -10,7 +10,9 @@ import type { FactoryState } from "../useFactory";
 import { Field } from "./parts";
 import { Icon } from "./Icon";
 import { SpeechSetup, engineOf } from "./SpeechSetup";
+import { AgentSetup } from "./AgentSetup";
 import "./engine-setup.css";
+import { platformWords } from "../platform";
 
 const readiness = [
   ["platform", "Platform"], ["apple_silicon", "Apple Silicon"],
@@ -35,15 +37,16 @@ export function EngineSetup({ factory, jobs = true }: { factory: FactoryState; /
   return (
     <div className="gf-local-engine">
       <SpeechSetup factory={factory} variant="engine" />
+      <AgentSetup factory={factory} />
       <section className="gf-local-engine-section" aria-label="Local runtime">
-        <header><div><h3>Local runtime</h3><p>Prepare this Mac for local processing.</p></div><Icon name="settings" size={20} /></header>
+        <header><div><h3>Local runtime</h3><p>Prepare {platformWords().computer} for local processing.</p></div><Icon name="settings" size={20} /></header>
         <div className="gf-local-engine-runtime">
           <div><strong>Runtime: <ReadOnlyValue value={system?.model_runtime} /></strong><small>{engine?.ready ? "Speech recognition is ready." : "Readiness is reported by the local service."}</small></div>
           <button type="button" className="gf-button secondary compact" disabled={factory.busy} onClick={() => void factory.run(() => post("/api/runtime/setup"), "Runtime setup queued. Watch the job output for errors.")}>Set up runtime</button>
         </div>
         <details className="gf-local-engine-disclosure">
-          <summary>This Mac <span>{typeof system?.memory_gb === "number" ? `${system.memory_gb} GB memory` : "Memory unknown"} · {typeof system?.free_disk_gb === "number" ? `${system.free_disk_gb} GB free` : "Disk space unknown"}</span><Icon name="down" size={14} /></summary>
-          <dl className="gf-local-engine-readiness">{readiness.map(([key, label]) => { const value = system?.[key]; return <div key={key}><dt>{label}</dt><dd><ReadOnlyValue value={value} />{typeof value === "number" ? " GB" : ""}</dd></div>; })}</dl>
+          <summary>{platformWords().Computer} <span>{typeof system?.memory_gb === "number" ? `${system.memory_gb} GB memory` : "Memory unknown"} · {typeof system?.free_disk_gb === "number" ? `${system.free_disk_gb} GB free` : "Disk space unknown"}</span><Icon name="down" size={14} /></summary>
+          <dl className="gf-local-engine-readiness">{readiness.filter(([key]) => key !== "apple_silicon" || platformWords().os === "macos").map(([key, label]) => { const value = system?.[key]; return <div key={key}><dt>{label}</dt><dd><ReadOnlyValue value={value} />{typeof value === "number" ? " GB" : ""}</dd></div>; })}</dl>
         </details>
         {factory.errors.system && <p className="gf-help" role="alert">System status unavailable: {factory.errors.system}</p>}
       </section>
@@ -67,7 +70,7 @@ export function EngineSetup({ factory, jobs = true }: { factory: FactoryState; /
       <details className="gf-local-engine-section gf-local-engine-tools">
         <summary><Icon name="research" size={18} /><span>Local testing & narration<small>Try an installed model or generate a separate audio file.</small></span><Icon name="down" size={14} /></summary>
         <div className="gf-local-engine-tools-body">
-          <section aria-label="Inference playground"><h3>Inference playground</h3><p className="gf-local-engine-note">Runs on this Mac. No cloud requests.</p><form onSubmit={(event) => { event.preventDefault(); if (canInfer) void factory.run(() => post("/api/inference", { prompt, model_id: model }), "Inference queued. Output appears after the job completes."); }}>
+          <section aria-label="Inference playground"><h3>Inference playground</h3><p className="gf-local-engine-note">Runs on {platformWords().computer}. No cloud requests.</p><form onSubmit={(event) => { event.preventDefault(); if (canInfer) void factory.run(() => post("/api/inference", { prompt, model_id: model }), "Inference queued. Output appears after the job completes."); }}>
             <Field label="Inference model">{(id) => <select id={id} value={model} onChange={(event) => setPicked(event.target.value)}>{!installed.some((entry) => entry.id === model) && <option value={model}>{model} (not installed)</option>}{installed.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</select>}</Field>
             <Field label="Prompt">{(id) => <AutoTextarea id={id} required rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask for a hook, a story angle, or a caption…" />}</Field>
             <button className="gf-button secondary compact" disabled={!canInfer}>Run locally</button>

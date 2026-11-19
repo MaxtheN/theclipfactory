@@ -26,8 +26,9 @@ import {
   websiteBriefApi,
   type Research as SiteResearch,
 } from "./websiteBriefApi";
+import { platformWords } from "../platform";
 
-/** The brand's website, remembered on this Mac (the backend brand has no URL field). */
+/** The brand's website, remembered on this computer (the backend brand has no URL field). */
 const websiteKey = (profileId: string) => `gf-brand-website:${profileId}`;
 export function rememberWebsite(profileId: string, url: string) {
   try {
@@ -738,7 +739,7 @@ export function Setup({
             />
           )}
         </Field>
-        <Field label="Logo (PNG file on this Mac)">
+        <Field label={`Logo (PNG file on ${platformWords().computer})`}>
           {(id) => (
             <input
               id={id}

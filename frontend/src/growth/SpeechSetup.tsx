@@ -5,6 +5,7 @@ import type { EngineStatus } from "../types";
 import type { FactoryState } from "../useFactory";
 import { Icon } from "./Icon";
 import "./speech-setup.css";
+import { platformWords } from "../platform";
 
 /** Speech readiness as the local service reports it (the factory line is polled; system is not). */
 export function engineOf(factory: FactoryState): EngineStatus | undefined {
@@ -124,7 +125,7 @@ export function SpeechSetup({
           <p>
             {damaged
               ? blocker.message
-              : `So the factory can hear your episodes, this Mac needs a one-time download${
+              : `So the factory can hear your episodes, ${platformWords().computer} needs a one-time download${
                   total ? ` (about ${total.toFixed(1)} GB)` : ""
                 }. Everything runs locally.`}
           </p>
