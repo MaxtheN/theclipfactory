@@ -188,7 +188,7 @@ class CraftOptions(BaseModel):
     # From the teaser back to the setup.
     transition: Literal["cut", "zoom", "flash"] = "zoom"
     # 9:16 crop (`framing="fill"`) of a wider source: follow the speaker's face over time
-    # (reframe.py, Apple Vision on-device) or keep the fixed horizontal `focus_x`. Without the
+    # (reframe.py, on-device face detection from faces.py) or keep the fixed horizontal `focus_x`. Without the
     # detector, or with too few faces, the render keeps focus_x and records why.
     crop_focus: Literal["fixed", "auto_face"] = "auto_face"
     variants: Variants | None = None
@@ -898,7 +898,7 @@ def place_title_card(hook: str, faces: list[dict] | None, *, caption_style: str 
 
 def hook_face_boxes(ffmpeg: str, source: Path, start: float, span: float, *, width: int, height: int,
                     framing: str, crop_x, crop_width: float | None = None, detector=None) -> tuple[list[dict], str]:
-    """Face boxes on the output frame while the title card shows, from Apple Vision samples.
+    """Face boxes on the output frame while the title card shows, from face-detector samples.
 
     Samples the card's source window with the reframe sampler (read-only use). `crop_x` is a
     number or a callable t -> crop centre (the reframe path). Returns (boxes, status) and never
@@ -936,24 +936,10 @@ def hook_face_boxes(ffmpeg: str, source: Path, start: float, span: float, *, wid
 
 
 def face_rectangles(jpeg: bytes) -> list[dict]:
-    """Face boxes (normalised, top-left origin: x, y, w, h) in one image via Apple Vision."""
-    import Foundation
-    import objc
-    import Vision
+    """Face boxes (normalised, top-left origin: x, y, w, h) in one image (`faces.py`)."""
+    from . import faces
 
-    faces = []
-    with objc.autorelease_pool():
-        data = Foundation.NSData.dataWithBytes_length_(jpeg, len(jpeg))
-        handler = Vision.VNImageRequestHandler.alloc().initWithData_options_(data, {})
-        request = Vision.VNDetectFaceRectanglesRequest.alloc().init()
-        ok, _ = handler.performRequests_error_([request], None)
-        for item in (request.results() or []) if ok else []:
-            if float(item.confidence()) < 0.5:
-                continue
-            box = item.boundingBox()  # Vision: normalised, bottom-left origin
-            w, h = float(box.size.width), float(box.size.height)
-            faces.append({"x": float(box.origin.x), "y": 1.0 - float(box.origin.y) - h, "w": w, "h": h})
-    return faces
+    return faces.rectangles(jpeg)
 
 
 def path_centre(keys: list) -> object:

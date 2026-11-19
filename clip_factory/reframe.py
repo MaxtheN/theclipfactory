@@ -2,7 +2,8 @@
 
 For `framing="fill"` on landscape sources (`craft.CraftOptions.crop_focus="auto_face"`), the
 renderer samples each source window at ~2.5 fps (640 px JPEGs piped from FFmpeg, never the whole
-clip in memory), finds faces with Apple Vision on-device (pyobjc; no model download), picks the
+clip in memory), finds faces on-device (`faces.py`: Apple Vision on macOS, OpenCV YuNet with MediaPipe landmarks on
+Windows and Linux), picks the
 active subject per sample, and turns the picks into a smoothed crop-centre path:
 
 * hold the last position through brief misses; median filter against single-sample noise;
@@ -13,7 +14,7 @@ active subject per sample, and turns the picks into a smoothed crop-centre path:
 
 The path becomes a flat piecewise-linear FFmpeg expression of `t` for `crop`'s `x` (evaluated
 per frame in FFmpeg 4.4, no sendcmd file). The pure functions here are deterministic and tested
-without Vision; `plan()` returns `None` path plus a reason whenever the detector is unavailable
+without a detector; `plan()` returns `None` path plus a reason whenever the detector is unavailable
 or the evidence is too thin, and the renderer then keeps the fixed `focus_x` crop.
 """
 
@@ -25,6 +26,8 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+
+from . import faces
 
 SAMPLE_FPS = 2.5
 SAMPLE_WIDTH = 640
@@ -46,24 +49,11 @@ SNAP_SECONDS = 0.001         # width of the step at a cut in the expression
 MAX_KEYFRAMES = 60           # bounded expression length
 SIMPLIFY_TOLERANCE = 0.004
 
-_AVAILABLE: tuple[bool, str | None] | None = None
-
-
 # --------------------------------------------------------------------------- detector
 
 def available() -> tuple[bool, str | None]:
-    """(True, None) when Apple Vision can be imported, else (False, reason). Cached."""
-    global _AVAILABLE
-    if _AVAILABLE is None:
-        try:
-            import Foundation  # noqa: F401
-            import objc  # noqa: F401
-            import Vision  # noqa: F401
-
-            _AVAILABLE = (True, None)
-        except Exception as exc:  # noqa: BLE001 - ImportError, or a framework load failure off macOS
-            _AVAILABLE = (False, f"Apple Vision is not available ({type(exc).__name__}: {str(exc)[:120]}).")
-    return _AVAILABLE
+    """(True, None) when this computer has a face detector, else (False, reason). Cached."""
+    return faces.available()
 
 
 def detect(jpeg: bytes) -> dict:
@@ -71,43 +61,7 @@ def detect(jpeg: bytes) -> dict:
 
     Each face: {"x": centre x, "w": width, "h": height, "mouth": inner-lip opening / face height}.
     """
-    import Foundation
-    import objc
-    import Vision
-
-    faces: list[dict] = []
-    people: list[dict] = []
-    with objc.autorelease_pool():
-        data = Foundation.NSData.dataWithBytes_length_(jpeg, len(jpeg))
-        handler = Vision.VNImageRequestHandler.alloc().initWithData_options_(data, {})
-        face_request = Vision.VNDetectFaceLandmarksRequest.alloc().init()
-        ok, _ = handler.performRequests_error_([face_request], None)
-        for item in (face_request.results() or []) if ok else []:
-            box = item.boundingBox()
-            if float(item.confidence()) < 0.5:
-                continue
-            mouth = None
-            landmarks = item.landmarks()
-            lips = landmarks.innerLips() if landmarks is not None else None
-            count = int(lips.pointCount()) if lips is not None else 0
-            if count:
-                points = lips.normalizedPoints()
-                ys = [float(points[i].y) for i in range(count)]
-                mouth = max(ys) - min(ys)
-            faces.append({
-                "x": float(box.origin.x) + float(box.size.width) / 2,
-                "w": float(box.size.width),
-                "h": float(box.size.height),
-                "mouth": mouth,
-            })
-        if not faces:
-            human_request = Vision.VNDetectHumanRectanglesRequest.alloc().init()
-            ok, _ = handler.performRequests_error_([human_request], None)
-            for item in (human_request.results() or []) if ok else []:
-                box = item.boundingBox()
-                people.append({"x": float(box.origin.x) + float(box.size.width) / 2,
-                               "w": float(box.size.width), "h": float(box.size.height), "mouth": None})
-    return {"faces": faces, "people": people}
+    return faces.detect(jpeg)
 
 
 # --------------------------------------------------------------------------- sampling
@@ -386,10 +340,13 @@ def plan(ffmpeg: str, source: Path, windows: list[dict], *, width: int, height: 
     windows: [{"start": source seconds, "span": seconds}]. Returns {"status": "applied" |
     "unavailable" | "skipped" | "fallback", "filters": [str per window] (applied only), "summary"}.
     `default` (the fixed focus_x) is used where no subject was seen for longer than HOLD_SECONDS.
-    `detector` replaces Vision in tests.
+    `detector` replaces the face detector in tests.
     """
     began = time.monotonic()
-    summary: dict = {"mode": "auto_face", "detector": "apple_vision"}
+    state = faces.status() if detector is None else {"backend": "injected", "mouth": True}
+    summary: dict = {"mode": "auto_face", "detector": state["backend"]}
+    if not state["mouth"]:
+        summary["mouth"] = state.get("mouth_reason")
     if width <= 0 or height <= 0 or width / height < 9 / 16 * 1.15:
         return {"status": "skipped", "summary": summary | {"reason": "The source is not wider than 9:16."}}
     total = sum(w["span"] for w in windows)
@@ -409,7 +366,7 @@ def plan(ffmpeg: str, source: Path, windows: list[dict], *, width: int, height: 
             found = [(t, detector(jpeg)) for t, jpeg in frames]
         except (subprocess.SubprocessError, OSError) as exc:
             return {"status": "fallback", "summary": summary | {"reason": f"Sampling failed: {type(exc).__name__}."}}
-        except Exception as exc:  # noqa: BLE001 - a Vision failure must never fail the render
+        except Exception as exc:  # noqa: BLE001 - a detector failure must never fail the render
             return {"status": "fallback", "summary": summary | {"reason": f"Detection failed: {str(exc)[:160]}"}}
         story = [c - window["start"] for c in scene_cuts or [] if window["start"] < c < window["start"] + window["span"]]
         all_cuts = sorted(cuts + [c for c in story if all(abs(c - d) > 0.5 for d in cuts)])
