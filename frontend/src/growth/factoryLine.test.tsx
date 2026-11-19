@@ -120,9 +120,9 @@ function factory(
     }),
   } as unknown as FactoryState;
 }
-function home(w: Workspace, f: FactoryState) {
+function home(w: Workspace, f: FactoryState, onSettings?: () => void) {
   return render(
-    <FactoryHome w={w} factory={f} onProduce={vi.fn()} onReview={vi.fn()} onLibrary={vi.fn()} onDirection={vi.fn()} />,
+    <FactoryHome w={w} factory={f} onProduce={vi.fn()} onReview={vi.fn()} onLibrary={vi.fn()} onDirection={vi.fn()} onSettings={onSettings} />,
   );
 }
 const swarm = {
@@ -180,11 +180,15 @@ describe("production line on the Factory screen", () => {
     expect(blocked).toBeDisabled();
     expect(blocked).toHaveAttribute("title", "Pick your clip style first.");
     first.unmount();
-    home(workspace(), factory({}, { model: null }));
+    const onSettings = vi.fn();
+    home(workspace(), factory({}, { model: null }), onSettings);
     expect(screen.getByRole("button", { name: "Find clips" })).toHaveAttribute(
       "title",
-      "Set up a local model: Brand profile → Advanced → Engine & models.",
+      "Set up a local model in Settings → Models.",
     );
+    // The missing prerequisite links to the Settings section that resolves it.
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings → Models" }));
+    expect(onSettings).toHaveBeenCalledOnce();
     expect(productionApi.campaignProduce).not.toHaveBeenCalled();
   });
 

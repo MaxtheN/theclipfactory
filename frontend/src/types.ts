@@ -11,6 +11,8 @@ export interface SystemInfo {
   ollama?: boolean | null;
   desktop?: boolean | null;
   data_dir?: string;
+  /** The installed app version (WO-21). */
+  version?: string;
   integrity?: Record<string, { state: IntegrityState; problems: string[] }>;
   engine?: EngineStatus;
 }

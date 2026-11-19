@@ -12,10 +12,7 @@ import {
   formatTime,
 } from "./parts";
 import { Icon } from "./Icon";
-import { CloudAccountRow } from "./CloudSignIn";
-import { AiModelCard } from "./AiModelCard";
 import { PanelDialog } from "./PanelDialog";
-import { EngineSetup } from "./EngineSetup";
 import "./brand-profile.css";
 import { objectives, type BrandKit, type Campaign, type Profile } from "../types";
 import { campaignGoalBody } from "./learningState";
@@ -146,7 +143,6 @@ export function Setup({
   part = "brand",
   active = true,
   goalsRequest = 0,
-  engineRequest = 0,
 }: {
   w: Workspace;
   factory: FactoryState;
@@ -160,15 +156,13 @@ export function Setup({
   onNewCampaign?: () => void;
   /** The Goals & brief section shown below the brand (part "campaign"). */
   goals?: ReactNode;
-  /** Opens connected accounts (Results). */
+  /** Opens Settings > Accounts and connections. */
   onAccounts?: () => void;
   part?: Part;
   /** Hides native modals when this screen is not the active app surface. */
   active?: boolean;
   /** A new positive value opens Goals & brief, including through quick actions. */
   goalsRequest?: number;
-  /** A new positive value opens local Engine & models maintenance. */
-  engineRequest?: number;
 }) {
   const campaign = creating ? undefined : w.campaign;
   // The brand being edited is fixed for this mount (GrowthApp keys Setup by
@@ -177,22 +171,18 @@ export function Setup({
     campaign && campaign.profile_ids.includes(w.profileId)
       ? w.profiles.find((p) => p.id === w.profileId)
       : undefined;
-  const [editor, setEditor] = useState<"identity" | "kit" | "account" | "goals" | "engine" | null>(null);
-  const [section, setSection] = useState<"identity" | "goals" | "kit" | "account">("identity");
+  const [editor, setEditor] = useState<"identity" | "kit" | "goals" | null>(null);
+  const [section, setSection] = useState<"identity" | "goals" | "kit">("identity");
   const summaryId = useId();
   const handledGoalsRequest = useRef(0);
-  const handledEngineRequest = useRef(0);
   useEffect(() => {
     if (!active) setEditor(null);
-    else if (engineRequest > 0 && engineRequest !== handledEngineRequest.current) {
-      handledEngineRequest.current = engineRequest;
-      setEditor("engine");
-    } else if (goals && goalsRequest > 0 && goalsRequest !== handledGoalsRequest.current) {
+    else if (goals && goalsRequest > 0 && goalsRequest !== handledGoalsRequest.current) {
       handledGoalsRequest.current = goalsRequest;
       setSection("goals");
       setEditor("goals");
     }
-  }, [active, goalsRequest, engineRequest, goals]);
+  }, [active, goalsRequest, goals]);
   const [name, setName] = useState(campaign?.name || "");
   const [brandName, setBrandName] = useState(profile?.name || "");
   const [audience, setAudience] = useState(profile?.audience || "");
@@ -758,9 +748,6 @@ export function Setup({
           <Icon name="down" size={15} />
         </summary>
         <div className="gf-disclosure-body">
-          <button type="button" className="gf-link-row gf-engine-settings-link" onClick={() => setEditor("engine")}>
-            <Icon name="settings" size={17} /><span><strong>Engine & models</strong><small>Speech, local models, runtime and background jobs.</small></span><Icon name="arrow" size={15} />
-          </button>
           <Field label="Extra creative notes">
             {(id) => (
               <AutoTextarea
@@ -1035,14 +1022,13 @@ export function Setup({
                 ["identity", "Brand & voice", "headphones"],
                 ...(goals ? [["goals", "Goals & brief", "results"]] : []),
                 ["kit", "Brand kit", "studio"],
-                ["account", "Account & model", "settings"],
               ] as [typeof section, string, string][]).map(([key, label, icon]) => (
                 <button type="button" key={key} aria-current={section === key ? "page" : undefined} aria-controls={summaryId} onClick={() => setSection(key)}>
                   <span className="gf-profile-section-icon"><Icon name={icon} size={17} /></span><span>{label}</span>
                 </button>
               ))}
             </nav>
-            <section className="gf-profile-summary" id={summaryId} key={section} aria-label={section === "identity" ? "Brand and voice summary" : section === "goals" ? "Goals and brief summary" : section === "kit" ? "Brand kit summary" : "Account and model summary"}>
+            <section className="gf-profile-summary" id={summaryId} key={section} aria-label={section === "identity" ? "Brand and voice summary" : section === "goals" ? "Goals and brief summary" : "Brand kit summary"}>
               {section === "identity" && <>
                 <header><h2>Brand, audience & voice</h2><p>The foundation behind every edit.</p></header>
                 <dl>
@@ -1071,15 +1057,6 @@ export function Setup({
                 </dl>
                 {(kitEdited || kitDirty) && kitError && <p className="gf-profile-validation">Brand kit needs attention. {kitError}</p>}
                 <button type="button" className="gf-button secondary compact gf-profile-edit" onClick={() => setEditor("kit")}>Edit brand kit<Icon name="arrow" size={15} /></button>
-              </>}
-              {section === "account" && <>
-                <header><h2>Account & model</h2><p>Your account and the way this factory processes footage.</p></header>
-                <dl>
-                  <div><dt>This workspace</dt><dd>{brandName || "Your brand"}</dd></div>
-                  <div><dt>Account access</dt><dd>Manage sign-in and device access.</dd></div>
-                  <div><dt>Model routing</dt><dd>Choose local or cloud processing and manage your model key.</dd></div>
-                </dl>
-                <button type="button" className="gf-button secondary compact gf-profile-edit" onClick={() => setEditor("account")}>Manage account & model<Icon name="arrow" size={15} /></button>
               </>}
             </section>
           </section>
@@ -1118,15 +1095,6 @@ export function Setup({
           <PanelDialog open={active && editor === "kit"} onClose={() => setEditor(null)} title="Brand kit" description="Colours, typography and the logo used in your clips.">
             <div className="gf-brand-editor">{kitForm}</div>
             {editor === "kit" && saveActions && <div className="gf-panel-dialog-footer">{saveActions}</div>}
-          </PanelDialog>
-          <PanelDialog open={active && editor === "account"} onClose={() => setEditor(null)} title="Account & AI model" size="wide" description="Manage your account and choose how the factory processes your footage.">
-            <div className="gf-brand-account-grid">
-              <section className="gf-profile-account" aria-label="Your account"><h3>Account</h3><CloudAccountRow showLocal /></section>
-              <AiModelCard />
-            </div>
-          </PanelDialog>
-          <PanelDialog open={active && editor === "engine"} onClose={() => setEditor(null)} title="Engine & models" size="wide" description="Manage this Mac’s runtime, local model library and background work.">
-            <EngineSetup factory={factory} />
           </PanelDialog>
           {goals && <PanelDialog open={active && editor === "goals"} onClose={() => setEditor(null)} title="Goals & brief" size="wide" description="Keep the desired outcome, creative direction and episode context together.">
             <div className="gf-brand-goals-editor">{goals}</div>

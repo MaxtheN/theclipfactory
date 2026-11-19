@@ -5,7 +5,7 @@ export type QuickAction = {
   id: string;
   label: string;
   icon: string;
-  group: "Clips" | "Brand";
+  group: "Clips" | "Brand" | "App";
   keywords?: string;
   disabled?: boolean;
   hint?: string;
@@ -79,7 +79,7 @@ export function QuickActions({
   const filtered = ranked.filter((action) => !recent.includes(action));
   const sections: { label: string; items: QuickAction[] }[] = [
     { label: "Recent", items: recent },
-    ...(["Clips", "Brand"] as const).map((group) => ({
+    ...(["Clips", "Brand", "App"] as const).map((group) => ({
       label: group,
       items: filtered.filter((action) => action.group === group),
     })),
