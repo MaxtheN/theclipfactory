@@ -404,11 +404,41 @@ describe("Growth Factory interface", () => {
     );
     closeBrandEditor();
     openEditingRules();
+    // Moving away keeps the draft and says so on the destination that holds it.
+    expect(screen.getByRole("button", { name: "Brand profile" })).toHaveAccessibleDescription("Has changes that are not saved");
+    expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Brand profile" }));
     openBrandEditor();
     expect(
       screen.getByRole("textbox", { name: "Who it's for" }),
     ).toHaveValue("A very specific audience");
+  });
+  it("asks before a campaign switch would drop an unsaved brand edit", async () => {
+    const original = await previewRequest<Campaign>(path);
+    const single = await send<Campaign>("/api/campaigns", { name: "Draft guard campaign", brief: original.brief, video_ids: [], profile_ids: ["preview-profile-allin"] });
+    localStorage.setItem("growth-campaign", single.id);
+    render(<GrowthApp />);
+    const picker = await screen.findByRole("combobox", { name: "Current campaign" });
+    await waitFor(() => expect(picker).toHaveValue(single.id));
+    await waitFor(() => expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"));
+    openBrandEditor();
+    fireEvent.change(screen.getByRole("textbox", { name: "Who it's for" }), { target: { value: "Kept on Stay" } });
+    closeBrandEditor();
+
+    fireEvent.change(picker, { target: { value: "preview-campaign" } });
+    const ask = await screen.findByRole("dialog", { name: "Unsaved changes" });
+    expect(within(ask).getByText("Switching campaign reloads every screen.")).toBeInTheDocument();
+    expect(within(ask).getByRole("list", { name: "Unsaved drafts" })).toHaveTextContent("Brand profile");
+    fireEvent.click(within(ask).getByRole("button", { name: "Stay" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).not.toBeInTheDocument());
+    expect(localStorage.getItem("growth-campaign")).toBe(single.id);
+    openBrandEditor();
+    expect(screen.getByRole("textbox", { name: "Who it's for" })).toHaveValue("Kept on Stay");
+    closeBrandEditor();
+
+    fireEvent.change(picker, { target: { value: "preview-campaign" } });
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "Unsaved changes" })).getByRole("button", { name: "Discard" }));
+    await waitFor(() => expect(localStorage.getItem("growth-campaign")).toBe("preview-campaign"));
   });
 });
 

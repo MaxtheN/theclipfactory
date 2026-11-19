@@ -1,6 +1,7 @@
 import { AutoTextarea } from "../components/AutoTextarea";
 import { ClipStyleSheet } from "./ClipStyle";
 import { useEffect, useRef, useState } from "react";
+import { UnsavedNote, useUnsavedDraft } from "./unsavedDrafts";
 import { activeJob, installedLlms } from "../productionPreflight";
 import type { Job, TeamRun } from "../types";
 import type { FactoryState } from "../useFactory";
@@ -51,6 +52,8 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const [focusX, setFocusX] = useState(.5), [subtitles, setSubtitles] = useState(true);
   const [craft, setCraft] = useState(freshCraft);
   const [feedback, setFeedback] = useState(""), [revisionParent, setRevisionParent] = useState<ProductionClip>();
+  // A change request is an Unsaved Draft until its render is queued.
+  const [revisionSent, setRevisionSent] = useState(false);
   const [modelId, setModelId] = useState(""), [budget, setBudget] = useState(1);
   // Many clips covering the whole episode, ranked best first; "Deep edit" is the slower team mode.
   const [strategy, setStrategy] = useState<"swarm" | "team">("swarm");
@@ -84,6 +87,14 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const edits = editErrors({ start, end, hook, opening, coldStart, coldEnd, focusX }, source?.duration);
   const plan = { start: +start, end: +end, hook: hook.trim(), subtitles, opening_treatment: opening, hook_overlay: opening === "text_overlay", cold_open_start: opening === "cold_open" ? +coldStart : null, cold_open_end: opening === "cold_open" ? +coldEnd : null, focus_x: focusX, framing: direction?.framing, caption_style: direction?.caption_style, ...craftPlan(craft) };
   const delta = revisionParent ? changedEditFields(revisionParent.edit_plan, plan) : [];
+  const revisionDirty = !!revisionParent && !revisionSent && (!!feedback.trim() || delta.length > 0);
+  useUnsavedDraft(revisionDirty, {
+    id: "studio-revision",
+    screen: "studio",
+    label: "Studio change request",
+    record: revisionParent?.id,
+    discard: () => { setRevisionParent(undefined); setFeedback(""); },
+  });
   const revisionError = revisionParent && (!feedback.trim() ? "Describe why this version needs to change." : !delta.length ? "Change an actual edit setting; feedback alone does not change the render." : "");
   const reviewReason = selected ? reviewBlocker(selected, factory.data.jobs, stale) : "Select a clip first.";
   const reviewReady = !!selected && !reviewReason && !busy && !playbackError && (reviewPreview || playbackReady);
@@ -199,12 +210,12 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     }
     if (!ready.canRender || edits.length || revisionError) return;
     const body: CampaignRenderRequest = { expected_strategy_version_id: active.id, video_id: source.id, profile_id: w.profileId, ...plan, caption: revisionParent?.caption || "", mode: "direct", instructions: revisionParent ? feedback.trim() : "Creator-selected moment within this campaign.", ...(revisionParent ? { parent_clip_id: revisionParent.id, change_reason: feedback.trim(), changed_variable: delta.join(", ") } : {}) };
-    await perform(async () => { const job = await productionApi.campaignRender(w.campaign!.id, body); setSubmitted({ id: job.id, scope: scopeKey, source: source.id }); setFreshProduction(true); }, reviewPreview ? "Sample handoff queued. This illustrative preview does not render footage." : "Render queued. This exact job's output will appear for fresh review.");
+    await perform(async () => { const job = await productionApi.campaignRender(w.campaign!.id, body); setSubmitted({ id: job.id, scope: scopeKey, source: source.id }); setFreshProduction(true); if (revisionParent) setRevisionSent(true); }, reviewPreview ? "Sample handoff queued. This illustrative preview does not render footage." : "Render queued. This exact job's output will appear for fresh review.");
   }
   function revise(clip: ProductionClip) {
     const p = clip.edit_plan;
     if (!p || typeof p.start !== "number" || typeof p.end !== "number" || typeof p.hook !== "string" || typeof p.subtitles !== "boolean" || typeof p.focus_x !== "number" || !["text_overlay", "cold_open"].includes(p.opening_treatment || "")) { setActionError("This legacy version has an incomplete saved edit plan. Create a new cut instead of guessing unknown settings."); return; }
-    setMode("manual"); setRevisionParent(clip); setFeedback(""); setSourceId(clip.video_id);
+    setMode("manual"); setRevisionParent(clip); setRevisionSent(false); setFeedback(""); setSourceId(clip.video_id);
     setStart(String(p.start ?? clip.start)); setEnd(String(p.end ?? clip.end)); setHook(p.hook ?? clip.hook);
     setOpening(p.opening_treatment === "cold_open" ? "cold_open" : "text_overlay");
     setColdStart(String(p.cold_open_start ?? 0)); setColdEnd(String(p.cold_open_end ?? 3));
@@ -324,6 +335,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
         {!revisionParent && (() => { const summary = briefSummary(w.campaign!.brief, w.campaign!.objective, w.campaign!.primary_metric); return <p className="gf-brief-summary" aria-label="Goals and brief summary"><span title={summary}>{summary}</span>{onEditBrief && <button type="button" className="gf-button ghost compact" onClick={onEditBrief}>Edit brief</button>}</p>; })()}
         {sources.length > 1 && <Field label="Episode">{id => <select id={id} value={sourceId} disabled={!!revisionParent || busy} onChange={e => { setSourceId(e.target.value); setStart("0"); const s = sources.find(v => v.id === e.target.value); setEnd(String(Math.min(direction?.duration_seconds || 30, s?.duration || 30))); }}><option value="" disabled>Choose an episode</option>{sources.map(s => <option value={s.id} key={s.id}>{sourceLabel(s.id, w.campaign!.video_ids)}</option>)}</select>}</Field>}
         {revisionParent && <Field label="What would make it better?">{id => <AutoTextarea id={id} value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="What should change, and why?" rows={3} />}</Field>}
+        {revisionDirty && <UnsavedNote>Change request not sent</UnsavedNote>}
         {/* One reason at a time: the first thing to fix. */}
         {mode === "agent" && !revisionParent && <Field label="What should the agents look for? (optional)" hint="Used for this run only, within your style rules.">{id => <AutoTextarea id={id} rows={2} maxLength={DIRECTION_MAX} value={lookFor} disabled={busy} placeholder="e.g. the spiciest takes on AI policy, under 40s" onChange={e => setLookFor(e.target.value)} />}</Field>}
         {!direction ? <ClipStyleSheet w={w} onFullRules={onDirection} /> : blockers[0] && <p className="gf-help">{blockers[0]}</p>}

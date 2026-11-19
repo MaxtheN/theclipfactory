@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { UnsavedNote, useUnsavedDraft } from "./unsavedDrafts";
 import { AutoTextarea } from "../components/AutoTextarea";
 import type { Campaign } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
@@ -355,9 +356,20 @@ export function CampaignBriefEditor({
   const problem = briefProblem(draft);
   const changed = !sameBrief(draft, campaign.brief);
   const blocked = w.busy || w.loading || state.kind === "unknown";
+  useUnsavedDraft(changed, {
+    id: `campaign-brief-${campaign.id}`,
+    screen: "setup",
+    label: "Campaign brief",
+    save: () => save(),
+    discard: () => {
+      setDraft(normalizeBrief(campaign.brief));
+      setState({ kind: "idle", message: "" });
+    },
+  });
 
-  async function save() {
-    if (blocked || problem) return;
+  /** Resolves true only when the brief was written and read back. */
+  async function save(): Promise<boolean> {
+    if (blocked || problem) return false;
     let stage = "read" as "read" | "write" | "readback";
     let failure = "";
     const ok = await w.run(async () => {
@@ -381,8 +393,11 @@ export function CampaignBriefEditor({
         throw error;
       }
     }, "Brief saved. The next production uses it; earlier clips keep theirs.");
-    if (ok) setState({ kind: "saved", message: "Brief saved and confirmed." });
-    else if (!failure) setState({ kind: "unknown", message: "Saved, but the screen could not refresh. Reload before editing again." });
+    if (ok) {
+      setState({ kind: "saved", message: "Brief saved and confirmed." });
+      return true;
+    }
+    if (!failure) setState({ kind: "unknown", message: "Saved, but the screen could not refresh. Reload before editing again." });
     else if (stage === "read") setState({ kind: "failed", message: `${failure} Nothing was saved.` });
     else
       setState({
@@ -392,6 +407,7 @@ export function CampaignBriefEditor({
             ? `${failure} The brief may or may not have been saved. Reload before editing again.`
             : `${failure} Your edits are still here.`,
       });
+    return false;
   }
 
   return (
@@ -406,6 +422,7 @@ export function CampaignBriefEditor({
         }}
       />
       <div className="gf-brief-actions">
+        {changed && <UnsavedNote />}
         <span role={problem || state.kind === "failed" || state.kind === "unknown" ? "alert" : state.kind === "saved" ? "status" : undefined}>
           {problem || state.message || (changed ? "Unsaved brief changes." : "Every agent reads this brief.")}
         </span>

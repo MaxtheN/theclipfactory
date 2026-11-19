@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
+import { UnsavedNote, useUnsavedDraft } from "./unsavedDrafts";
 import { Field, Pill } from "./parts";
 import {
   DEFAULT_LIMITS,
@@ -100,6 +101,8 @@ export function PostToInstagram({
   const [pkg, setPkg] = useState<PostPackageView>();
   const [chosen, setChosen] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
+  // The creator's own caption edits are an Unsaved Draft until they post, schedule or regenerate.
+  const [captionDirty, setCaptionDirty] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [coverMs, setCoverMs] = useState<number | null>(null);
   const [shareToFeed, setShareToFeed] = useState(true);
@@ -130,7 +133,7 @@ export function PostToInstagram({
     live.current = true;
     setTargets(undefined); setReport(undefined); setAttempts([]); setSchedules([]); setChosen([]); setError("");
     setOverride(""); setOverrides({}); setCoverMs(null); setShareToFeed(true); setMode("now"); setNotice("");
-    edited.current = false; prefilled.current = false; setCopy(undefined); setPkg(undefined);
+    edited.current = false; prefilled.current = false; setCopy(undefined); setPkg(undefined); setCaptionDirty(false);
     publishApi.targets(clip.id).then(t => {
       if (!live.current) return;
       applyTargets(t);
@@ -196,7 +199,7 @@ export function PostToInstagram({
         if (live.current) {
           setSchedules(old => [...old.filter(s => s.id !== row.id), row]);
           setAttempts(old => [...row.attempts, ...old.filter(a => !row.attempts.some(m => m.id === a.id))]);
-          setChosen([]); setNotice(`Scheduled for ${localTime(row.publish_at)}. The app must be open at that time.`);
+          setChosen([]); setCaptionDirty(false); setNotice(`Scheduled for ${localTime(row.publish_at)}. The app must be open at that time.`);
         }
         return;
       }
@@ -211,6 +214,7 @@ export function PostToInstagram({
       if (live.current) {
         setAttempts(old => [...made, ...old.filter(a => !made.some(m => m.id === a.id))]);
         setChosen([]);
+        if (made.length) setCaptionDirty(false);
         if (failures.length) setError(failures.join(" "));
       }
     } catch (e) {
@@ -233,7 +237,7 @@ export function PostToInstagram({
       }
       if (!live.current) return;
       if (view.job?.status === "failed") throw new Error(view.job.error || "Post copy could not be written.");
-      if (view.post_copy) { setCopy(view.post_copy); setCaption(view.post_copy.caption); edited.current = false; }
+      if (view.post_copy) { setCopy(view.post_copy); setCaption(view.post_copy.caption); edited.current = false; setCaptionDirty(false); }
     } catch (e) {
       if (live.current) setError(message(e));
     } finally {
@@ -269,7 +273,19 @@ export function PostToInstagram({
     }
   }
 
-  const editCaption = (value: string) => { edited.current = true; setCaption(value); };
+  const editCaption = (value: string) => { edited.current = true; setCaption(value); setCaptionDirty(true); };
+  useUnsavedDraft(captionDirty, {
+    id: "post-caption",
+    screen: "studio",
+    label: "Post caption",
+    record: clip.id,
+    discard: () => {
+      edited.current = false;
+      setCaption(copy?.caption || targets?.default_caption || clip.caption || clip.hook || "");
+      setOverrides({});
+      setCaptionDirty(false);
+    },
+  });
   const pending = schedules.filter(s => s.status === "scheduled");
   const submitLabel = busy ? "Working…" : mode === "schedule"
     ? (clip.approved ? "Schedule post" : "Approve & schedule")
@@ -306,6 +322,7 @@ export function PostToInstagram({
     {compact && <section className="gf-review-section gf-post-launcher" aria-label="Posting tools">
       <button type="button" className="gf-button secondary full" onClick={() => setEditorOpen(true)}><Icon name="send" size={16} /> Prepare your post<Icon name="arrow" size={15} /></button>
       <p className="gf-post-note">Preview, caption, accounts and timing.</p>
+      {captionDirty && <UnsavedNote>Caption not saved</UnsavedNote>}
       {attempts.length > 0 && <p className="gf-post-note" role="status" aria-label="Posting activity">{[...new Set(attempts.map(a => a.state))].map(state => `${stateLabel[state]}: ${attempts.filter(a => a.state === state).length}`).join(" · ")}</p>}
       {attempts.some(a => a.state === "unknown" || (a.state === "container_created" && !a.active)) && <p className="gf-post-recovery-note" role="status">A post needs a status check. Open posting to check the exact attempt before trying again.</p>}
       {pending.some(row => row.overdue_at) && <p className="gf-post-recovery-note" role="status">A scheduled post was missed while the app was closed. Nothing was posted. Open posting to choose what happens next.</p>}
@@ -359,6 +376,7 @@ export function PostToInstagram({
       <div className="gf-post-group">
         <Field label="Caption" hint={copy ? `${copy.label}${copy.fallback_reason ? ` · ${copy.fallback_reason}` : ""}` : undefined}>{id => <AutoTextarea id={id} rows={4} value={caption} onChange={e => editCaption(e.target.value)} />}</Field>
         <Counters text={caption} limits={limits} />
+        {captionDirty && <UnsavedNote>Caption not saved</UnsavedNote>}
         <div className="gf-chip-row" aria-label="Caption extras">
           {suggested.map(tag => <button key={tag} type="button" className="gf-chip" aria-pressed={present.has(tag.toLowerCase())}
             onClick={() => editCaption(toggleHashtag(caption, tag))}>#{tag}</button>)}
