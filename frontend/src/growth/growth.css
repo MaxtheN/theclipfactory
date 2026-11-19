@@ -1,13 +1,6 @@
 /* The desktop and review preview share one presentation layer. Operational
    tools retain their existing dark styling outside .gf-app. */
 .gf-app {
-  --ink: #202a27;
-  --muted: #64716a;
-  --line: rgba(81, 112, 128, 0.18);
-  --glass: rgba(255, 255, 255, 0.42);
-  --mint: #dceee1;
-  --accent: #dceee1;
-  --danger: #9b3935;
   color-scheme: light;
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;

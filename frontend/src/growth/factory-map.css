@@ -118,7 +118,6 @@
 }
 .gf-fmap-live.is-on i {
   background: var(--st-blue);
-  animation: gf-fmap-beacon 2s var(--fmap-ease) infinite;
 }
 .gf-fmap.is-replay .gf-fmap-live i {
   background: var(--st-amber);
@@ -336,7 +335,9 @@
   opacity: 0;
   pointer-events: none;
   will-change: offset-distance, opacity;
-  animation: gf-fmap-ride 2.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  /* One ride per hand-off: the token marks the move, then the wire's
+     lit state carries it. No infinite decorative loops. */
+  animation: gf-fmap-ride 2.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) 1 both;
 }
 
 /* Station cards: name, one status line, one metric, one pill. */
@@ -451,6 +452,8 @@
   inset: 0 auto 0 0;
   width: 36%;
   background: var(--st-blue);
+  /* Status motion: a running station with no measurable progress. Reduced
+     motion shows a still, half-tone bar instead. */
   animation: gf-fmap-indeterminate 1.8s var(--fmap-ease) infinite;
 }
 
@@ -952,7 +955,6 @@
 }
 .gf-fmap-mini li.is-active i {
   background: var(--st-blue);
-  animation: gf-fmap-breathe 1.6s ease-in-out infinite;
 }
 .gf-fmap-mini p {
   margin: 8px 2px 0;
@@ -1033,17 +1035,9 @@
   from { transform: translateX(-100%); }
   to { transform: translateX(280%); }
 }
-@keyframes gf-fmap-breathe {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
 @keyframes gf-fmap-pulse {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--st-green) 45%, transparent); }
   100% { box-shadow: 0 0 0 10px transparent; }
-}
-@keyframes gf-fmap-beacon {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--st-blue) 55%, transparent); }
-  100% { box-shadow: 0 0 0 7px transparent; }
 }
 @keyframes gf-fmap-sheet-in {
   from { transform: translateX(16px); opacity: 0; }

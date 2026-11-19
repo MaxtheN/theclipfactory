@@ -1,28 +1,7 @@
 /* One design system, loaded last: spacing, radius, button hierarchy, cards,
    page headers, motion and the shared skeleton. Every motion rule has a
-   prefers-reduced-motion fallback at the end of this file. */
-.gf-app,
-.gf-command-dialog {
-  --gf-s1: 4px;
-  --gf-s2: 8px;
-  --gf-s3: 12px;
-  --gf-s4: 16px;
-  --gf-s5: 24px;
-  --gf-s6: 32px;
-  --gf-radius: 12px;
-  --gf-radius-control: 8px;
-  --gf-radius-chip: 6px;
-  --gf-card-fill: rgba(118, 128, 136, 0.2);
-  --gf-card-line: rgba(255, 255, 255, 0.16);
-  --gf-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 12px 32px -20px rgba(10, 14, 18, 0.55);
-  --gf-card-shadow-hover: 0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 18px 40px -20px rgba(10, 14, 18, 0.7);
-  --gf-frost: blur(24px) saturate(1.15);
-  --gf-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --gf-fast: 150ms;
-  --gf-base: 200ms;
-}
+   prefers-reduced-motion fallback at the end of this file. Tokens live in
+   tokens.css. */
 
 /* Numbers that change (durations, counts, scores) never jiggle. */
 .gf-app .gf-pill,
