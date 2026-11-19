@@ -37,7 +37,8 @@ jobs:
         run: |
           case "$RUNNER_OS" in
             Linux)
-              sudo apt-get update -q && sudo apt-get install -y -q ffmpeg bubblewrap ;;
+              # libegl1/libgles2: MediaPipe face landmarks (faces.py) load them on Linux.
+              sudo apt-get update -q && sudo apt-get install -y -q ffmpeg bubblewrap libegl1 libgles2 ;;
             macOS)
               # Homebrew's default ffmpeg has no libass/drawtext; the keg-only ffmpeg-full does,
               # and it is the build the app prefers (media.FULL_FFMPEG_DIRS).
