@@ -11,7 +11,7 @@ import type { LibraryView, OpenProduction } from "./FactoryHome";
 import { SourceDetails, sourceLabel } from "./sourcePresentation";
 import { ClipPreview, QuickLook } from "./ClipPreview";
 import { newestFirst, undirected } from "./productionState";
-import { deleteEpisode, discardClips } from "./storage";
+import { deleteEpisode, discardClips, exportedClipIds, type Discarded } from "./storage";
 import { sourceHasActiveJob } from "../productionPreflight";
 
 export function Library({
@@ -96,23 +96,27 @@ export function Library({
     }
   }
   const count = (n: number) => `${n} clip${n === 1 ? "" : "s"}`;
-  function discard(targets: Clip[], picked = false): boolean {
+  async function discard(targets: Clip[], picked = false): Promise<boolean> {
     if (!targets.length) return false;
     const one = targets.length === 1 ? targets[0] : undefined;
-    const approved = targets.filter((c) => c.approved).length;
-    const question = one
-      ? `Discard “${one.hook || one.name}”? The clip file is deleted from this Mac.`
-      : picked
-        ? `Delete ${count(targets.length)}${approved ? ` (${approved} approved)` : ""}? Their files are deleted from this Mac. This cannot be undone.`
-        : `Discard ${count(targets.length)} that were not approved? Their files are deleted from this Mac. This cannot be undone.`;
+    let question: string;
+    if (one) {
+      question = `Discard “${clipTitle(one)}”? The clip file is deleted from this Mac.`;
+    } else {
+      // The count names what is at stake: approved work, and exported versions the service keeps.
+      const exported = await exportedClipIds();
+      const approved = targets.filter((c) => c.approved).length;
+      const kept = exported ? targets.filter((c) => exported.has(c.id)).length : 0;
+      const stakes = [approved && `${approved} approved`, kept && `${kept} exported`].filter(Boolean).join(", ");
+      question = `${picked ? "Delete" : "Discard"} ${count(targets.length)}${picked ? "" : " that were not approved"}${stakes ? ` (${stakes})` : ""}? Their files are deleted from this Mac. This cannot be undone.`;
+      if (kept) question += ` Exported versions are kept so their exports can be verified.`;
+      if (!exported) question += " Export history could not be read, so some exported clips may be kept.";
+    }
     if (!window.confirm(question)) return false;
     void clear(async () => {
       const result = await discardClips(targets);
       return result.kept
-        ? {
-            ok: false,
-            text: `${count(result.discarded)} discarded. ${result.kept} kept: ${result.reason}`,
-          }
+        ? { ok: false, text: `${count(result.discarded)} discarded. ${notDeleted(result)}` }
         : { ok: true, text: `${count(result.discarded)} discarded.` };
     });
     return true;
@@ -186,7 +190,7 @@ export function Library({
           <label><input type="checkbox" checked={olderTests} onChange={event => setOlderTests(event.target.checked)} /> Include older test drafts</label>
         </details>
       )}
-      {inspecting && <QuickLook clip={inspecting} title={inspecting.hook || inspecting.name} onClose={() => setInspecting(undefined)} onDiscard={locked ? undefined : () => discard([inspecting])} discardLabel="Remove" />}
+      {inspecting && <QuickLook clip={inspecting} title={inspecting.hook || inspecting.name} onClose={() => setInspecting(undefined)} onDiscard={locked ? undefined : () => void discard([inspecting])} discardLabel="Remove" />}
       {outcome && (
         <p
           className={`gf-message ${outcome.ok ? "success" : "error"}`}
@@ -218,7 +222,7 @@ export function Library({
                     iconSize={24}
                     onReview={clip.campaign_id ? () => onReview(clip) : undefined}
                     reviewLabel="Edit / request change"
-                    onDiscard={locked ? undefined : () => discard([clip])}
+                    onDiscard={locked ? undefined : () => void discard([clip])}
                     discardLabel="Remove"
                   />
                   <button
@@ -375,6 +379,20 @@ export function Library({
   );
 }
 
+const clipTitle = (clip: Clip) => clip.hook || clip.name;
+/** Names every clip the local service kept, grouped under its reason. */
+function notDeleted({ failed, kept, reason }: Discarded) {
+  if (!failed.length) return `${kept} kept: ${reason}`;
+  const byReason = new Map<string, string[]>();
+  for (const { clip, reason: why } of failed)
+    byReason.set(why, [...(byReason.get(why) ?? []), `“${clipTitle(clip)}”`]);
+  const groups = [...byReason].map(([why, names]) => {
+    const listed = names.length > 5 ? `${names.slice(0, 5).join(", ")} and ${names.length - 5} more` : names.join(", ");
+    return `${listed}: ${why}`;
+  });
+  return `Not deleted: ${groups.join(" ")}`;
+}
+
 type WallFilter = "All clips" | "Posted" | "Quality holds";
 const wallFilters: WallFilter[] = ["All clips", "Posted", "Quality holds"];
 const posted = (c: Clip) => !!(c.published_at || c.instagram_media_id);
@@ -402,7 +420,7 @@ function ReviewWall({
   onReview: (clip: Clip) => void;
   onFactory: () => void;
   /** Deletes the given clips' files after asking; false when the person declined. */
-  onDiscard: (clips: Clip[], picked?: boolean) => boolean;
+  onDiscard: (clips: Clip[], picked?: boolean) => Promise<boolean>;
   locked: boolean;
 }) {
   const [filter, setFilter] = useState<WallFilter>("All clips");
@@ -418,8 +436,17 @@ function ReviewWall({
   );
   const matches = (c: Clip, f: WallFilter) => f === "All clips" || (f === "Posted" ? posted(c) : !!c.rank?.below_bar || !!c.made_without_speech);
   const shown = scoped.filter((c) => matches(c, filter));
-  // Only clips that still exist count; deleted or refreshed-away ids drop out on their own.
-  const chosen = clips.filter((c) => picked.has(c.id));
+  // Only clips on screen count: a filter, hypothesis, search or refresh that hides a clip also
+  // drops it from the selection, so a delete never reaches clips the person cannot see.
+  const chosen = shown.filter((c) => picked.has(c.id));
+  const shownKey = shown.map((c) => c.id).join("\n");
+  useEffect(() => {
+    const visible = new Set(shownKey ? shownKey.split("\n") : []);
+    setPicked((prev) => {
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [shownKey]);
   const allShown = shown.length > 0 && shown.every((c) => picked.has(c.id));
   const toggle = (id: string) =>
     setPicked((prev) => {
@@ -432,8 +459,15 @@ function ReviewWall({
     setSelecting(false);
     setPicked(new Set());
   };
-  const deleteChosen = () => {
-    if (!locked && onDiscard(chosen, true)) stopSelecting();
+  const [asking, setAsking] = useState(false);
+  const deleteChosen = async () => {
+    if (locked || asking) return;
+    setAsking(true);
+    try {
+      if (await onDiscard(chosen, true)) stopSelecting();
+    } finally {
+      setAsking(false);
+    }
   };
   if (!clips.length)
     return (
@@ -502,8 +536,8 @@ function ReviewWall({
             <button
               type="button"
               className="gf-button compact gf-wall-batch-delete"
-              disabled={locked || !chosen.length}
-              onClick={deleteChosen}
+              disabled={locked || asking || !chosen.length}
+              onClick={() => void deleteChosen()}
             >
               <Icon name="trash" size={14} />
               {chosen.length ? `Delete ${chosen.length}` : "Delete"}

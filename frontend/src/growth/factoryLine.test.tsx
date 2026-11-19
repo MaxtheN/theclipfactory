@@ -433,7 +433,7 @@ describe("review wall in the Library", () => {
       fireEvent.click(screen.getByRole("button", { name: "Play Hook b" }));
       fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
       const outcome = await screen.findByRole("alert");
-      expect(outcome).toHaveTextContent("0 clips discarded. 1 kept: This exact version was exported.");
+      expect(outcome).toHaveTextContent("0 clips discarded. Not deleted: “Hook b”: This exact version was exported.");
     });
 
     it("selects several clips on the wall and deletes them together", async () => {
@@ -445,7 +445,7 @@ describe("review wall in the Library", () => {
       expect(screen.getByRole("button", { name: "Select Hook a" })).toHaveAttribute("aria-pressed", "true");
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Delete 2" }));
-      expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Delete 2 clips (1 approved)?"));
+      await waitFor(() => expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Delete 2 clips (1 approved)?")));
       expect(await screen.findByText("2 clips discarded.")).toBeInTheDocument();
       expect(deleted().sort()).toEqual(["/api/clips/a", "/api/clips/b"]);
       expect(screen.getByRole("button", { name: "Select" })).toBeInTheDocument();
@@ -466,6 +466,70 @@ describe("review wall in the Library", () => {
       fireEvent.click(screen.getByRole("button", { name: "Done" }));
       expect(screen.getByRole("button", { name: "Select" })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Select Hook a" })).not.toBeInTheDocument();
+    });
+
+    it("drops clips a filter hides from the selection and deletes only what is shown", async () => {
+      const clips = [made("a"), made("b", { published_at: "2026-11-01T00:00:00Z" }), made("c")];
+      render(<Library w={workspace()} factory={factory({}, { clips })} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="wall" />);
+      fireEvent.click(screen.getByRole("button", { name: "Select" }));
+      fireEvent.click(screen.getByRole("button", { name: "Select all shown (3)" }));
+      expect(screen.getByText("3 selected")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /^Posted/ }));
+      expect(await screen.findByText("1 selected")).toBeInTheDocument();
+      // Widening the filter again does not bring hidden clips back into the selection.
+      fireEvent.click(screen.getByRole("button", { name: /^All clips/ }));
+      expect(screen.getByText("1 selected")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Delete 1" }));
+      expect(await screen.findByText("1 clip discarded.")).toBeInTheDocument();
+      expect(deleted()).toEqual(["/api/clips/b"]);
+    });
+
+    it("drops clips of another hypothesis from the selection", async () => {
+      const clips = [made("a"), made("b", { hypothesis: "story" }), made("c")];
+      render(<Library w={workspace()} factory={factory({}, { clips })} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="wall" />);
+      fireEvent.click(screen.getByRole("button", { name: "Select" }));
+      fireEvent.click(screen.getByRole("button", { name: "Select all shown (3)" }));
+      fireEvent.change(screen.getByRole("combobox", { name: "Filter by hypothesis" }), { target: { value: "story" } });
+      expect(await screen.findByText("1 selected")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete 1" })).toBeEnabled();
+    });
+
+    it("counts approved and exported clips before deleting, then names the ones kept", async () => {
+      const reason = "This exact version was exported. It is kept so the export can be verified against it.";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          const method = init?.method ?? "GET";
+          requests.push({ url, method });
+          if (method === "GET" && url === "/api/exports")
+            return new Response(JSON.stringify([{ id: "e1", clip_id: "b" }, { id: "e2", clip_id: "c" }]), { status: 200, headers: { "Content-Type": "application/json" } });
+          const refused = method === "DELETE" && ["/api/clips/b", "/api/clips/c"].includes(url);
+          return new Response(JSON.stringify(refused ? { detail: reason } : {}), {
+            status: refused ? 409 : 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }),
+      );
+      const clips = [made("a", { approved: true }), made("b", { approved: true }), made("c")];
+      render(<Library w={workspace()} factory={factory({}, { clips })} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="wall" />);
+      fireEvent.click(screen.getByRole("button", { name: "Select" }));
+      fireEvent.click(screen.getByRole("button", { name: "Select all shown (3)" }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete 3" }));
+      await waitFor(() => expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Delete 3 clips (2 approved, 2 exported)?")));
+      expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Exported versions are kept"));
+      const outcome = await screen.findByRole("alert");
+      expect(outcome).toHaveTextContent(`1 clip discarded. Not deleted: “Hook b”, “Hook c”: ${reason}`);
+    });
+
+    it("says when export history could not be read before a bulk delete", async () => {
+      confirm.mockReturnValue(false);
+      const clips = [made("a"), made("b")];
+      render(<Library w={workspace()} factory={factory({}, { clips })} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="wall" />);
+      fireEvent.click(screen.getByRole("button", { name: "Select" }));
+      fireEvent.click(screen.getByRole("button", { name: "Select all shown (2)" }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete 2" }));
+      await waitFor(() => expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Export history could not be read")));
+      expect(deleted()).toEqual([]);
     });
 
     it("discards one clip from its quick look", async () => {
