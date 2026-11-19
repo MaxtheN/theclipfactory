@@ -158,12 +158,25 @@ def test_readiness_timeout():
         launcher.wait_ready(server, thread, "http://127.0.0.1:1", "secret", threading.Event(), timeout=0.01)
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="WO-28: the launcher adds macOS tool folders; per-OS discovery is defined there")
 def test_path_preserved(monkeypatch):
-    monkeypatch.setenv("PATH", "/custom/bin:/usr/bin")
+    original = launcher.os.pathsep.join(["/custom/bin", "/usr/bin"])
+    monkeypatch.setenv("PATH", original)
     launcher.preserve_tool_path()
-    assert launcher.os.environ["PATH"].startswith("/custom/bin:/usr/bin:")
-    assert "/opt/homebrew/bin" in launcher.os.environ["PATH"].split(":")
+    path = launcher.os.environ["PATH"]
+    assert path.startswith(original + launcher.os.pathsep)
+    assert set(launcher.tool_folders()) <= set(path.split(launcher.os.pathsep))
+
+
+def test_tool_folders_are_per_operating_system(monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", "C:/Users/me/AppData/Local")
+    assert "/opt/homebrew/bin" in launcher.tool_folders("darwin")
+    assert "/opt/homebrew/bin" not in launcher.tool_folders("linux")
+    windows = launcher.tool_folders("win32")
+    assert not any(folder.startswith("/") for folder in windows)
+    assert any("WinGet" in folder for folder in windows)
+    names = {s.name for s in launcher.stop_signals()}
+    assert {"SIGINT", "SIGTERM"} <= names
+    assert ("SIGBREAK" in names) == (sys.platform == "win32")
 
 
 def test_occupied_port_fails_without_token_leak(parent, capsys):
@@ -213,12 +226,12 @@ def test_windowed_failure_records_safe_diagnostics_without_stderr(monkeypatch, p
     monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(settings={}, create_window=fail))
     monkeypatch.setattr(launcher.sys, "stderr", None)
     alerts = []
-    monkeypatch.setattr(launcher, "show_launch_error", alerts.append)
+    monkeypatch.setattr(launcher, "show_launch_error", lambda message, log=None: alerts.append((message, log)))
     assert launcher.main(["--data-dir", str(tmp_path)]) == 1
     log = (tmp_path / "logs" / "startup.log").read_text()
     assert "startup-failed" in log and "native window failed" in log
     assert parent["token"] not in log and "secret token" not in log and "boot=" not in log
-    assert len(alerts) == 1
+    assert len(alerts) == 1 and alerts[0][1] == tmp_path / "logs" / "startup.log"
     assert sys.platform == "win32" or (tmp_path / "logs" / "startup.log").stat().st_mode & 0o777 == 0o600
 
 
