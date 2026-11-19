@@ -15,3 +15,32 @@ Sources: https://ollama.com/library/qwen3-vl:4b-instruct ; the repository's `cli
 The official signed/notarized Ollama0.40.16 app and Qwen3-VL4B-Instruct are installed locally. The pinned MLX runtime and Whisper Turbo model passed installation checks. After the user freed memory, the unchanged5GB ASR safety check passed: real60-second All-In transcription completed in6.2seconds with10timed cues and174word timestamps. An actual extracted-frame Qwen vision call completed successfully. Full production output and campaign-scoped team execution are later gates; do not infer success from these individual steps.
 
 Final verification: local baseline produced3captioned drafts; one campaign-scoped team run produced a checked unapproved draft with an explicit same-source fallback. A deliberate substantive90-second excerpt then produced a complete15.1-second captioned point in one119.2-second team run, with fresh grounded footage analysis and no fallback. Source boundaries matched word timestamps; critic and technical checks passed. All outputs remain unapproved for human editorial review. The full85-minute source and audience improvement are untested.
+
+## Speech on Windows and Linux
+
+Which speech engine a computer gets is decided in [`clip_factory/speech_backend.py`](../clip_factory/speech_backend.py):
+
+| Computer | Engine | Device | One-time download |
+|---|---|---|---|
+| Apple Silicon Mac | MLX Whisper large-v3-turbo | Apple GPU | about 1.4 GB packages + 1.6 GB model |
+| Windows or Linux, x64 | faster-whisper 1.2.1 with CTranslate2 4.9.0, Whisper large-v3-turbo ([CTranslate2 conversion](https://huggingface.co/dropbox-dash/faster-whisper-large-v3-turbo)) | NVIDIA GPU (float16) when `nvidia-smi` finds one; otherwise the CPU (float32) | about 0.2 GB packages (+1.3 GB NVIDIA cuBLAS/cuDNN on a computer with an NVIDIA GPU) + 1.6 GB model |
+| Intel Mac, ARM Windows or Linux | none | n/a | Setup is not offered. Use cloud speech (Groq) or write the transcript by hand. |
+
+On Windows and Linux the runtime is speech-only. It uses the same app-owned, checksum-pinned Python 3.12.16 (python-build-standalone 20261110, a separate archive for each platform) and the same isolated venv, ready marker and import probe as the Mac runtime. The venv's interpreter is `runtime\Scripts\python.exe` on Windows. Once set up, transcription is offline. If CUDA fails for any reason, the worker transcribes on the CPU and reports the device it used. `/api/system` reports the engine and device under `speech`.
+
+Pinned packages: `faster-whisper==1.2.1`, `ctranslate2==4.9.0`, `av==18.0.0` (faster-whisper 1.2.1 calls `av.open(metadata_errors=...)`, which PyAV 19 removed). With an NVIDIA GPU, setup also installs `nvidia-cublas-cu12==12.9.2.10` (the newest cuBLAS 12 with a Windows wheel) and `nvidia-cudnn-cu12==9.28.1.4`.
+
+### CPU benchmark
+
+The benchmark ran 10 minutes of English speech (LibriVox, *The Count of Monte Cristo*, chapter 1, public domain) as 16 kHz mono WAV. It used an 8-vCPU Intel Xeon x86_64 cloud VM with 31 GB RAM and no GPU, `cpu_threads=8`, greedy decoding, VAD and word timestamps. RTF is processing time divided by audio length; lower is faster.
+
+| Model | Compute type | Time for 10 min | RTF | Words | Same transcript every run? |
+|---|---|---|---|---|---|
+| large-v3-turbo (**default**) | float32 | 190 s | 0.32 | 1549 | yes (3 of 3 identical on a 60 s cut) |
+| large-v3-turbo | int16 | about 16–19 s per 60 s | about 0.29 | n/a | yes (3 of 3 identical) |
+| large-v3-turbo | int8 | 83–88 s | 0.14–0.15 | 1409–1532 | **no**: runs differed and some lost whole sentences (one dropped the first 23 s of a 60 s cut) |
+| small | int8 | 42 s | 0.07 | 1537 | not checked |
+
+The CPU default is float32. int8 is about twice as fast, but on this CPU it gave a different transcript on each run of the same audio, and some runs silently lost speech. MKL's `MKL_CBWR=COMPATIBLE` made int8 repeatable, but about 10× slower. float32 gives the same complete transcript every run and behaves the same on Intel and AMD processors (CTranslate2's int16 path depends on Intel MKL).
+
+The worker decodes the app's 16 kHz mono WAV itself, so transcription does not depend on PyAV's audio API. A creator's 30-minute source takes about 10 minutes to transcribe on a CPU like this one. GPU speed was not measured (no NVIDIA GPU was available for this benchmark).

@@ -701,7 +701,7 @@ class Analyzer:
         if not self.whisper_ready():
             # A reference with sound is never measured speechless (pace, first word, hook all need it).
             ref["transcript_status"] = "not_transcribed"
-            raise WorkError(speech.MISSING)
+            raise WorkError(speech.missing_message())
         if self._held():
             ref["transcript_status"] = "held"
             return None

@@ -7,17 +7,30 @@ with one actionable blocker instead of quietly making clips without captions.
 
 from __future__ import annotations
 
+from . import speech_backend
 from .jobs import WorkError
 
 ASR_MODEL = "whisper-turbo"
-MISSING = "Speech recognition isn't set up yet. Set it up once (about 1.6 GB download) and run again."
 DAMAGED = "Speech model files are damaged or were removed — repair (re-download)."
 NO_SPEECH = "No speech in this footage"
-# One-time downloads, as the setup card shows them.
-STEPS = {
-    "runtime": {"label": "Speech engine packages", "approx_gb": 1.4},
-    ASR_MODEL: {"label": "Speech model (Whisper)", "approx_gb": 1.6},
-}
+UNSUPPORTED = speech_backend.UNSUPPORTED
+MODEL_GB = 1.6
+
+
+def steps() -> dict:
+    """One-time downloads for this computer's speech engine, as the setup card shows them."""
+    if speech_backend.backend() is None:
+        return {}
+    return {
+        "runtime": {"label": "Speech engine packages", "approx_gb": speech_backend.runtime_gb()},
+        ASR_MODEL: {"label": "Speech model (Whisper)", "approx_gb": MODEL_GB},
+    }
+
+
+def missing_message(download_gb: float | None = None) -> str:
+    if download_gb is None:
+        download_gb = sum(step["approx_gb"] for step in steps().values())
+    return f"Speech recognition isn't set up yet. Set it up once (about {download_gb:.1f} GB download) and run again."
 
 
 class SpeechUnavailable(WorkError):
@@ -42,22 +55,30 @@ def integrity(models) -> dict:
 
 
 def blocker(code: str, health: dict | None = None, message: str | None = None) -> dict:
+    """The speech blocker. Only steps that can run on this computer are listed, with their real sizes."""
     health = health or {}
-    steps = []
-    for key, info in STEPS.items():
+    if code == "asr_unsupported" or speech_backend.backend() is None:
+        return {
+            "code": "asr_unsupported", "message": message or UNSUPPORTED, "tab": "Models", "scope": "speech",
+            "action": None, "steps": [], "download_gb": 0,
+        }
+    available = steps()
+    pending = []
+    for key, info in available.items():
         state = (health.get(key) or {}).get("state", "missing")
         if state != "ok":
-            steps.append({"id": key, **info, "state": state})
-    if not steps and code in {"asr_missing", "asr_damaged"}:
-        steps = [{"id": key, **info, "state": "missing"} for key, info in STEPS.items()]
+            pending.append({"id": key, **info, "state": state})
+    if not pending and code in {"asr_missing", "asr_damaged"}:
+        pending = [{"id": key, **info, "state": "missing"} for key, info in available.items()]
+    download_gb = round(sum(step["approx_gb"] for step in pending), 1)
     return {
         "code": code,
-        "message": message or (DAMAGED if code == "asr_damaged" else MISSING),
+        "message": message or (DAMAGED if code == "asr_damaged" else missing_message(download_gb)),
         "tab": "Models",
         "scope": "speech",
         "action": "speech_setup" if code in {"asr_missing", "asr_damaged"} else None,
-        "steps": steps,
-        "download_gb": round(sum(step["approx_gb"] for step in steps), 1),
+        "steps": pending,
+        "download_gb": download_gb,
     }
 
 
@@ -67,8 +88,10 @@ def classify(models, failure: str = "") -> dict | None:
     Damaged files (manifest present but files missing, runtime venv missing MLX's metallib) are told
     apart from a fresh install so the creator knows a repair, not a first setup, is needed.
     """
+    if speech_backend.backend() is None:
+        return blocker("asr_unsupported")  # Setting up cannot help on this computer: never offer it.
     health = integrity(models)
-    states = {health.get(key, {}).get("state", "missing") for key in STEPS}
+    states = {health.get(key, {}).get("state", "missing") for key in steps()}
     if "damaged" in states:
         return blocker("asr_damaged", health)
     if "missing" in states:
@@ -76,7 +99,7 @@ def classify(models, failure: str = "") -> dict | None:
     lowered = failure.lower()
     if "memory" in lowered:
         return None  # Installed and intact: the run tries, and a real memory error is reported then.
-    if "apple silicon" in lowered:
+    if "apple silicon" in lowered or failure == UNSUPPORTED:
         return blocker("asr_unsupported", health, failure)
     # Files look intact but the runtime does not answer: a reinstall repairs it.
     return blocker("asr_damaged", {**health, "runtime": {"state": "damaged", "problems": ["probe"]}})

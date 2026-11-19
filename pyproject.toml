@@ -11,7 +11,7 @@ dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "python-multipart>=0.0.
 
 [project.optional-dependencies]
 desktop = ["pywebview>=5,<7"]
-test = ["pytest>=8,<10", "ruff>=0.11,<1", "setuptools>=75", "wheel>=0.45"]
+test = ["pytest>=8,<10", "ruff>=0.11,<1", "setuptools>=75", "wheel>=0.45", "numpy>=1.26,<3"]
 
 [project.scripts]
 clip-factory = "clip_factory.main:main"

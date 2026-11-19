@@ -75,6 +75,10 @@ def validate_request(request):
         language = request.get("language")
         if language is not None and (not isinstance(language, str) or len(language) > 32):
             raise ValueError("Invalid language")
+        if request.get("engine", "mlx") not in {"mlx", "faster-whisper"}:
+            raise ValueError("Unsupported speech engine")
+        if request.get("device", "cpu") not in {"cpu", "cuda"}:
+            raise ValueError("Unsupported speech device")
     else:
         raise ValueError("Unsupported inference action")
 
@@ -166,6 +170,108 @@ def generate_text(model, processor, generate, model_path, request, config=None):
     return text
 
 
+def read_wav(path):
+    """16 kHz mono 16-bit PCM WAV (what the app extracts) as float32 samples, else None.
+
+    Decoding here rather than through PyAV keeps transcription independent of PyAV's audio API.
+    """
+    import wave
+
+    try:
+        with wave.open(str(path), "rb") as audio:
+            if (audio.getnchannels(), audio.getsampwidth(), audio.getframerate()) != (1, 2, 16000):
+                return None
+            frames = audio.readframes(audio.getnframes())
+    except (OSError, EOFError, wave.Error):
+        return None
+    import numpy as np  # faster-whisper's own dependency, present in its runtime
+
+    return np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
+
+
+def load_cuda_libraries():
+    """Make the pip-installed NVIDIA cuBLAS/cuDNN libraries findable by CTranslate2."""
+    import importlib.util
+
+    folders = []
+    for name in ("nvidia.cublas", "nvidia.cudnn"):
+        try:
+            spec = importlib.util.find_spec(name)
+        except (ImportError, ValueError):
+            spec = None
+        for base in (spec.submodule_search_locations or []) if spec else []:
+            folders += [Path(base) / sub for sub in ("bin", "lib") if (Path(base) / sub).is_dir()]
+    if os.name == "nt":
+        for folder in folders:
+            os.add_dll_directory(str(folder))
+        os.environ["PATH"] = os.pathsep.join([*map(str, folders), os.environ.get("PATH", "")])
+        return
+    import ctypes
+
+    # cuBLASLt before cuBLAS, then cuDNN and its sub-libraries, loaded globally so dlopen finds them.
+    for folder in folders:
+        for library in sorted(folder.glob("lib*.so*"), key=lambda p: ("Lt" not in p.name, p.name)):
+            with contextlib.suppress(OSError):
+                ctypes.CDLL(str(library), mode=ctypes.RTLD_GLOBAL)
+
+
+def transcribe_faster_whisper(request, model_path):
+    from faster_whisper import WhisperModel
+
+    samples = read_wav(request["audio"])
+    audio = samples if samples is not None else request["audio"]
+    options = {
+        "language": request.get("language") or None,
+        "word_timestamps": True,
+        # Greedy decoding like MLX Whisper; VAD skips silence (faster on the CPU, fewer invented lines).
+        "beam_size": 1,
+        "vad_filter": True,
+        "condition_on_previous_text": False,
+        "hallucination_silence_threshold": 2.0,
+    }
+    attempts = [("cuda", "float16")] if request.get("device") == "cuda" else []
+    # float32 on the CPU, not int8: in testing, int8 runs of the same audio differed and some lost whole
+    # sentences; float32 (about half int8's speed) gave the identical, complete transcript every run.
+    attempts.append(("cpu", "float32"))
+    for device, compute_type in attempts:
+        try:
+            if device == "cuda":
+                load_cuda_libraries()
+            model = WhisperModel(
+                model_path, device=device, compute_type=compute_type, cpu_threads=os.cpu_count() or 4,
+                local_files_only=True,
+            )
+            pieces, info = model.transcribe(audio, **options)
+            pieces = list(pieces)  # Decoding happens while iterating: CUDA errors surface here.
+            break
+        except Exception:
+            if device == "cpu":
+                raise
+            # A missing or mismatched CUDA library: the CPU still transcribes, only slower.
+    segments = []
+    for s in pieces:
+        segment = {
+            "start": float(s.start),
+            "end": float(s.end),
+            "text": s.text,
+            "words": [
+                {"word": w.word, "start": float(w.start), "end": float(w.end), "probability": float(w.probability)}
+                for w in (s.words or [])
+            ],
+        }
+        for key in ("no_speech_prob", "avg_logprob"):
+            if getattr(s, key, None) is not None:
+                segment[key] = float(getattr(s, key))
+        segments.append(segment)
+    return {
+        "text": "".join(s["text"] for s in segments),
+        "language": info.language,
+        "segments": segments,
+        "device": device,
+        "compute_type": compute_type,
+    }
+
+
 def infer(request):
     validate_request(request)
     model_path = request["model"]
@@ -191,6 +297,8 @@ def infer(request):
             except Exception:  # noqa: BLE001 - one unreadable window must not discard the rest
                 outputs.append({"error": "Generation failed for this request."})
         return {"outputs": outputs}
+    if action == "transcribe" and request.get("engine") == "faster-whisper":
+        return transcribe_faster_whisper(request, model_path)
     if action == "transcribe":
         import mlx_whisper
 

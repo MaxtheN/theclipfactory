@@ -15,6 +15,18 @@ export interface SystemInfo {
   version?: string;
   integrity?: Record<string, { state: IntegrityState; problems: string[] }>;
   engine?: EngineStatus;
+  /** The local speech engine and the device it transcribes on. */
+  speech?: SpeechEngine;
+}
+export interface SpeechEngine {
+  /** "mlx" on Apple Silicon, "faster-whisper" on Windows/Linux x64, null where no local engine runs. */
+  backend: "mlx" | "faster-whisper" | null;
+  label: string;
+  device: "gpu" | "cuda" | "cpu" | null;
+  detail: string;
+  gpu: string | null;
+  /** What the last local transcription really ran on (CUDA falls back to the CPU on any error). */
+  last_run: { device: string; compute_type: string | null } | null;
 }
 export type IntegrityState = "ok" | "missing" | "damaged";
 /** One one-time download the engine still needs (runtime packages, then the Whisper model). */

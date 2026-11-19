@@ -1,4 +1,8 @@
-"""App-owned, checksum-pinned native Python; never installs Homebrew/system packages."""
+"""App-owned, checksum-pinned native Python; never installs Homebrew/system packages.
+
+One pinned python-build-standalone archive per supported platform (Apple Silicon macOS, Windows x64,
+Linux x64); every archive was downloaded and its size and SHA-256 checked before pinning.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +19,7 @@ from pathlib import Path, PurePosixPath
 
 import certifi
 
+from . import speech_backend
 from .jobs import Jobs, WorkError
 
 # Publisher release metadata and archive independently verified before pinning.
@@ -29,9 +34,60 @@ PYTHON_BYTES = 25_237_581
 MAX_EXPANDED_BYTES = 512 * 1024**2
 MANIFEST = {"version": PYTHON_VERSION, "release": PYTHON_RELEASE, "sha256": PYTHON_SHA256}
 PROBE = "import platform,sys; print(platform.system(), platform.machine(), sys.version_info[:2])"
+_RELEASES = "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/"
+# Windows and Linux x64 builds from the same release as the macOS pin above.
+OTHER_PINS = {
+    ("Windows", "x86_64"): {
+        "url": _RELEASES + "cpython-3.12.16%2B20261110-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+        "sha256": "355ee61b8207b91574491b1c6dc9b0ebb4408fc56bfafe498f3ef439314b52dc",
+        "bytes": 22_365_213,
+        "executable": ("python.exe",),
+        "probe": "Windows AMD64 (3, 12)",
+        "suffix": "x86_64-windows",
+        "label": "Windows x64",
+    },
+    ("Linux", "x86_64"): {
+        "url": _RELEASES + "cpython-3.12.16%2B20261110-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+        "sha256": "6a9e62dad033790aef722dbd370e0ce76ce17b73627ba3ae679f537049350b39",
+        "bytes": 34_709_145,
+        "executable": ("bin", "python3.12"),
+        "probe": "Linux x86_64 (3, 12)",
+        "suffix": "x86_64-linux",
+        "label": "Linux x64",
+    },
+}
+
+
+def pin(system: str | None = None, machine: str | None = None) -> dict | None:
+    """The pinned Python archive for this platform, or None where no private Python is offered."""
+    if system is None or machine is None:
+        system, machine = speech_backend.host()
+    key = (system, speech_backend.normal_machine(machine))
+    if key == ("Darwin", "arm64"):
+        # Read the module values at call time (tests replace them); the marker shape never changes.
+        return {
+            "url": PYTHON_URL, "sha256": PYTHON_SHA256, "bytes": PYTHON_BYTES,
+            "executable": ("bin", "python3.12"), "probe": "Darwin arm64 (3, 12)", "suffix": "arm64",
+            "label": "Apple Silicon", "manifest": MANIFEST,
+        }
+    found = OTHER_PINS.get(key)
+    if found is None:
+        return None
+    return {**found, "manifest": {"version": PYTHON_VERSION, "release": PYTHON_RELEASE, "sha256": found["sha256"]}}
+
+
+def _current() -> dict:
+    found = pin()
+    if found is None:
+        raise WorkError("No app-owned Python is available for this computer's operating system and processor.")
+    return found
 
 
 def native_python(executable: Path | str, env: dict) -> bool:
+    """A native (not emulated) Python 3.12 for this platform, e.g. never Rosetta on a Mac."""
+    found = pin()
+    if found is None:
+        return False
     try:
         result = subprocess.run(
             [str(executable), "-I", "-c", PROBE],
@@ -41,14 +97,16 @@ def native_python(executable: Path | str, env: dict) -> bool:
             check=True,
             env=env,
         )
-        return result.stdout.strip() == "Darwin arm64 (3, 12)"
+        return result.stdout.strip() == found["probe"]
     except (OSError, subprocess.SubprocessError):
         return False
 
 
-def _download(archive: Path, jobs: Jobs, job_id: str):
+def _download(archive: Path, jobs: Jobs, job_id: str, found: dict | None = None):
+    found = found or _current()
+    expected = found["bytes"]
     digest, downloaded = hashlib.sha256(), 0
-    request = urllib.request.Request(PYTHON_URL, headers={"User-Agent": "ClipFactory-runtime-setup"})
+    request = urllib.request.Request(found["url"], headers={"User-Agent": "ClipFactory-runtime-setup"})
     with (
         urllib.request.urlopen(
             request, timeout=30, context=ssl.create_default_context(cafile=certifi.where())
@@ -63,17 +121,17 @@ def _download(archive: Path, jobs: Jobs, job_id: str):
             if not block:
                 break
             downloaded += len(block)
-            if downloaded > PYTHON_BYTES:
+            if downloaded > expected:
                 raise WorkError("Python download exceeded its verified size.")
             output.write(block)
             digest.update(block)
             jobs.update(
                 job_id,
-                progress=1 + round(downloaded / PYTHON_BYTES * 9),
-                message=f"Downloading app-owned Python 3.12 ({downloaded:,}/{PYTHON_BYTES:,} bytes)",
+                progress=1 + round(downloaded / expected * 9),
+                message=f"Downloading app-owned Python 3.12 ({downloaded:,}/{expected:,} bytes)",
             )
     jobs.check(job_id)
-    if downloaded != PYTHON_BYTES or digest.hexdigest() != PYTHON_SHA256:
+    if downloaded != expected or digest.hexdigest() != found["sha256"]:
         raise WorkError("Python download failed checksum verification. Retry runtime setup.")
 
 
@@ -114,9 +172,10 @@ def _extract(archive: Path, directory: Path, jobs: Jobs, job_id: str):
 
 def bootstrap_python(directory: Path, jobs: Jobs, job_id: str, env: dict) -> Path:
     """Install privately and atomically; a failed/cancelled install is never selected."""
+    found = _current()
     parent = directory / "python"
-    target = parent / f"cpython-{PYTHON_VERSION}-{PYTHON_RELEASE}-arm64"
-    executable = target / "bin" / "python3.12"
+    target = parent / f"cpython-{PYTHON_VERSION}-{PYTHON_RELEASE}-{found['suffix']}"
+    executable = target.joinpath(*found["executable"])
     marker = target / ".clip-factory-python.json"
     jobs.check(job_id)
     if directory.is_symlink() or parent.is_symlink() or target.is_symlink():
@@ -127,7 +186,7 @@ def bootstrap_python(directory: Path, jobs: Jobs, job_id: str, env: dict) -> Pat
             if (
                 not marker.is_symlink()
                 and not executable.is_symlink()
-                and json.loads(marker.read_text()) == MANIFEST
+                and json.loads(marker.read_text()) == found["manifest"]
                 and native_python(executable, env)
             ):
                 return executable
@@ -148,14 +207,14 @@ def bootstrap_python(directory: Path, jobs: Jobs, job_id: str, env: dict) -> Pat
         with tempfile.TemporaryDirectory(prefix=".install-", dir=parent) as temporary:
             staging = Path(temporary)
             archive = staging / "python.tar.gz"
-            _download(archive, jobs, job_id)
+            _download(archive, jobs, job_id, found)
             jobs.update(job_id, progress=11, message="Verifying and extracting app-owned Python")
             _extract(archive, staging, jobs, job_id)
-            staged_python = staging / "python" / "bin" / "python3.12"
+            staged_python = (staging / "python").joinpath(*found["executable"])
             if staged_python.is_symlink() or not native_python(staged_python, env):
-                raise WorkError("Downloaded Python is not a working native Apple Silicon Python 3.12.")
+                raise WorkError(f"Downloaded Python is not a working native {found['label']} Python 3.12.")
             jobs.check(job_id)
-            (staging / "python" / marker.name).write_text(json.dumps(MANIFEST))
+            (staging / "python" / marker.name).write_text(json.dumps(found["manifest"]))
             os.replace(staging / "python", target)
     except (OSError, tarfile.TarError) as exc:
         raise WorkError(
