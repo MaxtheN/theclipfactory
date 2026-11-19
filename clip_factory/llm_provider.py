@@ -367,7 +367,17 @@ class LlmGateway:
                 raise LocalHeld(" ".join(reasons)[:500])
         output = local()
         text = output.get("output") if isinstance(output, dict) else output
-        return Completion(text=text if isinstance(text, str) else "", provider="local", model="local")
+        text = text if isinstance(text, str) else ""
+        receipt = output.get("llm") if isinstance(output, dict) else None
+        if isinstance(receipt, dict) and receipt.get("provider") == "ollama":
+            # Ollama reports its model and token counts; the receipt names them like a cloud call.
+            return Completion(
+                text=text, provider="ollama", model=str(receipt.get("model") or "ollama"),
+                prompt_tokens=int(receipt.get("prompt_tokens") or 0),
+                completion_tokens=int(receipt.get("completion_tokens") or 0),
+                latency_seconds=float(receipt.get("latency_seconds") or 0.0),
+            )
+        return Completion(text=text, provider="local", model="local")
 
     def _cloud(self, role, model, system, user, schema, *, images, image_labels, max_tokens, timeout,
                temperature, job_id) -> Completion:

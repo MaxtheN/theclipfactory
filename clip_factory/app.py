@@ -26,7 +26,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from platformdirs import user_data_path
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import __version__, craft, media, ranking, scouts, speech
+from . import __version__, craft, local_agents, media, ranking, scouts, speech
 from .ads import AdsClient
 from .brief import brief_block, must_avoid_hits
 from .campaign_api import install as install_campaign_api
@@ -166,6 +166,11 @@ class Inference(Analysis):
 
 class License(Body):
     accept_license: bool
+
+
+class OllamaPull(Body):
+    model_id: str = Field(max_length=220)
+    accept_license: bool = False
 
 
 class ClipEdit(Body):
@@ -462,7 +467,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         return require("videos", video["id"])
 
     def usable_llms() -> list[dict]:
-        return [m for m in models().catalog() if m["kind"] == "llm" and m["installed"]]
+        installed = [m for m in models().catalog() if m.get("kind") == "llm" and m.get("installed")]
+        if not apple_silicon():
+            # MLX shelf models cannot run off Apple Silicon even if their files were copied here.
+            installed = [m for m in installed if m.get("source") == "ollama"]
+        return installed
 
     def choose_model(requested: str | None = None) -> str:
         """The model a production run uses: explicit request, saved default, then the best installed."""
@@ -472,15 +481,25 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         saved = settings()["default_model"]
         if saved and any(m["id"] == saved for m in installed):
             return saved
-        # Prefer models that can see; the small shelf model first because it leaves memory for editing.
+        order = ["qwen-small", "qwen-large"] + [item["id"] for item in local_agents.CATALOGUE]
+        # Prefer models that can see; the small shelf model first because it leaves memory for editing,
+        # then the recommended Ollama models in catalogue order.
         ranked = sorted(
             installed,
-            key=lambda m: (
-                m.get("vision") is False,
-                {"qwen-small": 0, "qwen-large": 1}.get(m["id"], 2),
-            ),
+            key=lambda m: (m.get("vision") is False, order.index(m["id"]) if m["id"] in order else len(order)),
         )
-        return ranked[0]["id"] if ranked else "qwen-small"
+        if ranked:
+            return ranked[0]["id"]
+        if apple_silicon():
+            return "qwen-small"
+        best = local_agents.recommend(local_agents.hardware())
+        return (best or local_agents.CATALOGUE[0])["id"]
+
+    def agents_state(*, force: bool = False) -> dict:
+        state = local_agents.status(models().ollama, force=force)
+        state["cloud"] = app.state.llm.uses_cloud("agents")
+        state["blocker"] = None if state["cloud"] else local_agents.blocker(state, usable_llms())
+        return state
 
     def blockers(model_id: str | None = None) -> list[dict]:
         """Plain reasons production cannot start, each with the screen that fixes it."""
@@ -493,11 +512,17 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                     "tab": None,
                 }
             )
-        model_id = model_id or choose_model()
-        try:
-            agent_models().require(model_id, "llm")
-        except WorkError as exc:
-            found.append({"code": "model", "message": str(exc), "tab": "Models"})
+        # Off the Mac, agents need Ollama, a model and enough memory; say so before anything is queued.
+        # Agents routed to the creator's own cloud key skip this check.
+        agents = None if apple_silicon() else agents_state()["blocker"]
+        if agents:
+            found.append(agents)
+        else:
+            model_id = model_id or choose_model()
+            try:
+                agent_models().require(model_id, "llm")
+            except WorkError as exc:
+                found.append({"code": "model", "message": str(exc), "tab": "Models"})
         # Applies to footage with sound only (see source_blockers); a silent source can still run.
         asr = asr_blocker()
         if asr:
@@ -652,6 +677,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             "engine": (engine_status() if app.state.llm.settings()["speech_provider"] == "groq"
                        else engine_status(None if whisper else asr_blocker())),
             "ollama": models().ollama.status()["running"],
+            # Which engine runs agent roles here, Ollama state, the hardware check and any blocker.
+            "agents": agents_state(),
             "desktop": app.state.desktop,
             "data_dir": str(root),
         }
@@ -734,6 +761,34 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
                 return {"installed": done, "speech_ready": whisper_ready()}
 
             return jobs().submit("speech_setup", run, speech_setup=speech.ASR_MODEL, steps=steps)
+
+    @app.post("/api/agents/check")
+    def check_agents():
+        """Look again for Ollama and its models, e.g. after the creator installed or opened it."""
+        return agents_state(force=True)
+
+    @app.post("/api/agents/ollama/pull", status_code=202)
+    def pull_agent_model(body: OllamaPull):
+        item = local_agents.entry(body.model_id)
+        if item is None:
+            raise HTTPException(422, "Choose one of the recommended Ollama models.")
+        if not body.accept_license:
+            raise HTTPException(422, "Accept the model license before downloading.")
+        state = agents_state(force=True)
+        if not state["ollama"]["running"]:
+            raise HTTPException(409, "Ollama is not running. Open the Ollama app or run `ollama serve`, then try again.")
+        if next(e for e in state["catalogue"] if e["id"] == item["id"])["installed"]:
+            raise HTTPException(409, "Model is already installed.")
+        if shutil.disk_usage(local_agents.ollama_store()).free < (item["download_gb"] + 2) * 1e9:
+            raise HTTPException(400, "Not enough free disk space for the model and download headroom.")
+        with operations_lock:
+            if jobs().busy("model_id", item["id"]):
+                raise HTTPException(409, "This model is already downloading.")
+            return jobs().submit(
+                "download",
+                lambda job: local_agents.pull(models().ollama, jobs(), job, item),
+                model_id=item["id"], source="ollama", download_gb=item["download_gb"],
+            )
 
     @app.post("/api/models/{identifier}/download", status_code=202)
     def download_model(identifier: str, body: License):
@@ -1989,7 +2044,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
             )
         return {
             "autopilot": settings()["autonomy"] == "auto",
-            "model_id": None if any(b["code"] == "model" for b in ready) else model,
+            "model_id": None if any(b["code"] == "model" or b.get("scope") == "agents" for b in ready) else model,
             "ready": not ready,
             "blockers": ready,
             "engine": engine_status(),

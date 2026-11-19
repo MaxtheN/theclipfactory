@@ -44,3 +44,25 @@ The benchmark ran 10 minutes of English speech (LibriVox, *The Count of Monte Cr
 The CPU default is float32. int8 is about twice as fast, but on this CPU it gave a different transcript on each run of the same audio, and some runs silently lost speech. MKL's `MKL_CBWR=COMPATIBLE` made int8 repeatable, but about 10× slower. float32 gives the same complete transcript every run and behaves the same on Intel and AMD processors (CTranslate2's int16 path depends on Intel MKL).
 
 The worker decodes the app's 16 kHz mono WAV itself, so transcription does not depend on PyAV's audio API. A creator's 30-minute source takes about 10 minutes to transcribe on a CPU like this one. GPU speed was not measured (no NVIDIA GPU was available for this benchmark).
+
+## Agents on Windows and Linux
+
+Which agent engine a computer gets, and which model fits it, is decided in [`clip_factory/local_agents.py`](../clip_factory/local_agents.py). Apple Silicon keeps MLX. Every other computer runs its agents through [Ollama](https://ollama.com/download), which the creator installs; the app detects it but never installs it.
+
+| Model | Download | Fits when | Notes |
+|---|---|---|---|
+| `qwen3-vl:4b-instruct` (**recommended**) | 3.3 GB | 12 GB RAM, or 8 GB RAM plus an NVIDIA GPU with 5 GB VRAM | Every feature, including the strategist, brand research, references and post copy, which are qualified on this model only |
+| `qwen3-vl:2b-instruct` | 1.9 GB | 8 GB RAM, or 3 GB VRAM | Clip production only; the 4B-only features stay unavailable |
+
+Both are Apache-2.0 and accept still frames. Download sizes come from the Ollama registry manifests. RAM is read with psutil and allows 0.6 GB for the memory the system reserves, so a 12 GB computer counts as 12 GB. VRAM is read once from `nvidia-smi --query-gpu=memory.total`, taking the largest GPU. The 8B model (6.2 GB) is not offered: no feature is qualified on it.
+
+The check runs before production starts, not partway through. In order, the app reports:
+
+1. under 8 GB RAM: no local model fits; add an OpenRouter key under Brand profile → AI model, or write the work by hand;
+2. Ollama not installed: a link to the download page, then **Check again**;
+3. Ollama installed but not running: start it, then **Check again**;
+4. no fitting model: download the recommended model through Ollama (a network download of the stated size).
+
+With a saved OpenRouter key and cloud agents on, the check is skipped.
+
+Calls through Ollama are recorded with provider `ollama`, the model and token counts, at no cost. Memory pressure for the local-resource guard comes from psutil on Windows and Linux (under 10 % of RAM available is a warning, under 5 % is critical). The guard needs at least 6 GiB available, or the model plus 3 GiB, before each strategist, brand research, references, post copy or learning call, so a 12 GB computer with other apps open may be held there. Speed on Windows and Linux has not been measured.

@@ -159,13 +159,28 @@ def test_macos_pressure_reader_is_read_only_bounded_and_normalized(monkeypatch, 
     )
 
 
-def test_unsupported_platform_holds_without_subprocess(monkeypatch):
-    monkeypatch.setattr(resources.platform, "system", lambda: "Linux")
+@pytest.mark.parametrize(("system", "available", "expected"), [
+    ("Linux", 8, "normal"), ("Windows", 8, "normal"), ("Linux", 1.5, "warning"),
+    ("Windows", 1.5, "warning"), ("Linux", 0.5, "critical"),
+])
+def test_windows_and_linux_pressure_comes_from_psutil_without_subprocess(monkeypatch, system, available, expected):
+    monkeypatch.setattr(resources.platform, "system", lambda: system)
     run = Mock()
     monkeypatch.setattr(resources.subprocess, "run", run)
+    monkeypatch.setattr(resources.psutil, "virtual_memory",
+                        lambda: Mock(available=int(available * GIB), total=16 * GIB))
+    assert resources.read_memory_pressure() == expected
     result = check_learning_resources({"size": 1}, memory_reader=lambda: {"available": 8 * GIB, "total": 16 * GIB})
-    assert not result.ready and result.memory_pressure == "unknown"
+    assert result.memory_pressure == expected and result.ready is (expected == "normal")
+    if expected != "normal":
+        assert any("this computer reports" in reason for reason in result.reasons)
     run.assert_not_called()
+
+
+def test_unreadable_memory_total_reads_as_unknown_pressure(monkeypatch):
+    monkeypatch.setattr(resources.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(resources.psutil, "virtual_memory", lambda: Mock(available=0, total=0))
+    assert resources.read_memory_pressure() == "unknown"
 
 
 @pytest.mark.parametrize("error", [OSError("private"), subprocess.TimeoutExpired("sysctl", 1),

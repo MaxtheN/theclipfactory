@@ -111,7 +111,12 @@ def watched(monkeypatch):
 @pytest.fixture(autouse=True)
 def no_gpu_probe(monkeypatch):
     """Never run the machine's nvidia-smi: tests choose whether a GPU is present."""
+    from clip_factory import local_agents
+
     monkeypatch.setattr(speech_backend, "nvidia_gpu", lambda: None)
+    monkeypatch.setattr(local_agents, "nvidia_memory_gb", lambda: None)
+    # Nor look for the developer's own Ollama install: tests choose whether it is there.
+    monkeypatch.setattr(local_agents, "ollama_binary", lambda: None)
 
 
 @pytest.fixture

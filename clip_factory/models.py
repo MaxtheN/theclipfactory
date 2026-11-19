@@ -327,7 +327,7 @@ class Models:
         return {
             "id": f"ollama:{info['name']}",
             "name": f"{info['name']} · Ollama" + (f" ({details})" if details else ""),
-            "repo": "Managed by Ollama on this Mac",
+            "repo": "Managed by Ollama on this computer",
             "kind": "llm",
             "license": "See `ollama show --license` for this model",
             "estimated_gb": round(info["size"] / 1e9, 1) if info["size"] else None,
@@ -704,6 +704,7 @@ class Models:
             results = []
             for index, request in enumerate(requests):
                 self.jobs.check(job_id)
+                started = time.monotonic()
                 try:
                     text = self.ollama.generate(
                         name,
@@ -717,7 +718,7 @@ class Models:
                         check=lambda: self.jobs.check(job_id),
                     )
                     self._log_ollama(job_id, name, text)
-                    results.append({"output": text})
+                    results.append({"output": text, "llm": self._ollama_receipt(name, started)})
                 except OllamaError as exc:
                     self._log_ollama(job_id, name, f"ERROR: {exc}")
                     if index == 0:
@@ -811,6 +812,7 @@ class Models:
     def _run_ollama(self, job_id: str, identifier: str, data: dict, *, keep_warm: bool = False,
                     context_tokens: int | None = None) -> dict:
         name = model_name(identifier)
+        started = time.monotonic()
         try:
             text = self.ollama.generate(
                 name,
@@ -828,7 +830,14 @@ class Models:
             self._log_ollama(job_id, name, f"ERROR: {exc}")
             raise WorkError(f"{exc} No output was fabricated.") from exc
         self._log_ollama(job_id, name, text)
-        return {"output": text}
+        return {"output": text, "llm": self._ollama_receipt(name, started)}
+
+    def _ollama_receipt(self, name: str, started: float) -> dict:
+        """Provider, model and tokens of one Ollama call for receipts; local calls cost nothing."""
+        return {
+            "provider": "ollama", "model": f"ollama:{name}", **self.ollama.usage(),
+            "cost_usd": 0.0, "cost_basis": "local", "latency_seconds": round(time.monotonic() - started, 2),
+        }
 
     def _log_ollama(self, job_id: str, name: str, text: str):
         """Keep the raw reply in the local job log, like the MLX worker's output, for diagnosis."""

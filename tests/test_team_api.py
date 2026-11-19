@@ -307,6 +307,7 @@ def test_restart_marks_bound_active_ledger_interrupted_without_resume(tmp_path, 
         assert restarted_app.state.jobs.pending.empty() and not calls
 
 
+@pytest.mark.usefixtures("mac_host")
 def test_baseline_produce_uses_queued_snapshot_and_comparison_api(
     client, monkeypatch, scripted, worker_block
 ):
@@ -840,6 +841,7 @@ def test_explicit_recheck_of_human_approved_clip_always_requires_fresh_human_app
     )
 
 
+@pytest.mark.usefixtures("mac_host")
 def test_autopilot_starts_production_on_import_and_the_line_reports_each_stage(
     client, monkeypatch, scripted, worker_block
 ):
@@ -873,6 +875,7 @@ def test_autopilot_starts_production_on_import_and_the_line_reports_each_stage(
     assert source["state"] == "done" and source["headline"] == "1 clip approved"
 
 
+@pytest.mark.usefixtures("mac_host")
 def test_failed_production_is_reported_in_plain_words_and_can_be_retried(client, monkeypatch, scripted):
     video = upload_mock(client, monkeypatch)
     scripted.outputs = ['{"summary":']  # the plan never arrives
