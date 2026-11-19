@@ -183,10 +183,79 @@ def test_find_tool_prefers_keg_only_ffmpeg_full(monkeypatch):
         return f"/opt/homebrew/bin/{name}" if f"/opt/homebrew/bin/{name}" in present else None
 
     monkeypatch.setattr(media.shutil, "which", which)
+    monkeypatch.setattr(media.sys, "platform", "darwin")
     assert media.find_tool("ffmpeg") == "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg"
     assert media.find_tool("ffprobe") == "/opt/homebrew/bin/ffprobe"  # falls back to PATH
     present.clear()
     assert media.find_tool("ffmpeg") is None
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux"])
+def test_find_tool_off_macos_uses_the_bundled_copy_then_path_and_never_homebrew(monkeypatch, platform):
+    looked = []
+
+    def which(name):
+        looked.append(name)
+        return "/usr/bin/ffmpeg" if name == "ffmpeg" else None
+
+    monkeypatch.setattr(media.shutil, "which", which)
+    monkeypatch.setattr(media.sys, "platform", platform)
+    monkeypatch.setattr(media, "bundled_tool_dirs", lambda: ["/bundle/bin"])
+    assert media.find_tool("ffmpeg") == "/usr/bin/ffmpeg"
+    assert looked == ["/bundle/bin/ffmpeg", "ffmpeg"]
+
+
+def test_install_help_is_written_for_each_operating_system():
+    assert "brew install ffmpeg-full" in media.install_ffmpeg_help("darwin")
+    assert "winget install Gyan.FFmpeg" in media.install_ffmpeg_help("win32")
+    assert "package manager" in media.install_ffmpeg_help("linux")
+    assert "brew" not in media.install_ffmpeg_help("win32") + media.install_ffmpeg_help("linux")
+    for platform in ("darwin", "win32", "linux"):
+        assert "libass" in media.install_captions_help(platform)
+    assert "brew" not in media.install_captions_help("win32") + media.install_captions_help("linux")
+
+
+def test_caption_support_reads_the_filter_list_once_per_tool(monkeypatch):
+    calls = []
+    listings = {"full": " ... subtitles  V->V  x\n ... ass  V->V  y\n", "plain": " ... scale  V->V\n"}
+
+    def run(command, **_):
+        calls.append(command[0])
+        return SimpleNamespace(stdout=listings[command[0]])
+
+    monkeypatch.setattr(media, "_caption_support", {})
+    monkeypatch.setattr(media.subprocess, "run", run)
+    assert media.can_burn_captions("full") is True
+    assert media.can_burn_captions("full") is True
+    assert media.can_burn_captions("plain") is False
+    assert calls == ["full", "plain"]
+    monkeypatch.setattr(media, "find_tool", lambda name: None)
+    assert media.can_burn_captions() is None
+
+
+def test_the_bundled_font_is_the_default_and_replaces_arial():
+    assert media.caption_font("") == media.caption_font("Arial") == media.CAPTION_FONT == "Liberation Sans"
+    assert media.caption_font("Inter") == "Inter"
+    names = sorted(p.name for p in media.BUNDLED_FONTS.iterdir())
+    assert names == ["LICENSE-LiberationSans.txt", "LiberationSans-Bold.ttf", "LiberationSans-Regular.ttf"]
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="FFmpeg is needed for a real caption render")
+def test_captions_render_with_the_bundled_font_from_fontsdir(tmp_path):
+    if not media.can_burn_captions(shutil.which("ffmpeg")):
+        pytest.skip("this FFmpeg cannot burn captions")
+    fontsdir = media.prepare_fonts(tmp_path / "clip.fonts")
+    (tmp_path / "clip.ass").write_text(media.pop_captions([
+        {"start": 0.0, "end": 1.0, "text": "Hello", "timed": [{"text": "Hello", "start": 0.0, "end": 1.0}]},
+    ]), encoding="utf-8")
+    result = subprocess.run(
+        [shutil.which("ffmpeg"), "-hide_banner", "-loglevel", "verbose", "-f", "lavfi", "-i",
+         "color=black:s=1080x1920:d=0.2", "-vf", f"subtitles=clip.ass{fontsdir}", "-frames:v", "1", "-f", "null", "-"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert "LiberationSans-Bold.ttf" in result.stderr  # libass loaded the bundled file from fontsdir
+    assert "fontselect: (Liberation Sans, 700, 0) -> LiberationSans-Bold" in result.stderr
 
 
 def spoken(start, text, *probabilities, length=1.0):
@@ -402,7 +471,7 @@ def test_find_tool_uses_the_copy_bundled_in_the_packaged_app(tmp_path, monkeypat
     assert _media.find_tool("ffprobe") is None
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="Homebrew does not exist on Windows; per-OS install help is WO-28")
+@pytest.mark.skipif(sys.platform == "win32", reason="the fake Homebrew tool is a POSIX shell script")
 def test_find_tool_finds_homebrew_ffmpeg_with_a_bare_path(tmp_path, monkeypatch):
     from clip_factory import media as _media
 
@@ -413,6 +482,6 @@ def test_find_tool_finds_homebrew_ffmpeg_with_a_bare_path(tmp_path, monkeypatch)
     tool.chmod(0o755)
     monkeypatch.setattr(_media, "FULL_FFMPEG_DIRS", ())
     monkeypatch.setattr(_media, "HOMEBREW_BIN_DIRS", (str(brew),))
+    monkeypatch.setattr(_media.sys, "platform", "darwin")
     monkeypatch.setenv("PATH", "/usr/bin:/bin")  # launchd PATH for a double-clicked app
     assert _media.find_tool("ffmpeg") == str(tool)
-    assert "brew install ffmpeg" in _media.INSTALL_FFMPEG

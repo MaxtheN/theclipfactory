@@ -24,6 +24,8 @@ def inputs(root):
     (root / "clip_factory/demo_ui").mkdir()
     for name in ("index.html", "app.js", "styles.css"):
         (root / "clip_factory/demo_ui" / name).write_text("demo source " + name)
+    (root / "clip_factory/fonts").mkdir()
+    (root / "clip_factory/fonts/LiberationSans-Regular.ttf").write_bytes(b"font fixture")
     (root / "frontend/dist/assets").mkdir(parents=True)
     (root / "frontend/dist/index.html").write_text("<html>built UI</html>")
     (root / "frontend/dist/assets/main.js").write_text("console.log('built');")
@@ -36,6 +38,7 @@ def bundle(root, target):
     shutil.copytree(root / "frontend/dist", package / "ui")
     shutil.copy(root / "clip_factory/cloud_config.json", package)
     shutil.copytree(root / "clip_factory/demo_ui", package / "demo_ui")
+    shutil.copytree(root / "clip_factory/fonts", package / "fonts")
     return package
 
 
@@ -47,7 +50,8 @@ def test_bundle_assets_include_worker_and_nested_frontend(tmp_path):
 
 
 @pytest.mark.parametrize("file", ["inference_worker.py", "ui/index.html", "ui/assets/main.js",
-                                 "cloud_config.json", "demo_ui/index.html", "demo_ui/app.js", "demo_ui/styles.css"])
+                                 "cloud_config.json", "demo_ui/index.html", "demo_ui/app.js", "demo_ui/styles.css",
+                                  "fonts/LiberationSans-Regular.ttf"])
 @pytest.mark.parametrize("failure", ["missing", "stale"])
 def test_bundle_assets_fail_closed(tmp_path, file, failure):
     inputs(tmp_path)
@@ -84,6 +88,7 @@ if [[ "$1" == -m && "$2" == PyInstaller ]]; then
   mkdir -p "$destination"
   cp -R frontend/dist "$destination/ui"
   cp -R clip_factory/demo_ui "$destination/demo_ui"
+  cp -R clip_factory/fonts "$destination/fonts"
   cp clip_factory/cloud_config.json "$destination/"
   if [[ "$OMIT_WORKER" == 0 ]]; then cp clip_factory/inference_worker.py "$destination/"; fi
 elif [[ "$1" == */verify-bundle-assets.py || "$1" == */write-release-manifest.py ]]; then
@@ -108,7 +113,8 @@ fi
     assert calls.index("npm ci") < calls.index("npm run build") < calls.index("PyInstaller")
     assert "pytest" in calls
     for data in (f"{root}/clip_factory/inference_worker.py:clip_factory",
-                 f"{root}/frontend/dist:clip_factory/ui", f"{root}/clip_factory/demo_ui:clip_factory/demo_ui"):
+                 f"{root}/frontend/dist:clip_factory/ui", f"{root}/clip_factory/demo_ui:clip_factory/demo_ui",
+                 f"{root}/clip_factory/fonts:clip_factory/fonts"):
         assert data in calls
         assert calls[calls.index(data) - 1] == "--add-data"
     assert (root / "clip_factory/ui/stale.js").exists(), "Packaging must never erase source UI directories"
