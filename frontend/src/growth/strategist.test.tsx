@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { StrategistPanel } from "./StrategistPanel";
-import { BeliefCard } from "./BeliefLedger";
+import { BeliefCard, BeliefLedger } from "./BeliefLedger";
 import {
   strategistApi,
   validSimulation,
@@ -167,6 +167,12 @@ describe("strategist contract guards", () => {
 });
 
 describe("StrategistPanel", () => {
+  it("shows one empty state instead of three empty lanes", () => {
+    render(<BeliefLedger beliefs={[]} />);
+    expect(screen.getByText("No insights yet.")).toBeTruthy();
+    expect(screen.queryByText("Nothing learned here yet.")).toBeNull();
+  });
+
   it("shows three lanes, belief cards, evidence chips, queue and held state", async () => {
     stubMotion(false);
     vi.spyOn(strategistApi, "view").mockResolvedValue(view());
