@@ -139,7 +139,7 @@ def main() -> None:
     parser.add_argument("--cache", type=Path, default=Path("build/ffmpeg-cache"))
     args = parser.parse_args()
     record = fetch(args.target or host_target(), args.dest, args.cache)
-    print(f"FFmpeg {record['asset']} · SHA-256 {record['sha256']} → {args.dest}")
+    print(f"FFmpeg {record['asset']}, SHA-256 {record['sha256']} -> {args.dest}")
     print(json.dumps(record))
 
 
