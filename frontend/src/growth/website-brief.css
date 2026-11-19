@@ -27,13 +27,13 @@
 
 .gf-wb-step {
   margin: 0 0 16px;
-  text-transform: uppercase;
-  letter-spacing: 1.2px !important;
+  text-transform: none;
+  letter-spacing: 0 !important;
   color: var(--wb-muted);
   opacity: 0.7;
   text-align: center;
   font-size: 12px;
-  letter-spacing: 0.2px;
+  letter-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
 .gf-flow-app .gf-onboarding-step.gf-website-brief > h1,
@@ -219,8 +219,8 @@
   font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .gf-wb-group-note {
   margin: calc(-1 * var(--gf-s2, 8px)) 0 0;

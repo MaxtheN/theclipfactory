@@ -1,8 +1,9 @@
 /* Growth Factory design tokens: the only place the app defines global custom
    properties.
 
-   Theme: dark graphite neutrals (Cursor-like greys, no warm tint) with the
-   Growth Factory violet ramp for actions, focus and selection.
+   Theme: darkroom graphite. Neutrals carry the interface; the Growth
+   Factory violet is a tally light, used only for the primary action, the
+   current place, focus and the brand mark. Selection is neutral.
 
    New rules use the semantic names (--foreground, --surface, --action,
    --status-*, --space-*, --radius-*). The app names further down map the
@@ -22,20 +23,20 @@
   --gf-violet-800: #59256d; /* plum: selected fill base */
 
   /* Graphite neutrals */
-  --gf-grey-1000: #0c0c0c;
-  --gf-grey-950: #111111;
-  --gf-grey-900: #151515; /* app background */
-  --gf-grey-850: #191919; /* shell: sidebar, top bar */
-  --gf-grey-800: #1e1e1e; /* surface: cards, panels */
-  --gf-grey-750: #242424; /* raised: menus, hovered cards */
-  --gf-grey-700: #2a2a2a; /* hairline */
-  --gf-grey-650: #313131; /* border */
-  --gf-grey-600: #3b3b3b; /* control border */
-  --gf-grey-500: #525252; /* field border */
-  --gf-grey-400: #8c8c8c; /* subtle text */
-  --gf-grey-300: #a8a8a8; /* muted text */
-  --gf-grey-200: #cfcfcf;
-  --gf-grey-100: #e8e8e8; /* foreground */
+  --gf-grey-1000: #0a0a0a;
+  --gf-grey-950: #0f0f0f; /* sunken: media wells */
+  --gf-grey-900: #121212; /* canvas: app, sidebar, top bar */
+  --gf-grey-850: #161616;
+  --gf-grey-800: #191919; /* panel */
+  --gf-grey-750: #202020; /* raised: menus, hover, controls */
+  --gf-grey-700: #262626; /* hairline */
+  --gf-grey-650: #2c2c2c; /* border */
+  --gf-grey-600: #363636; /* control border */
+  --gf-grey-500: #424242; /* field border */
+  --gf-grey-400: #8a8a8a; /* subtle text */
+  --gf-grey-300: #a3a3a3; /* muted text */
+  --gf-grey-200: #cdcdcd;
+  --gf-grey-100: #ececec; /* foreground */
   --gf-white: #ffffff;
 
   /* Operational and outcome states (tuned for dark surfaces) */
@@ -45,13 +46,13 @@
   --gf-blue-400: #8ab4f8;
 
   /* Semantic colour */
-  --background: #151515;
+  --background: var(--gf-grey-900);
   --background-flat: var(--gf-grey-900);
   --surface: var(--gf-grey-800);
   --surface-raised: var(--gf-grey-750);
   --surface-sunken: var(--gf-grey-950);
-  --surface-shell: rgba(25, 25, 25, .92);
-  --surface-topbar: rgba(21, 21, 21, .86);
+  --surface-shell: var(--gf-grey-900);
+  --surface-topbar: rgba(18, 18, 18, .88);
 
   --foreground: var(--gf-grey-100);
   --muted-foreground: var(--gf-grey-300);
@@ -65,15 +66,15 @@
 
   --action: var(--gf-violet-400);
   --action-hover: var(--gf-violet-200);
-  --action-foreground: #0b0b0b;
+  --action-foreground: var(--gf-grey-900);
   --accent-text: var(--gf-violet-100);
-  --accent-strong: var(--gf-violet-300);
+  --accent-strong: var(--gf-violet-100);
   --hover: rgba(255, 255, 255, .045);
-  --selected: rgba(167, 93, 227, .14);
-  --selected-border: var(--gf-violet-600);
+  --selected: rgba(255, 255, 255, .075);
+  --selected-border: #5a5a5a;
   --focus: var(--gf-violet-200);
   --focus-ring: rgba(175, 133, 243, .28);
-  --selection: rgba(167, 93, 227, .38);
+  --selection: rgba(167, 93, 227, .34);
 
   /* Status: every status is also carried by an icon and words, never colour alone. */
   --status-success: var(--gf-green-400);
@@ -97,10 +98,10 @@
   --gf-signal-500: var(--gf-violet-400);
   --gf-signal-600: var(--gf-violet-500);
   --gf-ember-700: var(--gf-violet-100);
-  --gf-ember-800: var(--gf-violet-300);
-  --gf-peach-200: var(--gf-violet-600);
-  --gf-peach-100: rgba(167, 93, 227, .18);
-  --gf-peach-75: rgba(167, 93, 227, .14);
+  --gf-ember-800: var(--gf-grey-100);
+  --gf-peach-200: #5a5a5a;
+  --gf-peach-100: rgba(255, 255, 255, .075);
+  --gf-peach-75: rgba(255, 255, 255, .06);
   --gf-peach-50: rgba(255, 255, 255, .045);
   --gf-peach-25: var(--gf-grey-850);
   --gf-peach-10: var(--gf-grey-900);
@@ -139,25 +140,25 @@
   --space-8: 32px;
 
   /* Radius */
-  --radius-chip: 5px;
-  --radius-control: 7px;
-  --radius-card: 10px;
+  --radius-chip: 6px;
+  --radius-control: 8px;
+  --radius-card: 12px;
   --radius-full: 999px;
 
   /* Controls and shell */
   --control-sm: 32px;
   --control-md: 40px;
   --control-lg: 48px;
-  --nav-item-height: 44px;
-  --sidebar-width: 224px;
+  --nav-item-height: 36px;
+  --sidebar-width: 232px;
   --sidebar-collapsed: 64px;
   --content-max: 1120px;
   --main-padding: 32px 28px 24px;
 
   /* Elevation: mostly flat; shadows only separate layers. */
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, .25);
-  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, .35);
-  --shadow-action-hover: 0 4px 14px rgba(167, 93, 227, .28);
+  --shadow-card: none;
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, .4);
+  --shadow-action-hover: none;
   --shadow-dialog: 0 24px 72px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .06) inset;
   --shadow-segment: 0 1px 2px rgba(0, 0, 0, .3);
 
@@ -169,19 +170,21 @@
   --duration-fast: 150ms;
   --duration-base: 200ms;
 
-  /* Type: the system face for working UI; Bricolage Grotesque (loaded by
-     @fontsource in GrowthApp) for page titles and the wordmark only. */
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
-  --font-display: "Bricolage Grotesque Variable", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  /* Type: one family, Instrument Sans (variable weight and width, loaded by
+     @fontsource in GrowthApp). Titles use the narrower widths; numbers use
+     tabular figures. */
+  --font-ui: "Instrument Sans Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--font-ui);
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
-  --text-display: 800 28px/1.2 var(--font-display);
-  --text-title: 700 22px/1.25 var(--font-display);
+  --text-display: 600 30px/1.1 var(--font-display);
+  --text-title: 600 20px/1.25 var(--font-display);
   --text-heading: 600 15px/1.4 var(--font-ui);
-  --text-body: 400 13px/1.6 var(--font-ui);
-  --text-body-strong: 600 13px/1.6 var(--font-ui);
-  --text-small: 400 12px/1.5 var(--font-ui);
-  --text-caption: 500 11px/1.4 var(--font-ui);
-  --text-number: 600 18px/1.2 var(--font-ui);
+  --text-body: 400 14px/1.55 var(--font-ui);
+  --text-body-strong: 600 14px/1.55 var(--font-ui);
+  --text-small: 400 12.5px/1.5 var(--font-ui);
+  --text-caption: 500 12px/1.4 var(--font-ui);
+  --text-number: 600 20px/1.15 var(--font-ui);
+  --title-stretch: 92%;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -193,9 +196,9 @@
 
 /* Dark operational tools in styles.css render outside the app shell. */
 :root {
-  --panel: #1e1e1e;
-  --line: #2a2a2a;
-  --muted: #a8a8a8;
+  --panel: #191919;
+  --line: #262626;
+  --muted: #a3a3a3;
   --accent: #af85f3;
   --danger: #f28b82;
   --radius: 12px;
@@ -215,7 +218,7 @@
   --material-pane: var(--surface);
   --material-pane-solid: var(--surface);
   --material-shell: var(--surface-shell);
-  --material-command: rgba(30, 30, 30, .97);
+  --material-command: rgba(25, 25, 25, .97);
 
   --material-ink: var(--foreground);
   --material-secondary: var(--muted-foreground);

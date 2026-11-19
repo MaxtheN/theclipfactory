@@ -203,7 +203,7 @@ export function ClipStyleSheet({
         )}
         <button
           type="button"
-          className="gf-button"
+          className="gf-button secondary"
           disabled={blocked}
           onClick={() =>
             void w.run(

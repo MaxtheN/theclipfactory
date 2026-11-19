@@ -20,7 +20,7 @@
 .gf-upgrades h3 { margin: 2px 0 6px; font-size: 18px; }
 .gf-upgrades-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
 .gf-upgrades-overline {
-  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--up-accent); font-weight: 600;
+  font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--up-accent); font-weight: 600;
 }
 .gf-upgrades-muted { color: var(--up-muted); font-size: 13px; line-height: 1.45; margin: 0; }
 .gf-upgrades-error { color: var(--up-bad); font-size: 13px; margin: 8px 0 0; }
