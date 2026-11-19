@@ -8,7 +8,8 @@ Flow (every arrow after the first is an explicit human click; nothing here runs 
         the builder model writes clip_factory/extensions/<capability>.py + tests/extensions/test_<capability>.py
       → static AST allowlist + size limits, then ruff, the new tests and one tiny real FFmpeg render,
         each in a sandboxed subprocess (timeout, stripped environment, network denied with macOS
-        sandbox-exec when available, cwd in the worktree); up to 2 repair rounds with the failure log
+        sandbox-exec or Linux Bubblewrap when available, cwd in the worktree; Windows records reduced
+        isolation); up to 2 repair rounds with the failure log
       → ready_for_review: branch + commit + diff + test log + sample render
       → a person reviews; "Push & open PR" (draft, base = the branch the build started from, never
         main/master) or "Discard" (removes the worktree and branch).
@@ -446,20 +447,81 @@ sys.exit(0 if ok else 1)
 '''
 
 
+# Windows child processes need these to start Python, find system DLLs and create temporary files.
+WINDOWS_ENV = ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "NUMBER_OF_PROCESSORS")
+
+
 def sandbox_env(worktree: Path, ffmpeg_dir: str | None) -> dict:
-    path = ":".join(p for p in [ffmpeg_dir, str(Path(sys.executable).parent), "/usr/bin", "/bin"] if p)
-    return {"PATH": path, "HOME": str(worktree), "LANG": "C.UTF-8", "PYTHONPATH": str(worktree),
-            "PYTHONDONTWRITEBYTECODE": "1", "NO_COLOR": "1",
-            # Belt and braces when sandbox-exec is unavailable: any HTTP client goes nowhere.
-            "HTTP_PROXY": "http://127.0.0.1:9", "HTTPS_PROXY": "http://127.0.0.1:9", "ALL_PROXY": "http://127.0.0.1:9",
-            "NO_PROXY": ""}
+    if os.name == "nt":
+        system = os.environ.get("SYSTEMROOT") or r"C:\Windows"
+        system_dirs = [str(Path(system) / "System32"), system]
+    else:
+        system_dirs = ["/usr/bin", "/bin"]
+    path = os.pathsep.join(p for p in [ffmpeg_dir, str(Path(sys.executable).parent), *system_dirs] if p)
+    env = {"PATH": path, "HOME": str(worktree), "LANG": "C.UTF-8", "PYTHONPATH": str(worktree),
+           "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1", "NO_COLOR": "1",
+           # Belt and braces when no network sandbox is available: any HTTP client goes nowhere.
+           "HTTP_PROXY": "http://127.0.0.1:9", "HTTPS_PROXY": "http://127.0.0.1:9", "ALL_PROXY": "http://127.0.0.1:9",
+           "NO_PROXY": ""}
+    if os.name == "nt":
+        env |= {name: os.environ[name] for name in WINDOWS_ENV if os.environ.get(name)}
+        env["USERPROFILE"] = str(worktree)
+    return env
+
+
+BWRAP_ARGS = ("--bind", "/", "/", "--dev", "/dev", "--unshare-net", "--die-with-parent", "--")
+_isolation: dict | None = None
+
+
+def isolation_mode(platform_name: str | None = None) -> dict:
+    """How generated-extension checks are isolated here: macOS sandbox-exec and Linux Bubblewrap deny
+    the network; otherwise (Windows, or Linux without a working bwrap) only the environment is stripped.
+    The result goes into the build receipt so a reviewer knows what the checks could reach."""
+    global _isolation
+    if platform_name is None and _isolation is not None:
+        return _isolation
+    current = platform_name is None
+    platform_name = platform_name or sys.platform
+    mode = None
+    if platform_name == "darwin" and Path("/usr/bin/sandbox-exec").exists():
+        mode = {"mode": "sandbox-exec", "network_denied": True, "label": "sandbox-exec (network denied)",
+                "prefix": ["/usr/bin/sandbox-exec", "-p", SANDBOX_PROFILE]}
+    elif platform_name.startswith("linux"):
+        bwrap = shutil.which("bwrap")
+        if bwrap and _bwrap_works(bwrap):
+            mode = {"mode": "bubblewrap", "network_denied": True, "label": "Bubblewrap (network denied)",
+                    "prefix": [bwrap, *BWRAP_ARGS]}
+        else:
+            why = ("Bubblewrap could not start; unprivileged user namespaces may be disabled" if bwrap
+                   else "install bubblewrap to deny network access")
+            mode = {"mode": "environment", "network_denied": False,
+                    "label": f"environment only (reduced isolation: {why})", "prefix": []}
+    elif platform_name == "win32":
+        mode = {"mode": "environment", "network_denied": False,
+                "label": "environment only (reduced isolation on Windows: network is not blocked)", "prefix": []}
+    if mode is None:
+        mode = {"mode": "environment", "network_denied": False,
+                "label": "environment only (no network sandbox available)", "prefix": []}
+    if current:
+        _isolation = mode
+    return mode
+
+
+def _bwrap_works(bwrap: str) -> bool:
+    try:
+        return subprocess.run([bwrap, *BWRAP_ARGS, "true"], capture_output=True, timeout=10, check=False).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def receipt(isolation: dict) -> dict:
+    """The part of the isolation mode stored with a build (no command prefix)."""
+    return {k: isolation[k] for k in ("mode", "network_denied", "label")}
 
 
 def sandboxed(command: list[str]) -> tuple[list[str], str]:
-    tool = "/usr/bin/sandbox-exec"
-    if sys.platform == "darwin" and Path(tool).exists():
-        return [tool, "-p", SANDBOX_PROFILE, *command], "sandbox-exec (network denied)"
-    return command, "environment only (no network sandbox available)"
+    isolation = isolation_mode()
+    return [*isolation["prefix"], *command], isolation["label"]
 
 
 def run_step(command: list[str], cwd: Path, env: dict, timeout: float) -> dict:
@@ -649,6 +711,7 @@ class FactoryBuilder:
                                                           "install a local model).")
         base_source = (worktree / "clip_factory" / "extensions" / "base.py").read_text(encoding="utf-8")
         sample_dir = self.data_dir / "work" / "factory" / "samples" / build_id
+        self.store.patch(BUILDS, build_id, isolation=receipt(isolation_mode()), updated_at=now())
         previous = problems = None
         usage: dict | None = None
         attempts = []
@@ -694,7 +757,8 @@ class FactoryBuilder:
         model = build.get("model") or {}
         message = (f"Add {cap} renderer extension (Factory builder)\n\n{candidate.get('summary') or ''}\n\n"
                    f"Optional and off by default; generated from capability request {build['request_id']} and "
-                   f"checked by the AST allowlist, ruff, its tests and a sample FFmpeg render.\n\n"
+                   f"checked by the AST allowlist, ruff, its tests and a sample FFmpeg render.\n"
+                   f"Check isolation: {isolation_mode()['label']}.\n\n"
                    f"{TRAILER}: {build['request_id']}\nGenerated-By: Growth Factory builder ({model.get('model', '?')})\n")
         git(worktree, "-c", "user.name=Growth Factory builder", "-c", "user.email=factory-builder@localhost",
             "commit", "--no-verify", "-m", message, "--", *files)
@@ -741,7 +805,8 @@ class FactoryBuilder:
         request = self.requests.get(build["request_id"]) or {}
         body = ((request.get("work_order") or {}).get("markdown") or "") + (
             f"\n\n---\nGenerated by the Growth Factory builder from request `{build['request_id']}`; "
-            f"reviewed locally before this draft was opened. Commit `{build['commit']}`.\n")
+            f"reviewed locally before this draft was opened. Commit `{build['commit']}`.\n"
+            f"Check isolation: {(build.get('isolation') or {}).get('label', 'not recorded')}.\n")
         result = self.runner([shutil.which("gh") or "gh", "pr", "create", "--draft", "--repo", plan["repo"],
                               "--base", plan["base"], "--head", build["branch"], "--title", plan["title"],
                               "--body-file", "-"], input=body, capture_output=True, text=True, timeout=90,

@@ -244,7 +244,6 @@ def run_build(builder, model):
 
 
 @pytest.mark.skipif(not FFMPEG, reason="FFmpeg is needed for the sample render")
-@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-29: the builder sandbox environment is POSIX-only (':' PATH, no SYSTEMROOT)")
 def test_builder_repairs_invalid_code_then_commits_a_reviewable_branch(builder, repo):
     model = FakeModel([reply(module() + "import os\n"), "not json at all", reply(module())])
     result = run_build(builder, model)
@@ -257,6 +256,9 @@ def test_builder_repairs_invalid_code_then_commits_a_reviewable_branch(builder, 
     assert "3 passed" in result["test_log"]
     log = git(Path(result["worktree"]), "log", "-1", "--format=%B").stdout
     assert "Factory-Builder-Request: cap_progress_bar" in log
+    # The receipt says how the checks were isolated, on the build and in the commit.
+    assert result["isolation"] == fb.receipt(fb.isolation_mode())
+    assert f"Check isolation: {result['isolation']['label']}." in log
     # The working checkout is untouched: the extension exists only on the factory branch.
     assert not (repo / "clip_factory" / "extensions" / "progress_bar.py").exists()
     assert builder.requests.get("cap_progress_bar")["status"] == "ready_for_review"
@@ -419,3 +421,50 @@ def test_gateway_builder_model_uses_keychain_client_and_ledger_with_reasoning_on
     assert body["model"] == "anthropic/claude-sonnet-5.5" and body["reasoning"] == {"effort": "low"}
     assert body["response_format"]["json_schema"]["schema"] == fb.SCHEMA
     assert ledger == [("factory_builder", "anthropic/claude-sonnet-5.5", 0.0004, None)]
+
+
+@pytest.mark.parametrize(
+    ("platform_name", "bwrap", "works", "mode", "denied"),
+    [
+        ("linux", "/usr/bin/bwrap", True, "bubblewrap", True),
+        ("linux", "/usr/bin/bwrap", False, "environment", False),
+        ("linux", None, False, "environment", False),
+        ("win32", None, False, "environment", False),
+    ],
+)
+def test_isolation_mode_per_platform(monkeypatch, platform_name, bwrap, works, mode, denied):
+    monkeypatch.setattr(fb.shutil, "which", lambda name: bwrap if name == "bwrap" else None)
+    monkeypatch.setattr(fb, "_bwrap_works", lambda _: works)
+    isolation = fb.isolation_mode(platform_name)
+    assert (isolation["mode"], isolation["network_denied"]) == (mode, denied)
+    if mode == "bubblewrap":
+        assert isolation["prefix"][0] == bwrap and "--unshare-net" in isolation["prefix"]
+    else:
+        assert isolation["prefix"] == [] and "reduced isolation" in isolation["label"]
+    if platform_name == "win32":
+        assert "Windows" in isolation["label"]
+    elif not works:
+        assert ("user namespaces" if bwrap else "install bubblewrap") in isolation["label"]
+    assert set(fb.receipt(isolation)) == {"mode", "network_denied", "label"}
+
+
+def test_sandbox_environment_is_stripped_and_starts_python_on_this_os(tmp_path):
+    env = fb.sandbox_env(tmp_path, None)
+    path = env["PATH"].split(fb.os.pathsep)
+    assert str(Path(sys.executable).parent) in path
+    assert env["HTTPS_PROXY"] == "http://127.0.0.1:9" and "OPENROUTER_API_KEY" not in env
+    if sys.platform == "win32":
+        assert env["SYSTEMROOT"] and env["USERPROFILE"] == str(tmp_path)
+    step = fb.run_step([sys.executable, "-c", "import os, random; print(os.environ['HOME'])"], tmp_path, env, 60)
+    assert step["ok"], step["output"]
+    assert step["sandbox"] == fb.isolation_mode()["label"]
+
+
+@pytest.mark.skipif(fb.isolation_mode()["mode"] != "bubblewrap", reason="needs a working bwrap (Linux)")
+def test_linux_sandbox_denies_network_access(tmp_path):
+    probe = ("import socket\n"
+             "try:\n    socket.create_connection(('1.1.1.1', 80), timeout=3)\nexcept OSError as e:\n"
+             "    print('blocked', e.errno); raise SystemExit(3)\nprint('connected')")
+    step = fb.run_step([sys.executable, "-c", probe], tmp_path, fb.sandbox_env(tmp_path, None), 60)
+    assert step["code"] == 3 and "blocked" in step["output"], step["output"]
+    assert step["sandbox"] == "Bubblewrap (network denied)"
