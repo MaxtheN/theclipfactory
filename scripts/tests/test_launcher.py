@@ -158,6 +158,7 @@ def test_readiness_timeout():
         launcher.wait_ready(server, thread, "http://127.0.0.1:1", "secret", threading.Event(), timeout=0.01)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="WO-28: the launcher adds macOS tool folders; per-OS discovery is defined there")
 def test_path_preserved(monkeypatch):
     monkeypatch.setenv("PATH", "/custom/bin:/usr/bin")
     launcher.preserve_tool_path()
@@ -218,7 +219,7 @@ def test_windowed_failure_records_safe_diagnostics_without_stderr(monkeypatch, p
     assert "startup-failed" in log and "native window failed" in log
     assert parent["token"] not in log and "secret token" not in log and "boot=" not in log
     assert len(alerts) == 1
-    assert (tmp_path / "logs" / "startup.log").stat().st_mode & 0o777 == 0o600
+    assert sys.platform == "win32" or (tmp_path / "logs" / "startup.log").stat().st_mode & 0o777 == 0o600
 
 
 @pytest.mark.parametrize(

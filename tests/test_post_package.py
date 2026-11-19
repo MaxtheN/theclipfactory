@@ -1,6 +1,7 @@
 """Post package: limits, cover hosting/fallback, scheduling and per-account captions. Offline only:
 fake Composio client and storage; no Composio write tool and no Instagram call is ever made."""
 
+import sys
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -129,6 +130,7 @@ def test_chosen_cover_is_hosted_and_sent_as_cover_url_with_package_recorded(cove
     assert storage.covers == [row["cover_object"]] and row["cover_object"] in storage.deleted
 
 
+@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-28: stored media paths use the OS separator (videos\\...) instead of POSIX")
 def test_auto_cover_uses_the_render_cover_jpg(cover_world):
     publisher = cover_world["make_covers"]()
     _, attempt = post(cover_world, publisher=publisher)

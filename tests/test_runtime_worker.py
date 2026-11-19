@@ -218,7 +218,7 @@ def test_worker_main_atomic_finite_response_and_private_streams(model, monkeypat
     worker.main()
     assert capfd.readouterr() == ("", "")
     assert json.loads(response.read_text()) == {"output": "new", "number": 0.5}
-    assert response.stat().st_mode & 0o777 == 0o600
+    assert sys.platform == "win32" or response.stat().st_mode & 0o777 == 0o600
     assert not response.with_suffix(".json.tmp").exists()
 
 

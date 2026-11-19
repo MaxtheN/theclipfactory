@@ -227,6 +227,7 @@ def paid_authorized(client):
     settings(client, ads_enabled=True, total_budget=12.50)
 
 
+@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-28: finished media is chmod 0o444, which Windows treats as read-only, so deleting it fails")
 def test_real_cover_generation_get_and_download(client, tmp_path):
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         pytest.skip("FFmpeg/ffprobe not installed")

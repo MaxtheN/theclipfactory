@@ -68,7 +68,9 @@ def main():
                 process.wait(timeout=5)
                 raise RuntimeError("headless launcher did not shut down") from None
             process.stdout.close()
-        assert process.returncode == 0, "headless shutdown failed"
+        # On Windows terminate() is TerminateProcess, a hard kill with exit code 1. A graceful stop needs the
+        # app to handle CTRL_BREAK (SIGBREAK), which is WO-28; until then only POSIX checks the clean exit.
+        assert sys.platform == "win32" or process.returncode == 0, "headless shutdown failed"
 
 
 if __name__ == "__main__":

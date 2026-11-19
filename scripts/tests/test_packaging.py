@@ -63,6 +63,7 @@ def test_bundle_assets_fail_closed(tmp_path, file, failure):
 
 
 @pytest.mark.parametrize("omit_worker", [False, True])
+@pytest.mark.skipif(sys.platform == "win32", reason="runs the macOS bash build script")
 def test_build_script_freezes_actual_data_before_archiving(tmp_path, omit_worker):
     root = tmp_path / "Checkout with spaces"
     inputs(root)

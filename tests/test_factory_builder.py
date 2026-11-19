@@ -244,6 +244,7 @@ def run_build(builder, model):
 
 
 @pytest.mark.skipif(not FFMPEG, reason="FFmpeg is needed for the sample render")
+@pytest.mark.xfail(sys.platform == "win32", strict=True, reason="WO-29: the builder sandbox environment is POSIX-only (':' PATH, no SYSTEMROOT)")
 def test_builder_repairs_invalid_code_then_commits_a_reviewable_branch(builder, repo):
     model = FakeModel([reply(module() + "import os\n"), "not json at all", reply(module())])
     result = run_build(builder, model)
