@@ -233,7 +233,7 @@ class ComposioClient:
 
     def __init__(self, api_key: str, *, transport=None, timeout=30):
         if not isinstance(api_key, str) or not api_key.strip() or len(api_key) > 4096:
-            raise ComposioError("Configure a Composio project API key in Keychain.", code="missing_key")
+            raise ComposioError("Configure a Composio project API key.", code="missing_key")
         if any(ord(c) < 33 or ord(c) == 127 for c in api_key):
             raise ComposioError("Invalid Composio project API key.", code="invalid_key")
         if type(timeout) not in {int, float} or not math.isfinite(timeout) or not 0 < timeout <= 120:

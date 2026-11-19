@@ -20,6 +20,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from .keystore import key_store_name
 from .meta import MetaError, SecureTokenStore
 from .store import now
 
@@ -107,15 +108,15 @@ class CloudSecrets:
     def _backend():
         try:
             return SecureTokenStore._backend()
-        except MetaError:
-            raise CloudError("Native Keychain unavailable. Unlock it and retry.", 503) from None
+        except MetaError as exc:
+            raise CloudError(str(exc), 503) from None
 
     def get(self) -> str | None:
         backend = self._backend()
         try:
             return backend.get_password(self.SERVICE, self.ACCOUNT)
         except Exception:  # noqa: BLE001 - keychain errors must not expose provider details
-            raise CloudError("Cannot read the cloud session from the native Keychain.", 503) from None
+            raise CloudError(f"Cannot read the cloud session from {key_store_name()}.", 503) from None
 
     def set(self, value: str) -> None:
         if not isinstance(value, str) or not value.strip():
@@ -124,7 +125,7 @@ class CloudSecrets:
         try:
             backend.set_password(self.SERVICE, self.ACCOUNT, value)
         except Exception:  # noqa: BLE001 - keychain errors must not expose provider details
-            raise CloudError("Cannot save the cloud session to the native Keychain.", 503) from None
+            raise CloudError(f"Cannot save the cloud session to {key_store_name()}.", 503) from None
 
     def delete(self) -> None:
         backend = self._backend()
@@ -132,7 +133,7 @@ class CloudSecrets:
             if backend.get_password(self.SERVICE, self.ACCOUNT) is not None:
                 backend.delete_password(self.SERVICE, self.ACCOUNT)
         except Exception:  # noqa: BLE001 - keychain errors must not expose provider details
-            raise CloudError("Cannot remove the cloud session from the native Keychain.", 503) from None
+            raise CloudError(f"Cannot remove the cloud session from {key_store_name()}.", 503) from None
 
 
 @dataclass

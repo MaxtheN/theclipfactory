@@ -20,6 +20,7 @@ from pathlib import Path
 import httpx
 
 from .jobs import WorkError
+from .keystore import key_store_failure, key_store_name
 
 KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT = "growth-factory-groq", "api-key"
 ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
@@ -50,11 +51,11 @@ class GroqSpeechSecrets:
     def get(self) -> str | None:
         try:
             value = self._backend().get_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
-        except Exception:  # noqa: BLE001 - backend diagnostics may contain credential details
-            raise WorkError("Cannot read the Groq key from macOS Keychain. Unlock it and retry.") from None
+        except Exception as exc:  # noqa: BLE001 - backend diagnostics may contain credential details
+            raise WorkError(key_store_failure("Cannot read the Groq key from", exc)) from None
         value = value.strip() if isinstance(value, str) else None
         if value and (len(value) > 4096 or "\r" in value or "\n" in value):
-            raise WorkError("The stored Groq key is malformed. Replace it in macOS Keychain.")
+            raise WorkError(f"The stored Groq key is malformed. Replace it in {key_store_name()}.")
         return value or None
 
     def configured(self) -> bool:
@@ -229,7 +230,7 @@ class GroqSpeech:
                                          data=data, files={"file": ("speech.wav", stream, "audio/wav")}) as response:
                     if response.status_code != 200:
                         kind = "auth" if response.status_code in {401, 403} else "rate" if response.status_code == 429 else "provider"
-                        message = {"auth": "Groq rejected the speech key. Check its permission in macOS Keychain.",
+                        message = {"auth": "Groq rejected the speech key. Check the key in Brand profile → AI model.",
                                    "rate": "Groq speech is rate-limited. Wait, then explicitly retry the transcription.",
                                    "provider": "Groq speech could not complete this request. No transcript was saved."}[kind]
                         raise CloudSpeechError(message, kind)
@@ -271,7 +272,7 @@ class GroqSpeech:
         language = None if language == "auto" or not language else language
         key = self.secrets.get()
         if not key:
-            raise CloudSpeechError("Add a Groq API key to macOS Keychain before enabling cloud speech.", "auth")
+            raise CloudSpeechError("Add a Groq API key in Brand profile → AI model before enabling cloud speech.", "auth")
         started, segments, calls, detected, dropped = time.monotonic(), [], [], [], []
         try:
             with wave.open(str(audio), "rb") as source:

@@ -389,7 +389,7 @@ def test_token_store_native_namespace_and_no_fallback(monkeypatch):
         __module__ = "keyrings.alt.file"
 
     monkeypatch.setattr("clip_factory.meta.keyring.get_keyring", lambda: Plaintext())
-    with pytest.raises(MetaError, match="plaintext fallback is forbidden"):
+    with pytest.raises(MetaError, match="never saved in plain text"):
         store.set_token("30", TOKEN)
 
 
@@ -565,3 +565,62 @@ def test_frozen_app_without_backend_discovery_uses_the_macos_keychain(monkeypatc
     monkeypatch.setattr(macOS.Keyring, "priority", 5, raising=False)
     backend = SecureTokenStore._backend()
     assert isinstance(backend, macOS.Keyring) and picked == [backend]
+
+
+def test_linux_without_a_secret_service_names_it_and_never_falls_back(monkeypatch):
+    """No keyring daemon: a clear message naming GNOME Keyring/KWallet, and no plain-text store."""
+    import sys as _sys
+
+    from clip_factory import keystore
+    from clip_factory.meta import KeyStoreUnavailableError
+
+    class Fail:
+        __module__ = "keyring.backends.fail"
+        priority = 0
+
+    picked = []
+    monkeypatch.setattr(_sys, "platform", "linux")
+    monkeypatch.setattr("clip_factory.meta.keyring.get_keyring", lambda: Fail())
+    monkeypatch.setattr("clip_factory.meta.keyring.set_keyring", picked.append)
+    with pytest.raises(KeyStoreUnavailableError) as error:
+        SecureTokenStore._backend()
+    message = str(error.value)
+    assert "Secret Service" in message and "GNOME Keyring" in message and "plain text" in message
+    assert isinstance(error.value, MetaError) and picked == []
+    # Every key wrapper passes that guidance through instead of a generic "unlock it".
+    assert keystore.key_store_failure("Cannot read the Groq key from", error.value) == message
+    assert keystore.key_store_failure("Cannot read the Groq key from", OSError()).startswith(
+        "Cannot read the Groq key from system keyring"
+    )
+
+
+def test_frozen_windows_app_without_backend_discovery_uses_credential_manager(monkeypatch):
+    import sys as _sys
+    import types
+
+    class Fail:
+        __module__ = "keyring.backends.fail"
+        priority = 0
+
+    class WinVaultKeyring:
+        __module__ = "keyring.backends.Windows"
+        priority = 5
+
+    picked = []
+    monkeypatch.setattr(_sys, "platform", "win32")
+    monkeypatch.setitem(_sys.modules, "keyring.backends.Windows", types.SimpleNamespace(WinVaultKeyring=WinVaultKeyring))
+    monkeypatch.setattr("clip_factory.meta.keyring.get_keyring", lambda: Fail())
+    monkeypatch.setattr("clip_factory.meta.keyring.set_keyring", picked.append)
+    backend = SecureTokenStore._backend()
+    assert isinstance(backend, WinVaultKeyring) and picked == [backend]
+
+
+@pytest.mark.parametrize(
+    ("platform_name", "name"),
+    [("darwin", "macOS Keychain"), ("win32", "Windows Credential Manager"), ("linux", "system keyring")],
+)
+def test_key_store_is_named_for_the_operating_system(platform_name, name):
+    from clip_factory import keystore
+
+    assert keystore.key_store_name(platform_name) == name
+    assert "never saved in plain text" in keystore.key_store_unavailable(platform_name)

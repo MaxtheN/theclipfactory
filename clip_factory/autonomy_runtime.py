@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .brief import brief_block, must_avoid_hits, normalize_brief
 from .campaigns import Production, migrate_campaign
 from .jobs import WorkError
+from .keystore import key_store_name
 from .learning import ANALYST_TIMEOUT_SECONDS, bound_digest
 from .learning import AnalysisResult as LearningDecision
 from .llm_provider import gateway_of
@@ -98,7 +99,7 @@ class AutonomyRuntime:
         if body.api_key is not None:
             self.secrets.set(body.api_key)
         elif not self.secrets.get():
-            raise HTTPException(422, "Add a Composio API key; it will be saved in Keychain.")
+            raise HTTPException(422, f"Add a Composio API key; it will be saved in {key_store_name()}.")
         self.store.put("automation_settings", {"id": "local", "auth_config_id": body.auth_config_id,
             "model_id": body.model_id, "updated_at": now()})
         return self.settings()
