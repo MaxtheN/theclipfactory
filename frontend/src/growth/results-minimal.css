@@ -1,5 +1,5 @@
 /* Results, minimal: three numbers, learnings, everything else folded away. */
-.gf-results-page.is-minimal { display: grid; gap: 20px; }
+.gf-results-page.is-minimal { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 .gf-results-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .gf-results-strip { display: flex; gap: 32px; margin: 0; }
 .gf-results-strip div { display: grid; gap: 2px; }
@@ -14,7 +14,7 @@
 .gf-results-ig.is-on i { background: #2f7d4f; }
 .gf-results-page.is-minimal .gf-results-now { margin: 0; font-size: 15px; color: var(--material-secondary, #9d9d9d); }
 .gf-results-learned h2 { margin: 0 0 10px; font-size: 18px; }
-.gf-results-learned-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.gf-results-learned-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .gf-results-belief { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--material-line, #373737); border-radius: 10px; background: #1f1f1f; }
 .gf-results-belief strong { font-size: 15px; font-weight: 600; }
 .gf-results-belief small { font-size: 12px; color: var(--material-secondary, #9d9d9d); }
@@ -35,7 +35,7 @@
 .gf-results-reset { margin-left: auto; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--material-secondary, #9d9d9d); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .gf-results-reset:hover { color: inherit; }
 .gf-results-sim .gf-lld-pill, .gf-results-sim-pill {
-  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none;
   padding: 3px 8px; border-radius: 4px; border: 1px solid var(--material-line, #373737); color: var(--material-secondary, #9d9d9d); background: #1f1f1f;
 }
 .gf-results-sim-posts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }

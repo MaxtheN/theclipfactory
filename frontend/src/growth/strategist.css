@@ -61,10 +61,10 @@
   color: var(--st-muted);
 }
 .gf-results-step {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 650;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--st-muted, var(--material-metadata));
   opacity: 1;
 }
@@ -119,8 +119,8 @@
 .gf-strategist-lane h3 {
   color: var(--lane) !important;
   font-size: 13px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .gf-strategist-note,
 .gf-strategist-empty,

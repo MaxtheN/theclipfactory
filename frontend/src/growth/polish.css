@@ -972,10 +972,10 @@
   gap: 4px;
   margin-bottom: 2px;
   color: #9bd3b0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 @keyframes gf-aurora {
@@ -1168,10 +1168,10 @@
 }
 .gf-command-dialog .gf-command-group-label {
   padding: 10px 12px 4px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   opacity: 0.75;
 }
 .gf-command-dialog .gf-command-option {

@@ -246,10 +246,10 @@
   gap: 8px;
   margin: 0 -10px -8px;
   padding: 18px 10px 10px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 620;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--fmap-muted);
   /* Untinted at rest; gains a solid backing only once cards scroll beneath. */
   background: transparent;
@@ -530,10 +530,10 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 620;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--fmap-muted);
 }
 .gf-fmap-sheet h3 {
