@@ -1,7 +1,8 @@
 """Optional connector to a locally running Ollama server (loopback only, no cloud models).
 
-Ollama models are offered as ready-to-use LLMs alongside the MLX shelf. Whisper and Kokoro stay
-on MLX. Nothing here downloads, pulls, or deletes Ollama models; Ollama owns its own storage.
+Ollama models are offered as ready-to-use LLMs alongside the MLX shelf, and are the local agent
+engine on Windows and Linux. Ollama owns its own storage: nothing here deletes Ollama models, and
+`pull` downloads only when the creator asks for a recommended model (see local_agents).
 """
 
 from __future__ import annotations
@@ -85,6 +86,8 @@ class Ollama:
         self._lock = threading.Lock()
         self._listing: tuple[float, dict] | None = None
         self._capabilities: dict[str, list[str]] = {}
+        # Token counts of the last chat on this thread, for receipts.
+        self._usage = threading.local()
 
     @property
     def url(self) -> str:
@@ -233,9 +236,14 @@ class Ollama:
             body.pop("format")
             return self._chat(body, check)
 
+    def usage(self) -> dict:
+        """{prompt_tokens, completion_tokens} that Ollama reported for this thread's last chat."""
+        return dict(getattr(self._usage, "value", None) or {"prompt_tokens": 0, "completion_tokens": 0})
+
     def _chat(self, body: dict, check) -> str:
         chunks: list[str] = []
         total = 0
+        self._usage.value = None
         timeout = httpx.Timeout(1800, connect=3)
         try:
             with self._client(timeout) as client, client.stream("POST", "/api/chat", json=body) as response:
@@ -259,9 +267,64 @@ class Ollama:
                         raise OllamaError("Ollama output exceeded the size limit.")
                     chunks.append(content)
                     if event.get("done"):
+                        counts = [event.get("prompt_eval_count"), event.get("eval_count")]
+                        self._usage.value = {
+                            "prompt_tokens": counts[0] if type(counts[0]) is int else 0,
+                            "completion_tokens": counts[1] if type(counts[1]) is int else 0,
+                        }
                         break
         except httpx.ConnectError as exc:
             raise OllamaError("Ollama is not running. Open the Ollama app or run `ollama serve`.") from exc
         except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
             raise OllamaError("Ollama returned an invalid or interrupted response.") from exc
         return "".join(chunks)
+
+    def pull(self, name: str, *, progress, check=lambda: None) -> None:
+        """Download a model through Ollama, reporting progress(percent 0..95, message); cancellable."""
+        if not NAME.fullmatch(name) or ".." in name:
+            raise OllamaError("Invalid Ollama model name.")
+        layers: dict[str, tuple[int, int]] = {}
+        last = -1
+        finished = False
+        try:
+            with self._client(httpx.Timeout(7200, connect=3)) as client, client.stream(
+                "POST", "/api/pull", json={"model": name, "stream": True}
+            ) as response:
+                if response.status_code != 200:
+                    response.read()
+                    raise OllamaError(f"Ollama refused the download (HTTP {response.status_code}).")
+                for line in response.iter_lines():
+                    check()
+                    if not line:
+                        continue
+                    event = json.loads(line)
+                    if not isinstance(event, dict):
+                        raise TypeError("Invalid Ollama event")
+                    if event.get("error"):
+                        raise OllamaError(f"Ollama could not download this model: {str(event['error'])[:300]}")
+                    state = str(event.get("status") or "")[:80]
+                    if state == "success":
+                        finished = True
+                        break
+                    digest, size, done = event.get("digest"), event.get("total"), event.get("completed")
+                    if isinstance(digest, str) and type(size) is int and size > 0:
+                        layers[digest] = (size, min(size, done) if type(done) is int and done > 0 else 0)
+                    total = sum(size for size, _ in layers.values())
+                    received = sum(done for _, done in layers.values())
+                    percent = min(95, round(received / total * 95)) if total else 0
+                    if percent != last:
+                        last = percent
+                        message = (
+                            f"Downloading through Ollama ({received / 1e9:.1f} of {total / 1e9:.1f} GB)"
+                            if total else f"Ollama: {state or 'starting'}"
+                        )
+                        progress(percent, message)
+        except httpx.ConnectError as exc:
+            raise OllamaError("Ollama is not running. Open the Ollama app or run `ollama serve`.") from exc
+        except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
+            raise OllamaError("Ollama's download stopped or returned an invalid response. Try again.") from exc
+        finally:
+            with self._lock:
+                self._listing = None
+        if not finished:
+            raise OllamaError("Ollama's download ended before it finished. Try again.")
