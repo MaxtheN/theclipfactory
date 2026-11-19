@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from platformdirs import user_data_path
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import craft, media, ranking, scouts, speech
+from . import __version__, craft, media, ranking, scouts, speech
 from .ads import AdsClient
 from .brief import brief_block, must_avoid_hits
 from .campaign_api import install as install_campaign_api
@@ -629,6 +629,8 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
         runtime_ready = models().ready()
         whisper = models().item("whisper-turbo")["installed"] and runtime_ready
         return {
+            # The installed engine's package version, shown in Settings.
+            "version": __version__,
             "platform": f"{platform.system()} {platform.machine()}",
             "apple_silicon": apple_silicon(),
             "memory_gb": round(psutil.virtual_memory().total / 1e9, 1),

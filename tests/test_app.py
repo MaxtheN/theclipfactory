@@ -740,6 +740,12 @@ def test_system_uses_a_single_runtime_snapshot(client, monkeypatch):
     ready.assert_called_once()
 
 
+def test_system_reports_the_installed_app_version(client):
+    from clip_factory import __version__
+
+    assert client.get("/api/system").json()["version"] == __version__
+
+
 def test_ollama_models_are_not_installed_or_removed_by_the_app(client):
     assert client.post("/api/models/ollama:qwen3/download", json={"accept_license": True}).status_code == 409
     assert client.delete("/api/models/ollama:qwen3").status_code == 409
