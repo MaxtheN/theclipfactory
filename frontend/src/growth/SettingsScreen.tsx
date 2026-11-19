@@ -132,7 +132,7 @@ export function SettingsScreen({
           <EngineSetup factory={factory} jobs={false} />
         </>}
         {section === "accounts" && <>
-          <header><h2>Accounts and connections</h2><p>Your Growth Factory account and the Instagram accounts it posts to and measures.</p></header>
+          <header><h2>Accounts and connections</h2><p>Your account and connected Instagram accounts.</p></header>
           <NeedsInternet>signing in, syncing, and connecting or measuring Instagram accounts.</NeedsInternet>
           <section className="gf-settings-block" aria-label="Your account"><h3>Account</h3><CloudAccountRow showLocal /></section>
           <div className="gf-settings-block gf-results-accounts">
@@ -146,7 +146,7 @@ export function SettingsScreen({
               <div><dt>Data folder</dt><dd>{system.data_dir || "Unknown"}</dd></div>
             </dl>
           )}
-          <p className="gf-help">Footage, clips and results are stored in the data folder on this Mac. Cloud model routing, sign-in and connected accounts are the features that use the internet; each is marked where you turn it on.</p>
+          <p className="gf-help">Everything is stored on this Mac. Features that use the internet are marked.</p>
         </>}
         {section === "jobs" && <>
           <header><h2>Background jobs</h2><p>Downloads, renders and analysis running on this Mac.</p></header>

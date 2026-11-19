@@ -432,8 +432,7 @@ export function AutomationPanel({
         <span className="gf-kicker">{full ? "The learning loop" : "Instagram accounts"}</span>
         <h2>{full ? "Every result informs the next draft." : "Connect and track your posts"}</h2>
         <p>
-          Connect accounts and collect real performance in the Mac app. This
-          hosted design preview contains illustrative data.
+          Illustrative data. Connect accounts in the Mac app.
         </p>
       </section>
     );
@@ -643,9 +642,7 @@ export function AutomationPanel({
             </button>
           </div>
           <p>
-            Already connected in Composio? Paste the connected account ID
-            (starts with ca_). We check the real Instagram account before
-            adding it.
+            Paste a Composio account ID (ca_…). We verify it first.
           </p>
           <div className="gf-automation-controls">
             <label>
@@ -687,8 +684,7 @@ export function AutomationPanel({
         <details>
           <summary>Find a post from your Instagram account</summary>
           <p>
-            Read your six most recent posts. These stay separate from learning
-            evidence until you confirm a matching reviewed clip.
+            Your six latest posts. Not used for learning until you match a clip.
           </p>
           <button
             disabled={
@@ -748,9 +744,7 @@ export function AutomationPanel({
       <details>
         <summary>Track an existing published clip</summary>
         <p>
-          Choose an approved clip and its actual Instagram media ID. The
-          collector verifies ownership and publication time. You confirm the
-          clip mapping. This does not publish anything.
+          Match an approved clip to its Instagram media ID. Nothing is published.
         </p>
         <div className="gf-automation-controls">
           <label>
@@ -890,8 +884,7 @@ export function AutomationPanel({
           <h3>What the factory is testing</h3>
           {!experiments.length && (
             <p>
-              No experiment yet. A quality score alone cannot establish audience
-              growth.
+              No experiment yet.
             </p>
           )}
           {experiments.slice(0, 6).map((row) => (
@@ -927,8 +920,7 @@ export function AutomationPanel({
           !memory.experiments.length &&
           !memory.pending.length && (
             <p>
-              Nothing measured yet. Track a published clip; its first real
-              check builds the baseline.
+              Nothing measured yet.
             </p>
           )}
         {memory && memory.posts > 0 && (
@@ -1056,8 +1048,7 @@ export function AutomationPanel({
         )}
       <div className="gf-automation-footer">
         <p>
-          Observational evidence guides a test; it does not prove lift. Paid
-          spending is off.
+          Guides tests, doesn't prove lift. Paid spend is off.
         </p>
         <button
           disabled={busy}

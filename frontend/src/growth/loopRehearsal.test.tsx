@@ -63,7 +63,7 @@ describe("native map rehearsal", () => {
     await screen.findByText("Plan-only example");
     expect(screen.getByRole("button", { name: "Run demo experiment — creates one draft" })).toBeDisabled();
     expect(document.querySelectorAll("video")).toHaveLength(0);
-    expect(screen.getByText(/Generate a real clip before rendering/)).toBeInTheDocument();
+    expect(screen.getByText(/Generate a real clip to render/)).toBeInTheDocument();
   });
   it("retains the idempotency identity after uncertain submission", async () => {
     vi.mocked(post).mockImplementation(async (path, body) => { if (path.endsWith("rehearse-preview")) return proposal(); throw new ApiError("Uncertain submission", 0); });

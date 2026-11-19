@@ -341,15 +341,13 @@ export function StrategistPanel({
       />
       {!simulation && learnedExtra}
       <p className="gf-strategist-footnote">
-        Observational, not proof: these patterns come from your own posts and
-        guide the next test. They don't show why a post did well.
+        Observational, not proof. Guides the next test.
       </p>
       <section className="gf-strategist-section" aria-labelledby="gf-next-experiment">
         <span className="gf-results-step">03</span>
         <h3 id="gf-next-experiment">Next experiment</h3>
         <p className="gf-strategist-note">
-          Most clips keep what has worked; about one in four tests something
-          still uncertain.
+          Mostly proven patterns; about 1 in 4 explores.
         </p>
         <PortfolioStrip
           portfolio={portfolio}
@@ -364,8 +362,7 @@ export function StrategistPanel({
           </h3>
           {!waitingCount && (
             <p className="gf-strategist-empty">
-              Nothing needs you right now. Nothing changes without your
-              approval.
+              Nothing needs you right now.
             </p>
           )}
           {pending?.style_rules.map((rule) => (

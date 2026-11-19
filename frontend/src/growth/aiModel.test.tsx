@@ -112,7 +112,7 @@ describe("AiModelCard", () => {
     const calls = serve(view(true), view(true, { cloud_agents: true }));
     render(<AiModelCard />);
     const toggle = await screen.findByRole("checkbox", { name: /Use cloud model for clip agents too/ });
-    expect(screen.getByText(/Sends transcript text and frame descriptions to OpenRouter\/Anthropic/)).toBeTruthy();
+    expect(screen.getByText(/Sends text to OpenRouter\/Anthropic, never raw video or audio/)).toBeTruthy();
     expect(screen.getByText(/Cloud spend so far: \$0.0042 over 3 calls/)).toBeTruthy();
     await userEvent.setup().click(toggle);
     await waitFor(() => expect(calls.at(-1)!.body).toBe(JSON.stringify({ cloud_agents: true })));

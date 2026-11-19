@@ -772,9 +772,7 @@ export function Onboarding({
                 {drafted && (
                   <p className="gf-flow-note">
                     <Icon name="check" size={14} />
-                    Drafted from your website. Check and edit anything; your
-                    key messages, topics, boundaries and call to action go into
-                    your first brief.
+                    Drafted from your website. Edit anything.
                   </p>
                 )}
                 <div className={`gf-prefill${drafted?.name && name === drafted.name ? " is-from-site" : ""}`}>
@@ -981,7 +979,7 @@ export function Onboarding({
                 <Disclosure title="Voice & boundaries" icon="settings">
                   <Field
                     label="What should every edit respect?"
-                    hint="Up to 30 lines, 1,200 characters per line, and 4,000 characters in total."
+                    hint="Up to 30 lines."
                   >
                     {(id) => (
                       <AutoTextarea

@@ -620,8 +620,7 @@ export function FactoryHome({
           <div>
             <h2>Drop an episode — your first clips in a few minutes</h2>
             <p>
-              Usually a few minutes for every 10 minutes of footage. You'll watch
-              each station work on the Factory map.
+              About a few minutes per 10 minutes of footage.
             </p>
           </div>
         )}

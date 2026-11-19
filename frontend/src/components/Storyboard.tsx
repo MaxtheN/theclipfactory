@@ -260,8 +260,7 @@ export function Storyboard({
   if (load.status === "missing")
     return (
       <p className="muted">
-        The factory has not watched this footage yet. It does that the first
-        time it makes clips from it.
+        Not watched yet. Happens on the first clip run.
       </p>
     );
   if (load.status === "error")

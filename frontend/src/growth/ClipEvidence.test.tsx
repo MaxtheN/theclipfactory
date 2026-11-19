@@ -119,7 +119,7 @@ describe("read-only clip evidence", () => {
     expect(
       screen.getByText(/Excluded: Hardware, Human time/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/not the fully loaded cost/)).toBeInTheDocument();
+    expect(screen.getByText(/not the full cost per asset/)).toBeInTheDocument();
     expect(screen.getByText("80% from left")).toBeInTheDocument();
     expect(screen.getByText("strategy-2")).toBeInTheDocument();
     expect(screen.getByText("Cold open: 0.00–1.00 s")).toBeInTheDocument();

@@ -88,7 +88,7 @@ describe("Settings", () => {
     show(factory(ready), "privacy");
     const privacy = screen.getByRole("region", { name: "Privacy and storage" });
     expect(within(privacy).getByText(ready.data_dir!)).toBeVisible();
-    expect(privacy).toHaveTextContent(/use the internet/);
+    expect(privacy).toHaveTextContent(/use the internet are marked/);
   });
 
   it("shows background jobs in their own section", () => {

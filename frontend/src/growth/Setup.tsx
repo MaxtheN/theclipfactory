@@ -601,7 +601,7 @@ export function Setup({
             {reading ? "Reading…" : "Re-read website"}
           </button>
           <small className="gf-website-hint">
-            Optional. We read public pages and show changes before anything is used.
+            Optional. Changes are shown before use.
           </small>
         </div>
         {reading && (
@@ -1109,7 +1109,7 @@ export function Setup({
           </div>
           {advancedForm}
           {!editor && saveActions}
-          <PanelDialog open={active && editor === "identity"} onClose={() => setEditor(null)} title="Brand, audience & voice" description="A clear identity keeps every clip on brand. Your drafts stay here when you close.">
+          <PanelDialog open={active && editor === "identity"} onClose={() => setEditor(null)} title="Brand, audience & voice" description="Drafts are kept when you close.">
             <div className="gf-brand-editor">{identityForm}</div>
             {editor === "identity" && saveActions && <div className="gf-panel-dialog-footer">{saveActions}</div>}
           </PanelDialog>
@@ -1117,7 +1117,7 @@ export function Setup({
             <div className="gf-brand-editor">{kitForm}</div>
             {editor === "kit" && saveActions && <div className="gf-panel-dialog-footer">{saveActions}</div>}
           </PanelDialog>
-          {goals && <PanelDialog open={active && editor === "goals"} onClose={() => setEditor(null)} title="Goals & brief" size="wide" description="Keep the desired outcome, creative direction and episode context together.">
+          {goals && <PanelDialog open={active && editor === "goals"} onClose={() => setEditor(null)} title="Goals & brief" size="wide" description="Outcome, direction and episode context.">
             <div className="gf-brand-goals-editor">{goals}</div>
           </PanelDialog>}
         </>

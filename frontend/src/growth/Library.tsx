@@ -200,7 +200,7 @@ export function Library({
       {olderCount > 0 && tab !== "footage" && (
         <details className="gf-library-older-tests">
           <summary>Older test drafts ({olderCount})</summary>
-          <p>These drafts were generated without speech. They are kept separately from current clips.</p>
+          <p>Made without speech. Kept apart from current clips.</p>
           <label><input type="checkbox" checked={olderTests} onChange={event => setOlderTests(event.target.checked)} /> Include older test drafts</label>
         </details>
       )}

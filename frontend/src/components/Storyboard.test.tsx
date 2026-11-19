@@ -73,7 +73,7 @@ describe("storyboard", () => {
     const fetch = respond({ detail: "No storyboard" }, 404);
     render(<Storyboard videoId="v/1" />);
     expect(screen.getByRole("status")).toHaveTextContent("Loading");
-    await waitFor(() => expect(screen.getByText(/has not watched this footage yet/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Not watched yet/)).toBeInTheDocument());
     expect(fetch.mock.calls[0][0]).toBe("/api/videos/v%2F1/storyboard");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
