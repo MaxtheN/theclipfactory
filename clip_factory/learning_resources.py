@@ -53,6 +53,21 @@ def read_macos_memory_pressure() -> str:
     return _pressure(result.stdout.strip())
 
 
+def read_memory_pressure() -> str:
+    """Kernel pressure on macOS; elsewhere derived from the share of memory still available.
+
+    Windows and Linux expose no pressure level comparable to macOS, so below 5% available reads as
+    critical and below 10% as warning, from psutil (the same numbers Task Manager and `free` show).
+    """
+    if platform.system() == "Darwin":
+        return read_macos_memory_pressure()
+    memory = psutil.virtual_memory()
+    if type(memory.total) is not int or memory.total <= 0:
+        return "unknown"
+    share = memory.available / memory.total
+    return "critical" if share < 0.05 else "warning" if share < 0.10 else "normal"
+
+
 def _pressure(value: Any) -> str:
     if type(value) is int:
         return {1: "normal", 2: "warning", 4: "critical"}.get(value, "unknown")
@@ -70,7 +85,7 @@ def check_learning_resources(
     model_metadata: Mapping[str, Any] | None,
     *,
     memory_reader: Callable[[], Any] = psutil.virtual_memory,
-    pressure_reader: Callable[[], Any] = read_macos_memory_pressure,
+    pressure_reader: Callable[[], Any] = read_memory_pressure,
     context_tokens: int = MAX_CONTEXT_TOKENS,
 ) -> ResourceReadiness:
     """Hold unless metadata, available RAM, pressure and context all pass.
@@ -124,7 +139,7 @@ def check_learning_resources(
     except Exception:  # noqa: BLE001 - inability to observe pressure must fail closed
         pressure = "unknown"
     if pressure in {"warning", "critical"}:
-        reasons.append(f"Learning is paused because this Mac reports {pressure} memory pressure. Try again later.")
+        reasons.append(f"Learning is paused because this computer reports {pressure} memory pressure. Try again later.")
     elif pressure != "normal":
         reasons.append("Learning is paused because memory pressure could not be verified. Try again shortly.")
 
