@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/desktop-apps.yml"
       - "packaging/**"
+      - "clip_factory/main.py"
       - "scripts/build-desktop-app.py"
       - "scripts/fetch-ffmpeg.py"
       - "scripts/verify-bundle-assets.py"
