@@ -242,25 +242,16 @@ describe("brand profile", () => {
     expect(within(screen.getByRole("dialog")).getByLabelText("Who it's for")).toHaveValue("A draft audience");
     expect(api.updateProfile).not.toHaveBeenCalled();
     expect(api.save).not.toHaveBeenCalled();
-    expect(view.container.querySelectorAll("dialog")).toHaveLength(4);
+    expect(view.container.querySelectorAll("dialog")).toHaveLength(2);
   });
 
-  it("opens Engine & models from a request and keeps drafts while navigation closes it", () => {
-    const { w, factory } = fixture({ editor: null });
-    cleanup();
-    const props = { w, factory, creating: false, next: vi.fn(), onSaved: vi.fn() };
-    const view = render(<Setup {...props} />);
-    expect(screen.queryByRole("dialog")).toBeNull();
-    view.rerender(<Setup {...props} engineRequest={1} />);
-    const dialog = screen.getByRole("dialog", { name: "Engine & models" });
-    fireEvent.click(within(dialog).getByText("Local testing & narration"));
-    fireEvent.change(within(dialog).getByLabelText("Prompt"), { target: { value: "A retained local test prompt" } });
-    view.rerender(<Setup {...props} active={false} engineRequest={1} />);
-    expect(screen.queryByRole("dialog")).toBeNull();
-    view.rerender(<Setup {...props} active engineRequest={1} />);
-    expect(screen.queryByRole("dialog")).toBeNull();
-    view.rerender(<Setup {...props} active engineRequest={2} />);
-    expect(within(screen.getByRole("dialog", { name: "Engine & models" })).getByLabelText("Prompt")).toHaveValue("A retained local test prompt");
+  it("keeps device, model and account controls out of Brand profile", () => {
+    const { view } = fixture({ editor: null });
+    const rail = screen.getByRole("navigation", { name: "Profile sections" });
+    expect(within(rail).queryByRole("button", { name: "Account & model" })).toBeNull();
+    screen.getByLabelText("Advanced controls").closest("details")?.setAttribute("open", "");
+    expect(screen.queryByRole("button", { name: /Engine & models/ })).toBeNull();
+    expect(view.container.textContent).not.toMatch(/Engine & models|Model library|Local runtime|Account & AI model/);
   });
 
   it("opens goals from its card or request, retains its draft, and closes on navigation", () => {
@@ -669,35 +660,72 @@ describe("app routing", () => {
   const originalUrl =
     window.location.pathname + window.location.search + window.location.hash;
   afterEach(() => window.history.replaceState(null, "", originalUrl));
-  it("opens Engine & models from quick actions inside the single app shell", async () => {
-    resetPreview();
+  async function shell() {
     render(<GrowthApp />);
     const brand = await screen.findByRole("combobox", { name: "Current brand" });
     await waitFor(() => expect(brand).toHaveValue("preview-profile-allin"));
+    return screen.getByRole("main");
+  }
+  function quick(query: string) {
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     const search = screen.getByRole("combobox", { name: "Search quick actions" });
-    fireEvent.change(search, { target: { value: "engine" } });
+    fireEvent.change(search, { target: { value: query } });
     fireEvent.keyDown(search, { key: "Enter" });
-    const engine = await screen.findByRole("dialog", { name: "Engine & models" });
-    expect(engine).toHaveClass("gf-panel-dialog-wide");
-    expect(within(engine).getByRole("region", { name: "Local model catalog" })).toBeVisible();
+  }
+  const sections = () => screen.getByRole("navigation", { name: "Settings sections" });
+
+  it("opens Settings > Models from the Engine & models quick action inside the single app shell", async () => {
+    resetPreview();
+    const main = await shell();
+    quick("engine");
+    expect(await within(main).findByRole("heading", { name: "Settings", level: 1 })).toBeTruthy();
+    expect(within(sections()).getByRole("button", { name: "Models" })).toHaveAttribute("aria-current", "page");
+    const models = screen.getByRole("region", { name: "Models" });
+    expect(within(models).getByRole("region", { name: "Local model catalog" })).toBeVisible();
+    expect(within(models).getByText(/Needs internet:/)).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: "Engine & models" })).toBeNull();
     expect(document.querySelectorAll(".gf-app")).toHaveLength(1);
     expect(document.querySelector(".gf-operational")).toBeNull();
     expect(screen.queryByRole("button", { name: "Advanced tools" })).toBeNull();
   });
 
-  it("still opens Results for #connections", async () => {
+  it("reaches Settings from the sidebar and quick actions, with its own current-location marker", async () => {
+    resetPreview();
+    const main = await shell();
+    const entry = screen.getByRole("button", { name: "Settings" });
+    fireEvent.click(entry);
+    expect(await within(main).findByRole("heading", { name: "Settings", level: 1 })).toBeTruthy();
+    expect(entry).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Brand profile" })).not.toHaveAttribute("aria-current");
+    expect(within(sections()).getByRole("button", { name: "Device and runtime" })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(screen.getByRole("button", { name: "Brand profile" }));
+    expect(await within(main).findByRole("heading", { name: "Brand profile", level: 1 })).toBeTruthy();
+    quick("go to settings");
+    expect(await within(main).findByRole("heading", { name: "Settings", level: 1 })).toBeTruthy();
+  });
+
+  it("opens Settings > Accounts and connections for #connections and a one-time #gf-accounts", async () => {
+    for (const hash of ["#connections", "#gf-accounts"]) {
+      cleanup();
+      resetPreview();
+      localStorage.setItem("growth-view-v2", "setup");
+      window.history.replaceState(null, "", `/${hash}`);
+      const main = await shell();
+      expect(await within(main).findByRole("heading", { name: "Settings", level: 1 })).toBeTruthy();
+      expect(within(main).queryByRole("heading", { name: "Brand profile", level: 1 })).toBeNull();
+      expect(within(sections()).getByRole("button", { name: "Accounts and connections" })).toHaveAttribute("aria-current", "page");
+      expect(screen.getByRole("region", { name: "Your account" })).toBeVisible();
+      expect(window.location.hash).toBe(hash === "#gf-accounts" ? "" : hash);
+    }
+  });
+
+  it("sends Brand profile's Connected accounts link to Settings", async () => {
     resetPreview();
     localStorage.setItem("growth-view-v2", "setup");
-    window.history.replaceState(null, "", "/#connections");
-    render(<GrowthApp />);
-    const main = await screen.findByRole("main");
-    expect(
-      await within(main).findByRole("heading", { name: "Results" }),
-    ).toBeTruthy();
-    expect(
-      within(main).queryByRole("heading", { name: "Brand profile" }),
-    ).toBeNull();
+    const main = await shell();
+    fireEvent.click(await within(main).findByRole("button", { name: "Connected accounts" }));
+    expect(await within(main).findByRole("heading", { name: "Settings", level: 1 })).toBeTruthy();
+    expect(within(sections()).getByRole("button", { name: "Accounts and connections" })).toHaveAttribute("aria-current", "page");
   });
 });
 

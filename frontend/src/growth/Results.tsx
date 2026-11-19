@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import type { Clip, Direction } from "../types";
 import {
-  AutomationPanel,
   parseAutomationState,
   parseLearningMemory,
   type LearningMemory,
@@ -1155,6 +1154,7 @@ export function Results({
   visible = true,
   onReview,
   onEditingRules,
+  onAccounts,
   onRehearse,
   demo = null,
   demoMode = false,
@@ -1169,6 +1169,8 @@ export function Results({
   visible?: boolean;
   onReview?: (clip: Clip) => void;
   onEditingRules?: () => void;
+  /** Opens Settings > Accounts and connections, which owns the Instagram accounts. */
+  onAccounts?: () => void;
   onRehearse?: () => void;
   /** The learning-loop demo's simulated outcome (its own store, never account history). */
   demo?: DemoResult | null;
@@ -1277,25 +1279,9 @@ export function Results({
     [demoMode, demo, brandKey],
   );
   const connected = (data.scoped?.accounts ?? []).length > 0;
-  const [accountsOpen, setAccountsOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [upgradesOpen, setUpgradesOpen] = useState(false);
-  const toAccounts = useCallback(() => setAccountsOpen(true), []);
-  useEffect(() => {
-    if (!visible || !["#gf-accounts", "#connections"].includes(window.location.hash))
-      return;
-    const frame = window.requestAnimationFrame(() => {
-      toAccounts();
-      // A one-time jump: the next launch opens where the person left off.
-      if (window.location.hash === "#gf-accounts")
-        window.history.replaceState(
-          null,
-          "",
-          window.location.pathname + window.location.search,
-        );
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [visible, toAccounts]);
+  const toAccounts = useCallback(() => onAccounts?.(), [onAccounts]);
 
   return (
     <div className="gf-results-page is-minimal">
@@ -1469,18 +1455,6 @@ export function Results({
           <button type="button" onClick={() => setUpgradesOpen(true)}><Icon name="settings" size={15} /> Factory upgrades</button>
         </div>
       </details>}
-      <PanelDialog open={accountsOpen && visible} onClose={() => setAccountsOpen(false)} title="Instagram accounts" description="Connect an account, track a post, or set its measurement window.">
-        <div className="gf-results-accounts">
-          <AutomationPanel
-            w={w}
-            factory={factory}
-            visible={visible && accountsOpen}
-            onReview={onReview}
-            onEditingRules={onEditingRules}
-            layout="accounts"
-          />
-        </div>
-      </PanelDialog>
       <PanelDialog open={manualOpen && visible} onClose={() => setManualOpen(false)} title="Add a result by hand" description="For numbers the app can't read. Keep the source, time window and limits with every result.">
         <HandEnteredResults w={w} factory={factory} next={next} />
       </PanelDialog>

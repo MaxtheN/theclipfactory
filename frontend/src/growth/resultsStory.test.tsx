@@ -160,7 +160,8 @@ describe("Results page", () => {
     const factory = { loading: false, errors: {}, data: { clips: [], videos: [], jobs: [] } } as unknown as FactoryState;
     const next = vi.fn();
     const onRehearse = vi.fn();
-    const { rerender } = render(<Results w={w} factory={factory} next={next} onRehearse={onRehearse} />);
+    const onAccounts = vi.fn();
+    render(<Results w={w} factory={factory} next={next} onRehearse={onRehearse} onAccounts={onAccounts} />);
     expect(screen.getByText("Posted")).toBeTruthy();
     expect(screen.getByText("Measuring")).toBeTruthy();
     expect(screen.getByText("Learned")).toBeTruthy();
@@ -178,10 +179,10 @@ describe("Results page", () => {
     expect(await screen.findByRole("heading", { name: "What we've learned" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "See how it learns (simulated data)" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
+    // Instagram accounts are owned by Settings > Accounts and connections; Results links there.
     fireEvent.click(screen.getByRole("button", { name: /Instagram: connect/ }));
-    const accounts = screen.getByRole("dialog", { name: "Instagram accounts" });
-    expect(within(accounts).getByRole("heading", { name: "Connect, track and measure" })).toBeTruthy();
-    fireEvent(accounts, new Event("cancel", { cancelable: true }));
+    fireEvent.click(within(start).getByRole("button", { name: "Connect Instagram" }));
+    expect(onAccounts).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(within(start).getByRole("button", { name: "Add a result by hand" }));
     const manual = screen.getByRole("dialog", { name: "Add a result by hand" });
@@ -193,15 +194,6 @@ describe("Results page", () => {
     const text = document.querySelector(".gf-results-top")?.textContent ?? "";
     for (const word of [/No winner/i, /\bpolicy\b/i, /snapshot/i, /publication mapping/i, /PLAN THE NEXT/])
       expect(text).not.toMatch(word);
-    for (const hash of ["#gf-accounts", "#connections"]) {
-      window.history.replaceState(null, "", hash);
-      rerender(<Results w={w} factory={factory} next={next} visible={false} />);
-      rerender(<Results w={w} factory={factory} next={next} visible />);
-      expect(await screen.findByRole("dialog", { name: "Instagram accounts" })).toBeTruthy();
-      expect(window.location.hash).toBe(hash === "#gf-accounts" ? "" : hash);
-      fireEvent.click(screen.getByRole("button", { name: "Close Instagram accounts" }));
-    }
-    window.history.replaceState(null, "", window.location.pathname);
     expect(post).not.toHaveBeenCalled();
     expect(put).not.toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();

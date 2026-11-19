@@ -21,7 +21,7 @@ const readiness = [
 ] as const;
 
 /** Local maintenance, explicitly requested by the user; mounting performs no work. */
-export function EngineSetup({ factory }: { factory: FactoryState }) {
+export function EngineSetup({ factory, jobs = true }: { factory: FactoryState; /** False where a separate Background jobs section shows the queue. */ jobs?: boolean }) {
   const [consent, setConsent] = useState<Record<string, boolean>>({});
   const [prompt, setPrompt] = useState("");
   const [picked, setPicked] = useState("qwen-small");
@@ -75,10 +75,10 @@ export function EngineSetup({ factory }: { factory: FactoryState }) {
           <Narration state={factory} />
         </div>
       </details>
-      <details className="gf-local-engine-section gf-local-engine-tools">
+      {jobs && <details className="gf-local-engine-section gf-local-engine-tools">
         <summary><Icon name="clock" size={18} /><span>Background jobs<small>Real progress, errors, results and cancellation.</small></span><Icon name="down" size={14} /></summary>
         <div className="gf-local-engine-tools-body"><Jobs state={factory} /></div>
-      </details>
+      </details>}
     </div>
   );
 }

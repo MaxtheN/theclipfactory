@@ -41,6 +41,7 @@ export function FactoryHome({
   onReview,
   onLibrary,
   onDirection,
+  onSettings,
   active = true,
 }: {
   w: Workspace;
@@ -49,6 +50,8 @@ export function FactoryHome({
   onReview: (clip: Clip) => void;
   onLibrary: (view?: LibraryView) => void;
   onDirection: () => void;
+  /** Opens Settings > Models, where a local model is set up. */
+  onSettings?: () => void;
   active?: boolean;
 }) {
   const picker = useRef<HTMLInputElement>(null);
@@ -650,6 +653,15 @@ export function FactoryHome({
       {!direction && sources.length > 0 && (
         <ClipStyleSheet w={w} onFullRules={onDirection} />
       )}
+      {/* No local model: name the owning Settings section instead of a dead end. */}
+      {line && !modelId && !!direction && onSettings && (
+        <p className="gf-message" role="status">
+          Finding clips needs a local model.{" "}
+          <button type="button" className="gf-link-button" onClick={onSettings}>
+            Open Settings → Models
+          </button>
+        </p>
+      )}
       {/* First run: the one-time engine downloads, with progress, before footage can be heard. */}
       {speechBlocked(engineOf(factory)) && (
         <SpeechSetup factory={factory} variant="engine" />
@@ -1012,7 +1024,7 @@ export function FactoryHome({
                       !direction
                         ? "Pick your clip style first."
                         : !modelId
-                          ? "Set up a local model: Brand profile → Advanced → Engine & models."
+                          ? "Set up a local model in Settings → Models."
                           : status.blocked_reason || undefined
                     }
                     onClick={() => void makeClips(source)}

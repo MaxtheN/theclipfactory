@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PanelLeft, Settings } from "lucide-react";
+import { Palette, PanelLeft, Settings } from "lucide-react";
 import { useFactory } from "../useFactory";
 import { useCampaignWorkspace } from "./useCampaignWorkspace";
 import { reviewPreview } from "./workspaceApi";
@@ -42,6 +42,7 @@ import "./website-alignment.css";
 import "@fontsource-variable/bricolage-grotesque";
 import "./identity.css";
 import { cloudApi } from "./cloudApi";
+import { SettingsScreen, type SettingsSection } from "./SettingsScreen";
 import { CLOUD_CHANGED } from "./appEvents";
 
 const views = {
@@ -67,6 +68,12 @@ const views = {
     label: "Brand profile",
     title: "Brand profile",
     sub: "Your brand, its voice and look, and what the clips should achieve.",
+    icon: "headphones",
+  },
+  settings: {
+    label: "Settings",
+    title: "Settings",
+    sub: "This Mac, its models, and the accounts the factory connects to.",
     icon: "settings",
   },
   research: {
@@ -89,9 +96,12 @@ const views = {
   },
 } as const;
 export type Stage = keyof typeof views;
+/** Older deep links (the desktop shell and earlier builds) to connected accounts. */
+const accountHash = () => ["#connections", "#gf-accounts"].includes(window.location.hash);
+/** Where go() lands within a destination. */
+export type GoTarget = { section?: SettingsSection };
 function storedView(): Stage {
-  if (["#connections", "#gf-accounts"].includes(window.location.hash))
-    return "results";
+  if (accountHash()) return "settings";
   try {
     const saved = localStorage.getItem("growth-view-v2");
     return saved && saved in views ? (saved as Stage) : "factory";
@@ -105,7 +115,9 @@ export function GrowthApp() {
   const w = useCampaignWorkspace(factory.refresh);
   const [stage, setStage] = useState<Stage>(storedView);
   const [goalsRequest, setGoalsRequest] = useState({ context: "", sequence: 0 });
-  const [engineRequest, setEngineRequest] = useState({ context: "", sequence: 0 });
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>(() =>
+    accountHash() ? "accounts" : "device",
+  );
   const [demoOpen, setDemoOpen] = useState(false);
   // Demo Mode is chosen by the creator and never persisted, so every launch starts on real results.
   const [demoMode, setDemoMode] = useState(false);
@@ -145,7 +157,6 @@ export function GrowthApp() {
   currentContext.current = contextKey;
   useEffect(() => {
     setGoalsRequest({ context: contextKey, sequence: 0 });
-    setEngineRequest({ context: contextKey, sequence: 0 });
     setDemoOpen(false);
     setDemoMode(false);
   }, [contextKey]);
@@ -257,9 +268,23 @@ export function GrowthApp() {
       setQuickOpen(false);
     } else heading.current?.focus();
   }, [stage, onboarding]);
-  function go(next: Stage) {
+  function go(next: Stage, target?: GoTarget) {
+    if (target?.section) setSettingsSection(target.section);
     setStage(next);
   }
+  useEffect(() => {
+    function landOnAccounts() {
+      if (!accountHash()) return;
+      setSettingsSection("accounts");
+      setStage("settings");
+      // A one-time jump: the next launch opens where the person left off.
+      if (window.location.hash === "#gf-accounts")
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    landOnAccounts();
+    window.addEventListener("hashchange", landOnAccounts);
+    return () => window.removeEventListener("hashchange", landOnAccounts);
+  }, []);
   function newWorkspace() {
     if (blocked) return;
     setOnboardingSession((n) => n + 1);
@@ -295,11 +320,11 @@ export function GrowthApp() {
     void factory.refresh();
   }
   const quickActions: QuickAction[] = [
-    ...(["factory", "library", "results", "setup"] as const).map((id) => ({
+    ...(["factory", "library", "results", "setup", "settings"] as const).map((id) => ({
       id,
       label: `Go to ${views[id].label}`,
       icon: views[id].icon,
-      group: id === "setup" ? ("Brand" as const) : ("Clips" as const),
+      group: id === "setup" ? ("Brand" as const) : id === "settings" ? ("App" as const) : ("Clips" as const),
       keywords: `${id} ${views[id].sub}`,
       disabled: blocked || onboarding || !usable,
       hint: id === "factory" ? "Add episodes and review clips" : undefined,
@@ -353,14 +378,21 @@ export function GrowthApp() {
       id: "engine",
       label: "Engine & models",
       icon: "settings",
-      group: "Brand",
+      group: "App",
       disabled: blocked || onboarding || !usable,
-      keywords: "models runtime speech whisper install hardware advanced",
-      hint: "Brand profile · Advanced",
-      run: () => {
-        go("setup");
-        setEngineRequest((request) => ({ context: contextKey, sequence: request.sequence + 1 }));
-      },
+      keywords: "models runtime speech whisper install hardware advanced settings",
+      hint: "Settings · Models",
+      run: () => go("settings", { section: "models" }),
+    },
+    {
+      id: "accounts",
+      label: "Connected accounts",
+      icon: "link",
+      group: "App",
+      disabled: blocked || onboarding || !usable,
+      keywords: "instagram account connect sign in sync settings",
+      hint: "Settings · Accounts and connections",
+      run: () => go("settings", { section: "accounts" }),
     },
     {
       id: "refresh",
@@ -459,13 +491,25 @@ export function GrowthApp() {
               <button
                 type="button"
                 className="gf-channel-settings"
+                aria-label="Settings"
+                aria-current={primaryStage === "settings" ? "page" : undefined}
+                title="Settings"
+                disabled={blocked || !usable || onboarding}
+                onClick={() => go("settings")}
+              >
+                <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
+                <span>Settings</span>
+              </button>
+              <button
+                type="button"
+                className="gf-channel-settings"
                 aria-label="Brand profile"
                 aria-current={primaryStage === "setup" ? "page" : undefined}
                 title="Brand profile"
                 disabled={blocked || !usable || onboarding}
                 onClick={() => go("setup")}
               >
-                <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
+                <Palette size={17} strokeWidth={1.6} aria-hidden="true" />
                 <span>Brand profile</span>
               </button>
               {accountEmail && (
@@ -671,6 +715,7 @@ export function GrowthApp() {
                         go("library");
                       }}
                       onDirection={() => go("research")}
+                      onSettings={() => go("settings", { section: "models" })}
                     />
                   </FactoryTabs>
                 </div>
@@ -698,17 +743,13 @@ export function GrowthApp() {
                   key={contextKey}
                   active={!onboarding && stage === "setup"}
                   goalsRequest={goalsRequest.context === contextKey ? goalsRequest.sequence : 0}
-                  engineRequest={engineRequest.context === contextKey ? engineRequest.sequence : 0}
                   creating={false}
                   onSaved={() => {}}
                   w={w}
                   factory={factory}
                   next={() => go("research")}
                   onNewCampaign={() => go("campaign")}
-                  onAccounts={() => {
-                    window.history.replaceState(null, "", "#gf-accounts");
-                    go("results");
-                  }}
+                  onAccounts={() => go("settings", { section: "accounts" })}
                   goals={
                     <Setup
                       key={`goals-${contextKey}`}
@@ -791,6 +832,7 @@ export function GrowthApp() {
                   visible={!onboarding && stage === "results"}
                   onReview={reviewClip}
                   onEditingRules={() => go("research")}
+                  onAccounts={() => go("settings", { section: "accounts" })}
                   onRehearse={openRehearsal}
                   demo={demoResult}
                   demoMode={demoMode}
@@ -798,6 +840,21 @@ export function GrowthApp() {
                   demoOpen={demoOpen && !onboarding && usable && stage === "results"}
                   onCloseDemo={() => setDemoOpen(false)}
                   onDemoResult={keepDemoResult}
+                />
+              </div>
+              <div
+                className="gf-stage"
+                hidden={onboarding || !usable || stage !== "settings"}
+              >
+                <SettingsScreen
+                  key={contextKey}
+                  w={w}
+                  factory={factory}
+                  section={settingsSection}
+                  onSection={setSettingsSection}
+                  visible={!onboarding && usable && stage === "settings"}
+                  onReview={reviewClip}
+                  onEditingRules={() => go("research")}
                 />
               </div>
             </main>

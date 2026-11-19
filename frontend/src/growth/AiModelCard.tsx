@@ -118,7 +118,7 @@ function KeyForm({
   );
 }
 
-/** Brand profile → "AI model": local vs cloud, key status, agent toggle and model choice. */
+/** Settings → Models "AI model": local vs cloud, key status, agent toggle and model choice. */
 export function AiModelCard() {
   const [view, setView] = useState<LlmView | null>(null);
   const [editingKey, setEditingKey] = useState(false);
