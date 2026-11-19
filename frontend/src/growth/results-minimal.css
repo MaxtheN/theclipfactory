@@ -19,7 +19,7 @@
 .gf-results-belief strong { font-size: 15px; font-weight: 600; }
 .gf-results-belief small { font-size: 12px; color: var(--material-secondary, #9d9d9d); }
 .gf-results-belief-bar { height: 5px; border-radius: 2px; background: #2a2a2a; overflow: hidden; }
-.gf-results-belief-bar i { display: block; height: 100%; background: #9d61dc; }
+.gf-results-belief-bar i { display: block; height: 100%; background: #a75de3; }
 .gf-results-empty { margin: 0; color: var(--material-secondary, #9d9d9d); }
 .gf-results-more { border-top: 1px solid var(--material-line, #373737); padding-top: 12px; }
 .gf-results-more > summary { cursor: pointer; font-size: 14px; color: var(--material-secondary, #9d9d9d); }
@@ -56,7 +56,7 @@
 .gf-results-sim-recut > div { display: grid; gap: 8px; justify-items: center; text-align: center; }
 .gf-results-sim-recut p { margin: 0; font-size: 15px; font-weight: 600; }
 .gf-results-sim-recut p.is-old { color: var(--material-secondary, #9d9d9d); font-weight: 500; text-decoration: line-through; }
-.gf-results-sim-chip { font-size: 14px; font-weight: 700; padding: 5px 10px; border-radius: 6px; background: #9d61dc; color: #ffffff; }
+.gf-results-sim-chip { font-size: 14px; font-weight: 700; padding: 5px 10px; border-radius: 6px; background: #a75de3; color: #ffffff; }
 @media (max-width: 900px) {
   .gf-results-sim-posts { grid-template-columns: 1fr; }
   .gf-results-sim-recut { grid-template-columns: 1fr; }
@@ -84,7 +84,7 @@
 
 /* One light visual system for Results: white surfaces, thin borders, 10px radius, accent used sparingly. */
 .gf-results-page.is-minimal {
-  --gf-r-line: #323232; --gf-r-surface: #1f1f1f; --gf-r-soft: #242424; --gf-r-accent: #9d61dc; --gf-r-accent-ink: #a987ec;
+  --gf-r-line: #323232; --gf-r-surface: #1f1f1f; --gf-r-soft: #242424; --gf-r-accent: #a75de3; --gf-r-accent-ink: #af85f3;
   gap: 20px;
 }
 .gf-results-page.is-minimal .gf-results-strip { gap: 0; border: 1px solid var(--gf-r-line); border-radius: 10px; background: var(--gf-r-surface); }
@@ -99,8 +99,8 @@
 .gf-results-page.is-minimal .gf-sim-post.is-loss { border-color: rgba(178, 59, 59, .4); }
 .gf-results-page.is-minimal .gf-sim-chip { background: var(--gf-r-soft); }
 .gf-results-page.is-minimal .gf-results-sim-chip {
-  font-size: 13px; font-weight: 600; background: rgba(157, 97, 220, .09); color: var(--gf-r-accent-ink);
-  border: 1px solid rgba(157, 97, 220, .3); border-radius: 999px; padding: 4px 10px;
+  font-size: 13px; font-weight: 600; background: rgba(167, 93, 227, .09); color: var(--gf-r-accent-ink);
+  border: 1px solid rgba(167, 93, 227, .3); border-radius: 999px; padding: 4px 10px;
 }
 .gf-results-page.is-minimal .gf-results-sim-wait { background: var(--gf-r-soft); border: 1px dashed var(--gf-r-line); color: var(--material-secondary, #9d9d9d); }
 .gf-results-page.is-minimal .gf-results-sim-recut video { background: var(--gf-r-soft); }

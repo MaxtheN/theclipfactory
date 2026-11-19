@@ -4,14 +4,14 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #d17cde;
+  color: #df77e4;
   white-space: nowrap;
 }
 .gf-unsaved-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #9d61dc;
+  background: #a75de3;
   flex: none;
 }
 .gf-nav-unsaved {
@@ -19,7 +19,7 @@
   height: 7px;
   margin-left: auto;
   border-radius: 50%;
-  background: #9d61dc;
+  background: #a75de3;
   flex: none;
 }
 .gf-unsaved-dialog p { margin: 0 0 10px; line-height: 1.5; }

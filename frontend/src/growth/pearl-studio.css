@@ -94,7 +94,7 @@
 .gf-app .gf-intro-mark { background: var(--material-pane); border-color: var(--material-line); box-shadow: none; }
 .gf-app .gf-onboarding-track, .gf-app .gf-launch-track { background: var(--material-line); }
 .gf-app .gf-onboarding-progress .is-complete .gf-onboarding-marker { color: var(--material-focus); border-color: var(--material-focus); }
-.gf-app .gf-onboarding-choice { --choice-accent: 157,97,220 !important; background: var(--material-pane); border-color: #464646; }
+.gf-app .gf-onboarding-choice { --choice-accent: 167,93,227 !important; background: var(--material-pane); border-color: #464646; }
 .gf-app .gf-onboarding-choice:hover:not(:has(input:disabled)):not(.is-selected):not(:has(input:checked)) { background: #252525; border-color: var(--material-focus); }
 .gf-app .gf-onboarding-choice.is-selected, .gf-app .gf-onboarding-choice:has(input:checked), .gf-app .gf-onboarding-choice.is-other.is-selected { background: #2d2d2d; border-color: var(--material-focus); box-shadow: inset 3px 0 0 var(--material-focus); }
 .gf-app .gf-onboarding-choice.is-selected > svg, .gf-app .gf-onboarding-choice:has(input:checked) > svg { color: var(--material-focus); }

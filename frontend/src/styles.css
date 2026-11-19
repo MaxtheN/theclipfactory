@@ -39,7 +39,7 @@ button,
 }
 button:hover,
 .button:hover {
-  background: #ccadf2;
+  background: #d2acf7;
 }
 button:disabled {
   opacity: 0.45;
@@ -969,7 +969,7 @@ textarea {
 /* Storyboard: what the factory saw */
 .storyboard {
   --series-motion: #3987e5;
-  --series-sound: #9d61dc;
+  --series-sound: #a75de3;
   min-width: 0;
 }
 .storyboard-caption {

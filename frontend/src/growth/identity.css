@@ -53,7 +53,7 @@
 }
 
 ::selection {
-  background: rgba(169, 135, 236, .22);
+  background: rgba(175, 133, 243, .22);
 }
 
 .gf-app :focus-visible,
@@ -81,7 +81,7 @@
 .gf-app .gf-clip-style-option[aria-pressed="true"],
 .gf-app .gf-wall-filter[aria-pressed="true"] {
   background: var(--peach);
-  border-color: rgba(169, 135, 236, .55);
+  border-color: rgba(175, 133, 243, .55);
   color: var(--ember-deep);
   font-weight: 600;
 }
@@ -128,8 +128,8 @@
 /* Pearl Studio carries a few bronze literals; bring them onto the orange palette.
    The logo itself (artwork, tint and size) stays as the shell styles define it. */
 .gf-app .gf-button:hover:not(:disabled) {
-  background: #d17cde;
-  border-color: #d17cde;
+  background: #df77e4;
+  border-color: #df77e4;
   color: var(--material-button-ink);
 }
 .gf-app .gf-button.secondary:hover:not(:disabled) {
@@ -159,10 +159,10 @@
 .gf-app .gf-automation .gf-automation-badge,
 .gf-app .gf-speechless-chip,
 .gf-app .gf-system-attention {
-  border-color: rgba(169, 135, 236, .35);
+  border-color: rgba(175, 133, 243, .35);
 }
 .gf-app .gf-spinner {
-  border-color: rgba(169, 135, 236, .2);
+  border-color: rgba(175, 133, 243, .2);
   border-top-color: var(--signal);
 }
 .gf-app .gf-page-heading h1,

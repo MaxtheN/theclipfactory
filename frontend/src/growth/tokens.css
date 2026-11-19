@@ -13,13 +13,13 @@
   color-scheme: dark;
 
   /* Violet brand ramp */
-  --gf-violet-100: #ccadf2; /* lavender: accent text, links on dark */
-  --gf-violet-200: #a987ec; /* periwinkle: focus, hover of primary */
-  --gf-violet-300: #d17cde; /* orchid: highlights, gradient end */
-  --gf-violet-400: #9d61dc; /* primary action */
-  --gf-violet-500: #9147a9; /* pressed / strong accent */
-  --gf-violet-600: #62439d; /* selected border, deep accent */
-  --gf-violet-800: #532869; /* plum: selected fill base */
+  --gf-violet-100: #d2acf7; /* lavender: accent text, links on dark */
+  --gf-violet-200: #af85f3; /* periwinkle: focus, hover of primary */
+  --gf-violet-300: #df77e4; /* orchid: highlights, gradient end */
+  --gf-violet-400: #a75de3; /* primary action */
+  --gf-violet-500: #9c41ae; /* pressed / strong accent */
+  --gf-violet-600: #6741a2; /* selected border, deep accent */
+  --gf-violet-800: #59256d; /* plum: selected fill base */
 
   /* Graphite neutrals */
   --gf-grey-1000: #0c0c0c;
@@ -69,11 +69,11 @@
   --accent-text: var(--gf-violet-100);
   --accent-strong: var(--gf-violet-300);
   --hover: rgba(255, 255, 255, .045);
-  --selected: rgba(157, 97, 220, .14);
+  --selected: rgba(167, 93, 227, .14);
   --selected-border: var(--gf-violet-600);
   --focus: var(--gf-violet-200);
-  --focus-ring: rgba(169, 135, 236, .28);
-  --selection: rgba(157, 97, 220, .38);
+  --focus-ring: rgba(175, 133, 243, .28);
+  --selection: rgba(167, 93, 227, .38);
 
   /* Status: every status is also carried by an icon and words, never colour alone. */
   --status-success: var(--gf-green-400);
@@ -99,8 +99,8 @@
   --gf-ember-700: var(--gf-violet-100);
   --gf-ember-800: var(--gf-violet-300);
   --gf-peach-200: var(--gf-violet-600);
-  --gf-peach-100: rgba(157, 97, 220, .18);
-  --gf-peach-75: rgba(157, 97, 220, .14);
+  --gf-peach-100: rgba(167, 93, 227, .18);
+  --gf-peach-75: rgba(167, 93, 227, .14);
   --gf-peach-50: rgba(255, 255, 255, .045);
   --gf-peach-25: var(--gf-grey-850);
   --gf-peach-10: var(--gf-grey-900);
@@ -157,7 +157,7 @@
   /* Elevation: mostly flat; shadows only separate layers. */
   --shadow-card: 0 1px 2px rgba(0, 0, 0, .25);
   --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, .35);
-  --shadow-action-hover: 0 4px 14px rgba(157, 97, 220, .28);
+  --shadow-action-hover: 0 4px 14px rgba(167, 93, 227, .28);
   --shadow-dialog: 0 24px 72px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .06) inset;
   --shadow-segment: 0 1px 2px rgba(0, 0, 0, .3);
 
@@ -196,7 +196,7 @@
   --panel: #1e1e1e;
   --line: #2a2a2a;
   --muted: #a8a8a8;
-  --accent: #a987ec;
+  --accent: #af85f3;
   --danger: #f28b82;
   --radius: 12px;
 }

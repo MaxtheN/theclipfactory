@@ -728,7 +728,7 @@
   border: 0;
 }
 .gf-onboarding-choice {
-  --choice-accent: 169, 135, 236;
+  --choice-accent: 175, 133, 243;
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) 16px;
   align-items: center;
