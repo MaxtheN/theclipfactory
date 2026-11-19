@@ -786,7 +786,7 @@ class TeamEngine:
             raise
 
     def _count_llm(self, run_id: str, *outputs) -> None:
-        """Cloud calls (provider, model, tokens, cost) add up on the run; local calls carry no usage."""
+        """Cloud and Ollama calls (provider, model, tokens, cost) add up on the run; MLX calls carry no usage."""
         items = [o["llm"] for o in outputs if isinstance(o, dict) and isinstance(o.get("llm"), dict)]
         if not items:
             return
