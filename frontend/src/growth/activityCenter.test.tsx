@@ -10,7 +10,7 @@ vi.mock("../api", async (importActual) => ({
   post: apiMock.post,
 }));
 
-import { ActivityCenter, activityItems, type PublishAttemptSummary } from "./ActivityCenter";
+import { ActivityCenter, activityItems, type PostScheduleSummary, type PublishAttemptSummary } from "./ActivityCenter";
 
 const nativeShowModal = HTMLDialogElement.prototype.showModal;
 const nativeClose = HTMLDialogElement.prototype.close;
@@ -101,6 +101,46 @@ describe("activityItems", () => {
       type: "Instagram post to @show", campaign: "Fall launch", status: "failed", failedStage: "Uploading",
     });
     expect(post.reason).toMatch(/outcome is unknown/);
+    expect(post.stage).toBe("Check posting status");
+    expect(post.reconcile).toBe("a1");
+    expect(post.target).toEqual({ to: "clip", clip: clips[0] });
+  });
+
+  it("keeps every current job but only the latest 20 finished ones", () => {
+    const done = Array.from({ length: 25 }, (_, n) =>
+      job({ id: `d${n}`, kind: "render", status: "completed", updated_at: ago(n + 1) }));
+    const items = activityItems([...done, job({ id: "live", kind: "render", status: "running" })], [], opts);
+    expect(items).toHaveLength(21);
+    expect(items[0].id).toBe("job:live");
+    expect(items[1].id).toBe("job:d0");
+    expect(items.at(-1)!.id).toBe("job:d19");
+  });
+
+  it("shows Cancel requested instead of a second Cancel while the engine stops a job", () => {
+    const [item] = activityItems([
+      job({ id: "j1", kind: "swarm", status: "running", message: "Cancellation requested; external writes cannot be undone" }),
+    ], [], opts);
+    expect(item).toMatchObject({ status: "active", stage: "Cancel requested", cancel: undefined });
+  });
+
+  it("marks a production run that finished as ready to review", () => {
+    const [item] = activityItems([job({ id: "j1", kind: "swarm", status: "completed", message: "Completed" })], [], opts);
+    expect(item.stage).toBe("Ready to review");
+  });
+
+  it("flags a scheduled post whose time passed while the app was closed", () => {
+    const attempts: PublishAttemptSummary[] = [
+      { id: "a1", clip_id: "k1", state: "scheduled", schedule_id: "s1", updated_at: ago(30) },
+      { id: "a2", clip_id: "k1", state: "scheduled", schedule_id: "s2", updated_at: ago(30) },
+    ];
+    const schedules: PostScheduleSummary[] = [
+      { id: "s1", status: "scheduled", overdue_at: ago(5), attempt_ids: ["a1"] },
+      { id: "s2", status: "scheduled", overdue_at: null, attempt_ids: ["a2"] },
+    ];
+    const [missed, waiting] = activityItems([], attempts, { ...opts, schedules });
+    expect(missed).toMatchObject({ id: "post:a1", status: "stopped", target: { to: "clip", clip: clips[0] } });
+    expect(missed.stage).toMatch(/^Stopped when the app closed/);
+    expect(waiting).toMatchObject({ id: "post:a2", status: "waiting", stage: "Scheduled" });
   });
 });
 
@@ -136,7 +176,7 @@ describe("ActivityCenter", () => {
     render(<ActivityCenter factory={f} campaigns={campaigns} onOpen={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Activity/ }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(confirm).toHaveBeenCalledWith("Stop this team production run? Clips that are already finished are kept.");
+    expect(confirm).toHaveBeenCalledWith("Stop this team production run? Finished clips are kept.");
     await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith("/api/jobs/j1/cancel"));
     expect(f.refresh).toHaveBeenCalledWith(["jobs", "factory"]);
   });
@@ -162,10 +202,23 @@ describe("ActivityCenter", () => {
     expect(live).toHaveTextContent("Render finished.");
   });
 
+  it("checks an uncertain post's status instead of retrying it", async () => {
+    apiMock.api.mockImplementation(async (path: string) => path === "/api/publish-attempts"
+      ? [{ id: "a1", clip_id: "k1", state: "unknown", updated_at: new Date().toISOString() }]
+      : []);
+    render(<ActivityCenter factory={factory([])} campaigns={campaigns} onOpen={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Activity/ }));
+    const check = await screen.findByRole("button", { name: "Check status" });
+    expect(screen.queryByRole("button", { name: /Retry|Post again/ })).toBeNull();
+    fireEvent.click(check);
+    await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith("/api/publish-attempts/a1/reconcile"));
+  });
+
   it("loads posting attempts and says when posting status is unavailable", async () => {
     apiMock.api.mockRejectedValue(new Error("offline"));
     render(<ActivityCenter factory={factory([])} campaigns={campaigns} onOpen={vi.fn()} />);
     expect(apiMock.api).toHaveBeenCalledWith("/api/publish-attempts");
+    expect(apiMock.api).toHaveBeenCalledWith("/api/post-schedules");
     fireEvent.click(screen.getByRole("button", { name: /Activity/ }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Posting status unavailable"));
   });

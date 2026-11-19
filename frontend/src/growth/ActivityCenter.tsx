@@ -26,6 +26,15 @@ export interface PublishAttemptSummary {
   created_at?: string;
   updated_at?: string;
   history?: { at?: string; state?: string; note?: string }[];
+  schedule_id?: string | null;
+}
+
+/** The subset of a post schedule (GET /api/post-schedules) the Activity Center reads. */
+export interface PostScheduleSummary {
+  id: string;
+  status: string;
+  overdue_at?: string | null;
+  attempt_ids?: string[];
 }
 
 export interface ActivityItem {
@@ -33,13 +42,16 @@ export interface ActivityItem {
   type: string;
   campaign?: string;
   stage: string;
-  status: "active" | "failed" | "done" | "cancelled" | "waiting";
+  /** "stopped": a scheduled post missed its time while the app was closed and waits for a decision. */
+  status: "active" | "failed" | "done" | "cancelled" | "waiting" | "stopped";
   updatedAt?: string;
   progress?: number;
   reason?: string;
   failedStage?: string;
   /** "production" also discloses that finished clips are kept. */
   cancel?: { jobId: string; production: boolean };
+  /** Uncertain posting outcome: offer Check status (reconcile), never retry. */
+  reconcile?: string;
   target?: ActivityTarget;
 }
 
@@ -89,7 +101,8 @@ const attemptStages: Record<string, string> = {
   unknown: "Outcome unknown",
 };
 const RECENT_MS = 24 * 60 * 60 * 1000;
-const SEEN_KEY = "gf-activity-seen-v1";
+const RECENT_LIMIT = 20;
+const SEEN_KEY = "gf-activity-seen";
 
 const typeOf = (kind: string) =>
   labels[kind] ?? kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -126,7 +139,13 @@ function targetOf(kind: string, ctx: Record<string, unknown>, clips: Clip[]): Ac
 export function activityItems(
   jobs: Job[],
   attempts: PublishAttemptSummary[],
-  { campaigns, clips, line, now = Date.now() }: { campaigns: Campaign[]; clips: Clip[]; line: FactoryLine | null; now?: number },
+  { campaigns, clips, line, schedules = [], now = Date.now() }: {
+    campaigns: Campaign[];
+    clips: Clip[];
+    line: FactoryLine | null;
+    schedules?: PostScheduleSummary[];
+    now?: number;
+  },
 ): ActivityItem[] {
   const items: ActivityItem[] = [];
   for (const job of jobs) {
@@ -137,49 +156,65 @@ export function activityItems(
           : job.status === "cancelled" ? "cancelled" : "done";
     const updatedAt = job.updated_at ?? job.created_at;
     if (status !== "active" && !(now - time(updatedAt) < RECENT_MS)) continue;
+    const cancelling = status === "active" && /^Cancellation requested/.test(job.message || "");
     items.push({
       id: `job:${job.id}`,
       type: typeOf(job.kind),
       campaign: campaignFor(campaigns, clips, { video: text(ctx.video_id), clip: text(ctx.clip_id), campaign: text(ctx.campaign_id) }),
-      stage: job.status === "queued" ? "Queued" : job.message || (status === "done" ? "Completed" : job.status),
+      stage: cancelling ? "Cancel requested"
+        : job.status === "queued" ? "Queued"
+          : status === "done" && PRODUCTION.has(job.kind) ? "Ready to review"
+            : job.message || (status === "done" ? "Completed" : job.status),
       status,
       updatedAt,
       progress: job.status === "running" && typeof job.progress === "number" && Number.isFinite(job.progress)
         ? Math.max(0, Math.min(100, job.progress)) : undefined,
       reason: status === "failed" ? job.error || "No reason was reported." : undefined,
       failedStage: status === "failed" ? failedStageOf(job, line) : undefined,
-      cancel: status === "active" && !NO_CANCEL.has(job.kind) ? { jobId: job.id, production: PRODUCTION.has(job.kind) } : undefined,
+      cancel: status === "active" && !cancelling && !NO_CANCEL.has(job.kind)
+        ? { jobId: job.id, production: PRODUCTION.has(job.kind) } : undefined,
       target: targetOf(job.kind, ctx, clips),
     });
   }
+  const overdue = new Set(
+    schedules.filter((s) => s.status === "scheduled" && s.overdue_at).flatMap((s) => [s.id, ...(s.attempt_ids ?? [])]),
+  );
   for (const attempt of attempts) {
     const updatedAt = attempt.updated_at ?? attempt.created_at;
     const failed = attempt.state === "failed" || attempt.state === "unknown";
+    const stopped = attempt.state === "scheduled" && (overdue.has(attempt.id) || (!!attempt.schedule_id && overdue.has(attempt.schedule_id)));
     const status: ActivityItem["status"] = failed ? "failed"
-      : attempt.state === "mapped" || attempt.state === "published" ? "done"
-        : attempt.state === "cancelled" ? "cancelled"
-          : attempt.state === "scheduled" ? "waiting" : "active";
-    if (status !== "active" && status !== "waiting" && !(now - time(updatedAt) < RECENT_MS)) continue;
+      : stopped ? "stopped"
+        : attempt.state === "mapped" || attempt.state === "published" ? "done"
+          : attempt.state === "cancelled" ? "cancelled"
+            : attempt.state === "scheduled" ? "waiting" : "active";
+    if (!isCurrent(status) && !(now - time(updatedAt) < RECENT_MS)) continue;
+    const clip = attempt.clip_id ? clips.find((c) => c.id === attempt.clip_id) : undefined;
     const before = [...(attempt.history ?? [])].reverse().find((h) => h.state && h.state !== "failed" && h.state !== "unknown")?.state;
     items.push({
       id: `post:${attempt.id}`,
       type: attempt.account_name ? `Instagram post to ${attempt.account_name}` : "Instagram post",
       campaign: campaignFor(campaigns, clips, { clip: attempt.clip_id ?? undefined, campaign: attempt.campaign_id ?? undefined }),
-      stage: attemptStages[attempt.state] ?? attempt.state,
+      stage: stopped ? "Stopped when the app closed. Choose Post now, Reschedule or Cancel."
+        : attempt.state === "unknown" ? "Check posting status" : attemptStages[attempt.state] ?? attempt.state,
       status,
       updatedAt,
       reason: failed
         ? attempt.error || (attempt.state === "unknown" ? "The outcome is unknown. Check the post on Instagram before trying again." : "No reason was reported.")
         : undefined,
       failedStage: failed && before ? attemptStages[before] ?? before : undefined,
-      target: { to: "results" },
+      reconcile: attempt.state === "unknown" ? attempt.id : undefined,
+      target: clip ? { to: "clip", clip } : { to: "results" },
     });
   }
-  const rank = (i: ActivityItem) => (i.status === "active" ? 0 : i.status === "waiting" ? 1 : 2);
-  return items
-    .sort((a, b) => rank(a) - rank(b) || (time(b.updatedAt) || 0) - (time(a.updatedAt) || 0))
-    .slice(0, 40);
+  const rank = (i: ActivityItem) => (i.status === "active" ? 0 : i.status === "stopped" ? 1 : i.status === "waiting" ? 2 : 3);
+  const sorted = items.sort((a, b) => rank(a) - rank(b) || (time(b.updatedAt) || 0) - (time(a.updatedAt) || 0));
+  // Every current Job, plus the latest finished ones from the last day.
+  return [...sorted.filter((i) => isCurrent(i.status)), ...sorted.filter((i) => !isCurrent(i.status)).slice(0, RECENT_LIMIT)];
 }
+
+const isCurrent = (status: ActivityItem["status"]) => status === "active" || status === "waiting" || status === "stopped";
+const needsYou = (status: ActivityItem["status"]) => status === "failed" || status === "stopped";
 
 function readSeen() {
   try {
@@ -196,10 +231,20 @@ const shortTime = (iso?: string) => {
     : "Time not reported";
 };
 
+const statusLabel: Record<ActivityItem["status"], string> = {
+  active: "Running",
+  waiting: "Waiting",
+  stopped: "Needs you",
+  done: "Done",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
 const finished: Record<ActivityItem["status"], string> = {
   active: "started",
   waiting: "is waiting",
   done: "finished",
+  stopped: "stopped when the app closed",
   failed: "failed",
   cancelled: "was cancelled",
 };
@@ -221,14 +266,19 @@ export function ActivityCenter({
 }) {
   const [open, setOpen] = useState(false);
   const [attempts, setAttempts] = useState<PublishAttemptSummary[]>([]);
+  const [schedules, setSchedules] = useState<PostScheduleSummary[]>([]);
   const [attemptsError, setAttemptsError] = useState(false);
   const [seen, setSeen] = useState(readSeen);
   const [announcement, setAnnouncement] = useState("");
   const [cancelError, setCancelError] = useState("");
   const loadAttempts = useCallback(async () => {
     try {
-      const rows = await api<PublishAttemptSummary[]>("/api/publish-attempts");
+      const [rows, planned] = await Promise.all([
+        api<PublishAttemptSummary[]>("/api/publish-attempts"),
+        api<PostScheduleSummary[]>("/api/post-schedules"),
+      ]);
       setAttempts(Array.isArray(rows) ? rows : []);
+      setSchedules(Array.isArray(planned) ? planned : []);
       setAttemptsError(false);
     } catch {
       setAttemptsError(true);
@@ -248,11 +298,12 @@ export function ActivityCenter({
       campaigns,
       clips: factory.data.clips,
       line: factory.data.factory,
+      schedules,
     }),
-    [jobsUnavailable, factory.data.jobs, factory.data.clips, factory.data.factory, attempts, campaigns],
+    [jobsUnavailable, factory.data.jobs, factory.data.clips, factory.data.factory, attempts, schedules, campaigns],
   );
   const active = items.filter((i) => i.status === "active").length;
-  const attention = items.some((i) => i.status === "failed" && (time(i.updatedAt) || Infinity) > seen);
+  const attention = items.some((i) => needsYou(i.status) && (time(i.updatedAt) || Infinity) > seen);
 
   // Announce each status change once; the first load is not a change.
   const previous = useRef<Map<string, ActivityItem["status"]> | null>(null);
@@ -288,7 +339,7 @@ export function ActivityCenter({
   async function cancel(item: ActivityItem) {
     if (!item.cancel) return;
     const question = item.cancel.production
-      ? `Stop this ${item.type.toLowerCase()}? Clips that are already finished are kept.`
+      ? `Stop this ${item.type.toLowerCase()}? Finished clips are kept.`
       : `Cancel this ${item.type.toLowerCase()}?`;
     if (!window.confirm(question)) return;
     setCancelError("");
@@ -301,15 +352,30 @@ export function ActivityCenter({
     }
   }
 
+  const [checking, setChecking] = useState<string | null>(null);
+  async function reconcile(item: ActivityItem) {
+    if (!item.reconcile) return;
+    setCancelError("");
+    setChecking(item.reconcile);
+    try {
+      await post(`/api/publish-attempts/${encodeURIComponent(item.reconcile)}/reconcile`);
+    } catch (e) {
+      setCancelError(e instanceof Error ? e.message : "Posting status could not be checked.");
+    } finally {
+      setChecking(null);
+      void loadAttempts();
+    }
+  }
+
   const label = `Activity: ${active ? `${active} active` : "nothing running"}${attention ? ", a failure needs attention" : ""}`;
-  const current = items.filter((i) => i.status === "active" || i.status === "waiting");
-  const recent = items.filter((i) => i.status !== "active" && i.status !== "waiting");
+  const current = items.filter((i) => isCurrent(i.status));
+  const recent = items.filter((i) => !isCurrent(i.status));
   const row = (item: ActivityItem) => (
     <li key={item.id} className={`gf-activity-item is-${item.status}`}>
       <div className="gf-activity-row">
         <strong>{item.type}</strong>
         <span className={`gf-pill quiet gf-activity-status is-${item.status}`}>
-          {item.status === "active" ? "Running" : item.status === "waiting" ? "Waiting" : item.status === "failed" ? "Failed" : item.status === "cancelled" ? "Cancelled" : "Done"}
+          {statusLabel[item.status]}
         </span>
       </div>
       <p className="gf-activity-meta">
@@ -328,12 +394,17 @@ export function ActivityCenter({
           <strong>{item.failedStage ? `Failed while ${item.failedStage.toLowerCase()}` : "Failed (stage not reported)"}:</strong> {item.reason}
         </p>
       )}
-      {(item.target || item.cancel) && (
+      {(item.target || item.cancel || item.reconcile) && (
         <div className="gf-activity-actions">
           {item.target && (
             <button type="button" className="gf-button secondary compact" onClick={() => { setOpen(false); onOpen(item.target!); }}>
-              {item.status === "failed" ? "Open to fix" : "Open"}
+              {needsYou(item.status) ? "Open to fix" : "Open"}
               <Icon name="arrow" size={14} />
+            </button>
+          )}
+          {item.reconcile && (
+            <button type="button" className="gf-button secondary compact" disabled={checking === item.reconcile} onClick={() => void reconcile(item)}>
+              {checking === item.reconcile ? "Checking…" : "Check status"}
             </button>
           )}
           {item.cancel && (
