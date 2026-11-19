@@ -1,0 +1,16 @@
+#!/bin/sh
+# AppImage entry point. The bundled app lives in usr/lib/growth-factory (a PyInstaller folder).
+# The window uses pywebview's Qt backend with the bundled Qt WebEngine, not the system's WebKitGTK.
+# The AppImage runtime sets APPDIR; shell built-ins only, so a minimal PATH still launches.
+HERE="${APPDIR:-$(dirname "$(readlink -f "$0")")}"
+export PYWEBVIEW_GUI="${PYWEBVIEW_GUI:-qt}"
+# Qt WebEngine's Chromium sandbox needs unprivileged user namespaces, which some distributions
+# disable; fall back to running without it rather than failing to open a window.
+userns=1
+if [ -r /proc/sys/kernel/unprivileged_userns_clone ]; then
+  read -r userns < /proc/sys/kernel/unprivileged_userns_clone
+fi
+if [ -z "${QTWEBENGINE_DISABLE_SANDBOX:-}" ] && [ "$userns" = 0 ]; then
+  export QTWEBENGINE_DISABLE_SANDBOX=1
+fi
+exec "$HERE/usr/lib/growth-factory/growth-factory" "$@"

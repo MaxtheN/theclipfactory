@@ -1,5 +1,6 @@
 """CI integration smoke: actual app/bootstrap cookie, no GUI, no persistent token log."""
 import argparse
+import json
 import os
 import queue
 import signal
@@ -16,6 +17,8 @@ from urllib.request import HTTPCookieProcessor, ProxyHandler, build_opener
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--executable", type=Path)
+    parser.add_argument("--expect-ffmpeg", action="store_true",
+                        help="require /api/system to report FFmpeg that can burn captions (bundled in Windows/Linux)")
     args = parser.parse_args()
     command = [str(args.executable.resolve())] if args.executable else [sys.executable, "-m", "clip_factory.main"]
     with tempfile.TemporaryDirectory(prefix="clip-factory-smoke-") as directory:
@@ -54,8 +57,12 @@ def main():
                 assert response.status == 200, "bootstrap did not serve UI"
                 assert "boot=" not in response.url, "bootstrap token not removed from URL"
             origin = url.split("/?", 1)[0]
-            with opener.open(f"{origin}/api/system", timeout=5) as response:
+            with opener.open(f"{origin}/api/system", timeout=30) as response:
                 assert response.status == 200, "session cookie did not authenticate"
+                system = json.loads(response.read())
+            if args.expect_ffmpeg:
+                assert system.get("ffmpeg") and system.get("ffprobe"), "packaged app did not find FFmpeg and ffprobe"
+                assert system.get("ffmpeg_captions") is True, "packaged FFmpeg cannot burn captions"
             with opener.open(f"{origin}/api/demo-loop/viewer", timeout=5) as response:
                 assert response.status == 200 and b"/api/demo-loop/assets/app.js" in response.read(), "packaged demo viewer missing"
             for filename in ("app.js", "styles.css"):
