@@ -93,11 +93,16 @@ def parse_cuts(text: str) -> list[float]:
 
 
 def sample(ffmpeg: str, source: Path, start: float, span: float) -> tuple[list[tuple[float, bytes]], list[float]]:
-    """(samples [(window time, jpeg)], cut times) for one source window in one decode pass."""
+    """(samples [(window time, jpeg)], cut times) for one source window in one decode pass.
+
+    The cut branch always keeps the first frame: a window with no cut would otherwise send no
+    frame to its null output, which FFmpeg 6 and later treat as an error. Frame 0 (pts_time 0)
+    can never be a cut, so it is dropped from the result.
+    """
     with tempfile.TemporaryDirectory(prefix="reframe-") as folder:
         graph = (
             f"[0:v]split[s][c];[s]fps={SAMPLE_FPS},scale={SAMPLE_WIDTH}:-2[out];"
-            f"[c]scale=160:-2,select='gt(scene,{SCENE_THRESHOLD})',metadata=print:file=cuts.txt[cuts]"
+            f"[c]scale=160:-2,select='eq(n,0)+gt(scene,{SCENE_THRESHOLD})',metadata=print:file=cuts.txt[cuts]"
         )
         result = subprocess.run(
             [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-ss", f"{start:.6f}", "-t", f"{span:.6f}",
@@ -107,7 +112,8 @@ def sample(ffmpeg: str, source: Path, start: float, span: float) -> tuple[list[t
             cwd=folder, capture_output=True, timeout=TIMEOUT, check=True,
         )
         cuts_file = Path(folder) / "cuts.txt"
-        cuts = parse_cuts(cuts_file.read_text(errors="replace")) if cuts_file.exists() else []
+        printed = parse_cuts(cuts_file.read_text(errors="replace")) if cuts_file.exists() else []
+        cuts = [cut for cut in printed if cut > 0]
     frames = split_jpegs(result.stdout)[:MAX_SAMPLES]
     return [(index / SAMPLE_FPS, frame) for index, frame in enumerate(frames)], cuts
 

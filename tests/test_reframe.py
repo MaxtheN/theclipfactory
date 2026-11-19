@@ -244,3 +244,17 @@ def test_real_ffmpeg_accepts_the_crop_expression_and_samples_with_cuts(tmp_path)
     )
     width = 2 * int(360 * 9 / 32)
     assert len(out.stdout) == width * 360 * 180
+
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="FFmpeg is not installed")
+def test_sampling_a_window_with_no_cut_succeeds_on_this_ffmpeg(tmp_path):
+    """A static shot has no scene cut; FFmpeg 6+ fails an output that receives no frame."""
+    ffmpeg = shutil.which("ffmpeg")
+    video = tmp_path / "static.mp4"
+    subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                    "testsrc2=size=1280x720:rate=30:duration=3", "-vf", "hue=s=0", "-pix_fmt", "yuv420p",
+                    str(video)], check=True)
+    frames, cuts = reframe.sample(ffmpeg, video, 0.5, 2.0)
+    assert len(frames) == 5 and all(jpeg.startswith(b"\xff\xd8") for _, jpeg in frames)
+    assert [t for t, _ in frames] == [0.0, 0.4, 0.8, 1.2, 1.6]
+    assert cuts == []  # frame 0 is kept only so the output is never empty
