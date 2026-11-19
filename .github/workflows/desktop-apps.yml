@@ -1,0 +1,125 @@
+name: Build Windows and Linux desktop apps (unsigned)
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+    # Agent branches rebuild when the packaging itself changes, so a packaging PR is proven before merge.
+    branches: ["8090/**"]
+    paths:
+      - ".github/workflows/desktop-apps.yml"
+      - "packaging/**"
+      - "scripts/build-desktop-app.py"
+      - "scripts/fetch-ffmpeg.py"
+      - "scripts/verify-bundle-assets.py"
+      - "scripts/smoke-headless.py"
+      - "scripts/setup-windows.ps1"
+      - "scripts/setup-linux.sh"
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: growth-factory-windows-x64-setup.exe
+          # The oldest supported runner sets the glibc floor (2.35) the AppImage needs.
+          - os: ubuntu-22.04
+            artifact: growth-factory-linux-x86_64.AppImage
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Linux build libraries
+        if: runner.os == 'Linux'
+        # libegl1/libgles2: MediaPipe; the xcb and xkb libraries are bundled with the Qt window.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libegl1 libgles2 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
+            libxcb-util1 libxcb-xkb1 libxtst6 xvfb xauth
+      - name: Inno Setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and
+              -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+      - name: Check the source setup script parses
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD\scripts\setup-windows.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }
+      - name: Check the source setup script parses
+        if: runner.os == 'Linux'
+        run: bash -n scripts/setup-linux.sh
+      - name: Build, verify assets and smoke the bundle
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/build-desktop-app.py
+      - name: Install silently and smoke the installed app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Start-Process -FilePath "dist\${{ matrix.artifact }}" -Wait -PassThru `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART'
+          if ($setup.ExitCode -ne 0) { throw "installer exited with $($setup.ExitCode)" }
+          $installed = Join-Path $env:LOCALAPPDATA 'Programs\Growth Factory'
+          if (-not (Test-Path (Join-Path $installed 'Growth Factory.exe'))) { throw 'Growth Factory.exe not installed' }
+          python scripts/smoke-headless.py --expect-ffmpeg --executable (Join-Path $installed 'growth-factory-cli.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'installed app smoke failed' }
+      - name: Open the real WebView2 window
+        if: runner.os == 'Windows'
+        shell: pwsh
+        # --native-smoke writes native-smoke.json only after the window loads the authenticated UI.
+        run: |
+          $data = Join-Path $env:RUNNER_TEMP 'gf-native'
+          New-Item -ItemType Directory -Force $data | Out-Null
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\Growth Factory\Growth Factory.exe'
+          $app = Start-Process -FilePath $exe -ArgumentList '--native-smoke', '--data-dir', "`"$data`"" -Wait -PassThru
+          if ($app.ExitCode -ne 0 -or -not (Test-Path (Join-Path $data 'native-smoke.json'))) {
+            Get-Content (Join-Path $data 'logs\startup.log') -ErrorAction SilentlyContinue
+            throw "native window smoke failed ($($app.ExitCode))"
+          }
+      - name: Smoke the AppImage's contents
+        if: runner.os == 'Linux'
+        # Unpacked rather than extract-and-run, which does not pass SIGTERM on to the app.
+        run: |
+          mkdir -p build/appimage-check && cd build/appimage-check
+          "$GITHUB_WORKSPACE/dist/${{ matrix.artifact }}" --appimage-extract > /dev/null
+          python "$GITHUB_WORKSPACE/scripts/smoke-headless.py" --expect-ffmpeg --executable squashfs-root/AppRun
+      - name: Open the real Qt window under Xvfb
+        if: runner.os == 'Linux'
+        # --native-smoke writes native-smoke.json only after the window loads the authenticated UI.
+        run: |
+          data="$(mktemp -d)"
+          QTWEBENGINE_DISABLE_SANDBOX=1 timeout 120 xvfb-run -a -s '-screen 0 1600x1000x24' \
+            build/appimage-check/squashfs-root/AppRun --native-smoke --data-dir "$data"
+          test -f "$data/native-smoke.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-unsigned
+          path: |
+            dist/${{ matrix.artifact }}
+            dist/${{ matrix.artifact }}.manifest.json
+          if-no-files-found: error
+          retention-days: 14
