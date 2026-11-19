@@ -43,6 +43,7 @@ import "@fontsource-variable/bricolage-grotesque";
 import "./identity.css";
 import { cloudApi } from "./cloudApi";
 import { SettingsScreen, type SettingsSection } from "./SettingsScreen";
+import { ActivityCenter, type ActivityTarget } from "./ActivityCenter";
 import { CLOUD_CHANGED } from "./appEvents";
 
 const views = {
@@ -268,6 +269,7 @@ export function GrowthApp() {
       setQuickOpen(false);
     } else heading.current?.focus();
   }, [stage, onboarding]);
+  const [activityRequest, setActivityRequest] = useState(0);
   function go(next: Stage, target?: GoTarget) {
     if (target?.section) setSettingsSection(target.section);
     setStage(next);
@@ -314,6 +316,13 @@ export function GrowthApp() {
   }
   function reviewClip(clip: Clip) {
     openProduction(clip.video_id, undefined, clip.id);
+  }
+  /** Activity Center: open the screen holding a job's outputs or its fix. */
+  function openActivity(target: ActivityTarget) {
+    if (target.to === "source") openProduction(target.videoId);
+    else if (target.to === "clip") reviewClip(target.clip);
+    else if (target.to === "settings") go("settings", { section: target.section });
+    else go(target.to);
   }
   function refreshWorkspace() {
     void w.load().catch(() => {});
@@ -393,6 +402,16 @@ export function GrowthApp() {
       keywords: "instagram account connect sign in sync settings",
       hint: "Settings · Accounts and connections",
       run: () => go("settings", { section: "accounts" }),
+    },
+    {
+      id: "activity",
+      label: "Activity",
+      icon: "clock",
+      group: "App",
+      disabled: blocked || onboarding || !usable,
+      keywords: "jobs running progress failed failures cancel renders downloads posts background",
+      hint: "Jobs, posts and failures",
+      run: () => setActivityRequest((n) => n + 1),
     },
     {
       id: "refresh",
@@ -593,7 +612,16 @@ export function GrowthApp() {
                   </label>
                 )}
               </div>
-              <div className="gf-top-right">{commandTrigger}</div>
+              <div className="gf-top-right">
+                <ActivityCenter
+                  factory={factory}
+                  campaigns={w.campaigns}
+                  disabled={onboarding || !usable}
+                  openRequest={activityRequest}
+                  onOpen={openActivity}
+                />
+                {commandTrigger}
+              </div>
             </header>
             <main id="growth-main" className="gf-main" tabIndex={-1}>
               <header
