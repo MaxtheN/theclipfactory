@@ -54,13 +54,30 @@ serial heavy worker:
 2. Static checks before anything runs: AST allowlist (imports only `math`, `re`, `dataclasses`,
    `typing`, `clip_factory.extensions.base`; no `exec/eval/open/getattr/__import__`, no
    `os/sys/subprocess/socket`, no dunder attributes, no `while`), size/line limits.
-3. In the worktree, each in a subprocess with a timeout, stripped environment and
-   `sandbox-exec (deny network*)` on macOS: `ruff check`, the generated tests
+3. In the worktree, each in a subprocess with a timeout, a stripped environment and the platform's
+   network sandbox (see *Check isolation* below): `ruff check`, the generated tests
    (`--noconftest`), and a sample render harness: a 2 s 1080×1920 `testsrc2` render with the fragment
    applied must succeed and its frame at 1.5 s must differ from the plain render.
 4. Up to 2 repair rounds feed the failure log back. Success commits the two files on the branch
    (trailer `Factory-Builder-Request: <id>`) and stores the diff, test log, sample path and
    per-build model usage/cost: `ready_for_review`. Failure removes the generated files.
+
+### Check isolation
+
+Every step runs with a timeout, the worktree as its working directory and a stripped environment
+(`HOME` is the worktree, proxies point at a closed local port, no provider keys). On top of that:
+
+| Platform | Mode | Network |
+| --- | --- | --- |
+| macOS | `sandbox-exec` with `(allow default)(deny network*)` | denied |
+| Linux with a working `bwrap` | Bubblewrap: `--bind / / --dev /dev --unshare-net --die-with-parent` | denied |
+| Linux without `bwrap`, or where it cannot start (unprivileged user namespaces disabled) | environment only, labelled *reduced isolation* with the reason | not blocked |
+| Windows | environment only (keeps `SYSTEMROOT`, `TEMP` and the other variables Python needs), labelled *reduced isolation on Windows* | not blocked |
+
+The mode is probed once per run and stored on the build as `isolation` (`mode`, `network_denied`,
+`label`). It also appears in each step of the test log, in the commit message (`Check isolation: …`)
+and in the draft PR body. The review screen shows it and warns when the network was not blocked.
+Install Bubblewrap on Linux with your package manager (for example `sudo apt install bubblewrap`).
 
 ## 4. Review and merge
 

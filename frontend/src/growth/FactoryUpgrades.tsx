@@ -237,6 +237,12 @@ function BuildReview({
           ))}
         </ul>
       )}
+      {build.isolation && (
+        <p className={build.isolation.network_denied ? "gf-upgrades-muted" : "gf-upgrades-warning"}>
+          Checks ran with {build.isolation.label}.
+          {!build.isolation.network_denied && " The generated code could reach the network while its checks ran; read the diff before merging."}
+        </p>
+      )}
       {build.status === "ready_for_review" && build.sample_path && (
         <video className="gf-upgrade-sample" src={factoryBuilderApi.sampleUrl(build.id)} controls muted loop playsInline
           aria-label="Sample render with the new extension" />

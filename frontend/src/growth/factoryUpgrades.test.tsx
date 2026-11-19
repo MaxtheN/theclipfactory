@@ -40,6 +40,7 @@ const build = (over: Partial<FactoryBuild> = {}): FactoryBuild => ({
   attempts: [{ n: 1, ok: true, steps: [{ name: "static", ok: true }, { name: "tests", ok: true }, { name: "render", ok: true }] }],
   model: { provider: "openrouter", model: "anthropic/claude-sonnet-5.5" },
   usage: { calls: 1, cost_usd: 0.0421, prompt_tokens: 9000, completion_tokens: 2000 },
+  isolation: { mode: "sandbox-exec", network_denied: true, label: "sandbox-exec (network denied)" },
   error: null,
   demo: true,
   created_at: "2026-11-14T00:00:00Z",
@@ -109,9 +110,29 @@ describe("FactoryUpgrades", () => {
     expect(screen.getByLabelText("Sample render with the new extension")).toBeTruthy();
     expect(await screen.findByLabelText("Exact commands")).toBeTruthy();
     expect(screen.getByText(/\$0\.0421/)).toBeTruthy();
+    expect(screen.getByText(/Checks ran with sandbox-exec \(network denied\)/)).toBeTruthy();
+    expect(screen.queryByText(/could reach the network/)).toBeNull();
     expect(push).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Push & open draft PR" }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("fb_1"));
+  });
+
+  it("warns when a build's checks could reach the network", async () => {
+    const ready = request({ status: "ready_for_review", build_id: "fb_1" });
+    const isolation = {
+      mode: "environment" as const, network_denied: false,
+      label: "environment only (reduced isolation on Windows: network is not blocked)",
+    };
+    vi.spyOn(factoryBuilderApi, "view").mockResolvedValue(view([ready], [build({ isolation })]));
+    vi.spyOn(factoryBuilderApi, "detail").mockResolvedValue(build({ isolation }));
+    vi.spyOn(factoryBuilderApi, "prPlan").mockResolvedValue({
+      remote: "origin", repo: "o/r", base: "b", head: "h", commands: [], blocked: null,
+      gh: { authenticated: true, reason: null },
+    });
+    render(<FactoryUpgrades />);
+    fireEvent.click(await screen.findByRole("button", { name: /Progress bar/ }));
+    expect(await screen.findByText(/reduced isolation on Windows/)).toBeTruthy();
+    expect(screen.getByText(/could reach the network/)).toBeTruthy();
   });
 
   it("disables push when the plan is blocked", async () => {

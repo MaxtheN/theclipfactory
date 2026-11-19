@@ -68,6 +68,8 @@ export interface FactoryBuild {
   test_log: string | null;
   sample_path: string | null;
   render_check?: { ok: boolean; mean_abs_diff?: number; changed_pixels?: number } | null;
+  /** How the checks were isolated on this computer; older builds have none. */
+  isolation?: { mode: "sandbox-exec" | "bubblewrap" | "environment"; network_denied: boolean; label: string } | null;
   attempts: { n: number; ok: boolean; summary?: string | null; steps: BuildStep[] }[];
   model: { provider: string; model: string } | null;
   usage: { calls: number; cost_usd: number; prompt_tokens: number; completion_tokens: number } | null;
