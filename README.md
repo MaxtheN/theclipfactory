@@ -98,6 +98,43 @@ The source launch is the reproducible entry point. The Mac packaging workflow ma
 an **ad-hoc-signed, unnotarized artifact**, not a verified public release. A clean-Mac
 installation and current release download remain separate acceptance gates.
 
+## Run on Windows 10/11 (x64)
+
+Install with **`growth-factory-windows-x64-setup.exe`** from the *Build Windows and Linux
+desktop apps* workflow. It installs for your user only (no administrator rights), adds a
+Start menu shortcut, and installs Microsoft Edge WebView2 if it is missing. FFmpeg with
+caption support is included. The beta installer is **unsigned**, so Windows SmartScreen
+warns first: choose **More info → Run anyway** only for an installer whose source you trust.
+
+From source (Python 3.11–3.13 x64, Node 22.12+):
+
+```powershell
+git clone https://github.com/MaxtheN/theclipfactory.git
+cd theclipfactory
+powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
+.venv\Scripts\clip-factory.exe
+```
+
+## Run on Linux (x64)
+
+Download **`growth-factory-linux-x86_64.AppImage`** from the same workflow, then
+`chmod +x growth-factory-linux-x86_64.AppImage` and open it. It needs glibc 2.35 or newer
+(Ubuntu 22.04, Debian 12, Fedora 36 or later) and a desktop session. FFmpeg and the app window
+(Qt WebEngine) are included, so no WebKitGTK is needed. Saving API keys needs a Secret Service
+key store such as GNOME Keyring or KWallet.
+
+From source (Python 3.11–3.13, Node 22.12+):
+
+```sh
+git clone https://github.com/MaxtheN/theclipfactory.git
+cd theclipfactory
+bash scripts/setup-linux.sh
+.venv/bin/clip-factory
+```
+
+On both systems, speech runs locally and the agents use Ollama; the app's Settings → Models
+walks through each step. [Windows and Linux packaging notes](docs/development.md#packaged-windows-installer-and-linux-appimage).
+
 ## Verify
 
 ```sh
