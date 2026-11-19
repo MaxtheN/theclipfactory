@@ -28,6 +28,7 @@ vi.mock("../api", async () => {
   };
 });
 import { GrowthApp } from "./GrowthApp";
+import { saveDemoResult, type DemoResult } from "./demoStore";
 const path = "/api/campaigns/preview-campaign";
 // Style rules belong to the workspace (profile), inherited by its campaigns.
 const workspacePath = "/api/profiles/preview-profile-allin";
@@ -75,18 +76,39 @@ function openEditingRules() {
 }
 
 describe("Growth Factory interface", () => {
-  it("opens the one learning-loop demo from Results and closes it with Escape", async () => {
+  it("opens Results on real data and runs the learning-loop demo only in labelled Demo Mode", async () => {
     localStorage.setItem("growth-view-v2", "results");
+    // A demo left over from an earlier session must not come back on launch.
+    saveDemoResult("preview-profile-allin", {
+      ran_at: "2026-11-14T12:00:00Z",
+      after: null,
+      plan: { profile_id: "preview-profile-allin", baseline: { metrics: { views: 1600, completion_rate: 0.41, hold_3s: 0.52 } },
+        clips: [], clip_count: 0, source_minutes: 0, beliefs: [{ id: "q", headline: "Leftover demo belief", confidence: 0.7, detail: "", status: "active", counts: { matching: 1, beats: 1 }, evidence: [] }],
+        recut: { clip_id: "x", before_kind: "setup", before_hook: "x", after_kind: "question", after_hook: "y?", payoff_start: 1, payoff_end: 2, rule: "", next_test: "" }, engine: "", honesty: "" },
+    } as unknown as DemoResult);
     render(<GrowthApp />);
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Current brand" })).toHaveValue("preview-profile-allin"));
     expect(screen.queryByRole("button", { name: "Rehearse the loop" })).toBeNull();
-    fireEvent.click(screen.getAllByRole("button", { name: /Run the learning loop/ })[0]);
+    // Real results by default: nothing simulated until the creator asks for it.
+    expect(await screen.findByRole("heading", { name: "No results yet" })).toBeTruthy();
+    expect(screen.queryByText("Simulated")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Learning loop demo" })).toBeNull();
+    expect(screen.queryByText("Leftover demo belief")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try Demo Mode (simulated data)" }));
     const demo = await screen.findByRole("dialog", { name: "Learning loop demo" });
     expect(demo.closest("#growth-main")).toBeTruthy(); // plays inside the Factory pane, not a new window
-    expect(screen.getByText("Simulated")).toBeTruthy();
+    expect(screen.getByText(/^Demo Mode\./)).toBeTruthy();
+    expect(screen.getAllByText("Simulated").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "No results yet" })).toBeNull();
     expect(document.querySelector("iframe")).toBeNull();
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Learning loop demo" })).toBeNull());
+    // Closing the panel keeps Demo Mode labelled; leaving it returns to real results only.
+    expect(screen.getByText(/^Demo Mode\./)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Exit Demo Mode" }));
+    expect(screen.queryByText(/^Demo Mode\./)).toBeNull();
+    expect(screen.queryByText("Simulated")).toBeNull();
+    expect(screen.getByRole("heading", { name: "No results yet" })).toBeTruthy();
   });
 
   it("switches workspaces without changing campaign membership and shows the campaign picker only for several campaigns", async () => {
@@ -487,7 +509,9 @@ describe("approval transition regressions", () => {
     localStorage.setItem("growth-view-v2", "results");
     render(<GrowthApp />);
     fireEvent.click(await screen.findByText(/^Strategist and tools/));
-    fireEvent.click(screen.getByRole("button", { name: "Add a result by hand" }));
+    // Query fresh: Results remounts once the workspace context loads.
+    const tools = screen.getByText(/^Strategist and tools/).closest("details")!;
+    fireEvent.click(within(tools).getByRole("button", { name: "Add a result by hand" }));
     await screen.findByRole("button", { name: /^Approve next test\b/ });
     fireEvent.change(screen.getByLabelText("Proposed source-selection rule"), {
       target: { value: "An unsaved different rule." },
