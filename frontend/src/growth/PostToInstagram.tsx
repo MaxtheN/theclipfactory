@@ -70,7 +70,7 @@ function Counters({ text, limits, label }: { text: string; limits: PostLimits; l
  */
 function PostEditorSurface({ compact, open, onClose, children }: { compact: boolean; open: boolean; onClose: () => void; children: ReactNode }) {
   return compact
-    ? <PanelDialog open={open} onClose={onClose} title="Prepare your post" description="Preview this exact clip, choose its accounts, then post or schedule when you're ready." size="wide">{children}</PanelDialog>
+    ? <PanelDialog open={open} onClose={onClose} title="Prepare your post" description="Preview, pick accounts, then post or schedule." size="wide">{children}</PanelDialog>
     : <>{children}</>;
 }
 
@@ -338,7 +338,7 @@ export function PostToInstagram({
           <p role="status"><strong>Sign in required.</strong> We host the approved video briefly so Instagram can fetch it.</p>
           {targets?.cloud_configured && !signingIn && <button type="button" className="gf-button compact" onClick={() => setSigningIn(true)}>Sign in</button>}
         </div>
-        {!targets?.cloud_configured && <p>Accounts aren't set up on this Mac yet, so posting is off. Everything else still works.</p>}
+        {!targets?.cloud_configured && <p>Posting is off until accounts are set up.</p>}
         {signingIn && <CloudSignIn skipLabel="Cancel" onSkip={() => setSigningIn(false)} onDone={() => {
           setSigningIn(false);
           // Re-read targets so posting unlocks as soon as the session exists. The password is never kept here.

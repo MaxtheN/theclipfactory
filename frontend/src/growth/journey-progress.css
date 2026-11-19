@@ -128,7 +128,7 @@
   overflow: hidden;
   border: 0;
   border-radius: 3px;
-  background: rgba(243, 239, 230, 0.12);
+  background: rgba(255, 255, 255, .12);
   color: var(--material-focus);
   accent-color: var(--material-focus);
   appearance: none;
@@ -136,7 +136,7 @@
 }
 .gf-production-journey-progress::-webkit-progress-bar {
   border-radius: inherit;
-  background: rgba(243, 239, 230, 0.12);
+  background: rgba(255, 255, 255, .12);
 }
 .gf-production-journey-progress::-webkit-progress-value {
   border-radius: inherit;
@@ -152,7 +152,7 @@
   background-image: linear-gradient(
     90deg,
     transparent 25%,
-    rgba(226, 196, 157, 0.65) 50%,
+    rgba(76, 58, 34, .65) 50%,
     transparent 75%
   );
   background-size: 200% 100%;
@@ -208,8 +208,8 @@
 }
 .gf-production-journey[data-state="ready"] .gf-production-journey-symbol,
 .gf-production-journey[data-state="review"] .gf-production-journey-symbol {
-  border-color: rgba(226, 196, 157, 0.55);
-  background: rgba(226, 196, 157, 0.08);
+  border-color: rgba(77, 57, 30, .55);
+  background: rgba(76, 58, 34, .08);
 }
 .gf-production-journey[data-state="ready"] .gf-production-journey-symbol > svg {
   animation: gf-source-confirm 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -219,7 +219,7 @@
   color: var(--material-warning);
 }
 .gf-production-journey[data-state="error"] {
-  border-color: rgba(226, 196, 157, 0.4);
+  border-color: rgba(77, 57, 30, .4);
 }
 
 /* Inside Studio the status is part of the workbench, without another enclosing card. */

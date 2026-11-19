@@ -252,14 +252,12 @@ export function SourceTranscript({
       <Disclosure title="Transcript & captions" icon="file">
         {reviewPreview ? (
           <p>
-            Import and local transcription are available in the native app. This
-            design preview does not inspect files or generate a transcript.
+            Available in the Mac app.
           </p>
         ) : (
           <>
             <p>
-              Import a timed transcript, or generate one locally with Whisper.
-              Source text is not a technical or creative approval.
+              Import a timed transcript or generate one locally.
             </p>
             {sourceBusy && (
               <p className="gf-help">
@@ -312,7 +310,7 @@ export function SourceTranscript({
             </Field>
             <Field
               label="Timed transcript"
-              hint="Review the text and timestamps before importing. The service validates them against this source."
+              hint="Check text and timestamps first."
             >
               {(id) => (
                 <AutoTextarea
@@ -330,7 +328,7 @@ export function SourceTranscript({
             </Field>
             <Field
               label="Transcript language"
-              hint="Optional language code for imported text, such as en or fr. Local transcription uses your default language."
+              hint="Optional, e.g. en or fr."
             >
               {(id) => (
                 <input

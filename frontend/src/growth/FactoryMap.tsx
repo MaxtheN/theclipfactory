@@ -613,8 +613,7 @@ export function RunLedgerCard({
           <h3>Run ledger</h3>
         </header>
         <p className="gf-fmap-note">
-          No run recorded for this campaign yet. Produce clips from an episode
-          and its timings, clips and approvals appear here.
+          No runs yet.
         </p>
       </section>
     );

@@ -434,7 +434,7 @@ export function ActivityCenter({
         {attention && <span className="gf-activity-alert" aria-hidden="true" />}
       </button>
       <p className="gf-activity-sr" role="status" aria-live="polite">{announcement}</p>
-      <PanelDialog open={open && !disabled} onClose={() => setOpen(false)} title="Activity" description="What the factory is doing on this Mac, and what needs you.">
+      <PanelDialog open={open && !disabled} onClose={() => setOpen(false)} title="Activity" description="What's running and what needs you.">
         <div className="gf-activity">
           {jobsUnavailable && (
             <p className="gf-help" role="alert">Job status unavailable: {factory.errors.jobs}. Reconnect to the local service to see production, render and model jobs.</p>

@@ -15,7 +15,7 @@
   font-weight: 650;
   line-height: 18px;
   text-align: center;
-  color: var(--material-button-ink, #fff);
+  color: var(--material-button-ink, #ffffff);
   background: var(--material-button, #2f6f5e);
 }
 .gf-activity-alert {
@@ -26,7 +26,7 @@
   height: 8px;
   border-radius: 50%;
   background: var(--material-danger, #c2412d);
-  box-shadow: 0 0 0 2px var(--material-shell, #fff);
+  box-shadow: 0 0 0 2px var(--material-shell, rgba(255, 255, 255, .05));
 }
 .gf-activity-sr {
   position: absolute;
@@ -49,7 +49,7 @@
   font-weight: 650;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: var(--material-secondary, #62786b);
+  color: var(--material-secondary, #879e90);
 }
 .gf-activity ul {
   display: grid;
@@ -62,7 +62,7 @@
   display: grid;
   gap: 6px;
   padding: 10px 12px;
-  border: 1px solid var(--material-line, #8da89b45);
+  border: 1px solid var(--material-line, rgba(62, 86, 75, .271));
   border-radius: 10px;
   background: var(--material-pane, transparent);
 }
@@ -79,7 +79,7 @@
   color: var(--material-ink);
 }
 .gf-activity-status.is-failed {
-  color: var(--material-danger, #c2412d);
+  color: var(--material-danger, #ec6751);
 }
 .gf-activity-meta {
   display: flex;
@@ -87,18 +87,18 @@
   gap: 4px 12px;
   margin: 0;
   font-size: 12px;
-  color: var(--material-secondary, #62786b);
+  color: var(--material-secondary, #879e90);
 }
 .gf-activity-progress {
   display: grid;
   gap: 4px;
   font-size: 12px;
-  color: var(--material-secondary, #62786b);
+  color: var(--material-secondary, #879e90);
 }
 .gf-activity-progress progress {
   width: 100%;
   height: 6px;
-  accent-color: var(--material-button, #2f6f5e);
+  accent-color: var(--material-button, #70b09d);
 }
 .gf-activity-failure {
   margin: 0;
@@ -112,5 +112,5 @@
 }
 .gf-activity-empty {
   margin: 0;
-  color: var(--material-secondary, #62786b);
+  color: var(--material-secondary, #879e90);
 }

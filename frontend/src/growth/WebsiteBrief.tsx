@@ -241,7 +241,7 @@ export function WebsiteBrief({
     error: "We couldn’t draft it this time",
   };
   const descriptions: Record<Phase, string> = {
-    input: "Give us your website and we'll grab everything about your brand.",
+    input: "We'll draft your brand brief from it. You review it first.",
     reading: "Reading your pages for your audience, voice, and what makes you different.",
     review: "Make it sound like you. Confirm the details you want your agents to use.",
     error: "Your details are safe. You can type them yourself instead.",
@@ -259,7 +259,7 @@ export function WebsiteBrief({
         {titles[phase]}
       </h1>
       <p className="gf-wb-lede">{descriptions[phase]}</p>
-      {phase === "input" && <><p className="gf-wb-lede">We need to build a growth engine for you.</p><p className="gf-wb-lede">You’ll review the brand brief before we use it.</p></>}
+      
 
       {phase === "input" && (
         // Not a <form>: this step renders inside the onboarding wizard's own form.

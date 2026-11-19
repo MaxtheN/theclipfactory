@@ -144,10 +144,7 @@ export function TeamLedger({
       }
     >
       <p className="muted">
-        One heavy worker serializes local model calls and rendering; roles do
-        not imply parallel GPU inference. No publish or spend tools. Every
-        output needs human review. Restarted work may be interrupted, not
-        silently resumed.
+        One local worker · no publishing or spend · every output needs your review.
       </p>
       {error && (
         <p role="alert" className="error-text">
@@ -216,9 +213,7 @@ export function TeamLedger({
             <Unknown value={run.elapsed_seconds} suffix=" s" />
           </p>
           <p className="muted">
-            needs_review means local production finished, not approved or
-            published. Unknown/failed critic checks block approval; a model pass
-            is not human approval.
+            needs_review = finished locally, not approved. Failed or unknown checks block approval.
           </p>
           <button
             className="secondary small"

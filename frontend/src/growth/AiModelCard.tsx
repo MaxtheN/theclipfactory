@@ -233,7 +233,7 @@ export function AiModelCard() {
           />
           <span>
             <strong>{cloudLabel}</strong>
-            <small>Fast, works on any Mac. Well under a cent per brand read, on your OpenRouter account.</small>
+            <small>Fast, any Mac. Under 1¢ per read.</small>
           </span>
         </label>
       </div>
@@ -299,9 +299,7 @@ export function AiModelCard() {
             <span>
               <strong>Use cloud model for clip agents too</strong>
               <small>
-                Sends transcript text and frame descriptions to OpenRouter/Anthropic, without raw video or audio.
-                Speech recognition uses the separate setting above.
-                Costs a few cents per production run.
+                Sends text to OpenRouter/Anthropic, never raw video or audio. A few cents per run.
               </small>
             </span>
           </label>
@@ -315,7 +313,7 @@ export function AiModelCard() {
               />
               <span>
                 <strong>Also send still frames</strong>
-                <small>Lets the agents look at a few stills from your footage. Off means text descriptions only.</small>
+                <small>Agents see a few stills. Off: text only.</small>
               </span>
             </label>
           )}
@@ -406,8 +404,7 @@ export function AiModelHint({
       ) : (
         <>
           <p className="gf-ai-muted">
-            Claude Haiku 5.5 via OpenRouter reads your public website text. Needs your OpenRouter key; well under a
-            cent per read.
+            Claude Haiku 5.5 via OpenRouter. Needs your key; under 1¢ per read.
           </p>
           <KeyForm
             submitLabel="Save and retry"

@@ -4,7 +4,7 @@
 .gf-growth-loop p, .gf-growth-scorecard p { margin: 8px 0; line-height: 1.6; font-size: 13px; color: var(--material-secondary); }
 .gf-growth-loop h3, .gf-growth-scorecard h3 { margin: 20px 0 12px; font-size: 15px; font-weight: 600; }
 .gf-growth-note { font-size: 12px !important; color: var(--material-metadata) !important; line-height: 1.6; }
-.gf-growth-error { color: var(--material-error, #9f4032) !important; padding: 12px; background: var(--material-hover); border-radius: 8px; }
+.gf-growth-error { color: var(--material-error, #e67f6e) !important; padding: 12px; background: var(--material-hover); border-radius: 8px; }
 .gf-growth-preference { display: grid; gap: 7px; padding-block: 4px 20px; }
 .gf-growth-preference > strong { font-size: 14px; }
 .gf-growth-preference > span, .gf-growth-preference small { font-size: 12px; color: var(--material-secondary); }

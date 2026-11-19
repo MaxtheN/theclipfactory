@@ -139,7 +139,7 @@ export function ReferenceResearch({
       <div>
         <span className="gf-refs-kicker">{entry === "studio" ? "Test a pattern from examples" : "Learn from examples"}</span>
         <h2>Research what works</h2>
-        <p>Add 1–3 reels you admire. We measure them, note what they do, and turn one pattern into an A/B test on your own footage. Nothing is approved for you.</p>
+        <p>Add 1–3 reels you admire. One pattern becomes an A/B test.</p>
       </div>
       {onClose && <button className="gf-refs-close" aria-label="Close" onClick={onClose}><Icon name="close" size={16} /></button>}
     </header>
@@ -167,7 +167,7 @@ export function ReferenceResearch({
           <button className="gf-button secondary" disabled={full || locked || !url.trim()}>Add link</button>
         </form>
         {r.references.length === 0
-          ? <p className="gf-refs-quiet">No references yet. Uploaded videos are analyzed; links to Instagram, TikTok or YouTube are kept as notes only.</p>
+          ? <p className="gf-refs-quiet">No references yet.</p>
           : <ul className="gf-refs-cards">{r.references.map(ref => <ReferenceCard key={ref.id} research={r} item={ref}
             disabled={locked} onNote={note => void act("Saving note…", () => referencesApi.note(r.id, ref.id, note))}
             onRemove={() => void act("Removing…", () => referencesApi.remove(r.id, ref.id))}

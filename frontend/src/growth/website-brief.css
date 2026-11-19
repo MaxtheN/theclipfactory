@@ -3,12 +3,12 @@
    150ms fade when results appear, and none at all with reduced motion. */
 
 .gf-website-brief {
-  --wb-ink: var(--material-ink, #f3f1ec);
-  --wb-muted: var(--material-secondary, #e8e4dc);
-  --wb-line: var(--material-field-line, rgba(255, 255, 255, 0.24));
-  --wb-fill: var(--material-field, rgba(255, 255, 255, 0.035));
+  --wb-ink: var(--material-ink, #f1f1f1);
+  --wb-muted: var(--material-secondary, #e4e4e4);
+  --wb-line: var(--material-field-line, rgba(255, 255, 255, .064));
+  --wb-fill: var(--material-field, rgba(255, 255, 255, .035));
   --wb-focus: var(--material-focus, #e2c49d);
-  --wb-hairline: rgba(255, 255, 255, 0.1);
+  --wb-hairline: rgba(255, 255, 255, .1);
   display: flex;
   flex-direction: column;
   align-items: stretch;

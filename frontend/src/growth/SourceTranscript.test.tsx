@@ -252,7 +252,7 @@ describe("source transcript tools", () => {
     );
     openDetails();
     expect(
-      screen.getByText(/does not inspect files or generate a transcript/),
+      screen.getByText(/Available in the Mac app/),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Transcript file")).not.toBeInTheDocument();
     expect(

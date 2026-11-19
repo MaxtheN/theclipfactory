@@ -55,8 +55,7 @@ export function Narration({ state }: { state: FactoryState }) {
       </form>
       {!jobs.length && (
         <p className="muted narration-empty">
-          No narration jobs yet. Generated audio is not automatically added to
-          your clips.
+          No narration yet.
         </p>
       )}
       {jobs.map((job) => {

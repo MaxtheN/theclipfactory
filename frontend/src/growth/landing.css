@@ -76,7 +76,7 @@
   grid-template-columns: 72px minmax(0, 1fr) auto;
   border: 1px dashed var(--material-focus);
   border-radius: 18px;
-  background: linear-gradient(115deg, rgba(226,196,157,0.12), rgba(35,43,49,0.12));
+  background: linear-gradient(115deg, rgba(76, 58, 34, .12), rgba(42, 42, 42, .12));
 }
 .gf-flow-app .gf-upload-stage-icon {
   width: 72px;

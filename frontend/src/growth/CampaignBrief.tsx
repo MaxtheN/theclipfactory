@@ -122,7 +122,7 @@ export function BriefFields({
       <FieldGroup title="Message">
         <Chips
           label="Key messages"
-          hint="Up to 5. Agents prefer moments that make one of these points."
+          hint="Up to 5."
           values={value.key_messages}
           onChange={(key_messages) => set({ key_messages })}
           max={L.messages}
@@ -199,7 +199,7 @@ export function BriefFields({
         />
         <Chips
           label="Must avoid"
-          hint="Up to 8. Moments that touch these are rejected."
+          hint="Up to 8. Matching moments are skipped."
           values={value.must_avoid}
           onChange={(must_avoid) => set({ must_avoid })}
           max={L.topics}

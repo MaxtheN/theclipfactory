@@ -70,8 +70,7 @@ export function FactoryUpgrades({ compact = false }: { compact?: boolean }) {
           <span className="gf-upgrades-overline">The factory that improves itself</span>
           <h3>Factory upgrades</h3>
           <p className="gf-upgrades-muted">
-            Craft people asked for that the renderer can't do yet. Each idea becomes a work order and, when you click
-            Build, a tested code change on its own branch for you to review.
+            Craft the renderer can't do yet. Build turns one into a reviewed code change.
           </p>
         </div>
         <button type="button" className="gf-button secondary compact" disabled={!!busy}
@@ -83,8 +82,7 @@ export function FactoryUpgrades({ compact = false }: { compact?: boolean }) {
       {!requests.length ? (
         <div className="gf-upgrades-empty">
           <p>
-            No upgrade ideas yet. They appear when references, critic notes, change requests or Strategist beliefs
-            name craft the renderer doesn't support.
+            No upgrade ideas yet.
           </p>
           <button type="button" className="gf-button secondary compact" disabled={!!busy}
             onClick={() => act("demo", factoryBuilderApi.demo)}>
@@ -143,7 +141,7 @@ function RequestRow({
         <div className="gf-upgrade-body">
           {!r.buildable && (
             <p className="gf-upgrades-muted">
-              The builder can't make this one yet: it needs more than a video overlay (audio or a multi-camera layout).
+              Needs more than a video overlay.
             </p>
           )}
           <div className="gf-upgrade-actions">

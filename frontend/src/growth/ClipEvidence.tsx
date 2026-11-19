@@ -134,8 +134,7 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
         </Fact>
       </dl>
       <p className="gf-evidence-note">
-        Technical checks and model critique do not replace human review of this
-        exact version.
+        Checks don't replace your review.
       </p>
       <Disclosure title="Technical check details" icon="info">
         <Checks title="Playback and format" rows={checks?.playback_format} />
@@ -210,8 +209,7 @@ export function ClipEvidence({ clip }: { clip: ProductionClip }) {
           <p>Excluded: {cost.excluded.map(title).join(", ")}.</p>
         )}
         <p className="gf-evidence-note">
-          Processing time excludes queue wait and human work. Direct render cost
-          is not the fully loaded cost per usable asset.
+          Excludes queue and human time; not the full cost per asset.
         </p>
         <p>
           Started: {receipt?.started_at || unknown}

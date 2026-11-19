@@ -149,8 +149,7 @@ function AnalystRecommendations({
   return (
     <Disclosure title="Performance analyst recommendations" icon="results">
       <p>
-        Read completed recommendations for this brand. This does
-        not run an agent or establish audience lift.
+        Completed recommendations for this brand.
       </p>
       <button
         type="button"
@@ -167,8 +166,7 @@ function AnalystRecommendations({
       )}
       {rows?.length === 0 && (
         <p>
-          No completed, scoped performance recommendations were found. The
-          performance role may be skipped until observations or feedback exist.
+          No recommendations yet.
         </p>
       )}
       {rows?.map(({ row, source }, index) => (
@@ -395,7 +393,7 @@ export function HandEnteredResults({
   if (!w.campaign)
     return (
       <Empty title="Every next edit needs a reason" icon="results">
-        Set up your brand to build a traceable production and learning loop.
+        Set up your brand to start.
       </Empty>
     );
   const validDates =
@@ -425,7 +423,7 @@ export function HandEnteredResults({
           <p>
             {observations.length
               ? "Observations can inform a new test. They don't establish why an edit performed."
-              : "There isn't enough evidence to compare outcomes. That's useful to know, too."}
+              : "Not enough evidence to compare yet."}
           </p>
         </div>
         {observations.map((o) => (
@@ -566,9 +564,7 @@ export function HandEnteredResults({
         </Disclosure>
         <Disclosure title="Source, window & limits">
           <p>
-            Manual publication references are retained with each observation.
-            Unknown values remain unknown. This interface has no statistical
-            evaluation service and cannot say which edit caused a result.
+            Unknown values stay unknown. Causes aren't inferred.
           </p>
         </Disclosure>
       </section>
@@ -814,9 +810,7 @@ export function HandEnteredResults({
             outputs for this brand.
           </p>
           <p>
-            Elapsed time, human minutes and cost per accepted asset need a
-            matched baseline and actual recorded receipts. Missing values are
-            unknown; no productivity advantage is claimed by this preview.
+            Needs a matched baseline and recorded receipts.
           </p>
         </Disclosure>
       </section>
@@ -943,8 +937,7 @@ function PostedClips({
       {!rows.length && !untracked.length && (
         <div className="gf-results-empty">
           <p>
-            Nothing posted yet. Approve a clip in Studio, post it, then track
-            it here so it can be measured.
+            Nothing posted yet.
           </p>
           <button
             type="button"
@@ -1302,8 +1295,7 @@ export function Results({
         <div className="gf-results-demo-banner" role="status">
           <span className="gf-results-sim-pill">Simulated</span>
           <p>
-            <strong>Demo Mode.</strong> Everything below is sample data built from this brand&apos;s clips.
-            None of it is from your audience, and none of it is saved to your results.
+            <strong>Demo Mode.</strong> Sample data. Not your audience, not saved.
           </p>
           <div className="gf-results-demo-actions">
             {onRehearse && (
@@ -1343,8 +1335,7 @@ export function Results({
           <div>
             <h2 id="gf-results-start-title">No results yet</h2>
             <p>
-              Results appear once a clip is posted and measured. Connect Instagram so posts are tracked
-              automatically, or add a result by hand for a post the app can&apos;t read.
+              Results appear once a clip is posted. Connect Instagram or add one by hand.
             </p>
           </div>
           <div className="gf-results-start-actions">
@@ -1455,7 +1446,7 @@ export function Results({
           <button type="button" onClick={() => setUpgradesOpen(true)}><Icon name="settings" size={15} /> Factory upgrades</button>
         </div>
       </details>}
-      <PanelDialog open={manualOpen && visible} onClose={() => setManualOpen(false)} title="Add a result by hand" description="For numbers the app can't read. Keep the source, time window and limits with every result.">
+      <PanelDialog open={manualOpen && visible} onClose={() => setManualOpen(false)} title="Add a result by hand" description="For numbers the app can't read.">
         <HandEnteredResults w={w} factory={factory} next={next} />
       </PanelDialog>
       <PanelDialog open={upgradesOpen && visible} onClose={() => setUpgradesOpen(false)} title="Factory upgrades" description="Review craft gaps and proposed improvements.">
