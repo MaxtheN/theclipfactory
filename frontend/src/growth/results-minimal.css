@@ -109,3 +109,12 @@
 .gf-results-page.is-minimal .gf-results-demo-panel .gf-lld { border-color: var(--gf-r-line); border-radius: 10px; background: var(--gf-r-soft); }
 .gf-results-page.is-minimal .gf-results-demo-panel { margin-top: -20px; transition: grid-template-rows 360ms cubic-bezier(0.2, 0.8, 0.2, 1), margin-top 360ms ease; }
 .gf-results-page.is-minimal .gf-results-demo-panel.is-open { margin-top: 0; }
+
+/* Demo Mode: opt-in, always labelled, never beside real records (REQ-RSL-001). */
+.gf-results-demo-banner { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; padding: 12px 16px; border: 1px dashed var(--gf-r-line, #c7b8ad); border-radius: 10px; background: repeating-linear-gradient(135deg, #ffffff, #ffffff 8px, #f0ede7 8px, #f0ede7 9px); }
+.gf-results-demo-banner p { flex: 1 1 320px; margin: 0; font-size: 13px; line-height: 1.55; }
+.gf-results-demo-actions { display: flex; align-items: center; gap: 10px; }
+.gf-results-error { margin: 0; }
+.gf-results-start { align-items: flex-start; }
+.gf-results-start h2 { margin: 0 0 6px; font-size: 16px; }
+.gf-results-start-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

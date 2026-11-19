@@ -107,6 +107,8 @@ export function GrowthApp() {
   const [goalsRequest, setGoalsRequest] = useState({ context: "", sequence: 0 });
   const [engineRequest, setEngineRequest] = useState({ context: "", sequence: 0 });
   const [demoOpen, setDemoOpen] = useState(false);
+  // Demo Mode is chosen by the creator and never persisted, so every launch starts on real results.
+  const [demoMode, setDemoMode] = useState(false);
   // Account creation is the last onboarding step, asked only when the cloud
   // is configured, nobody is signed in and the creator hasn't chosen offline.
   const [askAccount, setAskAccount] = useState(false);
@@ -145,14 +147,20 @@ export function GrowthApp() {
     setGoalsRequest({ context: contextKey, sequence: 0 });
     setEngineRequest({ context: contextKey, sequence: 0 });
     setDemoOpen(false);
+    setDemoMode(false);
   }, [contextKey]);
   // Leaving Factory closes the demo; it only lives inside that pane.
   useEffect(() => {
     if (stage !== "results") setDemoOpen(false);
   }, [stage]);
   // The demo's simulated outcome lives in its own per-brand store, never in account history.
-  const [demoResult, setDemoResult] = useState<DemoResult | null>(() => loadDemoResult(w.profileId));
+  // Nothing simulated is loaded or fetched until the creator turns Demo Mode on.
+  const [demoResult, setDemoResult] = useState<DemoResult | null>(null);
   useEffect(() => {
+    if (!demoMode) {
+      setDemoResult(null);
+      return;
+    }
     const stored = loadDemoResult(w.profileId);
     setDemoResult(stored);
     if (stored || !w.profileId) return;
@@ -167,7 +175,7 @@ export function GrowthApp() {
     return () => {
       live = false;
     };
-  }, [w.profileId]);
+  }, [w.profileId, demoMode]);
   const keepDemoResult = useCallback(
     (result: DemoResult) => {
       saveDemoResult(w.profileId, result);
@@ -272,7 +280,12 @@ export function GrowthApp() {
   function openRehearsal() {
     if (blocked || onboarding || !usable || currentContext.current !== contextKey) return;
     go("results"); // the demo expands inline on Results, below the strip
+    setDemoMode(true);
     setDemoOpen(true);
+  }
+  function exitDemoMode() {
+    setDemoOpen(false);
+    setDemoMode(false);
   }
   function reviewClip(clip: Clip) {
     openProduction(clip.video_id, undefined, clip.id);
@@ -780,6 +793,8 @@ export function GrowthApp() {
                   onEditingRules={() => go("research")}
                   onRehearse={openRehearsal}
                   demo={demoResult}
+                  demoMode={demoMode}
+                  onExitDemo={exitDemoMode}
                   demoOpen={demoOpen && !onboarding && usable && stage === "results"}
                   onCloseDemo={() => setDemoOpen(false)}
                   onDemoResult={keepDemoResult}

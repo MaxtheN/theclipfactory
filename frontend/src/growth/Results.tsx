@@ -1157,8 +1157,10 @@ export function Results({
   onEditingRules,
   onRehearse,
   demo = null,
+  demoMode = false,
   demoOpen = false,
   onCloseDemo,
+  onExitDemo,
   onDemoResult,
 }: {
   w: Workspace;
@@ -1170,9 +1172,12 @@ export function Results({
   onRehearse?: () => void;
   /** The learning-loop demo's simulated outcome (its own store, never account history). */
   demo?: DemoResult | null;
+  /** Demo Mode: the creator chose to explore simulated results. Off on every launch. */
+  demoMode?: boolean;
   /** The demo panel expands inline below the strip. */
   demoOpen?: boolean;
   onCloseDemo?: () => void;
+  onExitDemo?: () => void;
   onDemoResult?: (result: DemoResult) => void;
 }) {
   const data = useResultsData(w, visible);
@@ -1264,11 +1269,12 @@ export function Results({
   const demoView: DemoResult | null = demo && draft
     ? { ...demo, after: { clip_id: draft.id, media_url: `/api/clips/${encodeURIComponent(draft.id)}/media`, hook: draft.hook } }
     : demo;
-  // Simulated history only while no real post exists; display only, never written to real tables.
+  // Simulated history only in Demo Mode, which the creator must choose. Display only:
+  // never written to real tables and never shown beside real records.
   const sim = useMemo(
-    () => (demo && !posted ? simulateResults(demo, brandPool) : null),
+    () => (demoMode && demo ? simulateResults(demo, brandPool) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [demo, posted, brandKey],
+    [demoMode, demo, brandKey],
   );
   const connected = (data.scoped?.accounts ?? []).length > 0;
   const [accountsOpen, setAccountsOpen] = useState(false);
@@ -1298,6 +1304,7 @@ export function Results({
           <div><dt>Posted</dt><dd>{sim ? sim.posts.length : posted}</dd></div>
           <div><dt>Measuring</dt><dd>{sim ? sim.posts.length : measuring}</dd></div>
           <div><dt>Learned</dt><dd>{sim ? sim.beliefs.length : learned.length}</dd></div>
+          {sim && <span className="gf-results-sim-pill">Simulated</span>}
         </dl>
         <div className="gf-results-top-actions">
           <button type="button" className={`gf-results-ig${connected ? " is-on" : ""}`} onClick={toAccounts}>
@@ -1305,14 +1312,32 @@ export function Results({
           </button>
         </div>
       </header>
-      {onRehearse && (
-        <div className="gf-results-run">
-          <DemoLoopButton onClick={demoOpen ? () => onCloseDemo?.() : onRehearse} expanded={demoOpen} />
+      {demoMode ? (
+        <div className="gf-results-demo-banner" role="status">
+          <span className="gf-results-sim-pill">Simulated</span>
+          <p>
+            <strong>Demo Mode.</strong> Everything below is sample data built from this brand&apos;s clips.
+            None of it is from your audience, and none of it is saved to your results.
+          </p>
+          <div className="gf-results-demo-actions">
+            {onRehearse && (
+              <DemoLoopButton onClick={demoOpen ? () => onCloseDemo?.() : onRehearse} expanded={demoOpen} />
+            )}
+            <button type="button" className="gf-results-reset" onClick={() => onExitDemo?.()}>
+              Exit Demo Mode
+            </button>
+          </div>
         </div>
+      ) : (
+        data.error && posted === 0 && (
+          <p className="gf-help gf-results-error" role="alert">
+            {data.error} Results will update when collection works again.
+          </p>
+        )
       )}
       <div ref={demoPanel} className={`gf-results-demo-panel${demoOpen ? " is-open" : ""}`}>
         <div>
-          {w.profileId && (demoOpen || demoShown) && (
+          {w.profileId && demoMode && (demoOpen || demoShown) && (
             <LearningLoopDemo
               profileId={w.profileId}
               open
@@ -1322,9 +1347,36 @@ export function Results({
           )}
         </div>
       </div>
+      {demoMode && !sim && !demoOpen && (
+        <p className="gf-results-empty" role="status">Preparing sample results from this brand&apos;s clips…</p>
+      )}
       {demoView && sim && <DemoOutcome demo={demoView} sim={sim} onReplay={demoOpen ? undefined : onRehearse} />}
-      <p id="gf-results-now" className="gf-results-now" role="status">{story.headline}</p>
-      {(!demo || learned.length > 0) && <section className="gf-results-learned" aria-labelledby="gf-results-learned-title">
+      {!demoMode && <p id="gf-results-now" className="gf-results-now" role="status">{story.headline}</p>}
+      {!demoMode && posted === 0 && (
+        <section className="gf-results-empty gf-results-start" aria-labelledby="gf-results-start-title">
+          <div>
+            <h2 id="gf-results-start-title">No results yet</h2>
+            <p>
+              Results appear once a clip is posted and measured. Connect Instagram so posts are tracked
+              automatically, or add a result by hand for a post the app can&apos;t read.
+            </p>
+          </div>
+          <div className="gf-results-start-actions">
+            <button type="button" className="gf-button" onClick={toAccounts}>
+              {connected ? "Track a post" : "Connect Instagram"}
+            </button>
+            <button type="button" className="gf-button secondary" onClick={() => setManualOpen(true)}>
+              Add a result by hand
+            </button>
+            {onRehearse && (
+              <button type="button" className="gf-button ghost" onClick={onRehearse}>
+                Try Demo Mode (simulated data)
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+      {!demoMode && (posted > 0 || learned.length > 0) && <section className="gf-results-learned" aria-labelledby="gf-results-learned-title">
         <h2 id="gf-results-learned-title">What we learned</h2>
         {learned.length ? (
           <div className="gf-results-learned-grid">
@@ -1340,8 +1392,15 @@ export function Results({
           <p className="gf-results-empty">No measured posts yet.</p>
         )}
       </section>}
-      {posted > 0 && <PostedClips rows={rows} untracked={untracked} error={data.error} onAccounts={toAccounts} />}
-      <details className="gf-results-more" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
+      {!demoMode && posted > 0 && <PostedClips rows={rows} untracked={untracked} error={data.error} onAccounts={toAccounts} />}
+      {!demoMode && onRehearse && posted > 0 && (
+        <div className="gf-results-run">
+          <button type="button" className="gf-results-reset" onClick={onRehearse}>
+            Try Demo Mode (simulated data)
+          </button>
+        </div>
+      )}
+      {!demoMode && <details className="gf-results-more" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
         <summary>Strategist and tools{pendingCount + drafts.length > 0 ? ` · ${pendingCount + drafts.length} to review` : ""}</summary>
       {visible && w.profileId && (
         <StrategistPanel
@@ -1409,7 +1468,7 @@ export function Results({
           <button type="button" onClick={() => setManualOpen(true)}><Icon name="upload" size={15} /> Add a result by hand</button>
           <button type="button" onClick={() => setUpgradesOpen(true)}><Icon name="settings" size={15} /> Factory upgrades</button>
         </div>
-      </details>
+      </details>}
       <PanelDialog open={accountsOpen && visible} onClose={() => setAccountsOpen(false)} title="Instagram accounts" description="Connect an account, track a post, or set its measurement window.">
         <div className="gf-results-accounts">
           <AutomationPanel
