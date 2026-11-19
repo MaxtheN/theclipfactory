@@ -109,13 +109,13 @@
   color: var(--material-focus);
 }
 .gf-app .gf-brand-mark i {
-  background: #bc9877;
+  background: #6b533e;
 }
 .gf-app .gf-brand-mark i:nth-child(2) {
-  background: #d0b28e;
+  background: #58452d;
 }
 .gf-app .gf-brand-mark i:nth-child(3) {
-  background: #e3cbae;
+  background: #3a3a3a;
 }
 
 .gf-app .gf-page-heading > div > p,
@@ -173,13 +173,13 @@
 .gf-app .gf-eyebrow > span,
 .gf-app .gf-local-status > span:first-child,
 .gf-app .gf-tiny-dot {
-  background: #d6c1a2;
+  background: #414141;
 }
 
 .gf-app .gf-nav-item,
 .gf-app .gf-workspace-menu nav > button,
 .gf-app .gf-sidebar-bottom > button {
-  color: #e3e1dc;
+  color: #e1e1e1;
   background: transparent;
 }
 
@@ -198,7 +198,7 @@
 }
 
 .gf-app .gf-active-dot {
-  background: #e7cfaa;
+  background: #45351c;
 }
 .gf-app .gf-top-right select {
   color: var(--material-ink) !important;
@@ -207,9 +207,9 @@
   color: var(--ink);
 }
 .gf-app .gf-avatar {
-  color: #f4e9d9;
-  background: #bc987733;
-  border-color: #e3ccb233;
+  color: #eaeaea;
+  background: rgba(88, 88, 88, .2);
+  border-color: rgba(58, 58, 58, .2);
 }
 
 .gf-app .gf-icon-button,
@@ -221,22 +221,22 @@
 .gf-app .gf-icon-button:hover,
 .gf-app .gf-sidebar-toggle:hover {
   color: var(--material-ink);
-  background: #ffffff12;
+  background: rgba(255, 255, 255, .071);
 }
 
 .gf-app .gf-preview-bar {
-  color: #d2d1cb;
-  background: rgba(255, 255, 255, 0.035);
-  border-color: rgba(255, 255, 255, 0.1);
+  color: #d1d1d1;
+  background: rgba(255, 255, 255, .035);
+  border-color: rgba(255, 255, 255, .1);
 }
 .gf-app .gf-preview-bar strong {
-  color: #e6e2db;
+  color: #e2e2e2;
 }
 .gf-app .gf-preview-tag {
   color: var(--material-secondary);
 }
 .gf-app .gf-preview-dot {
-  background: #c6baa9;
+  background: #464646;
 }
 
 .gf-app .gf-button {
@@ -247,7 +247,7 @@
 }
 .gf-app .gf-button:hover:not(:disabled) {
   color: var(--material-button-ink);
-  background: #f7f4ee;
+  background: #252525;
   border-color: transparent;
   box-shadow: none;
 }
@@ -272,7 +272,7 @@
 }
 .gf-app .gf-button.ghost:hover:not(:disabled) {
   color: var(--material-ink);
-  background: #ffffff10;
+  background: rgba(255, 255, 255, .063);
   border-color: transparent;
   box-shadow: none;
 }
@@ -281,8 +281,8 @@
 }
 .gf-app .gf-command-trigger kbd {
   color: var(--material-secondary);
-  background: #ffffff0b;
-  border-color: #ffffff26;
+  background: rgba(255, 255, 255, .043);
+  border-color: rgba(255, 255, 255, .055);
 }
 
 .gf-app input:not([type="checkbox"]),
@@ -356,11 +356,11 @@
 }
 .gf-app .gf-source-cover,
 .gf-app .gf-next-source-art {
-  color: #d6c8b4;
-  background: #ffffff0d;
+  color: #cacaca;
+  background: rgba(255, 255, 255, .051);
 }
 .gf-app .gf-variant-letter {
-  color: #c8b9a4;
+  color: #bbbbbb;
 }
 .gf-app .gf-upload {
   color: var(--material-ink);
@@ -375,7 +375,7 @@
 }
 .gf-app .gf-upload-icon,
 .gf-app .gf-upload u {
-  color: #dac7ab;
+  color: #cacaca;
 }
 .gf-app .gf-disclosure {
   border-color: var(--line);
@@ -394,17 +394,17 @@
   border-color: var(--line);
 }
 .gf-app .gf-clip-strip {
-  background: #ffffff04;
+  background: rgba(255, 255, 255, .016);
 }
 
 .gf-app .gf-pill,
 .gf-app .gf-pill.quiet {
-  color: #e2ded6;
-  background: #ffffff10;
+  color: #dedede;
+  background: rgba(255, 255, 255, .063);
 }
 .gf-app .gf-pill.mint {
   color: #d4e8d3;
-  background: #a0c5a01c;
+  background: rgba(56, 78, 57, .11);
 }
 .gf-app .gf-pill.sand {
   color: var(--material-warning);
@@ -415,80 +415,80 @@
   background: var(--material-field);
 }
 .gf-app .gf-studio-media {
-  background: rgba(22, 29, 34, 0.24);
-  border: 1px solid #ffffff0b;
+  background: rgba(28, 28, 28, .24);
+  border: 1px solid rgba(255, 255, 255, .043);
 }
 .gf-app .gf-preview-film,
 .gf-app .gf-studio-media > video {
-  background: #252e34;
+  background: #2d2d2d;
 }
 .gf-app .gf-podcast-art {
-  color: #f1ebe0;
-  background: linear-gradient(145deg, #2d3c46, #445057 53%, #66503e);
+  color: #ececec;
+  background: linear-gradient(145deg, #3a3a3a, #4e4e4e 53%, #555555);
 }
 .gf-app .gf-podcast-art.variant-1 {
-  color: #f3e8d8;
-  background: linear-gradient(145deg, #695443, #5b5148 50%, #3b4549);
+  color: #e9e9e9;
+  background: linear-gradient(145deg, #595959, #535353 50%, #434343);
 }
 .gf-app .gf-art-dot {
-  background: #c9bda9;
-  box-shadow: 0 0 40px #cfab7815;
+  background: #444444;
+  box-shadow: 0 0 40px rgba(0, 0, 0, .6);
 }
 .gf-app .gf-art-period {
-  color: #d8c5a5;
+  color: #c7c7c7;
 }
 .gf-app .gf-wave i {
-  background: #ded2bf;
+  background: #373737;
 }
 .gf-app .gf-film-caption > .gf-pill {
-  color: #f5eee1;
-  background: #ffffff18;
+  color: #efefef;
+  background: rgba(255, 255, 255, .094);
 }
 .gf-app .gf-film-caption small {
-  color: #e3dacf;
+  color: #dbdbdb;
 }
 .gf-app .gf-reason-chain > div > span {
-  color: #e2cfb1;
-  background: #ffffff09;
-  border-color: #ffffff30;
+  color: #d2d2d2;
+  background: rgba(255, 255, 255, .035);
+  border-color: rgba(255, 255, 255, .059);
 }
 .gf-app .gf-reason-chain > i {
-  background: #ffffff26;
+  background: rgba(255, 255, 255, .055);
 }
 .gf-app .gf-next-source > svg {
   color: #e0c9a5;
 }
 .gf-app .gf-rule-diff {
-  color: #f1e6d3;
-  background: #d2ae7612;
-  border-color: #d2ae763d;
+  color: #e7e7e7;
+  background: rgba(75, 75, 75, .071);
+  border-color: rgba(70, 70, 70, .239);
 }
 .gf-app .gf-rule-diff > span,
 .gf-app .gf-rule-diff small {
-  color: #dbc6a7;
+  color: #c9c9c9;
 }
 .gf-app .gf-job-progress {
-  color: #e4ddd2;
+  color: #dedede;
 }
 .gf-app .gf-job-progress progress {
   accent-color: #d7b88c;
 }
 .gf-app .gf-spinner {
-  border-color: #ffffff29;
-  border-top-color: #eee0ca;
+  border-color: rgba(255, 255, 255, .056);
+  border-top-color: #323232;
 }
 .gf-app .gf-empty > span {
-  color: #d9c7ad;
-  background: #ffffff0b;
+  color: #cacaca;
+  background: rgba(255, 255, 255, .043);
 }
 .gf-app .gf-empty-film {
-  background: #ffffff06;
-  border-color: #ffffff20;
+  background: rgba(255, 255, 255, .024);
+  border-color: rgba(255, 255, 255, .053);
 }
 .gf-app .gf-message {
-  color: #eee8de;
-  background: #ffffff0d;
-  border-color: #ffffff29;
+  color: #e9e9e9;
+  background: rgba(255, 255, 255, .051);
+  border-color: rgba(255, 255, 255, .056);
 }
 .gf-app .gf-help {
   color: var(--material-warning) !important;
@@ -497,14 +497,14 @@
 }
 .gf-app .gf-message.error,
 .gf-app .gf-inline-error {
-  color: #f2c3b6;
-  background: #a1533c26;
-  border-color: #dfac963b;
+  color: #d8c7ee;
+  background: rgba(145, 71, 169, .149);
+  border-color: rgba(75, 62, 90, .231);
 }
 .gf-app .gf-message.success {
   color: #d7e6ce;
-  background: #7d9b6e21;
-  border-color: #c0d0b33b;
+  background: rgba(88, 105, 79, .129);
+  border-color: rgba(53, 66, 42, .231);
 }
 .gf-app .gf-journey {
   color: var(--material-secondary);
@@ -515,27 +515,27 @@
   -webkit-backdrop-filter: none;
 }
 .gf-app .gf-journey > div > span {
-  color: #dfd7ca;
-  background: #ffffff08;
-  border-color: #ffffff2e;
+  color: #d8d8d8;
+  background: rgba(255, 255, 255, .031);
+  border-color: rgba(255, 255, 255, .058);
 }
 .gf-app .gf-journey > div > i {
-  background: #ffffff20;
+  background: rgba(255, 255, 255, .053);
 }
 .gf-app .gf-journey .reached {
-  color: #e2d6c2;
+  color: #d7d7d7;
 }
 .gf-app .gf-journey .reached > span {
-  color: #f1dfbf;
-  background: #d7ba8719;
-  border-color: #d7ba8757;
+  color: #e1e1e1;
+  background: rgba(68, 68, 68, .098);
+  border-color: rgba(66, 66, 66, .341);
 }
 .gf-app .gf-journey > svg {
-  color: #cdbda5;
+  color: #bfbfbf;
 }
 .gf-app .gf-skip {
-  color: #262b2d;
-  background: #f3eee5;
+  color: #c5c5c5;
+  background: #282828;
 }
 .gf-app button:focus-visible,
 .gf-app a:focus-visible,
@@ -587,12 +587,12 @@
   color: var(--material-ink);
   background: var(--material-command);
   border-color: var(--material-line);
-  box-shadow: 0 24px 72px -24px rgba(9, 14, 23, 0.5);
+  box-shadow: 0 24px 72px -24px rgba(0, 0, 0, .6);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
 }
 .gf-command-dialog::backdrop {
-  background: rgba(20, 27, 33, 0.14);
+  background: rgba(26, 26, 26, .14);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }

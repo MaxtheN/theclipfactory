@@ -1,17 +1,17 @@
 /* Factory upgrades share Pearl Studio paper and restrained evidence colors. */
 .gf-upgrades {
-  --up-ink: var(--material-ink, #293237);
-  --up-muted: var(--material-metadata, #616A6E);
-  --up-line: var(--material-divider, #DAD6CE);
-  --up-accent: #C2410C;
-  --up-good: #4B6656;
-  --up-bad: #925446;
-  --up-demo: #805E36;
+  --up-ink: var(--material-ink, #c0c0c0);
+  --up-muted: var(--material-metadata, #9d9d9d);
+  --up-line: var(--material-divider, #373737);
+  --up-accent: #a987ec;
+  --up-good: #8eab99;
+  --up-bad: #cd8a7a;
+  --up-demo: #bc976e;
   margin-top: 22px;
   padding: 22px 24px;
   border: 1px solid var(--up-line);
   border-radius: 24px;
-  background: #FCFBF7;
+  background: #212121;
   backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
   color: var(--up-ink);
@@ -32,11 +32,11 @@
   border: 1px solid var(--up-line);
   border-radius: 16px;
   padding: 12px 14px;
-  background: #F7F4ED;
+  background: #252525;
   min-width: 0;
 }
-.gf-upgrade.is-ready_for_review { border-color: #8F9F90; }
-.gf-upgrade.is-building { border-color: #B5A38B; }
+.gf-upgrade.is-ready_for_review { border-color: #535353; }
+.gf-upgrade.is-building { border-color: #4d4d4d; }
 .gf-upgrade-summary {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%;
   background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
@@ -50,7 +50,7 @@
 .gf-upgrade-evidence { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; }
 .gf-upgrade-chip {
   font-size: 12px; line-height: 1.35; padding: 3px 9px; border-radius: 999px;
-  background: #F0EDE7; border: 1px solid var(--up-line); max-width: 100%;
+  background: #292929; border: 1px solid var(--up-line); max-width: 100%;
   overflow-wrap: anywhere;
 }
 .gf-upgrade-chip b { color: var(--up-accent); font-weight: 600; margin-right: 4px; }
@@ -60,7 +60,7 @@
 .gf-upgrade-order summary { cursor: pointer; font-size: 13px; color: var(--up-muted); }
 .gf-upgrade-order pre, .gf-upgrade-commands {
   max-height: 320px; overflow: auto; margin: 8px 0 0; padding: 10px 12px; border-radius: 10px;
-  background: #EDEAE4; font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere;
+  background: #2a2a2a; font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .gf-upgrade-build {
   border-top: 1px solid var(--up-line); padding-top: 10px; display: grid; gap: 8px; font-size: 13px; min-width: 0;
@@ -68,10 +68,10 @@
 .gf-upgrade-build p { margin: 0; }
 .gf-upgrade-build code { font-size: 12px; overflow-wrap: anywhere; }
 .gf-upgrade-steps { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
-.gf-upgrade-steps li { font-size: 12px; padding: 2px 8px; border-radius: 8px; background: #F0EDE7; }
+.gf-upgrade-steps li { font-size: 12px; padding: 2px 8px; border-radius: 8px; background: #292929; }
 .gf-upgrade-steps .is-ok { color: var(--up-good); }
 .gf-upgrade-steps .is-fail { color: var(--up-bad); }
-.gf-upgrade-sample { width: 160px; aspect-ratio: 9 / 16; border-radius: 12px; background: #000; }
+.gf-upgrade-sample { width: 160px; aspect-ratio: 9 / 16; border-radius: 12px; background: #000000; }
 .gf-upgrade-review { display: grid; gap: 8px; }
 .gf-upgrades.is-compact { padding: 16px 18px; }
 @media (max-width: 640px) {

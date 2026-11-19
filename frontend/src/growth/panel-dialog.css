@@ -4,18 +4,18 @@
   margin: auto;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--material-line, rgba(255,255,255,.2));
+  border: 1px solid var(--material-line, rgba(255, 255, 255, .06));
   border-radius: 16px;
-  background: var(--material-command, rgba(68, 76, 83, .94));
+  background: var(--material-command, rgba(75, 75, 75, .94));
   color-scheme: dark;
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
-  color: var(--material-ink, #f3f0e9);
+  color: var(--material-ink, #f0f0f0);
   font-family: var(--material-font, -apple-system, sans-serif);
-  box-shadow: 0 30px 100px rgba(10,14,18,.4), 0 1px 0 rgba(255,255,255,.1) inset;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, .6), 0 1px 0 rgba(255, 255, 255, .05) inset;
 }
 .gf-app .gf-panel-dialog[open] { display: flex; flex-direction: column; animation: gf-panel-enter 220ms cubic-bezier(.2,.7,.2,1) both; }
-.gf-panel-dialog::backdrop { background: rgba(18,24,30,.46); backdrop-filter: blur(9px) saturate(.85); -webkit-backdrop-filter: blur(9px) saturate(.85); }
+.gf-panel-dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(9px) saturate(.85); -webkit-backdrop-filter: blur(9px) saturate(.85); }
 .gf-panel-dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 24px; border-bottom: 1px solid var(--material-divider); flex: 0 0 auto; }
 .gf-panel-dialog-heading h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.45px; line-height: 1.3; }
 .gf-panel-dialog-heading p { margin: 6px 0 0; color: var(--material-secondary); font-size: 13px; line-height: 1.5; }
@@ -23,7 +23,7 @@
 .gf-panel-dialog-close:hover { color: var(--material-ink); background: var(--material-hover); }
 .gf-panel-dialog-close:focus-visible { outline: 2px solid var(--material-focus); outline-offset: 2px; }
 .gf-panel-dialog-body { padding: 24px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.gf-panel-dialog-body > .gf-panel-dialog-footer { position: sticky; bottom: -24px; margin: 24px -24px -24px; padding: 16px 24px; background: var(--material-pane-solid, #4b555d); border-top: 1px solid var(--material-divider); }
+.gf-panel-dialog-body > .gf-panel-dialog-footer { position: sticky; bottom: -24px; margin: 24px -24px -24px; padding: 16px 24px; background: var(--material-pane-solid, #535353); border-top: 1px solid var(--material-divider); }
 @keyframes gf-panel-enter { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .gf-app .gf-panel-dialog[open] { animation: none; } }
 @media (max-width: 600px) { .gf-app .gf-panel-dialog { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); } .gf-panel-dialog-heading, .gf-panel-dialog-body { padding: 20px; } }

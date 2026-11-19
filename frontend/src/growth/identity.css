@@ -53,7 +53,7 @@
 }
 
 ::selection {
-  background: rgba(255, 90, 31, 0.22);
+  background: rgba(169, 135, 236, .22);
 }
 
 .gf-app :focus-visible,
@@ -65,42 +65,42 @@
 
 /* Primary actions glow orange on hover; secondary ones stay calm and white. */
 .gf-app .gf-button:not(.secondary):not(.ghost):hover:not(:disabled) {
-  box-shadow: 0 10px 22px -12px rgba(255, 90, 31, 0.85);
+  box-shadow: 0 10px 22px -12px rgba(0, 0, 0, .6);
 }
 .gf-app .gf-button.secondary {
-  background: #ffffff;
+  background: #1f1f1f;
   border-color: var(--material-field-line);
   color: var(--material-ink);
 }
 .gf-app .gf-button.secondary:hover:not(:disabled) {
-  border-color: rgba(23, 18, 14, 0.28);
-  background: #ffffff;
+  border-color: rgba(19, 19, 19, .28);
+  background: #1f1f1f;
 }
 
 /* Choices you have made are peach, not orange: orange is kept for actions. */
 .gf-app .gf-clip-style-option[aria-pressed="true"],
 .gf-app .gf-wall-filter[aria-pressed="true"] {
   background: var(--peach);
-  border-color: rgba(255, 90, 31, 0.55);
+  border-color: rgba(169, 135, 236, .55);
   color: var(--ember-deep);
   font-weight: 600;
 }
 .gf-app .gf-clip-style-option,
 .gf-app .gf-wall-filter {
-  background: #ffffff;
+  background: #1f1f1f;
   border-color: var(--material-field-line);
 }
 
 /* View switchers are a white pill on a quiet track. */
 .gf-app .gf-fmap-segment {
-  background: rgba(23, 18, 14, 0.06);
+  background: rgba(19, 19, 19, .06);
   border-color: transparent;
 }
 .gf-app .gf-fmap-segment button[aria-selected="true"],
 .gf-app .gf-fmap-segment button[aria-selected="true"]:hover {
   color: var(--material-ink);
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(23, 18, 14, 0.14);
+  background: #1f1f1f;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .376);
 }
 
 /* Navigation: the current place is peach with an orange icon. */
@@ -119,21 +119,21 @@
 
 /* The shell's glass reads as frosted white over the bloom. */
 .gf-app .gf-sidebar {
-  border-right: 1px solid rgba(23, 18, 14, 0.07);
+  border-right: 1px solid rgba(19, 19, 19, .07);
 }
 .gf-app .gf-topbar {
-  border-bottom: 1px solid rgba(23, 18, 14, 0.06);
+  border-bottom: 1px solid rgba(19, 19, 19, .06);
 }
 
 /* Pearl Studio carries a few bronze literals; bring them onto the orange palette.
    The logo itself (artwork, tint and size) stays as the shell styles define it. */
 .gf-app .gf-button:hover:not(:disabled) {
-  background: #ff7a45;
-  border-color: #ff7a45;
+  background: #d17cde;
+  border-color: #d17cde;
   color: var(--material-button-ink);
 }
 .gf-app .gf-button.secondary:hover:not(:disabled) {
-  background: #ffffff;
+  background: #1f1f1f;
 }
 .gf-app .gf-button.ghost:hover:not(:disabled) {
   background: var(--material-hover);
@@ -144,7 +144,7 @@
 .gf-app .gf-upload-stage:hover,
 .gf-app .gf-upload-stage.is-over,
 .gf-app .gf-onboarding-choice:hover:not(:has(input:disabled)):not(.is-selected):not(:has(input:checked)) {
-  background: #fff6f0;
+  background: #232323;
   border-color: var(--signal);
 }
 .gf-app .gf-onboarding-choice.is-selected,
@@ -159,10 +159,10 @@
 .gf-app .gf-automation .gf-automation-badge,
 .gf-app .gf-speechless-chip,
 .gf-app .gf-system-attention {
-  border-color: rgba(255, 90, 31, 0.35);
+  border-color: rgba(169, 135, 236, .35);
 }
 .gf-app .gf-spinner {
-  border-color: rgba(255, 90, 31, 0.2);
+  border-color: rgba(169, 135, 236, .2);
   border-top-color: var(--signal);
 }
 .gf-app .gf-page-heading h1,
@@ -177,13 +177,13 @@
   height: 10px;
 }
 .gf-app *::-webkit-scrollbar-thumb {
-  background: rgba(23, 18, 14, 0.16);
+  background: rgba(19, 19, 19, .16);
   border: 3px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
 }
 .gf-app *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(23, 18, 14, 0.28);
+  background-color: rgba(19, 19, 19, .28);
 }
 .gf-app *::-webkit-scrollbar-track {
   background: transparent;

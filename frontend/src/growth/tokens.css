@@ -1,100 +1,129 @@
 /* Growth Factory design tokens: the only place the app defines global custom
-   properties. Ramps and semantic aliases match the DesignSystem in the Knowledge
-   Base (tokens/colors.css, layout.css, motion.css, typography.css).
+   properties.
+
+   Theme: dark graphite neutrals (Cursor-like greys, no warm tint) with the
+   Growth Factory violet ramp for actions, focus and selection.
 
    New rules use the semantic names (--foreground, --surface, --action,
    --status-*, --space-*, --radius-*). The app names further down map the
-   names existing rules use onto those tokens; screens move to the semantic
-   names as they are rebuilt. Component-scoped variables (--fmap-*, --st-*,
-   --rf-* and similar) stay with their components. */
+   names existing rules use onto those tokens. Component-scoped variables
+   (--fmap-*, --st-*, --rf-* and similar) stay with their components. */
 
 :root {
-  /* Signal (actions) and Ember (accent text) */
-  --gf-signal-300: #ff8a5c;
-  --gf-signal-500: #ff5a1f;
-  --gf-signal-600: #f34d12;
-  --gf-ember-700: #c2410c;
-  --gf-ember-800: #9a3412;
+  color-scheme: dark;
 
-  /* Peach (choices you made, hover light) */
-  --gf-peach-200: #e7c0a8;
-  --gf-peach-100: #ffe9dd;
-  --gf-peach-75: #fff0e7;
-  --gf-peach-50: #fff5ee;
-  --gf-peach-25: #fff8f3;
-  --gf-peach-10: #fffcfa;
+  /* Violet brand ramp */
+  --gf-violet-100: #ccadf2; /* lavender: accent text, links on dark */
+  --gf-violet-200: #a987ec; /* periwinkle: focus, hover of primary */
+  --gf-violet-300: #d17cde; /* orchid: highlights, gradient end */
+  --gf-violet-400: #9d61dc; /* primary action */
+  --gf-violet-500: #9147a9; /* pressed / strong accent */
+  --gf-violet-600: #62439d; /* selected border, deep accent */
+  --gf-violet-800: #532869; /* plum: selected fill base */
 
-  /* Warm neutrals */
-  --gf-ink-900: #17120e;
-  --gf-ink-700: #57524c;
-  --gf-ink-600: #6b6660;
-  --gf-ink-500: #92867e;
-  --gf-ink-400: #c7b8ad;
-  --gf-ink-300: #cdc3bb;
-  --gf-ink-200: #e7ddd6;
-  --gf-ink-150: #eee5de;
-  --gf-ink-100: #f6f1ed;
-  --gf-ink-50: #fff1e7;
+  /* Graphite neutrals */
+  --gf-grey-1000: #0c0c0c;
+  --gf-grey-950: #111111;
+  --gf-grey-900: #151515; /* app background */
+  --gf-grey-850: #191919; /* shell: sidebar, top bar */
+  --gf-grey-800: #1e1e1e; /* surface: cards, panels */
+  --gf-grey-750: #242424; /* raised: menus, hovered cards */
+  --gf-grey-700: #2a2a2a; /* hairline */
+  --gf-grey-650: #313131; /* border */
+  --gf-grey-600: #3b3b3b; /* control border */
+  --gf-grey-500: #525252; /* field border */
+  --gf-grey-400: #8c8c8c; /* subtle text */
+  --gf-grey-300: #a8a8a8; /* muted text */
+  --gf-grey-200: #cfcfcf;
+  --gf-grey-100: #e8e8e8; /* foreground */
   --gf-white: #ffffff;
 
-  /* Operational and outcome states */
-  --gf-green-800: #1e4d43;
-  --gf-green-100: #e3efea;
-  --gf-red-700: #b42318;
-  --gf-red-100: #fdecea;
-  --gf-amber-700: #805e36;
-  --gf-amber-100: #f2ebdd;
-  --gf-slate-600: #506777;
-  --gf-slate-100: #e7edf0;
-  --gf-stone-600: #616a6e;
-  --gf-stone-100: #f0ede7;
+  /* Operational and outcome states (tuned for dark surfaces) */
+  --gf-green-400: #6fcf97;
+  --gf-red-400: #f28b82;
+  --gf-amber-400: #e5b567;
+  --gf-blue-400: #8ab4f8;
 
   /* Semantic colour */
-  --background: linear-gradient(145deg, #ffffff 0%, #fffcfa 52%, #fff1e7 100%);
-  --background-flat: var(--gf-peach-10);
-  --surface: var(--gf-white);
-  --surface-sunken: var(--gf-ink-100);
-  --surface-shell: rgba(255, 248, 243, .9);
-  --surface-topbar: rgba(255, 255, 255, 0.88);
+  --background: #151515;
+  --background-flat: var(--gf-grey-900);
+  --surface: var(--gf-grey-800);
+  --surface-raised: var(--gf-grey-750);
+  --surface-sunken: var(--gf-grey-950);
+  --surface-shell: rgba(25, 25, 25, .92);
+  --surface-topbar: rgba(21, 21, 21, .86);
 
-  --foreground: var(--gf-ink-900);
-  --muted-foreground: var(--gf-ink-700);
-  --subtle-foreground: var(--gf-ink-600);
+  --foreground: var(--gf-grey-100);
+  --muted-foreground: var(--gf-grey-300);
+  --subtle-foreground: var(--gf-grey-400);
 
-  --border: var(--gf-ink-200);
-  --divider: var(--gf-ink-150);
-  --border-control: var(--gf-ink-400);
-  --border-field: var(--gf-ink-500);
-  --border-disabled: var(--gf-ink-300);
+  --border: var(--gf-grey-650);
+  --divider: var(--gf-grey-700);
+  --border-control: var(--gf-grey-600);
+  --border-field: var(--gf-grey-500);
+  --border-disabled: var(--gf-grey-700);
 
-  --action: var(--gf-signal-500);
-  --action-hover: var(--gf-signal-600);
-  --action-foreground: var(--gf-ink-900);
-  --accent-text: var(--gf-ember-700);
-  --accent-strong: var(--gf-ember-800);
-  --hover: var(--gf-peach-50);
-  --selected: var(--gf-peach-75);
-  --selected-border: var(--gf-peach-200);
-  --focus: var(--gf-ember-700);
-  --focus-ring: rgba(255, 90, 31, .16);
-  --selection: rgba(255, 90, 31, 0.22);
+  --action: var(--gf-violet-400);
+  --action-hover: var(--gf-violet-200);
+  --action-foreground: #0b0b0b;
+  --accent-text: var(--gf-violet-100);
+  --accent-strong: var(--gf-violet-300);
+  --hover: rgba(255, 255, 255, .045);
+  --selected: rgba(157, 97, 220, .14);
+  --selected-border: var(--gf-violet-600);
+  --focus: var(--gf-violet-200);
+  --focus-ring: rgba(169, 135, 236, .28);
+  --selection: rgba(157, 97, 220, .38);
 
   /* Status: every status is also carried by an icon and words, never colour alone. */
-  --status-success: var(--gf-green-800);
-  --status-success-fill: var(--gf-green-100);
-  --status-danger: var(--gf-red-700);
-  --status-danger-fill: var(--gf-red-100);
-  --status-warning: var(--gf-amber-700);
-  --status-warning-fill: var(--gf-amber-100);
-  --status-running: var(--gf-slate-600);
-  --status-running-fill: var(--gf-slate-100);
-  --status-neutral: var(--gf-stone-600);
-  --status-neutral-fill: var(--gf-stone-100);
-  --status-simulated: var(--gf-stone-600);
-  --status-simulated-fill: repeating-linear-gradient(135deg, #f0ede7 0 6px, #f6f1ed 6px 12px);
+  --status-success: var(--gf-green-400);
+  --status-success-fill: rgba(111, 207, 151, .12);
+  --status-danger: var(--gf-red-400);
+  --status-danger-fill: rgba(242, 139, 130, .12);
+  --status-warning: var(--gf-amber-400);
+  --status-warning-fill: rgba(229, 181, 103, .12);
+  --status-running: var(--gf-blue-400);
+  --status-running-fill: rgba(138, 180, 248, .12);
+  --status-neutral: var(--gf-grey-300);
+  --status-neutral-fill: rgba(255, 255, 255, .06);
+  --status-simulated: var(--gf-grey-300);
+  --status-simulated-fill: repeating-linear-gradient(135deg, #1f1f1f 0 6px, #262626 6px 12px);
 
-  --backdrop: rgba(49, 35, 26, 0.15);
-  --media-canvas: #17120e;
+  --backdrop: rgba(0, 0, 0, .55);
+  --media-canvas: #0c0c0c;
+
+  /* Legacy ramp names, kept so older rules resolve to the dark theme. */
+  --gf-signal-300: var(--gf-violet-200);
+  --gf-signal-500: var(--gf-violet-400);
+  --gf-signal-600: var(--gf-violet-500);
+  --gf-ember-700: var(--gf-violet-100);
+  --gf-ember-800: var(--gf-violet-300);
+  --gf-peach-200: var(--gf-violet-600);
+  --gf-peach-100: rgba(157, 97, 220, .18);
+  --gf-peach-75: rgba(157, 97, 220, .14);
+  --gf-peach-50: rgba(255, 255, 255, .045);
+  --gf-peach-25: var(--gf-grey-850);
+  --gf-peach-10: var(--gf-grey-900);
+  --gf-ink-900: var(--gf-grey-100);
+  --gf-ink-700: var(--gf-grey-300);
+  --gf-ink-600: var(--gf-grey-400);
+  --gf-ink-500: var(--gf-grey-500);
+  --gf-ink-400: var(--gf-grey-600);
+  --gf-ink-300: var(--gf-grey-700);
+  --gf-ink-200: var(--gf-grey-650);
+  --gf-ink-150: var(--gf-grey-700);
+  --gf-ink-100: var(--gf-grey-950);
+  --gf-ink-50: var(--gf-grey-850);
+  --gf-green-800: var(--status-success);
+  --gf-green-100: var(--status-success-fill);
+  --gf-red-700: var(--status-danger);
+  --gf-red-100: var(--status-danger-fill);
+  --gf-amber-700: var(--status-warning);
+  --gf-amber-100: var(--status-warning-fill);
+  --gf-slate-600: var(--status-running);
+  --gf-slate-100: var(--status-running-fill);
+  --gf-stone-600: var(--status-neutral);
+  --gf-stone-100: var(--status-neutral-fill);
 
   /* Spacing */
   --space-0-5: 2px;
@@ -126,14 +155,14 @@
   --main-padding: 32px 28px 24px;
 
   /* Elevation: mostly flat; shadows only separate layers. */
-  --shadow-card: 0 1px 2px rgba(65, 32, 14, .025);
-  --shadow-card-hover: 0 2px 8px rgba(65, 32, 14, .055);
-  --shadow-action-hover: 0 2px 6px rgba(145, 57, 18, 0.12);
-  --shadow-dialog: 0 18px 64px rgba(64, 34, 18, 0.15), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
-  --shadow-segment: 0 1px 3px rgba(64, 34, 18, 0.04);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .25);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, .35);
+  --shadow-action-hover: 0 4px 14px rgba(157, 97, 220, .28);
+  --shadow-dialog: 0 24px 72px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .06) inset;
+  --shadow-segment: 0 1px 2px rgba(0, 0, 0, .3);
 
   /* Translucency is for shell chrome only (sidebar, top bar, command dialog). */
-  --frost: blur(18px) saturate(1.05);
+  --frost: blur(20px) saturate(1.1);
 
   /* Motion */
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -164,11 +193,11 @@
 
 /* Dark operational tools in styles.css render outside the app shell. */
 :root {
-  --panel: #181c20;
-  --line: #2b3137;
-  --muted: #9da7ad;
-  --accent: #c6e9c1;
-  --danger: #f4a29c;
+  --panel: #1e1e1e;
+  --line: #2a2a2a;
+  --muted: #a8a8a8;
+  --accent: #a987ec;
+  --danger: #f28b82;
   --radius: 12px;
 }
 
@@ -182,11 +211,11 @@
   --material-display: var(--font-display);
 
   --material-canvas: var(--background);
-  --material-canvas-top: var(--gf-white);
+  --material-canvas-top: var(--gf-grey-900);
   --material-pane: var(--surface);
   --material-pane-solid: var(--surface);
   --material-shell: var(--surface-shell);
-  --material-command: rgba(255, 253, 251, .97);
+  --material-command: rgba(30, 30, 30, .97);
 
   --material-ink: var(--foreground);
   --material-secondary: var(--muted-foreground);
@@ -212,12 +241,11 @@
   --material-success-fill: var(--status-success-fill);
   --material-danger: var(--status-danger);
   --material-danger-fill: var(--status-danger-fill);
-  /* Warnings in the current screens use Ember on peach, not the DS amber. */
-  --material-warning: var(--gf-ember-800);
-  --material-warning-fill: var(--gf-peach-100);
+  --material-warning: var(--status-warning);
+  --material-warning-fill: var(--status-warning-fill);
 
-  --signal: var(--gf-signal-500);
-  --ember-deep: var(--gf-ember-800);
+  --signal: var(--gf-violet-400);
+  --ember-deep: var(--gf-violet-300);
   --peach: var(--gf-peach-100);
 
   --ink: var(--foreground);
