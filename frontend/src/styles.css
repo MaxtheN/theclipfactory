@@ -5,13 +5,6 @@
   background: #101316;
   font-synthesis: none;
   font-weight: 400;
-  --bg: #101316;
-  --panel: #181c20;
-  --line: #2b3137;
-  --muted: #9da7ad;
-  --accent: #c6e9c1;
-  --danger: #f4a29c;
-  --radius: 12px;
 }
 * {
   box-sizing: border-box;
@@ -828,7 +821,7 @@ textarea {
 
 /* Bounded, inspectable team artifacts follow the local studio palette. */
 .ledger-task {
-  border: 1px solid var(--border, #ddd);
+  border: 1px solid #ddd;
   border-radius: 10px;
   padding: 16px;
   margin-top: 16px;
@@ -839,7 +832,7 @@ textarea {
   padding: 8px;
   max-height: 360px;
   overflow: auto;
-  border-left: 2px solid var(--border, #ddd);
+  border-left: 2px solid #ddd;
 }
 .artifact-data > div {
   margin: 6px 0;

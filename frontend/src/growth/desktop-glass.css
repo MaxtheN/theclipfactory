@@ -1,12 +1,5 @@
 /* Luminous smoked glass: spatial slate light with transmitted umber warmth. */
 .gf-app {
-  --ink: var(--material-ink);
-  --muted: var(--material-secondary);
-  --line: var(--material-divider);
-  --glass: var(--material-pane);
-  --mint: #d8dfd6;
-  --accent: var(--material-button);
-  --danger: var(--material-danger);
   color-scheme: dark;
   font-family: var(--material-font);
   color: var(--ink);

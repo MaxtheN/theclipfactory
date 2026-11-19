@@ -1,38 +1,7 @@
 /* Website-aligned material: Signal orange, white/peach light, graphite.
-   Palette only. Geometry, operational state and media presentation stay owned
-   by their existing components. Keep this import after the Pearl/shell rules. */
-.gf-app,
-.gf-command-dialog,
-.gf-fmap-picker-menu,
-.gf-fmap-sheet {
-  --material-canvas-top: #ffffff;
-  --material-canvas-bottom: #fff1e7;
-  --material-canvas: linear-gradient(145deg, #ffffff 0%, #fffcfa 52%, #fff1e7 100%);
-  --material-pane: #ffffff;
-  --material-pane-solid: #ffffff;
-  --material-shell: rgba(255, 248, 243, .9);
-  --material-ink: #17120e;
-  --material-secondary: #57524c;
-  --material-metadata: #6b6660;
-  --material-line: #e7ddd6;
-  --material-divider: #eee5de;
-  --material-field-line: #92867e;
-  --material-field: #ffffff;
-  --material-hover: #fff5ee;
-  --material-selected: #fff0e7;
-  --material-button: #ff5a1f;
-  --material-button-ink: #17120e;
-  --material-focus: #c2410c;
-  --material-accent: #c2410c;
-  --material-focus-ring: rgba(255, 90, 31, .16);
-  --material-choice-fill: #ffffff;
-  --material-choice-line: #92867e;
-  --material-choice-disabled-line: #cdc3bb;
-  --material-command: rgba(255, 253, 251, .97);
-  --gf-card-shadow: 0 1px 2px rgba(65, 32, 14, .025);
-  --gf-card-shadow-hover: 0 2px 8px rgba(65, 32, 14, .055);
-  --gf-frost: blur(18px) saturate(1.05);
-}
+   Palette values live in tokens.css. Geometry, operational state and media
+   presentation stay owned by their existing components. Keep this import
+   after the Pearl/shell rules. */
 
 /* Let light and orange seep through the chrome without tinting content cards. */
 .gf-app .gf-topbar { background: rgba(255, 255, 255, .88); }

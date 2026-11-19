@@ -1,6 +1,6 @@
 /* Brand layer, loaded last: typography, focus, selection and the few
    accents that make the shell read as Growth Factory. Colour comes from
-   material-tokens.css; this file only decides where the brand shows. */
+   tokens.css; this file only decides where the brand shows. */
 
 .gf-app,
 .gf-operational,

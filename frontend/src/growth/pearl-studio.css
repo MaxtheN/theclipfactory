@@ -1,21 +1,6 @@
 /* Approved Pearl Studio material. Loaded after legacy layout rules. */
 .gf-app,
 .gf-command-dialog {
-  --gf-card-fill: var(--material-pane);
-  --gf-card-line: var(--material-line);
-  --gf-card-shadow: 0 1px 2px rgba(52, 44, 34, .035);
-  --gf-card-shadow-hover: 0 2px 8px rgba(52, 44, 34, .065);
-  --gf-frost: blur(18px) saturate(.95);
-  --gf-radius: 10px;
-  --gf-radius-control: 7px;
-  --gf-radius-chip: 5px;
-  --ink: var(--material-ink);
-  --muted: var(--material-secondary);
-  --line: var(--material-divider);
-  --glass: var(--material-pane);
-  --mint: var(--material-success);
-  --accent: var(--material-focus);
-  --danger: var(--material-danger);
   color-scheme: light;
   accent-color: var(--material-focus);
 }
