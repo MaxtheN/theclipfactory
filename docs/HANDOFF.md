@@ -107,7 +107,8 @@ human approve → post to Instagram → measure → learn → better next clips.
 - **Craft** (`craft.py`, `media.py`, `reframe.py`): hook-first payoff teaser,
   title card, keyword-emphasis captions, jump cuts, −14 LUFS loudness, smart
   cover, CTA end card + brand kit, A/B variants (one variable), face-following
-  9:16 crop (Apple Vision via pyobjc-framework-Vision 13.0).
+  9:16 crop (`faces.py`: Apple Vision via pyobjc-framework-Vision 13.0 on macOS; OpenCV YuNet
+  with MediaPipe face landmarks on Windows and Linux).
 - **AI model routing** (`llm_provider.py`): Local (Ollama qwen3-vl:4b) or
   OpenRouter per role. With a key: brand research, post copy, reference
   patterns, strategist ideas use cloud; clip agents + scene descriptions only
@@ -168,7 +169,7 @@ Landed and pushed to master:
 - **Review screen** (`99ed875`, `1920b0a`, `564c99f`, `e869666`): fixed
   380–420px inspector column; status → quality pills → post panel; Reels-style
   phone preview (`PostPreview.tsx`, `review-panel.css`, `post-preview.css`);
-  title card placed off the face (Apple Vision face box in `craft.py`, IG safe
+  title card placed off the face (face box from `faces.py` via `craft.py`, IG safe
   areas, receipt `hook.placement`). Verified on a real render.
 
 - **Engine quality** (`1f40636`, stopped by the coordinator after 6 real runs):

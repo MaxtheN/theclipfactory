@@ -19,7 +19,9 @@ The following license identifiers were checked in installed package metadata. Re
 | keyring | Native credential storage | MIT | [jaraco/keyring](https://github.com/jaraco/keyring) |
 | huggingface-hub | Opt-in model downloads | Apache-2.0 | [huggingface/huggingface_hub](https://github.com/huggingface/huggingface_hub) |
 | psutil | Memory/resource probes | BSD-3-Clause | [giampaolo/psutil](https://github.com/giampaolo/psutil) |
-| pyobjc-framework-Vision | Apple Vision bridge for face-aware framing | MIT | [ronaldoussoren/pyobjc](https://github.com/ronaldoussoren/pyobjc) |
+| pyobjc-framework-Vision | Apple Vision bridge for face-aware framing (macOS) | MIT | [ronaldoussoren/pyobjc](https://github.com/ronaldoussoren/pyobjc) |
+| opencv-contrib-python | Face detection (YuNet), people detection (HOG) and frame decoding on Windows and Linux | Apache-2.0; the wheels bundle FFmpeg (LGPL) and other libraries with their own notices | [opencv/opencv-python](https://github.com/opencv/opencv-python) |
+| MediaPipe | Face landmarks (inner-lip opening) on Windows and Linux | Apache-2.0. Its dependencies: NumPy (BSD-3-Clause), matplotlib (matplotlib license, PSF-based), sounddevice (MIT), absl-py and FlatBuffers (Apache-2.0) | [google-ai-edge/mediapipe](https://github.com/google-ai-edge/mediapipe) |
 | pywebview, optional desktop extra | Native application window | BSD-3-Clause | [r0x0r/pywebview](https://github.com/r0x0r/pywebview) |
 
 FastAPI also brings Pydantic (MIT), Starlette (BSD-3-Clause) and AnyIO (MIT); their installed notices remain applicable. Apple Vision, Cocoa and WebKit are platform frameworks governed by Apple's platform terms; the PyObjC bridge license does not relicense those frameworks.
@@ -74,6 +76,8 @@ Runtime setup is explicit and installs a separate environment. Model weights are
 | Catalog Qwen3.5 9B / 35B-A3B MLX conversions | Optional larger local models | Catalog identifies Apache-2.0; inspect the exact [9B](https://huggingface.co/mlx-community/Qwen3.5-9B-MLX-4bit) or [35B](https://huggingface.co/mlx-community/Qwen3.5-35B-A3B-4bit) repository and upstream terms before use. Catalog labels are not a license grant. |
 | Whisper large-v3-turbo MLX conversion | Speech-model weights | OpenAI upstream MIT; [Whisper license](https://github.com/openai/whisper/blob/main/LICENSE), [MLX conversion](https://huggingface.co/mlx-community/whisper-large-v3-turbo). Retain conversion metadata and upstream notices. |
 | Whisper large-v3-turbo CTranslate2 conversion | Speech-model weights on Windows and Linux x64 | OpenAI upstream MIT; [Whisper license](https://github.com/openai/whisper/blob/main/LICENSE), [CTranslate2 conversion](https://huggingface.co/dropbox-dash/faster-whisper-large-v3-turbo) (MIT). Retain conversion metadata and upstream notices. |
+| YuNet face detector (`face_detection_yunet_2023mar.onnx`, 0.23 MB) | Bundled in `clip_factory/face_models` for face detection on Windows and Linux | MIT per [opencv_zoo](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) |
+| MediaPipe Face Landmarker (`face_landmarker.task`, float16 v1, 3.8 MB) | Bundled in `clip_factory/face_models` for mouth movement on Windows and Linux | Apache-2.0 per the [model card](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker) |
 | Kokoro-82M weights and selected voices | Optional narration assets | Apache-2.0 per [model card](https://huggingface.co/hexgrad/Kokoro-82M); preserve its acknowledgments and asset-specific notices. |
 
 `narrowed` in `team.py` is a project function for schema constraints, not a third-party package. Installed runtime dependencies such as tokenizer, audio and language packages have additional licenses; their metadata/license files must accompany any redistribution of that runtime.
@@ -92,6 +96,7 @@ The separately installed development binary reviewed for this submission reports
 - The desktop PNG logo is founder-supplied artwork; its provenance is documented in [`logo-source.md`](logo-source.md). The source image is not an open-source font or icon dependency.
 - Landing-page project-native SVG marks and generated alpine sample imagery are described in [`landing-page/ASSETS.md`](../landing-page/ASSETS.md). Generated illustrations are demonstration assets, not customer outputs or endorsements. Generative-service terms apply to their creation.
 - All-In and other third-party video used for internal testing remain their owners' media. This project license does not grant rights to republish source episodes, names, likenesses, music or brands. Public demo footage must be owned, licensed or otherwise cleared for that use; do not treat test-media availability as clearance.
+- Face-detection test fixtures (`tests/fixtures/faces`) are NASA photographs in the public domain (Apollo 11 crew, 1969; Sally Ride, 1984, via Wikimedia Commons), resized for tests.
 - FFmpeg resolves the configured caption font on the host machine. No third-party font file is licensed by selecting its family name in the app; user-imported brand fonts and logos retain their own rights and notices.
 
 ## APIs, sponsor tools and AI assistance
