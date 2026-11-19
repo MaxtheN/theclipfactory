@@ -737,24 +737,14 @@ const OVERVIEW_STAGES: { label: string; ids: StationId[]; detail: string }[] = [
   { label: "Ship", ids: ["post", "measure"], detail: "Instagram and measurement" },
   { label: "Learn", ids: ["strategist", "rules", "builder"], detail: "Strategist and style rules" },
 ];
-function FactoryOverview({ model, rehearsal, selected, onSelect, onPreview }: { model: FactoryMapModel; rehearsal?: ReturnType<typeof useLoopRehearsal>; selected: number; onSelect: (index: number) => void; onPreview: (index: number | null) => void }) {
+function FactoryOverview({ model, rehearsal, selected, onSelect }: { model: FactoryMapModel; rehearsal?: ReturnType<typeof useLoopRehearsal>; selected: number; onSelect: (index: number) => void }) {
   const activeStage = rehearsal ? [0, 1, 2, 3, 4, 4][rehearsal.phase] : OVERVIEW_STAGES.findIndex(group => model.stations.some(s => group.ids.includes(s.id) && s.state === "active"));
-  return <ol className="gf-fmap-overview" aria-label="Factory growth loop" onMouseLeave={() => onPreview(null)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) onPreview(null); }}>{OVERVIEW_STAGES.map((group, index) => {
+  return <ol className="gf-fmap-overview" aria-label="Factory growth loop">{OVERVIEW_STAGES.map((group, index) => {
     const members = model.stations.filter(s => group.ids.includes(s.id));
     const current = members.find(s => s.state === "failed") || members.find(s => s.state === "active") || members.find(s => s.state === "waiting") || members.find(s => s.state === "done") || members[0];
     const status = rehearsal ? index === activeStage ? rehearsal.result?.status === "completed" ? "Draft saved" : rehearsal.title : index < activeStage ? "Inspected" : "Next" : current?.status || "No work recorded";
-    return <li key={group.label} className={`${index === activeStage ? "is-current" : ""}${rehearsal?.transition && index === activeStage ? " is-transition" : ""}`}><button type="button" aria-current={index === activeStage ? "step" : undefined} aria-pressed={selected === index} onMouseEnter={() => onPreview(index)} onFocus={() => onPreview(index)} onClick={() => { onSelect(index); onPreview(null); }}><span className="gf-fmap-overview-step">{String(index + 1).padStart(2, "0")}</span><strong>{group.label}</strong><span>{status}</span></button></li>;
+    return <li key={group.label} className={`${index === activeStage ? "is-current" : ""}${rehearsal?.transition && index === activeStage ? " is-transition" : ""}`}><button type="button" aria-current={index === activeStage ? "step" : undefined} aria-pressed={selected === index} onClick={() => onSelect(index)}><span className="gf-fmap-overview-step">{String(index + 1).padStart(2, "0")}</span><strong>{group.label}</strong><span>{status}</span></button></li>;
   })}</ol>;
-}
-
-function StagePreview({ index, model, rehearsal }: { index: number; model: FactoryMapModel; rehearsal?: ReturnType<typeof useLoopRehearsal> }) {
-  const group = OVERVIEW_STAGES[index];
-  const members = model.stations.filter(s => group.ids.includes(s.id));
-  const current = members.find(s => s.state === "active") || members.find(s => s.state === "failed") || members.find(s => s.state === "waiting") || members[0];
-  const recorded = members.flatMap(s => s.sheet.flatMap(section => section.rows || [])).filter(row => /input|source|clip|version|account|window|evidence|proposal/i.test(row.label)).slice(0, 3);
-  const demoInputs = rehearsal ? [rehearsal.clip ? `Exact clip ${rehearsal.clip.id} · SHA ${rehearsal.clip.sha256?.slice(0, 12)}` : "No eligible real clip; plan-only example", "Selected reel and hypothetical Instagram destination. No external post is made.", "Synthetic audience counts with known denominators; not live Instagram data.", rehearsal.proposal?.source_quote || "Awaiting source-backed rubric evidence", rehearsal.proposal?.after || "No safely supported edit yet"] : [];
-  const demoOutput = rehearsal ? [rehearsal.score ? "Exact-source rubric loaded; quality is not an engagement probability." : "No real rubric loaded", "Simulated publication only; posting permission is unchanged.", rehearsal.comparison ? `${rehearsal.comparison.status.replaceAll("_", " ")} · ${rehearsal.comparison.reasons.join(" ")}` : "No observation available", rehearsal.proposal?.reason || "No strategy change supported", rehearsal.output ? `Actual output clip ${rehearsal.output.id}` : rehearsal.result ? `Loop #${rehearsal.result.number} · ${rehearsal.result.status}` : "A real draft appears only after a supported experiment runs."] : [];
-  return <section className="gf-fmap-overview-detail" aria-label="Selected factory stage"><header><h3>{group.label}</h3><span>{rehearsal ? "Simulated Instagram data · real files where available" : group.detail}</span></header><dl><div><dt>Inputs</dt><dd>{rehearsal ? demoInputs[index] : recorded.length ? recorded.map(row => `${row.label}: ${row.value}`).join(" · ") : index === 0 ? "Campaign source footage and the current creative brief" : "Upstream records for this campaign; no unrecorded work is inferred."}</dd></div><div><dt>Current task / progress</dt><dd>{rehearsal ? [0, 1, 2, 3, 4, 4][rehearsal.phase] === index ? rehearsal.title : "Inspecting this step; the experiment has not advanced." : current ? `${current.title} · ${current.status}` : "No work recorded"}</dd></div><div><dt>Output evidence</dt><dd>{rehearsal ? demoOutput[index] : members.filter(s => s.last).map(s => s.last).join(" · ") || "No output recorded for this stage yet."}</dd></div><div><dt>Next transition</dt><dd>{index < 4 ? `${OVERVIEW_STAGES[index + 1].label} · ${OVERVIEW_STAGES[index + 1].detail}` : "Return the new draft to Content for its own rubric and next experiment."}{index === 4 && " Factory builder is used only for a recorded capability gap; a normal re-cut uses the current editor."}</dd></div></dl></section>;
 }
 
 export function FactoryMap({
@@ -806,14 +796,13 @@ export function FactoryMap({
   const pulses = usePulses(model);
   const [open, setOpen] = useState<StationId | null>(null);
   const [overview, setOverview] = useState(0);
-  const [previewStage, setPreviewStage] = useState<number | null>(null);
   const track = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
   const { paths, loop, size } = useWires(track, [model.stations.map((s) => s.status).join("|")]);
   const closeSheet = useCallback(() => { setOpen(null); rehearsal.pause(); }, [rehearsal.pause]);
   const opened = model.stations.find((s) => s.id === open);
   useEffect(() => { if (mode === "demo") { setOpen(null); setOverview([0, 1, 2, 3, 4, 4][rehearsal.phase]); } }, [mode, rehearsal.phase]);
-  useEffect(() => { setOpen(null); setOverview(0); setPreviewStage(null); }, [w.profileId, w.campaign?.id]);
+  useEffect(() => { setOpen(null); setOverview(0); }, [w.profileId, w.campaign?.id]);
   const flowing = model.edges.filter((e) => e.flowing);
   const working = model.stations.filter((s) => s.state === "active").length;
 
@@ -838,7 +827,7 @@ export function FactoryMap({
           </span>
         </div>
       </header>
-      <FactoryOverview model={model} rehearsal={mode === "demo" ? rehearsal : undefined} selected={overview} onSelect={setOverview} onPreview={setPreviewStage} />
+      <FactoryOverview model={model} rehearsal={mode === "demo" ? rehearsal : undefined} selected={overview} onSelect={setOverview} />
       {mode === "demo" && <><LoopRehearsalControls state={rehearsal} /><LoopRehearsalInspector state={rehearsal} /></>}
       {mode === "real" && <RunLedgerCard runs={runs} clips={clips} />}
       <details className="gf-fmap-engine-details"><summary>Open full map</summary>

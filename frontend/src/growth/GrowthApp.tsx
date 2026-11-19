@@ -48,6 +48,10 @@ import { CLOUD_CHANGED } from "./appEvents";
 import { UnsavedDraftProvider, useDraftRegistry, type DraftFilter, type UnsavedDraft } from "./unsavedDrafts";
 import { createLibraryViewStore } from "./libraryViewState";
 
+/** Pages whose title, selector and content already say what they are; their
+    sub stays only as command-palette keywords. */
+const QUIET_VIEWS = new Set<string>(["factory", "library"]);
+
 const views = {
   factory: {
     label: "Factory",
@@ -719,11 +723,13 @@ export function GrowthApp() {
                   <h1 tabIndex={-1} ref={heading}>
                     {onboarding ? "Your stories start here." : current.title}
                   </h1>
-                  <p>
-                    {onboarding
-                      ? "From long-form footage to clips worth sharing. Give your agents a little context before the first edit."
-                      : current.sub}
-                  </p>
+                  {(onboarding || !QUIET_VIEWS.has(stage)) && (
+                    <p>
+                      {onboarding
+                        ? "From long-form footage to clips worth sharing. Give your agents a little context before the first edit."
+                        : current.sub}
+                    </p>
+                  )}
                 </div>
               </header>
               {!onboarding && w.loading && (

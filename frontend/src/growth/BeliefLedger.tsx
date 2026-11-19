@@ -133,6 +133,9 @@ export function BeliefLedger({
   beliefs: LedgerBelief[];
   onRetire?: (id: string) => void;
 }) {
+  // One empty state instead of an empty card per lane.
+  if (!beliefs.length)
+    return <p className="gf-strategist-empty">No insights yet.</p>;
   return (
     <div className="gf-strategist-lanes">
       {LANES.map((lane) => {

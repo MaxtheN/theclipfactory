@@ -1051,7 +1051,7 @@ export function Setup({
             </nav>
             <section className="gf-profile-summary" id={summaryId} key={section} aria-label={section === "identity" ? "Brand and voice summary" : section === "goals" ? "Goals and brief summary" : "Brand kit summary"}>
               {section === "identity" && <>
-                <header><h2>Brand, audience & voice</h2><p>The foundation behind every edit.</p></header>
+                <header><h2>Brand, audience & voice</h2></header>
                 <dl>
                   <div><dt>Brand name</dt><dd>{brandName || "Add your brand name"}</dd></div>
                   <div><dt>Who it’s for</dt><dd>{audience.trim() || "Define who you’re speaking to."}</dd></div>
