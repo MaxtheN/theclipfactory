@@ -1,6 +1,6 @@
 # Growth Factory handoff packet (2026-11-20)
 
-Snapshot of `master` at `df50d43` (the merge of PR #37, WO-23), 2026-11-20.
+Snapshot of `master` at `327ec43` (the merge of PR #34), 2026-11-20.
 
 | File | What it covers |
 | --- | --- |
@@ -13,11 +13,13 @@ test-data folders (§2) and the 2026-11-14 live test results (§5).
 
 ## Health at this snapshot
 
-- CI (`Test local MVP`, `.github/workflows/ci.yml`, on Windows, Linux and macOS) is green on `df50d43`.
+- CI (`Test local MVP`, `.github/workflows/ci.yml`, on Windows, Linux and macOS) last passed on
+  `df50d43` (PR #37). The run for `327ec43` (PR #34) was still in progress when this was written.
 - The Windows and Linux desktop build (`desktop-apps.yml`) last passed on 2026-11-20. The Mac
   artifact build (`mac-app.yml`) last ran on 2026-11-14.
-- Tests: pytest under `tests/` and `scripts/tests/`; 52 Vitest files under `frontend/src/`.
-- Open code: PR #34 and one branch without a PR. See
+- Tests: pytest under `tests/` and `scripts/tests/`; 54 Vitest files under `frontend/src/`, plus a
+  render benchmark (`npm run perf`).
+- Open code: one branch without a PR. See
   [outstanding-work.md §2](outstanding-work.md#2-unmerged-code).
 - **No real post has been made through the app yet.** This is the biggest open gate.
 
@@ -32,7 +34,7 @@ review.
 
 | Area | State on `master` | Main code |
 | --- | --- | --- |
-| App shell | Sidebar: Factory, Library, Results, Brand profile, Settings. Studio for clip review. Activity Center for jobs, posts and failures (WO-17). ⌘K / Ctrl+K quick actions. Library filters and unsaved drafts survive navigation (WO-18). Platform-correct wording from `/api/system` (WO-32). Dark graphite and violet theme. | `frontend/src/growth/GrowthApp.tsx`, `ActivityCenter.tsx` |
+| App shell | Sidebar: Factory, Library, Results, Brand profile, Settings. Studio for clip review. Activity Center for jobs, posts and failures (WO-17). ⌘K / Ctrl+K quick actions. Library filters and unsaved drafts survive navigation (WO-18). Platform-correct wording from `/api/system` (WO-32). Idle polls cause no re-render, and hidden screens stay dormant (PR #34). Dark graphite and violet theme. | `frontend/src/growth/GrowthApp.tsx`, `ActivityCenter.tsx` |
 | Onboarding and brand | Website-assisted brand brief (OpenRouter Haiku; fields quote the site, inferred suggestions are opt-in), goals, clip style (approves the first Style rules), Supabase email and password sign-in or offline use. Campaigns are hidden by default (one "<Brand> — main"); archive and restore exist. | `brand_research.py`, `campaigns.py`, `campaign_api.py`, `cloud.py`, `frontend/src/growth/Setup.tsx` |
 | Settings | Device, models and accounts moved out of Brand profile (WO-16). Engine reports its installed version (WO-21). | `frontend/src/growth/SettingsScreen.tsx`, `EngineSetup.tsx`, `AgentSetup.tsx`, `SpeechSetup.tsx` |
 | Speech | MLX Whisper large-v3-turbo on macOS; faster-whisper on Windows and Linux x64 (WO-25); opt-in Groq Whisper cloud speech. Production is blocked when speech assets are missing or damaged, with one-click setup. | `speech.py`, `speech_backend.py`, `cloud_speech.py` |
@@ -103,6 +105,7 @@ Add `?fixtures=flow` to the URL for Factory-map sample data.
 python -m pytest tests scripts/tests -q
 python -m ruff check clip_factory scripts
 cd frontend && npx tsc --noEmit -p . && npx vitest run && npm run build
+cd frontend && npm run perf   # optional render benchmark (vitest.perf.config.ts)
 ```
 
 Passing checks don't replace watching a real render, verifying an account or making a real post.

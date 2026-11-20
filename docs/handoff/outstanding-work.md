@@ -1,6 +1,6 @@
 # Outstanding work (2026-11-20)
 
-What isn't yet built, merged, proven or closed as of `master` `df50d43`. Each section is in
+What isn't yet built, merged, proven or closed as of `master` `327ec43`. Each section is in
 priority order. Work order links go to the
 [Growth Factory Software Factory project](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319).
 
@@ -76,14 +76,13 @@ against the current code, or close it.
 
 | Branch | State | What it does | Next step |
 | --- | --- | --- | --- |
-| `8090/chat-ui-render-performance-p3f9k2` | [PR #34](https://github.com/MaxtheN/theclipfactory/pull/34) open, 5 commits (2026-11-20) | Idle polls keep their data, hidden destinations stay dormant, Library memoizes its lists; adds a render benchmark | Reconcile with `master`, run the frontend checks, merge |
 | `8090/chat-faster-transcribe-scout-k7m2q9` | No PR, 3 commits (2026-11-20), 13 files, +816/−160 | Batched faster-whisper with sentence lines on Windows and Linux; one model load per scout run with a prompt Ollama can reuse; `scripts/bench-speech.py` | Review, reconcile, run pytest, merge |
 | `8090/chat-polish-landing-page-e03414` | PR #10 closed | Landing-page polish from 2026-11-14 | Keep anything still wanted, then delete |
 | `feature/code-cut-off-desing-improvements` | PR #11 closed | UI copy cuts and Factory-map selection changes from 2026-11-14, probably superseded by later redesigns | Confirm it's superseded, then delete |
 
 These branches are already merged and can be deleted from origin:
-`8090/chat-switch-supabase-project-k2w9f4`, `8090/wo-22-zernio-posting-server-t5j8n2` and
-`8090/wo-23-zernio-engine-adapter-p6w3c8`.
+`8090/chat-switch-supabase-project-k2w9f4`, `8090/chat-ui-render-performance-p3f9k2` (PR #34),
+`8090/wo-22-zernio-posting-server-t5j8n2` and `8090/wo-23-zernio-engine-adapter-p6w3c8`.
 
 ## 3. Built but not yet proven live
 
