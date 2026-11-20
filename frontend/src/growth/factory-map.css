@@ -232,11 +232,33 @@
   padding: 0 44px 64px 20px;
 }
 .gf-fmap-col {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 20px;
 }
+/* The stage picked in the overview above is outlined here too. Drawn as a band
+   behind the column so it never moves the cards the wires are measured from. */
+.gf-fmap-col::before {
+  content: "";
+  position: absolute;
+  inset: 6px -11px -20px;
+  z-index: -1;
+  border: 1px solid transparent;
+  border-radius: var(--radius-card, 12px);
+  pointer-events: none;
+  transition: background-color var(--fmap-fast) var(--fmap-ease), border-color var(--fmap-fast) var(--fmap-ease);
+}
+.gf-fmap-col.is-selected::before {
+  background: color-mix(in srgb, var(--gf-violet-400) 7%, transparent);
+  border-color: color-mix(in srgb, var(--gf-violet-600) 75%, transparent);
+}
+.gf-fmap-col.is-selected .gf-fmap-phase,
+.gf-fmap-col.is-selected .gf-fmap-phase-index {
+  color: var(--accent-text);
+}
+@media (prefers-reduced-motion: reduce) { .gf-fmap-col::before { transition: none; } }
 .gf-fmap-phase {
   position: sticky;
   top: 0;
