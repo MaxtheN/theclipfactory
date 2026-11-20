@@ -8,7 +8,14 @@ import {
   type LearningMemory,
 } from "./AutomationPanel";
 import { pendingRules, scopeAutomation, type Row } from "./flowEvents";
-import { postedRows, resultsStory, type PostedRow } from "./resultsModel";
+import {
+  accountMap,
+  postedRows,
+  resultsStory,
+  type AccountMapModel,
+  type PostedRow,
+} from "./resultsModel";
+import { AccountMap } from "./AccountMap";
 import { StrategistPanel } from "./StrategistPanel";
 import { GrowthLoopPanel } from "./GrowthLoopPanel";
 import { DemoLoopButton, LearningLoopDemo } from "./LearningLoopDemo";
@@ -822,6 +829,8 @@ type ResultsData = {
   experiments: Row[];
   memory: LearningMemory | null;
   error: string;
+  /** Every account record, connected or not, so past posts keep their account's name. */
+  accounts: Row[];
 };
 const textOf = (v: unknown) => (typeof v === "string" ? v : "");
 
@@ -831,6 +840,7 @@ function useResultsData(w: Workspace, visible: boolean): ResultsData {
     experiments: [],
     memory: null,
     error: "",
+    accounts: [],
   });
   const campaignId = w.campaign?.id,
     profileId = w.profileId;
@@ -864,6 +874,7 @@ function useResultsData(w: Workspace, visible: boolean): ResultsData {
           ),
           memory: parseLearningMemory(digest),
           error: parsed ? "" : "Tracking data is unavailable right now.",
+          accounts: rows,
         });
       } catch (e) {
         setData((old) => ({
@@ -912,21 +923,154 @@ function StoryHeader({ story }: { story: ReturnType<typeof resultsStory> }) {
   );
 }
 
+const POSTED_VIEW_KEY = "gf-posted-view";
+type PostedView = "list" | "map";
+const POSTED_VIEWS: readonly (readonly [PostedView, string])[] = [
+  ["list", "List"],
+  ["map", "Account map"],
+];
+function rememberedPostedView(): PostedView {
+  try {
+    return localStorage.getItem(POSTED_VIEW_KEY) === "map" ? "map" : "list";
+  } catch {
+    return "list";
+  }
+}
+
 function PostedClips({
   rows,
   untracked,
   error,
   onAccounts,
+  map,
 }: {
   rows: PostedRow[];
   untracked: Clip[];
   error: string;
   onAccounts: () => void;
+  map: AccountMapModel;
 }) {
+  const [view, setView] = useState<PostedView>(rememberedPostedView);
+  // The map needs Publication Records: without them there is nothing to place on it.
+  const offered = rows.length > 0;
+  const shown: PostedView = offered ? view : "list";
+  const choose = (next: PostedView, focus = false) => {
+    setView(next);
+    try {
+      localStorage.setItem(POSTED_VIEW_KEY, next);
+    } catch {
+      /* Remembering the view is only a convenience. */
+    }
+    if (focus) document.getElementById(`gf-posted-tab-${next}`)?.focus();
+  };
+  const list = (
+    <ul className="gf-posted-list">
+      {rows.map((row) => (
+        <li key={row.id} className="gf-posted">
+          <div className="gf-posted-head">
+            <strong>{row.title}</strong>
+            <span>
+              {row.account}
+              {row.postedAt
+                ? ` · posted ${new Date(row.postedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                : ""}
+              {row.untitled && row.mediaId ? ` · post ID ${row.mediaId}` : ""}
+            </span>
+          </div>
+          {row.demo && (
+            <span className="gf-automation-badge">
+              Demo override · measured{" "}
+              {row.demoHours === null ? "early" : `${row.demoHours} h after posting`}, before its window
+            </span>
+          )}
+          {row.chips.length ? (
+            <ul className="gf-ratio-chips" aria-label="Latest numbers vs your typical post">
+              {row.chips.map((chip) => (
+                <li key={chip.metric} className={`is-${chip.tone}`}>
+                  {chip.label}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="gf-posted-wait">No numbers yet — the first reading comes at the end of the window.</p>
+          )}
+          <div className="gf-posted-window">
+            <span
+              className="gf-posted-window-bar"
+              role="progressbar"
+              aria-label="Measurement window"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(row.window * 100)}
+            >
+              <i style={{ width: `${Math.round(row.window * 100)}%` }} />
+            </span>
+            <small>{row.windowLabel}</small>
+          </div>
+        </li>
+      ))}
+      {untracked.map((clip) => (
+        <li key={clip.id} className="gf-posted is-untracked">
+          <div className="gf-posted-head">
+            <strong>{clip.hook || clip.name}</strong>
+            <span>
+              Posted
+              {clip.published_at
+                ? ` ${new Date(clip.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                : ""}{" "}
+              · not tracked yet
+            </span>
+          </div>
+          <button type="button" className="gf-strategist-link" onClick={onAccounts}>
+            Track it to measure
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
   return (
     <section className="gf-results-card" aria-labelledby="gf-posted-title">
       <span className="gf-results-step">01</span>
       <h2 id="gf-posted-title">Posted clips</h2>
+      {offered && (
+        <div
+          className="gf-fmap-segment gf-posted-views"
+          data-view={shown}
+          role="tablist"
+          aria-label="Show posted clips as"
+        >
+          <span className="gf-fmap-segment-selection" aria-hidden="true" />
+          {POSTED_VIEWS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              id={`gf-posted-tab-${key}`}
+              aria-selected={shown === key}
+              aria-controls={`gf-posted-panel-${key}`}
+              tabIndex={shown === key ? 0 : -1}
+              onClick={() => choose(key)}
+              onKeyDown={(event) => {
+                const next =
+                  event.key === "ArrowLeft" || event.key === "ArrowRight"
+                    ? shown === "list"
+                      ? "map"
+                      : "list"
+                    : event.key === "Home"
+                      ? "list"
+                      : event.key === "End"
+                        ? "map"
+                        : null;
+                if (!next) return;
+                event.preventDefault();
+                choose(next, true);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {error && (
         <p className="gf-help" role="alert">
           {error}
@@ -947,73 +1091,30 @@ function PostedClips({
           </button>
         </div>
       )}
-      <ul className="gf-posted-list">
-        {rows.map((row) => (
-          <li key={row.id} className="gf-posted">
-            <div className="gf-posted-head">
-              <strong>{row.title}</strong>
-              <span>
-                {row.account}
-                {row.postedAt
-                  ? ` · posted ${new Date(row.postedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                  : ""}
-                {row.untitled && row.mediaId ? ` · post ID ${row.mediaId}` : ""}
-              </span>
-            </div>
-            {row.demo && (
-              <span className="gf-automation-badge">
-                Demo override · measured{" "}
-                {row.demoHours === null ? "early" : `${row.demoHours} h after posting`}, before its window
-              </span>
+      {offered ? (
+        <>
+          <div
+            role="tabpanel"
+            id="gf-posted-panel-list"
+            aria-labelledby="gf-posted-tab-list"
+            hidden={shown !== "list"}
+          >
+            {list}
+          </div>
+          <div
+            role="tabpanel"
+            id="gf-posted-panel-map"
+            aria-labelledby="gf-posted-tab-map"
+            hidden={shown !== "map"}
+          >
+            {shown === "map" && (
+              <AccountMap model={map} untracked={untracked.length} onAccounts={onAccounts} />
             )}
-            {row.chips.length ? (
-              <ul className="gf-ratio-chips" aria-label="Latest numbers vs your typical post">
-                {row.chips.map((chip) => (
-                  <li key={chip.metric} className={`is-${chip.tone}`}>
-                    {chip.label}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="gf-posted-wait">No numbers yet — the first reading comes at the end of the window.</p>
-            )}
-            <div className="gf-posted-window">
-              <span
-                className="gf-posted-window-bar"
-                role="progressbar"
-                aria-label="Measurement window"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(row.window * 100)}
-              >
-                <i style={{ width: `${Math.round(row.window * 100)}%` }} />
-              </span>
-              <small>{row.windowLabel}</small>
-            </div>
-          </li>
-        ))}
-        {untracked.map((clip) => (
-          <li key={clip.id} className="gf-posted is-untracked">
-            <div className="gf-posted-head">
-              <strong>{clip.hook || clip.name}</strong>
-              <span>
-                Posted
-                {clip.published_at
-                  ? ` ${new Date(clip.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                  : ""}{" "}
-                · not tracked yet
-              </span>
-            </div>
-            <button
-              type="button"
-              className="gf-strategist-link"
-              onClick={onAccounts}
-            >
-              Track it to measure
-            </button>
-          </li>
-        ))}
-      </ul>
+          </div>
+        </>
+      ) : (
+        list
+      )}
     </section>
   );
 }
@@ -1201,10 +1302,18 @@ export function Results({
     publications,
     snapshots: data.scoped?.snapshots ?? [],
     policies: data.scoped?.policies ?? [],
-    accounts: data.scoped?.accounts ?? [],
+    // Every known account, so a post on a since-disconnected account keeps its name.
+    accounts: data.accounts.length ? data.accounts : data.scoped?.accounts ?? [],
     clips,
     baseline: data.memory?.baseline ?? [],
     now,
+  });
+  const map = accountMap({
+    rows,
+    connected: data.scoped?.accounts ?? [],
+    known: data.accounts,
+    brand: w.profiles.find((p) => p.id === w.profileId)?.name || "Your brand",
+    typical: data.memory?.baseline.find((m) => m.name === "views")?.median ?? null,
   });
   const strategistPending = pendingRules([], view);
   // Proposed brand Style rules (from any source) that the Strategist did not list itself.
@@ -1394,7 +1503,15 @@ export function Results({
           <p className="gf-results-empty">No measured posts yet.</p>
         )}
       </section>}
-      {!demoMode && posted > 0 && <PostedClips rows={rows} untracked={untracked} error={data.error} onAccounts={toAccounts} />}
+      {!demoMode && posted > 0 && (
+        <PostedClips
+          rows={rows}
+          untracked={untracked}
+          error={data.error}
+          onAccounts={toAccounts}
+          map={map}
+        />
+      )}
       {!demoMode && onRehearse && posted > 0 && (
         <div className="gf-results-run">
           <button type="button" className="gf-results-reset" onClick={onRehearse}>
