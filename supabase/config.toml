@@ -7,3 +7,9 @@ project_id = "growth-factory"
 # or a Zernio webhook signature.
 verify_jwt = false
 entrypoint = "./functions/posting/index.ts"
+
+[functions.billing]
+# Stripe's webhook cannot send a Supabase JWT, so the gateway check is off and the function
+# verifies the caller itself: a valid signed-in session, or a Stripe-Signature header.
+verify_jwt = false
+entrypoint = "./functions/billing/index.ts"
