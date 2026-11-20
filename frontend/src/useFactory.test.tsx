@@ -19,6 +19,45 @@ function responses(path: string) {
   return [];
 }
 describe("workspace state and polling", () => {
+  it("keeps the same state object when a poll returns unchanged data", async () => {
+    vi.useFakeTimers();
+    let jobs = [{ id: "j1", kind: "produce", status: "running", progress: 0.1 }];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string) =>
+        new Response(JSON.stringify(path === "/api/jobs" ? jobs : responses(path))),
+      ),
+    );
+    let renders = 0;
+    const { result } = renderHook(() => {
+      renders++;
+      return useFactory();
+    });
+    // First load, then one poll for React's one-off bailout render after an update.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+    const before = result.current;
+    const settled = renders;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000 * 3);
+    });
+    // Three idle polls: nothing changed, so nothing re-rendered and every reference held.
+    expect(renders).toBe(settled);
+    expect(result.current).toBe(before);
+    jobs = [{ ...jobs[0], progress: 0.5 }];
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+    expect(result.current.data.jobs[0].progress).toBe(0.5);
+    // Only the resource that changed gets a new reference.
+    expect(result.current.data.jobs).not.toBe(before.data.jobs);
+    expect(result.current.data.clips).toBe(before.data.clips);
+    expect(result.current.data.factory).toBe(before.data.factory);
+  });
   it("exposes boot errors without injecting fixture data, then recovers on retry", async () => {
     let failing = true;
     vi.stubGlobal(

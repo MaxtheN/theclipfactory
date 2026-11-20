@@ -23,6 +23,7 @@ import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
 import { QuickActions, type QuickAction } from "./QuickActions";
 import { BrandMark } from "./BrandMark";
+import { Dormant } from "./Dormant";
 import "./tokens.css";
 import "./growth.css";
 import "./desktop-glass.css";
@@ -784,6 +785,7 @@ export function GrowthApp() {
                 </div>
               )}
               <div className="gf-stage" hidden={!onboarding}>
+                <Dormant active={onboarding} scope={`${onboardingSession}-${contextKey}`}>
                 <Onboarding
                   key={onboardingSession}
                   w={w}
@@ -803,11 +805,13 @@ export function GrowthApp() {
                     go("factory");
                   }}
                 />
+                </Dormant>
               </div>
               <div
                 className="gf-stage"
                 hidden={onboarding || !usable || stage !== "factory"}
               >
+                <Dormant active={!onboarding && usable && stage === "factory"} scope={contextKey}>
                 <div>
                   <FactoryTabs
                     w={w}
@@ -830,11 +834,13 @@ export function GrowthApp() {
                     />
                   </FactoryTabs>
                 </div>
+                </Dormant>
               </div>
               <div
                 className="gf-stage"
                 hidden={onboarding || !usable || stage !== "library"}
               >
+                <Dormant active={!onboarding && usable && stage === "library"} scope={contextKey}>
                 <Library
                   key={contextKey}
                   w={w}
@@ -846,11 +852,13 @@ export function GrowthApp() {
                   onView={chooseLibraryView}
                   viewState={{ store: libraryStore, key: contextKey }}
                 />
+                </Dormant>
               </div>
               <div
                 className="gf-stage"
                 hidden={onboarding || stage !== "setup"}
               >
+                <Dormant active={!onboarding && stage === "setup"} scope={contextKey}>
                 <Setup
                   key={contextKey}
                   active={!onboarding && stage === "setup"}
@@ -890,16 +898,19 @@ export function GrowthApp() {
                     </nav>
                   }
                 />
+                </Dormant>
               </div>
               <div
                 className="gf-stage"
                 hidden={onboarding || stage !== "research"}
               >
+                <Dormant active={!onboarding && stage === "research"} scope={contextKey}>
                 <Research
                   key={contextKey}
                   w={w}
                   onFactory={() => go("factory")}
                 />
+                </Dormant>
               </div>
               <div
                 className="gf-stage"
@@ -919,6 +930,7 @@ export function GrowthApp() {
                 className="gf-stage"
                 hidden={onboarding || stage !== "studio"}
               >
+                <Dormant active={!onboarding && stage === "studio"} scope={contextKey}>
                 <Studio
                   key={contextKey}
                   w={w}
@@ -931,11 +943,13 @@ export function GrowthApp() {
                   onDirection={() => go("research")}
                   onEditBrief={openGoals}
                 />
+                </Dormant>
               </div>
               <div
                 className="gf-stage"
                 hidden={onboarding || stage !== "results"}
               >
+                <Dormant active={!onboarding && stage === "results"} scope={contextKey}>
                 <Results
                   key={contextKey}
                   w={w}
@@ -953,11 +967,13 @@ export function GrowthApp() {
                   onCloseDemo={() => setDemoOpen(false)}
                   onDemoResult={keepDemoResult}
                 />
+                </Dormant>
               </div>
               <div
                 className="gf-stage"
                 hidden={onboarding || !usable || stage !== "settings"}
               >
+                <Dormant active={!onboarding && usable && stage === "settings"} scope={contextKey}>
                 <SettingsScreen
                   key={contextKey}
                   w={w}
@@ -968,6 +984,7 @@ export function GrowthApp() {
                   onReview={reviewClip}
                   onEditingRules={() => go("research")}
                 />
+                </Dormant>
               </div>
             </main>
           </div>

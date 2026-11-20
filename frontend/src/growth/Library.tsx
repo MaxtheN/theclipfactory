@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { endpoint, post } from "../api";
 import { clipMediaUrl } from "./productionApi";
 import type { Clip } from "../types";
@@ -61,29 +61,57 @@ export function Library({
   useEffect(() => {
     viewState?.store.patch(viewState.key, { query, olderTests });
   }, [viewState?.store, viewState?.key, query, olderTests]);
-  const ids = w.campaign?.video_ids || [];
-  const sources = factory.data.videos.filter((v) => ids.includes(v.id));
-  const clips = factory.data.clips.filter(
-    (c) =>
-      c.campaign_id === w.campaign?.id &&
-      c.profile_id === w.profileId &&
-      ids.includes(c.video_id),
+  const campaignVideoIds = w.campaign?.video_ids;
+  const ids = useMemo(() => campaignVideoIds || [], [campaignVideoIds]);
+  const campaignId = w.campaign?.id;
+  const profileId = w.profileId;
+  // Everything below is derived from the polled lists; it is recomputed only when they change,
+  // not on every keystroke or unrelated update.
+  const { sources, libraryClips, olderCount } = useMemo(() => {
+    const inCampaign = new Set(ids);
+    const sources = factory.data.videos.filter((v) => inCampaign.has(v.id));
+    const clips = factory.data.clips.filter(
+      (c) =>
+        c.campaign_id === campaignId &&
+        c.profile_id === profileId &&
+        inCampaign.has(c.video_id),
+    );
+    // Undirected outputs stay playable locally without borrowing the active brand’s Studio direction.
+    const loose = factory.data.clips.filter((c) => undirected(c, ids));
+    const allClips = [...new Map([...clips, ...loose].map(clip => [clip.id, clip])).values()];
+    return {
+      sources,
+      olderCount: allClips.filter(clip => clip.made_without_speech).length,
+      libraryClips: allClips.filter(clip => olderTests || !clip.made_without_speech),
+    };
+  }, [factory.data.videos, factory.data.clips, ids, campaignId, profileId, olderTests]);
+  const newest = useMemo(() => newestFirst(libraryClips), [libraryClips]);
+  const searchable = useMemo(() => {
+    const names = new Map(sources.map((s) => [s.id, s.name]));
+    return new Map(newest.map((c) => [
+      c.id,
+      `${c.name} ${c.hook} ${sourceLabel(c.video_id, ids)} ${names.get(c.video_id) || ""}`.toLocaleLowerCase(),
+    ]));
+  }, [newest, sources, ids]);
+  const madeFrom = useMemo(() => {
+    const groups = new Map<string, Clip[]>();
+    for (const clip of libraryClips) groups.set(clip.video_id, [...(groups.get(clip.video_id) ?? []), clip]);
+    return groups;
+  }, [libraryClips]);
+  // The field updates on every keystroke; the long list follows a moment later, without blocking typing.
+  const normalized = useDeferredValue(query).trim().toLocaleLowerCase();
+  const edits = useMemo(
+    () => (normalized ? newest.filter((c) => searchable.get(c.id)?.includes(normalized)) : newest),
+    [newest, searchable, normalized],
   );
-  // Undirected outputs stay playable locally without borrowing the active brand’s Studio direction.
-  const loose = factory.data.clips.filter((c) => undirected(c, ids));
-  const normalized = query.trim().toLocaleLowerCase();
-  const allClips = [...new Map([...clips, ...loose].map(clip => [clip.id, clip])).values()];
-  const olderCount = allClips.filter(clip => clip.made_without_speech).length;
-  const libraryClips = allClips.filter(clip => olderTests || !clip.made_without_speech);
-  const edits = newestFirst(libraryClips).filter((c) =>
-    `${c.name} ${c.hook} ${sourceLabel(c.video_id, ids)} ${sources.find((s) => s.id === c.video_id)?.name || ""}`
-      .toLocaleLowerCase()
-      .includes(normalized),
-  );
-  const footage = sources.filter((v) =>
-    `${sourceLabel(v.id, ids)} ${v.name}`
-      .toLocaleLowerCase()
-      .includes(normalized),
+  const footage = useMemo(
+    () =>
+      sources.filter((v) =>
+        `${sourceLabel(v.id, ids)} ${v.name}`
+          .toLocaleLowerCase()
+          .includes(normalized),
+      ),
+    [sources, ids, normalized],
   );
   // Freeing space: deleting is the one thing here that cannot be undone, so each path asks first
   // and says exactly what went and what the local service kept.
@@ -111,6 +139,18 @@ export function Library({
     }
   }
   const count = (n: number) => `${n} clip${n === 1 ? "" : "s"}`;
+  // Rows get one stable set of actions that always call the latest handlers, so a row re-renders
+  // only when its own clip or lock state changes.
+  const latest = useRef({ onReview, discard, inspect: setInspecting });
+  latest.current = { onReview, discard, inspect: setInspecting };
+  const rowActions = useMemo<RowActions>(
+    () => ({
+      review: (clip) => latest.current.onReview(clip),
+      discard: (clip) => void latest.current.discard([clip]),
+      inspect: (clip) => latest.current.inspect(clip),
+    }),
+    [],
+  );
   async function discard(targets: Clip[], picked = false): Promise<boolean> {
     if (!targets.length) return false;
     const one = targets.length === 1 ? targets[0] : undefined;
@@ -232,34 +272,13 @@ export function Library({
           {edits.length ? (
             <div className="gf-library-edits">
               {edits.map((clip) => (
-                <div className="gf-library-edit" key={clip.id}>
-                  <ClipPreview
-                    clip={clip}
-                    className="gf-library-edit-art"
-                    iconSize={24}
-                    onReview={clip.campaign_id ? () => onReview(clip) : undefined}
-                    reviewLabel="Edit / request change"
-                    onDiscard={locked ? undefined : () => void discard([clip])}
-                    discardLabel="Remove"
-                  />
-                  <button
-                    type="button"
-                    className="gf-library-edit-open"
-                    onClick={() => clip.campaign_id ? onReview(clip) : setInspecting(clip)}
-                    aria-label={`${clip.campaign_id ? "Edit" : "Inspect"} ${clip.name}`}
-                  >
-                    <span className="gf-library-edit-copy">
-                      <strong>{clip.name}</strong>
-                      <span>{clip.hook || "Clip"}</span>
-                      <small>
-                        {formatTime(clip.start)}–{formatTime(clip.end)} ·{" "}
-                        {sourceLabel(clip.video_id, ids)}
-                      </small>
-                    </span>
-                    {(posted(clip) || clip.made_without_speech || clip.rank?.below_bar) && <Pill tone={posted(clip) ? "approved" : ""}>{posted(clip) ? "Posted" : clip.made_without_speech ? "Older test draft" : "Quality hold"}</Pill>}
-                    <Icon name="arrow" size={16} />
-                  </button>
-                </div>
+                <LibraryEdit
+                  key={clip.id}
+                  clip={clip}
+                  source={sourceLabel(clip.video_id, ids)}
+                  locked={locked}
+                  actions={rowActions}
+                />
               ))}
             </div>
           ) : (
@@ -285,7 +304,7 @@ export function Library({
             <div className="gf-episode-grid">
               {footage.map((source) => {
                 // Counted like the Factory screen does: clips made before a direction existed are this episode's too.
-                const made = libraryClips.filter((c) => c.video_id === source.id);
+                const made = madeFrom.get(source.id) ?? [];
                 const waiting = made.filter((c) => !c.approved).length;
                 return (
                   <article className="gf-episode-card" key={source.id}>
@@ -395,6 +414,55 @@ export function Library({
     </section>
   );
 }
+
+type RowActions = {
+  review: (clip: Clip) => void;
+  discard: (clip: Clip) => void;
+  inspect: (clip: Clip) => void;
+};
+
+/** One clip in the Library list. Memoized: filtering or polling leaves unchanged rows alone. */
+const LibraryEdit = memo(function LibraryEdit({
+  clip,
+  source,
+  locked,
+  actions,
+}: {
+  clip: Clip;
+  source: string;
+  locked: boolean;
+  actions: RowActions;
+}) {
+  return (
+    <div className="gf-library-edit">
+      <ClipPreview
+        clip={clip}
+        className="gf-library-edit-art"
+        iconSize={24}
+        onReview={clip.campaign_id ? () => actions.review(clip) : undefined}
+        reviewLabel="Edit / request change"
+        onDiscard={locked ? undefined : () => actions.discard(clip)}
+        discardLabel="Remove"
+      />
+      <button
+        type="button"
+        className="gf-library-edit-open"
+        onClick={() => (clip.campaign_id ? actions.review(clip) : actions.inspect(clip))}
+        aria-label={`${clip.campaign_id ? "Edit" : "Inspect"} ${clip.name}`}
+      >
+        <span className="gf-library-edit-copy">
+          <strong>{clip.name}</strong>
+          <span>{clip.hook || "Clip"}</span>
+          <small>
+            {formatTime(clip.start)}–{formatTime(clip.end)} · {source}
+          </small>
+        </span>
+        {(posted(clip) || clip.made_without_speech || clip.rank?.below_bar) && <Pill tone={posted(clip) ? "approved" : ""}>{posted(clip) ? "Posted" : clip.made_without_speech ? "Older test draft" : "Quality hold"}</Pill>}
+        <Icon name="arrow" size={16} />
+      </button>
+    </div>
+  );
+});
 
 const clipTitle = (clip: Clip) => clip.hook || clip.name;
 /** Names every clip the local service kept, grouped under its reason. */

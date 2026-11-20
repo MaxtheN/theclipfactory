@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { keepIfSame } from "../growth/stable";
 import { api, ApiError, post } from "../api";
 import type { TeamRun, Video } from "../types";
 import { Badge, Field, Section, Unknown, date } from "./ui";
@@ -63,7 +64,7 @@ export function TeamLedger({
       if (!validRuns(result))
         throw new Error("Invalid team ledger response from local service.");
       if (mounted.current) {
-        setRuns(result);
+        setRuns((old) => keepIfSame(old, result));
         setError("");
       }
     } catch (e) {
@@ -82,7 +83,9 @@ export function TeamLedger({
   useEffect(() => {
     mounted.current = true;
     void load();
-    const timer = window.setInterval(() => void load(), 4000);
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void load();
+    }, 4000);
     return () => {
       mounted.current = false;
       window.clearInterval(timer);
