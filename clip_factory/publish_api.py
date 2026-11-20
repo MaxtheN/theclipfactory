@@ -293,7 +293,7 @@ def install(app, runtime, engine, campaigns, *, publisher: Publisher | None = No
         account = call(lambda: accounts.get(identifier))
         if account.get("platform") != "tiktok":
             raise HTTPException(400, "Creator info is only available for TikTok accounts.")
-        server = server_factory()
+        server = accounts.server_factory()
         if server is None:
             raise HTTPException(409, "Growth Factory cloud is not configured.")
         try:

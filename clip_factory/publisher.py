@@ -60,7 +60,9 @@ class PublishError(Exception):
 
 
 def _from_server(error: PostingServerError) -> PublishError:
-    return PublishError(error.status if 400 <= error.status < 600 else 502, error.message, error.code)
+    # A cloud sign-in problem is a conflict on the local API: 401 there means the local session token.
+    status = 409 if error.status == 401 else error.status if 400 <= error.status < 600 else 502
+    return PublishError(status, error.message, error.code)
 
 
 def normalize_caption(value: str) -> str:
