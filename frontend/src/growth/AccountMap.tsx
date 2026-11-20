@@ -139,7 +139,8 @@ export function AccountMap({
       .querySelectorAll<HTMLElement>("[data-amap-entry]")
       .forEach((el) => entries.set(el.dataset.amapEntry ?? "", rel(el)));
     const wires: Wire[] = [];
-    root.querySelectorAll<HTMLElement>("[data-amap-node]").forEach((el) => {
+    const nodeEls = root.querySelectorAll<HTMLElement>("[data-amap-node]");
+    nodeEls.forEach((el, index) => {
       const key = el.dataset.amapNode ?? "";
       const node = rel(el);
       const head = rel(el.querySelector("[data-amap-anchor]") ?? el);
@@ -157,11 +158,14 @@ export function AccountMap({
         return;
       }
       const start = entries.get(key);
+      // Fan the turns out across the gap: lower links turn nearer the brand, so none cross
+      // and long ones do not bundle into one line.
+      const turn = nodeEls.length > 1 ? 0.75 - (0.5 * index) / (nodeEls.length - 1) : 0.5;
       const x1 = brand.r,
         y1 = start ? start.y : round(brand.b - 22),
         x2 = node.l,
         y2 = head.y,
-        mid = round((x1 + x2) / 2);
+        mid = round(x1 + (x2 - x1) * turn);
       wires.push({
         key,
         ghost,

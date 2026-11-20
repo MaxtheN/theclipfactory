@@ -8,6 +8,8 @@
 
 .gf-amap {
   display: grid;
+  /* An explicit column: an auto one grows to the canvas's max-content and spills out of the card. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-width: 0;
 }
@@ -56,9 +58,11 @@
 .gf-amap-canvas {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(200px, 248px) minmax(0, 1fr);
+  grid-template-columns: minmax(200px, 248px) minmax(0, 640px);
+  justify-content: center;
   column-gap: 72px;
   align-items: start;
+  min-width: 0;
   padding: 22px;
   border: 1px solid var(--gf-r-line, #323232);
   border-radius: 12px;
@@ -370,6 +374,7 @@
 .gf-amap-clip-text small {
   font-size: 11px;
   color: var(--muted-foreground, #9d9d9d);
+  overflow-wrap: anywhere;
 }
 .gf-amap-clip-views {
   grid-area: views;
@@ -498,6 +503,7 @@
 /* Narrow: the brand sits on top and a rail runs down the left edge to each account. */
 .gf-amap.is-stacked .gf-amap-canvas {
   grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
   row-gap: 24px;
   padding: 14px;
 }
@@ -506,6 +512,12 @@
 }
 .gf-amap.is-stacked .gf-amap-stats dd {
   font-size: 16px;
+}
+.gf-amap.is-stacked .gf-amap-clip {
+  grid-template-areas: "text text" "views ratio" "bar bar" "also also";
+}
+.gf-amap.is-stacked .gf-amap-clip-views {
+  text-align: left;
 }
 
 @media (prefers-reduced-motion: reduce) {
