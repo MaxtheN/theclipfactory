@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { SHOW_FACTORY_MAP } from "./appEvents";
-import { FirstRunInstagram } from "./FirstRunInstagram";
+import { FirstRunAccounts } from "./FirstRunAccounts";
 import { ClipStyleSheet } from "./ClipStyle";
 import type { Clip, Job, TeamRun, Video } from "../types";
 import { ApiError, endpoint, post } from "../api";
@@ -670,7 +670,7 @@ export function FactoryHome({
         <SpeechSetup factory={factory} variant="engine" />
       )}
       {!sources.length && !importing && !pending && !unknown && w.profileId && (
-        <FirstRunInstagram profileId={w.profileId} />
+        <FirstRunAccounts profileId={w.profileId} />
       )}
       {error && (
         <p className="gf-message error" role="alert">

@@ -4,9 +4,8 @@ import type { FactoryState } from "../useFactory";
 import type { Clip } from "../types";
 import type { Workspace } from "./useCampaignWorkspace";
 import { reviewPreview } from "./workspaceApi";
-import { ConnectInstagram } from "./ConnectInstagram";
+import { platformLabel } from "./publishApi";
 import "./automation.css";
-import { platformWords } from "../platform";
 
 type Row = Record<string, unknown> & { id: string };
 type Post = {
@@ -295,14 +294,9 @@ export function AutomationPanel({
   const blocked = busy || !fresh;
   const [accountId, setAccountId] = useState(""),
     [cadence, setCadence] = useState<3 | 6>(3);
-  const [authConfig, setAuthConfig] = useState(""),
-    [key, setKey] = useState("");
-  const [existingAccount, setExistingAccount] = useState("");
-  const [configured, setConfigured] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]),
     [postAccount, setPostAccount] = useState(""),
     [postLimits, setPostLimits] = useState("");
-  const [advanced, setAdvanced] = useState(false);
   const [clipId, setClipId] = useState(""),
     [mediaId, setMediaId] = useState(""),
     [confirmedMapping, setConfirmedMapping] = useState(false);
@@ -348,7 +342,6 @@ export function AutomationPanel({
     const response = await Promise.all([
       api<unknown>("/api/automation/state"),
       api<unknown>("/api/automation/accounts"),
-      api<Record<string, unknown>>("/api/automation/settings"),
     ]).catch((error) => {
       if (!alive.current || generation !== refreshGeneration.current)
         return null;
@@ -356,15 +349,13 @@ export function AutomationPanel({
     });
     if (!response || !alive.current || generation !== refreshGeneration.current)
       return;
-    const [next, linked, settings] = response;
+    const [next, linked] = response;
     const parsed = parseAutomationState(next),
       checked = rows(linked);
     if (alive.current && generation === refreshGeneration.current) {
       setState(parsed);
       setAccounts(checked);
       setFresh(true);
-      setConfigured(settings.configured === true);
-      setAuthConfig((previous) => previous || text(settings.auth_config_id));
     }
     // Learning memory is supplementary: a failed read never blocks controls.
     if (!w.profileId) return;
@@ -430,7 +421,7 @@ export function AutomationPanel({
   if (reviewPreview)
     return (
       <section className="gf-automation" id={full ? undefined : "gf-accounts"}>
-        <span className="gf-kicker">{full ? "The learning loop" : "Instagram accounts"}</span>
+        <span className="gf-kicker">{full ? "The learning loop" : "Accounts"}</span>
         <h2>{full ? "Every result informs the next draft." : "Connect and track your posts"}</h2>
         <p>
           Illustrative data. Connect accounts in the desktop app.
@@ -490,7 +481,7 @@ export function AutomationPanel({
       )}
       <div className="gf-automation-controls">
         <label>
-          Instagram account
+          Account
           <select
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
@@ -499,7 +490,7 @@ export function AutomationPanel({
             <option value="">Choose a connected account</option>
             {selectedAccounts.map((a) => (
               <option key={a.id} value={a.id}>
-                {text(a.display_name) || a.id}
+                {platformLabel(text(a.platform) || "instagram")} · {text(a.display_name) || a.id}
               </option>
             ))}
           </select>
@@ -577,107 +568,10 @@ export function AutomationPanel({
         <p className="gf-automation-help">
           {selectedAccounts.length
             ? "Choose an account to start the loop."
-            : "Connect an account below to start the loop."}
+            : "Connect an account under Settings → Accounts and connections to start the loop."}
         </p>
       )}
-      <details className="gf-ui-disclosure" open={selectedAccounts.length === 0 || undefined}>
-        <summary>Connect an Instagram account</summary>
-        <ConnectInstagram
-          profileId={w.profileId}
-          ready={configured}
-          disabled={blocked}
-          onConnected={(id) => {
-            setAccountId(id);
-            setNotice("Instagram connected. Choose how often to check results, then start the loop.");
-            void refresh().catch(() => undefined);
-          }}
-          onNeedsDashboard={() => setAdvanced(true)}
-        />
-        <details className="gf-ui-disclosure"
-          open={advanced || !configured || undefined}
-          onToggle={(e) => setAdvanced(e.currentTarget.open)}
-        >
-          <summary>Advanced</summary>
-          <p>Your API key stays in {platformWords().keyStore}.</p>
-          <div className="gf-automation-controls">
-            <label>
-              Auth Config ID (starts with ac_)
-              <input
-                value={authConfig}
-                onChange={(e) => setAuthConfig(e.target.value)}
-                placeholder="ac_…"
-                autoComplete="off"
-              />
-            </label>
-            <label>
-              Composio project API key
-              <input
-                type="password"
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-                autoComplete="off"
-                placeholder={configured ? `Saved in ${platformWords().keyStoreShort}` : ""}
-              />
-            </label>
-            <button
-              disabled={
-                blocked || !authConfig.trim() || (!configured && !key.trim())
-              }
-              onClick={() =>
-                void act(async () => {
-                  await put("/api/automation/settings", {
-                    auth_config_id: authConfig.trim(),
-                    ...(key ? { api_key: key } : {}),
-                  });
-                  setKey("");
-                  setConfigured(true);
-                  setNotice("Settings saved. Now press Connect Instagram.");
-                })
-              }
-            >
-              Save connection settings
-            </button>
-          </div>
-          <p>
-            Paste a Composio account ID (ca_…). We verify it first.
-          </p>
-          <div className="gf-automation-controls">
-            <label>
-              Connected account ID
-              <input
-                value={existingAccount}
-                onChange={(e) => setExistingAccount(e.target.value)}
-                placeholder="ca_…"
-              />
-            </label>
-            <button
-              disabled={blocked || !configured || !existingAccount.trim()}
-              onClick={() =>
-                void act(async () => {
-                  const result = await post<Record<string, unknown>>(
-                    "/api/automation/accounts/import",
-                    {
-                      profile_id: w.profileId,
-                      connected_account_id: existingAccount.trim(),
-                    },
-                  );
-                  if (result.id !== existingAccount.trim())
-                    throw new Error(
-                      "Account confirmation did not match your selection.",
-                    );
-                  setAccountId(text(result.id));
-                  setNotice(
-                    "Instagram account verified. Choose your review cadence and start the loop.",
-                  );
-                })
-              }
-            >
-              Import this account
-            </button>
-          </div>
-        </details>
-      </details>
-      {!!selectedAccounts.length && (
+      {selectedAccounts.some((a) => a.id === accountId && a.provider === "composio") && (
         <details className="gf-ui-disclosure">
           <summary>Find a post from your Instagram account</summary>
           <p>

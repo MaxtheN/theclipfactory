@@ -41,12 +41,14 @@ beforeEach(() => {
             profile_id: "profile",
             display_name: "My podcast",
             status: "active",
+            provider: "composio",
           },
           {
             id: "foreign",
             profile_id: "other",
             display_name: "Other workspace",
             status: "active",
+            provider: "composio",
           },
         ]
       : blank,
@@ -69,9 +71,9 @@ it("keeps hidden learning panels idle and filters accounts to the workspace", as
   );
   expect(api).not.toHaveBeenCalled();
   view.rerender(<AutomationPanel w={workspace} factory={factory} visible />);
-  await screen.findByRole("option", { name: "My podcast" });
+  await screen.findByRole("option", { name: "Instagram · My podcast" });
   expect(
-    screen.queryByRole("option", { name: "Other workspace" }),
+    screen.queryByRole("option", { name: "Instagram · Other workspace" }),
   ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Start the loop" })).toBeDisabled();
 });
@@ -85,8 +87,8 @@ it("saves an exact-account policy once while a request is pending", async () => 
       }),
   );
   render(<AutomationPanel w={workspace} factory={factory} visible />);
-  await screen.findByRole("option", { name: "My podcast" });
-  fireEvent.change(screen.getByLabelText("Instagram account"), {
+  await screen.findByRole("option", { name: "Instagram · My podcast" });
+  fireEvent.change(screen.getByLabelText("Account"), {
     target: { value: "mine" },
   });
   const start = screen.getByRole("button", { name: "Start the loop" });
@@ -111,7 +113,7 @@ it("disables mutations when state cannot be refreshed", async () => {
   render(<AutomationPanel w={workspace} factory={factory} visible />);
   await screen.findByRole("alert");
   expect(
-    screen.getByRole("button", { name: "Connect Instagram" }),
+    screen.getByRole("button", { name: "Start the loop" }),
   ).toBeDisabled();
   expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
   expect(post).not.toHaveBeenCalled();
@@ -167,18 +169,21 @@ function mockCatalog(reply: unknown) {
           profile_id: catalogProfile,
           display_name: "First creator",
           status: "active",
+            provider: "composio",
         },
         {
           id: "ca_other",
           profile_id: catalogProfile,
           display_name: "Second creator",
           status: "active",
+            provider: "composio",
         },
         {
           id: "ca_foreign",
           profile_id: "another-profile",
           display_name: "Foreign profile",
           status: "active",
+            provider: "composio",
         },
       ];
     if (path === "/api/automation/settings")
@@ -193,8 +198,8 @@ function mockCatalog(reply: unknown) {
 }
 
 async function openPostChooser() {
-  await screen.findByRole("option", { name: "First creator" });
-  fireEvent.change(screen.getByLabelText("Instagram account"), {
+  await screen.findByRole("option", { name: "Instagram · First creator" });
+  fireEvent.change(screen.getByLabelText("Account"), {
     target: { value: catalogAccount },
   });
   fireEvent.click(screen.getByText("Find a post from your Instagram account"));
@@ -407,7 +412,7 @@ describe("recent Instagram post chooser", () => {
     expect(screen.getByLabelText("Selected post ID")).toHaveValue(
       catalogPost.media_id,
     );
-    fireEvent.change(screen.getByLabelText("Instagram account"), {
+    fireEvent.change(screen.getByLabelText("Account"), {
       target: { value: "ca_other" },
     });
     await waitFor(() =>
@@ -463,6 +468,7 @@ describe("recent Instagram post chooser", () => {
               profile_id: "profile",
               display_name: "Current creator",
               status: "active",
+            provider: "composio",
             },
           ];
         if (path === "/api/automation/settings") return { configured: true };
@@ -479,7 +485,7 @@ describe("recent Instagram post chooser", () => {
         <AutomationPanel w={workspace} factory={factory} visible />,
       );
       await screen.findByText("Current verified health");
-      await screen.findByRole("option", { name: "Current creator" });
+      await screen.findByRole("option", { name: "Instagram · Current creator" });
       await act(async () => {
         if (outcome === "success")
           resolveOld({

@@ -168,7 +168,7 @@ describe("Results page", () => {
     expect(screen.getByText("Nothing posted yet — approve a clip and post it")).toBeTruthy();
     // Nothing recorded: an explicit empty state, never simulated history.
     const start = screen.getByRole("region", { name: "No results yet" });
-    expect(within(start).getByRole("button", { name: "Connect Instagram" })).toBeTruthy();
+    expect(within(start).getByRole("button", { name: "Connect accounts" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "What we learned" })).toBeNull();
     expect(screen.queryByText("Simulated")).toBeNull();
     expect(screen.queryByRole("heading", { name: "Posted clips" })).toBeNull();
@@ -179,9 +179,9 @@ describe("Results page", () => {
     expect(await screen.findByRole("heading", { name: "Strategist" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "See how it learns (simulated data)" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
-    // Instagram accounts are owned by Settings > Accounts and connections; Results links there.
-    fireEvent.click(screen.getByRole("button", { name: /Instagram: connect/ }));
-    fireEvent.click(within(start).getByRole("button", { name: "Connect Instagram" }));
+    // Connected accounts are owned by Settings > Accounts and connections; Results links there.
+    fireEvent.click(screen.getByRole("button", { name: /Accounts: connect/ }));
+    fireEvent.click(within(start).getByRole("button", { name: "Connect accounts" }));
     expect(onAccounts).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(within(start).getByRole("button", { name: "Add a result by hand" }));
