@@ -60,7 +60,7 @@ CATALOGUE = [
 ]
 MIN_RAM_GB = min(entry["min_ram_gb"] for entry in CATALOGUE)
 ALTERNATIVES = (
-    "add your own OpenRouter key under Brand profile → AI model and turn on cloud agents, "
+    "add your own OpenRouter key under Settings → Models and turn on cloud agents, "
     "or edit clips by hand"
 )
 
