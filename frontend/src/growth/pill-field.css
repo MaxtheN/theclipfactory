@@ -62,3 +62,34 @@
 }
 .gf-app .gf-pill-field > small { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .gf-pill-field .gf-pill-choice { transition: none; } }
+
+/* Inside the clip style picker: same row grid, pill size and selected state as its other choices. */
+.gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--gf-s3, 12px);
+}
+.gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes > label {
+  margin: 0;
+  padding-top: 7px;
+  color: var(--material-secondary, var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 550;
+}
+.gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes > small { grid-column: 2; }
+.gf-app .gf-clip-style .gf-pill-field .gf-pill-choice { min-height: 30px; font-size: 12px; }
+.gf-app .gf-clip-style .gf-clip-style-option[aria-pressed="true"],
+.gf-app .gf-clip-style .gf-clip-style-option[aria-pressed="true"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--gf-violet-400) 14%, var(--surface));
+  border-color: var(--gf-violet-600);
+  color: var(--foreground);
+}
+.gf-app .gf-review-inspector .gf-clip-style .gf-pill-field.gf-clip-style-notes { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.gf-app .gf-review-inspector .gf-clip-style .gf-pill-field.gf-clip-style-notes > label { padding-top: 0; }
+.gf-app .gf-review-inspector .gf-clip-style .gf-pill-field.gf-clip-style-notes > small { grid-column: auto; }
+@media (max-width: 720px) {
+  .gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes > label { padding-top: 0; }
+  .gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes > small { grid-column: auto; }
+}

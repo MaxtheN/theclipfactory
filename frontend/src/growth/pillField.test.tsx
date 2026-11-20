@@ -83,6 +83,26 @@ describe("PillField", () => {
     expect(stored()).toBe("");
   });
 
+  it("treats a stored or typed label as its preset", () => {
+    function Stored() {
+      const [value, setValue] = useState("Reach");
+      return (
+        <>
+          <PillSelect label="Metric" options={["reach", "views"]} labels={{ reach: "Reach" }} value={value} onChange={setValue} />
+          <output>{value}</output>
+        </>
+      );
+    }
+    render(<Stored />);
+    expect(screen.getAllByRole("button", { name: /Reach/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Reach" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Add your own" }));
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "reach" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(stored()).toBe("reach");
+  });
+
   it("splits and joins symmetrically", () => {
     for (const [text, format] of [["a, b, c", "comma"], ["one\ntwo", "lines"]] as const)
       expect(joinList(splitList(text, format), format)).toBe(text);

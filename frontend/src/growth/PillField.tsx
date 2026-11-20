@@ -79,12 +79,14 @@ export function PillField({
   const [draft, setDraft] = useState("");
   const addButton = useRef<HTMLButtonElement>(null);
   const choices = uniqueOptions(suggested, options);
-  const custom = values.filter((v) => !choices.some((c) => same(c, v)));
-  const picked = (v: string) => values.some((x) => same(x, v));
+  // A stored value matches a choice by its key or by its display label.
+  const is = (choice: string, v: string) => same(choice, v) || (!!labels?.[choice] && same(labels[choice], v));
+  const custom = values.filter((v) => !choices.some((c) => is(c, v)));
+  const picked = (v: string) => values.some((x) => is(v, x) || same(x, v));
   const full = !single && max !== undefined && values.length >= max;
 
   function toggle(v: string) {
-    if (picked(v)) onChange(single ? [] : values.filter((x) => !same(x, v)));
+    if (picked(v)) onChange(single ? [] : values.filter((x) => !is(v, x) && !same(x, v)));
     else if (single) onChange([v]);
     else if (!full) onChange([...values, v]);
   }
@@ -92,7 +94,7 @@ export function PillField({
     const v = draft.trim();
     setDraft("");
     if (v) {
-      const match = choices.find((c) => same(c, v)) ?? values.find((x) => same(x, v)) ?? v;
+      const match = choices.find((c) => is(c, v)) ?? values.find((x) => same(x, v)) ?? v;
       if (single) onChange([match]);
       else if (!picked(match) && !full) onChange([...values, match]);
     }
