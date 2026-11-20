@@ -3,6 +3,8 @@
 
 import { type ZernioClient, type ZernioResponse, ZernioUnavailable } from "./zernio.ts";
 import { type Auth, type PostingEvent, type Store, StoreError } from "./store.ts";
+import { type PlanSource, PlanSourceError } from "../_shared/plan_source.ts";
+import type { Entitlement } from "../_shared/plans.ts";
 
 export const PLATFORMS = ["tiktok", "instagram", "youtube", "facebook", "linkedin", "twitter", "threads"];
 export const UPLOAD_TYPES = new Set(["video/mp4", "video/quicktime", "image/jpeg", "image/png"]);
@@ -23,6 +25,8 @@ export interface Deps {
   zernio: ZernioClient;
   store: Store;
   auth: Auth;
+  /** The owner's Growth Factory plan (Plans and Billing): posting and account limits are enforced here. */
+  plans: PlanSource;
   webhookSecret: string;
   log?: (entry: Record<string, unknown>) => void;
   now?: () => Date;
@@ -31,6 +35,7 @@ export interface Deps {
 
 interface Caller {
   workspaceId: string;
+  ownerId: string;
 }
 
 type Json = Record<string, unknown>;
@@ -41,9 +46,33 @@ export class HttpError extends Error {
     readonly code: string,
     message: string,
     readonly headers: Record<string, string> = {},
+    readonly details: Record<string, unknown> = {},
   ) {
     super(message);
   }
+}
+
+const PLAN_NAMES: Record<string, string> = { free: "Free", pro: "Pro", business: "Business" };
+
+/** 402 refusal from the Growth Factory plan (not Zernio's): the app shows an Upgrade Prompt. */
+function planRefusal(
+  code: "plan_required" | "plan_limit" | "plan_over_limit",
+  entitlement: Entitlement,
+  usage: number,
+): HttpError {
+  const max = entitlement.limits.connected_accounts;
+  const plan = PLAN_NAMES[entitlement.plan] ?? entitlement.plan;
+  const message = code === "plan_required"
+    ? `Posting from the app is not included in the ${plan} plan. Upgrade to Pro or Business to connect accounts and post.`
+    : code === "plan_limit"
+    ? `The ${plan} plan includes ${max} connected accounts and ${usage} are connected. Disconnect one or upgrade.`
+    : `${usage} accounts are connected but the ${plan} plan includes ${max}. Disconnect accounts or upgrade to post again.`;
+  return new HttpError(402, code, message, {}, {
+    limit: "connected_accounts",
+    usage,
+    max,
+    plan: entitlement.plan,
+  });
 }
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
@@ -221,7 +250,14 @@ export function createHandler(deps: Deps) {
     if ((await store.workspaceOwner(workspaceId)) !== userId) {
       throw new HttpError(403, "workspace_forbidden", "This workspace does not belong to the signed-in account.");
     }
-    return { workspaceId };
+    return { workspaceId, ownerId: userId };
+  }
+
+  /** Refuses posting features the owner's plan does not include. */
+  async function postingPlan(caller: Caller): Promise<Entitlement> {
+    const entitlement = await deps.plans.entitlement(caller.ownerId);
+    if (!entitlement.limits.posting) throw planRefusal("plan_required", entitlement, 0);
+    return entitlement;
   }
 
   async function ensureProfile(caller: Caller): Promise<string> {
@@ -282,7 +318,10 @@ export function createHandler(deps: Deps) {
       }
       redirect = parsed!.toString();
     }
+    const entitlement = await postingPlan(caller);
     const profileId = await ensureProfile(caller);
+    const connected = (await profileAccounts(profileId)).length;
+    if (connected >= entitlement.limits.connected_accounts) throw planRefusal("plan_limit", entitlement, connected);
     const result = await zernio.request("GET", `/connect/${platform}`, {
       query: { profileId, redirect_url: redirect },
     });
@@ -303,6 +342,7 @@ export function createHandler(deps: Deps) {
     if (typeof size !== "number" || !Number.isInteger(size) || size < 1 || size > MAX_UPLOAD_BYTES) {
       throw new HttpError(400, "invalid_size", "Send the file size in bytes, up to 5 GB.");
     }
+    await postingPlan(caller);
     await ensureProfile(caller);
     const result = await zernio.request("POST", "/media/presign", { body: { filename, contentType, size } });
     const uploadUrl = str(result.body?.uploadUrl);
@@ -363,8 +403,13 @@ export function createHandler(deps: Deps) {
       throw new HttpError(400, "invalid_external_id", "externalId must be 1-128 letters, digits or ._:- characters.");
     }
 
+    const entitlement = await postingPlan(caller);
     const profileId = await ensureProfile(caller);
     const accounts = new Map((await profileAccounts(profileId)).map((a) => [a._id as string, a]));
+    // After a downgrade the extra accounts stay connected, but posting waits until they fit the plan.
+    if (accounts.size > entitlement.limits.connected_accounts) {
+      throw planRefusal("plan_over_limit", entitlement, accounts.size);
+    }
     const seen = new Set<string>();
     const platforms: Json[] = [];
     const rootTikTok = isObject(body.tiktokSettings) ? body.tiktokSettings : {};
@@ -612,10 +657,14 @@ export function createHandler(deps: Deps) {
       }
     } catch (error) {
       if (error instanceof HttpError) {
-        response = json(error.status, { error: { code: error.code, message: error.message } }, error.headers);
+        response = json(
+          error.status,
+          { error: { ...error.details, code: error.code, message: error.message } },
+          error.headers,
+        );
       } else if (error instanceof ZernioUnavailable) {
         response = json(502, { error: { code: "zernio_unavailable", message: "Zernio could not be reached." } });
-      } else if (error instanceof StoreError) {
+      } else if (error instanceof StoreError || error instanceof PlanSourceError) {
         response = json(503, { error: { code: "store_unavailable", message: "Posting state is unavailable." } });
       } else {
         response = json(500, { error: { code: "internal", message: "The posting server failed." } });
