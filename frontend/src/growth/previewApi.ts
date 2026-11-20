@@ -759,7 +759,7 @@ function route(
       return job;
     }
   }
-  return fail(`Unsupported ${method} ${path}. No external action was taken.`);
+  return fail(`this step runs in the desktop app (${method} ${path}). Nothing was sent.`);
 }
 
 export async function previewRequest<T>(
