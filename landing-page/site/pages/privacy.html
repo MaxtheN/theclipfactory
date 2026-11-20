@@ -1,0 +1,39 @@
+<!--meta {"title": "Privacy policy — Growth Factory", "description": "What Growth Factory stores, where it lives, which services receive what, and how to ask for your data to be deleted.", "bodyClass": "legal-page"} -->
+<section class="page-hero legal-hero"><div class="wrap page-hero-inner"><p class="page-kicker">Privacy policy</p><h1>Your footage stays<br /><span class="page-accent">on your computer.</span></h1><p class="page-lead">This policy explains, in plain words, what Growth Factory keeps, where it keeps it and who else sees what. Last updated 19 November 2026.</p></div></section>
+<div class="wrap legal prose">
+<h2 id="summary">The short version</h2>
+<ul><li>Your episodes, clips, transcripts, Style rules and results are stored on your computer, not on our servers.</li><li>Our cloud stores your account email, your workspace, your plan and records of the posts you send through it, so that sign-in, posting and billing work.</li><li>Payments are handled by Stripe. We never see or store card details.</li><li>We do not sell personal data, and this website uses no advertising or tracking cookies.</li></ul>
+<h2 id="who">Who we are</h2>
+<p>Growth Factory is a desktop app and a small set of online services (the "cloud") that support it. For any privacy question or request, email <a href="mailto:jamesbodebiyi@gmail.com">jamesbodebiyi@gmail.com</a>.</p>
+<h2 id="on-your-computer">What stays on your computer</h2>
+<p>The app keeps its working data in a data folder on your computer: imported video, transcripts, clips and their revisions, edits, Style rules, results you track, and logs. <strong>Settings → Privacy and storage → Data folder</strong> shows where. API keys you add are kept in your system's key store. We have no copy of any of this. Deleting the data folder deletes it.</p>
+<h2 id="cloud">What our cloud stores</h2>
+<div class="table-scroll"><table><thead><tr><th scope="col">Data</th><th scope="col">Why</th></tr></thead><tbody>
+<tr><th scope="row">Account email and a password hash</th><td>To sign you in (Supabase Auth). We cannot read your password.</td></tr>
+<tr><th scope="row">Workspace name and id</th><td>To keep your plan, accounts and posts separate from everyone else's.</td></tr>
+<tr><th scope="row">Plan, subscription status and dates, and Stripe customer id</th><td>To know which plan you are on. Card details, invoices and receipts stay with Stripe.</td></tr>
+<tr><th scope="row">Posting records: your Zernio profile id, the ids and links of clips you uploaded, the ids of posts you created, and the platforms' status updates for them (platform, account id, status, published link, any error)</th><td>To make sure each workspace can act only on its own accounts and posts, and to tell you how a post went. Captions and account details are held by Zernio, not stored in our database.</td></tr>
+<tr><th scope="row">Request logs: method, route, status and duration</th><td>To keep the service running. Logs contain no tokens, emails or customer ids.</td></tr>
+</tbody></table></div>
+<h2 id="services">Services that receive data</h2>
+<ul>
+<li><strong>Supabase</strong> hosts the cloud database, sign-in and functions.</li>
+<li><strong>Stripe</strong> processes payments and receives your email and payment details when you check out. See <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer">Stripe's privacy policy</a>.</li>
+<li><strong>Zernio</strong>, our posting partner, stores the clip you upload, the caption and the target accounts for each post, and holds the access the platforms grant when you connect an account. See <a href="https://zernio.com" target="_blank" rel="noopener noreferrer">zernio.com</a>.</li>
+<li><strong>The social platforms</strong> you post to receive the clip and caption, under their own terms and policies.</li>
+<li><strong>OpenRouter and Groq</strong> receive data only if you add your own key. Then your computer sends them the text (and still frames, or audio for cloud speech, only if you turn those on) directly, under your own account with them.</li>
+<li><strong>Vercel</strong> hosts this website and keeps standard server logs, such as IP addresses, for security.</li>
+</ul>
+<h2 id="website">This website</h2>
+<p>The website is static. It sets no cookies, runs no analytics and loads its fonts from Google Fonts, which receives your IP address when you visit.</p>
+<h2 id="retention">How long we keep it</h2>
+<p>We keep cloud data while your account exists. Post records and status updates stay so your history is complete. Stripe keeps billing records as the law requires. When you ask us to delete your account, we delete your cloud data within 30 days, except billing records we must keep.</p>
+<h2 id="your-rights">Your choices and rights</h2>
+<p>You can use the app signed out (it works as Free), disconnect social accounts at any time in <strong>Settings → Accounts and connections</strong>, and delete your local data by deleting the data folder. To get a copy of your cloud data, correct it or delete your account, email <a href="mailto:jamesbodebiyi@gmail.com">jamesbodebiyi@gmail.com</a>. Depending on where you live, you may have further rights under laws such as the GDPR or CCPA, and you can complain to your local data protection authority.</p>
+<h2 id="security">Security</h2>
+<p>Traffic to the cloud is encrypted. Each account can read only its own rows, enforced by the database. Platform and payment secrets are held only by the cloud functions, never in the app.</p>
+<h2 id="children">Children</h2>
+<p>Growth Factory is not meant for anyone under 16, and we do not knowingly collect their data.</p>
+<h2 id="changes">Changes</h2>
+<p>If this policy changes, we update this page and the date at the top. For a significant change, we tell signed-in users by email.</p>
+</div>

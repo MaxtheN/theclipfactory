@@ -242,8 +242,11 @@ python -m pip install -e '.[test]' 'setuptools>=75' wheel
 python -m pytest tests scripts/tests -q
 python -m ruff check clip_factory scripts
 (cd frontend && npm ci && npm test && npm run build)
+(cd landing-page && npm run check && npm test)
 python scripts/smoke-headless.py
 ```
+
+The website renders the user guide from `docs/guide/`. After editing a guide page, run `npm run generate` in `landing-page/` and commit the result; CI's website job fails while the generated pages are stale.
 
 CI runs frontend build/tests and backend/launcher tests on Linux, macOS and Windows. The
 headless smoke uses temporary data, authenticates through the real bootstrap

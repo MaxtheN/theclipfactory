@@ -81,3 +81,19 @@ jobs:
           deno check posting/index.ts posting/handler_test.ts billing/index.ts billing/handler_test.ts
       - name: Tests
         run: deno test --allow-read posting/ billing/
+  website:
+    # landing-page/: generated pages are current (including the guide from docs/guide/), links resolve, pricing
+    # matches plans.json, no installer link before a signed release.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: landing-page
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generated pages are up to date
+        run: npm run check
+      - name: Site tests
+        run: npm test

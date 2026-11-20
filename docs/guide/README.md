@@ -20,6 +20,8 @@ The app keeps its labels short. This guide holds the longer explanations: how ea
 | [Models and AI settings](models.md) | Local and cloud models, exactly what is sent where, costs |
 | [Settings and privacy](settings-privacy.md) | Where data is stored, which features use the internet |
 | [Plans and billing](plans.md) | Free, Pro and Business, upgrading, limits, offline use |
+| [Questions and answers](faq.md) | Short answers: computers, privacy, costs, platforms, cancelling |
+| [Self-hosting the cloud](self-hosting.md) | For operators: running your own sign-in, posting and billing service |
 
 Open this guide from the app with **Help** in the sidebar or **⌘K / Ctrl+K → Help**.
 

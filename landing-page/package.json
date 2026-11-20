@@ -2,10 +2,11 @@
   "name": "growth-factory-landing",
   "version": "1.0.0",
   "private": true,
-  "description": "Standalone Growth Factory marketing site. No build step or runtime dependencies.",
+  "description": "Growth Factory website. Static HTML, CSS and JavaScript; generated pages are committed, so hosting needs no build step.",
   "scripts": {
     "dev": "python3 -m http.server 4174 --bind 127.0.0.1",
-    "check": "node --check app.js",
+    "generate": "node build.mjs",
+    "check": "node --check app.js && node build.mjs --check",
     "test": "node --test tests/*.test.mjs"
   }
 }
