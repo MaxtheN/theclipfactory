@@ -33,6 +33,10 @@ FW_MODEL = {
     "estimated_gb": 1.6,
     "format": "ctranslate2",
 }
+# Speech windows faster-whisper decodes at once. On an 8-thread CPU, 8 transcribed 1.28x faster than one
+# window at a time, with as accurate a transcript and no more memory; 16 was no faster and used 1.4 GB more.
+# GPUs gain more from batching. A fixed size keeps the transcript the same from run to run.
+FW_BATCH = 8
 
 UNSUPPORTED = (
     "Local speech recognition needs an Apple Silicon Mac, or Windows or Linux on a 64-bit Intel/AMD "

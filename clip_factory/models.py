@@ -782,6 +782,7 @@ class Models:
             data["engine"] = engine or speech_backend.MLX
             if engine == speech_backend.FASTER_WHISPER:
                 data["device"] = self.speech_status()["device"]
+                data.setdefault("batch_size", speech_backend.FW_BATCH)
         try:
             validate_request(data)
         except (ValueError, TypeError, KeyError) as exc:
@@ -836,6 +837,7 @@ class Models:
             if not isinstance(result, dict):
                 raise TypeError("Invalid response")
             if action == "transcribe" and "device" in result:
+                result.pop("batch_size", None)  # how the worker decoded, not part of the transcript
                 self.last_speech_device = {
                     "device": result.pop("device"), "compute_type": result.pop("compute_type", None),
                 }

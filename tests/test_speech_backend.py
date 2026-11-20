@@ -318,11 +318,13 @@ def test_run_sends_engine_and_device_and_records_what_ran(speech_host, models, m
         assert command[0] == str(models.runtime / "Scripts" / "python.exe")
         sent.update(json.loads(request.read_text()))
         response.write_text(json.dumps({"text": " Hi", "language": "en", "segments": [], "device": "cpu",
-                                        "compute_type": "float32"}))
+                                        "compute_type": "float32", "batch_size": 8}))
 
     models.jobs.process.side_effect = process
     result = models.run("job", "whisper-turbo", "transcribe", audio=str(audio), language=None)
     assert sent["engine"] == "faster-whisper" and sent["device"] == "cpu"
+    # A fixed batch on every computer: the same audio gives the same transcript from run to run.
+    assert sent["batch_size"] == speech_backend.FW_BATCH == 8
     assert result == {"text": " Hi", "language": "en", "segments": []}
     assert models.speech_status()["last_run"] == {"device": "cpu", "compute_type": "float32"}
 
@@ -332,7 +334,8 @@ def test_worker_rejects_unknown_engine_or_device(tmp_path):
     audio.write_bytes(b"x")
     base = {"action": "transcribe", "model": str(tmp_path), "audio": str(audio)}
     inference_worker.validate_request({**base, "engine": "faster-whisper", "device": "cuda"})
-    for bad in ({"engine": "whisper.cpp"}, {"device": "metal"}):
+    inference_worker.validate_request({**base, "engine": "faster-whisper", "batch_size": 32})
+    for bad in ({"engine": "whisper.cpp"}, {"device": "metal"}, *({"batch_size": n} for n in (0, 33, True, 8.0, "8"))):
         with pytest.raises(ValueError):
             inference_worker.validate_request({**base, **bad})
 
@@ -350,11 +353,14 @@ class FakeWhisper:
 
     calls: ClassVar[list] = []
     cuda_fails = False
+    unloadable: ClassVar[set] = set()  # devices the weights cannot load on
 
     def __init__(self, path, *, device, compute_type, cpu_threads, local_files_only):
         self.device = device
         FakeWhisper.calls.append({"path": path, "device": device, "compute_type": compute_type,
                                   "threads": cpu_threads, "local_only": local_files_only})
+        if device in FakeWhisper.unloadable:
+            raise RuntimeError("Library cublas64_12.dll is not found")
 
     def transcribe(self, audio, **options):
         FakeWhisper.calls[-1].update(audio=audio, options=options)
@@ -371,11 +377,38 @@ class FakeWhisper:
         return segments(), SimpleNamespace(language="en")
 
 
+class FakeBatched:
+    """faster_whisper.BatchedInferencePipeline: each window of speech comes back as one segment."""
+
+    fails = False  # a batch too big for memory
+
+    def __init__(self, model):
+        self.model = model
+
+    def transcribe(self, audio, **options):
+        FakeWhisper.calls[-1].setdefault("batched", []).append(options)
+
+        def segments():
+            if FakeBatched.fails or (self.model.device == "cuda" and FakeWhisper.cuda_fails):
+                raise RuntimeError("CUDA failed with error out of memory")
+            words = [SimpleNamespace(word=w, start=s, end=e, probability=0.9)
+                     for w, s, e in ((" Hello", 0.5, 0.9), (" there.", 0.9, 1.3), (" Bye", 2.6, 2.8), (" now.", 2.8, 3.0))]
+            yield SimpleNamespace(start=0.5, end=3.0, text=" Hello there. Bye now.", words=words,
+                                  no_speech_prob=0.02, avg_logprob=-0.3)
+
+        return segments(), SimpleNamespace(language="en")
+
+
 @pytest.fixture
 def fake_whisper(monkeypatch):
     FakeWhisper.calls = []
     FakeWhisper.cuda_fails = False
-    monkeypatch.setitem(sys.modules, "faster_whisper", SimpleNamespace(WhisperModel=FakeWhisper))
+    FakeWhisper.unloadable = set()
+    FakeBatched.fails = False
+    monkeypatch.setitem(
+        sys.modules, "faster_whisper",
+        SimpleNamespace(WhisperModel=FakeWhisper, BatchedInferencePipeline=FakeBatched),
+    )
     cuda = Mock()
     monkeypatch.setattr(inference_worker, "load_cuda_libraries", cuda)
     return cuda
@@ -398,6 +431,7 @@ def test_worker_transcript_contract_matches_mlx(fake_whisper, tmp_path):
         ],
         "device": "cpu",
         "compute_type": "float32",
+        "batch_size": 1,
     }
     call = FakeWhisper.calls[0]
     assert call["local_only"] is True and call["device"] == "cpu" and call["compute_type"] == "float32"
@@ -437,6 +471,88 @@ def test_other_audio_formats_are_left_to_faster_whisper(fake_whisper, tmp_path):
                             "engine": "faster-whisper"})
     assert FakeWhisper.calls[0]["audio"] == str(stereo)
     assert inference_worker.read_wav(tmp_path / "missing.wav") is None
+
+
+def transcribe(tmp_path, **request):
+    audio = tmp_path / "speech.wav"
+    write_wav(audio)
+    return inference_worker.infer({"action": "transcribe", "model": str(tmp_path), "audio": str(audio),
+                                   "engine": "faster-whisper", "language": "en", **request})
+
+
+def test_batched_transcription_decodes_windows_together_and_keeps_sentence_lines(fake_whisper, tmp_path):
+    out = transcribe(tmp_path, device="cpu", batch_size=8)
+    # No timestamp tokens: with them, faster-whisper 1.2.1 drops a window's words after its last pair.
+    assert FakeWhisper.calls[0]["batched"] == [{"language": "en", "batch_size": 8, "word_timestamps": True,
+                                                "beam_size": 1, "vad_filter": True, "without_timestamps": True}]
+    assert "options" not in FakeWhisper.calls[0]  # never decoded one window at a time as well
+    assert [(s["start"], s["end"], s["text"]) for s in out["segments"]] == [
+        (0.5, 1.3, " Hello there."), (2.6, 3.0, " Bye now."),
+    ]
+    assert [w["word"] for w in out["segments"][1]["words"]] == [" Bye", " now."]
+    # The window's confidence goes with each line: the transcript cleanup reads it per line.
+    assert all((s["no_speech_prob"], s["avg_logprob"]) == (0.02, -0.3) for s in out["segments"])
+    assert out["text"] == " Hello there. Bye now." and (out["device"], out["batch_size"]) == ("cpu", 8)
+    json.dumps(inference_worker.json_value(out), allow_nan=False)
+
+
+def test_a_batch_that_fails_is_decoded_again_one_window_at_a_time(fake_whisper, tmp_path):
+    FakeBatched.fails = True
+    out = transcribe(tmp_path, device="cpu", batch_size=8)
+    assert len(FakeWhisper.calls) == 1  # the same weights, not loaded twice
+    assert FakeWhisper.calls[0]["options"]["hallucination_silence_threshold"] == 2.0
+    assert (out["device"], out["batch_size"]) == ("cpu", 1) and out["segments"][0]["text"] == " Hello there."
+
+
+def test_a_gpu_that_cannot_decode_hands_the_batch_to_the_cpu(fake_whisper, tmp_path):
+    FakeWhisper.cuda_fails = True
+    out = transcribe(tmp_path, device="cuda", batch_size=8)
+    gpu, cpu = FakeWhisper.calls
+    assert (gpu["device"], cpu["device"]) == ("cuda", "cpu")
+    assert len(gpu["batched"]) == 1 and "options" in gpu  # batched, then one window at a time, on the GPU
+    assert (out["device"], out["compute_type"], out["batch_size"]) == ("cpu", "float32", 8)
+
+
+def test_a_gpu_that_cannot_load_the_model_is_tried_once(fake_whisper, tmp_path):
+    FakeWhisper.unloadable = {"cuda"}
+    out = transcribe(tmp_path, device="cuda", batch_size=8)
+    assert [c["device"] for c in FakeWhisper.calls] == ["cuda", "cpu"]
+    assert (out["device"], out["batch_size"]) == ("cpu", 8)
+    FakeWhisper.calls = []
+    FakeWhisper.unloadable = {"cpu"}
+    with pytest.raises(RuntimeError, match="not found"):
+        transcribe(tmp_path, device="cpu", batch_size=8)
+    assert len(FakeWhisper.calls) == 1
+
+
+def spoken(text, *, step=0.3, pauses=()):
+    """A batched window as faster-whisper times it: step seconds a word, a 1.5 s pause after listed words."""
+    words, at = [], 0.0
+    for index, word in enumerate(text.split()):
+        words.append({"word": " " + word, "start": round(at, 2), "end": round(at + step, 2), "probability": 0.9})
+        at += step + (1.5 if index in pauses else 0.0)
+    return {"start": 0.0, "end": words[-1]["end"], "text": "".join(w["word"] for w in words), "words": words,
+            "avg_logprob": -0.2}
+
+
+def test_a_window_is_cut_into_sentences_not_at_titles_or_initials():
+    lines = inference_worker.sentences(spoken('Dr. Smith met the U.S. team. "Was it good?" she asked. Yes!'))
+    assert [line["text"] for line in lines] == [" Dr. Smith met the U.S. team.", ' "Was it good?"', " she asked.", " Yes!"]
+    assert [(line["start"], line["end"]) for line in lines[:2]] == [(0.0, 1.8), (1.8, 2.7)]
+    assert all(line["avg_logprob"] == -0.2 and "no_speech_prob" not in line for line in lines)
+
+
+def test_a_pause_ends_a_line_and_run_on_speech_is_cut_at_a_comma():
+    paused = inference_worker.sentences(spoken("so we went home and then nothing", pauses={3}))
+    assert [line["text"] for line in paused] == [" so we went home", " and then nothing"]
+    # Past 40 words, the line ends at its last comma; with no comma, where it reached 15 s.
+    run_on = inference_worker.sentences(spoken(" ".join(["word"] * 30 + ["comma,"] + ["word"] * 20), step=0.2))
+    assert [len(line["words"]) for line in run_on] == [31, 20]
+    slow = inference_worker.sentences(spoken(" ".join(["la"] * 45), step=0.5))
+    assert [len(line["words"]) for line in slow] == [30, 15]
+    assert [w for line in slow for w in line["words"]] == spoken(" ".join(["la"] * 45), step=0.5)["words"]
+    bare = {"start": 1.0, "end": 2.0, "text": " Hm.", "words": []}
+    assert inference_worker.sentences(bare) == [bare]
 
 
 # App-owned Python for Windows and Linux.

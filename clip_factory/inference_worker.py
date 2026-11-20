@@ -7,6 +7,7 @@ import json
 import math
 import numbers
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -17,6 +18,7 @@ MAX_IMAGES = 24
 MAX_BATCH = 64
 MAX_SCHEMA = 64_000
 MAX_RESPONSE = 4 * 1024**2
+MAX_SPEECH_BATCH = 32  # speech windows faster-whisper decodes together
 
 
 def validate_generation(request):
@@ -79,6 +81,9 @@ def validate_request(request):
             raise ValueError("Unsupported speech engine")
         if request.get("device", "cpu") not in {"cpu", "cuda"}:
             raise ValueError("Unsupported speech device")
+        batch = request.get("batch_size", 1)
+        if type(batch) is not int or not 1 <= batch <= MAX_SPEECH_BATCH:
+            raise ValueError("Invalid speech batch size")
     else:
         raise ValueError("Unsupported inference action")
 
@@ -215,61 +220,140 @@ def load_cuda_libraries():
                 ctypes.CDLL(str(library), mode=ctypes.RTLD_GLOBAL)
 
 
+# A batched window ends where a sentence does, not where a title or initial abbreviates ("Dr.", "U.S.").
+SENTENCE_END = (".", "?", "!", "\u2026", "\u3002", "\uff1f", "\uff01")
+SOFT_BREAK = (",", ";", ":", "\uff0c", "\u3001", "\uff1b", "\uff1a")
+CLOSERS = "\"')]}\u00bb\u201d\u2019"
+ABBREVIATIONS = frozenset({"mr.", "mrs.", "ms.", "dr.", "st.", "vs.", "etc.", "jr.", "sr.", "prof.", "no."})
+INITIALS = re.compile(r"(?:[A-Za-z]\.)+")
+
+
+def ends_sentence(word: str) -> bool:
+    token = word.strip().rstrip(CLOSERS)
+    return (
+        token.endswith(SENTENCE_END) and token.lower() not in ABBREVIATIONS and not INITIALS.fullmatch(token)
+    )
+
+
+def sentences(segment: dict, *, pause: float = 1.0, longest: float = 15.0, most_words: int = 40) -> list[dict]:
+    """One batched window (up to 30 s of speech) as sentence-sized segments.
+
+    Batched decoding returns each window as a single segment. Lines are cut after a sentence ends or where
+    the speaker pauses, and run-on speech at its last comma once a line passes 15 s or 40 words, so a
+    clip can start and end on a sentence and timed lines stay as short as sequential decoding makes them.
+    """
+    words = segment.get("words") or []
+    if not words:
+        return [segment]
+    pieces, current = [], []
+    for word, following in zip(words, [*words[1:], None]):
+        current.append(word)
+        if following is None:
+            break
+        if ends_sentence(word["word"]) or following["start"] - word["end"] >= pause:
+            pieces.append(current)
+            current = []
+        elif current[-1]["end"] - current[0]["start"] >= longest or len(current) >= most_words:
+            soft = [i for i, w in enumerate(current) if i >= 4 and w["word"].strip().endswith(SOFT_BREAK)]
+            cut = soft[-1] + 1 if soft else len(current)
+            pieces.append(current[:cut])
+            current = current[cut:]
+    pieces.append(current)
+    shared = {key: segment[key] for key in ("no_speech_prob", "avg_logprob") if key in segment}
+    return [
+        {"start": part[0]["start"], "end": part[-1]["end"], "text": "".join(w["word"] for w in part),
+         "words": part, **shared}
+        for part in pieces
+    ]
+
+
+def as_segment(piece) -> dict:
+    """A faster-whisper segment in the transcript shape MLX Whisper gives the app."""
+    segment = {
+        "start": float(piece.start),
+        "end": float(piece.end),
+        "text": piece.text,
+        "words": [
+            {"word": w.word, "start": float(w.start), "end": float(w.end), "probability": float(w.probability)}
+            for w in (piece.words or [])
+        ],
+    }
+    for key in ("no_speech_prob", "avg_logprob"):
+        if getattr(piece, key, None) is not None:
+            segment[key] = float(getattr(piece, key))
+    return segment
+
+
+# Greedy decoding like MLX Whisper; VAD skips silence (faster on the CPU, fewer invented lines).
+SEQUENTIAL = {
+    "word_timestamps": True, "beam_size": 1, "vad_filter": True, "condition_on_previous_text": False,
+    "hallucination_silence_threshold": 2.0,
+}
+# Batched decoding cuts speech at pauses into windows of up to 30 s and decodes several at once. Without
+# timestamp tokens: faster-whisper 1.2.1 drops a window's words after its last timestamp pair (in testing
+# the transcript lost a tenth of its words). Word timings still come from alignment, and sentences()
+# rebuilds the lines.
+BATCHED = {"word_timestamps": True, "beam_size": 1, "vad_filter": True, "without_timestamps": True}
+
+
+def decode(model, audio, language, batch_size):
+    """Segments and transcription info. Decoding happens while iterating, so its errors surface here."""
+    if batch_size > 1:
+        from faster_whisper import BatchedInferencePipeline
+
+        pieces, info = BatchedInferencePipeline(model).transcribe(
+            audio, language=language, batch_size=batch_size, **BATCHED
+        )
+        return [part for piece in pieces for part in sentences(as_segment(piece))], info
+    pieces, info = model.transcribe(audio, language=language, **SEQUENTIAL)
+    return [as_segment(piece) for piece in pieces], info
+
+
 def transcribe_faster_whisper(request, model_path):
     from faster_whisper import WhisperModel
 
     samples = read_wav(request["audio"])
     audio = samples if samples is not None else request["audio"]
-    options = {
-        "language": request.get("language") or None,
-        "word_timestamps": True,
-        # Greedy decoding like MLX Whisper; VAD skips silence (faster on the CPU, fewer invented lines).
-        "beam_size": 1,
-        "vad_filter": True,
-        "condition_on_previous_text": False,
-        "hallucination_silence_threshold": 2.0,
-    }
-    attempts = [("cuda", "float16")] if request.get("device") == "cuda" else []
+    batch = request.get("batch_size", 1)
+    # A batch too big for this computer's memory is retried one window at a time on the same device.
+    sizes = [batch, 1] if batch > 1 else [1]
+    attempts = [("cuda", "float16", size) for size in sizes] if request.get("device") == "cuda" else []
     # float32 on the CPU, not int8: in testing, int8 runs of the same audio differed and some lost whole
     # sentences; float32 (about half int8's speed) gave the identical, complete transcript every run.
-    attempts.append(("cpu", "float32"))
-    for device, compute_type in attempts:
+    attempts += [("cpu", "float32", size) for size in sizes]
+    model = loaded = failure = None
+    unusable = set()
+    for device, compute_type, size in attempts:
+        if device in unusable:
+            continue
         try:
-            if device == "cuda":
-                load_cuda_libraries()
-            model = WhisperModel(
-                model_path, device=device, compute_type=compute_type, cpu_threads=os.cpu_count() or 4,
-                local_files_only=True,
-            )
-            pieces, info = model.transcribe(audio, **options)
-            pieces = list(pieces)  # Decoding happens while iterating: CUDA errors surface here.
-            break
-        except Exception:
-            if device == "cpu":
-                raise
-            # A missing or mismatched CUDA library: the CPU still transcribes, only slower.
-    segments = []
-    for s in pieces:
-        segment = {
-            "start": float(s.start),
-            "end": float(s.end),
-            "text": s.text,
-            "words": [
-                {"word": w.word, "start": float(w.start), "end": float(w.end), "probability": float(w.probability)}
-                for w in (s.words or [])
-            ],
+            if loaded != (device, compute_type):
+                model = loaded = None  # one set of weights in memory at a time
+                try:
+                    if device == "cuda":
+                        load_cuda_libraries()
+                    model = WhisperModel(
+                        model_path, device=device, compute_type=compute_type, cpu_threads=os.cpu_count() or 4,
+                        local_files_only=True,
+                    )
+                except Exception:
+                    unusable.add(device)
+                    raise
+                loaded = (device, compute_type)
+            segments, info = decode(model, audio, request.get("language") or None, size)
+        except Exception as exc:  # noqa: BLE001 - the next attempt is slower, never wrong; the last one raises
+            # A missing or mismatched CUDA library, or a batch too big: the CPU still transcribes.
+            failure = exc
+            continue
+        return {
+            "text": "".join(s["text"] for s in segments),
+            "language": info.language,
+            "segments": segments,
+            "device": device,
+            "compute_type": compute_type,
+            "batch_size": size,
         }
-        for key in ("no_speech_prob", "avg_logprob"):
-            if getattr(s, key, None) is not None:
-                segment[key] = float(getattr(s, key))
-        segments.append(segment)
-    return {
-        "text": "".join(s["text"] for s in segments),
-        "language": info.language,
-        "segments": segments,
-        "device": device,
-        "compute_type": compute_type,
-    }
+    raise failure
 
 
 def infer(request):
