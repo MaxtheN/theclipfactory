@@ -179,6 +179,10 @@ describe("production line on the Factory screen", () => {
     const blocked = screen.getByRole("button", { name: "Find clips" });
     expect(blocked).toBeDisabled();
     expect(blocked).toHaveAttribute("title", "Pick your clip style first.");
+    // The reason is on screen and tied to the button, not only in a hover tooltip, and the
+    // row no longer claims to be ready.
+    expect(blocked).toHaveAccessibleDescription("Pick your clip style first.");
+    expect(screen.queryByText("Ready to make clips")).toBeNull();
     first.unmount();
     const onSettings = vi.fn();
     home(workspace(), factory({}, { model: null }), onSettings);
@@ -189,6 +193,18 @@ describe("production line on the Factory screen", () => {
     // The missing prerequisite links to the Settings section that resolves it.
     fireEvent.click(screen.getByRole("button", { name: "Open Settings → Models" }));
     expect(onSettings).toHaveBeenCalledOnce();
+    expect(productionApi.campaignProduce).not.toHaveBeenCalled();
+  });
+
+  it("says agents need the desktop app in the review preview instead of failing the request", () => {
+    mode.preview = true;
+    home(workspace(), factory());
+    const blocked = screen.getByRole("button", { name: "Find clips" });
+    expect(blocked).toBeDisabled();
+    expect(blocked).toHaveAccessibleDescription(
+      "Agents run in the desktop app, not in this preview.",
+    );
+    fireEvent.click(blocked);
     expect(productionApi.campaignProduce).not.toHaveBeenCalled();
   });
 

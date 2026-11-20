@@ -961,9 +961,16 @@ export function FactoryHome({
               );
               const working =
                 status?.state === "queued" || status?.state === "working";
+              // Why Find clips cannot start, said in the row rather than only on hover.
+              const blocker = !direction
+                ? "Pick your clip style first."
+                : !modelId
+                  ? "Set up a local model in Settings → Models."
+                  : reviewPreview
+                    ? "Agents run in the desktop app, not in this preview."
+                    : (!status?.can_produce && status?.blocked_reason) || "";
               const ready =
-                !!direction &&
-                !!modelId &&
+                !blocker &&
                 !!status?.can_produce &&
                 !w.busy &&
                 !w.loading;
@@ -994,7 +1001,10 @@ export function FactoryHome({
                       ? `${own.length} clip${own.length === 1 ? "" : "s"} generated`
                       : status.blocked_code?.startsWith("asr_") && status.blocked_reason
                         ? status.blocked_reason
-                        : "Ready to make clips";
+                        : blocker || "Ready to make clips";
+              // Find clips is the row's action and cannot start: tie the button to its reason.
+              const findBlocked = !!status && !working && !unreviewed.length && !!blocker;
+              const reasonId = `factory-reason-${source.id}`;
               let action;
               if (working && status?.job_id)
                 action = (
@@ -1024,13 +1034,8 @@ export function FactoryHome({
                     type="button"
                     className="gf-button secondary compact"
                     disabled={!ready}
-                    title={
-                      !direction
-                        ? "Pick your clip style first."
-                        : !modelId
-                          ? "Set up a local model in Settings → Models."
-                          : status.blocked_reason || undefined
-                    }
+                    title={blocker || undefined}
+                    aria-describedby={findBlocked ? reasonId : undefined}
                     onClick={() => void makeClips(source)}
                   >
                     Find clips
@@ -1093,9 +1098,18 @@ export function FactoryHome({
                     <div className="gf-footage-line">
                       <div className="source-card-body">
                         {working && <Stages source={status} />}
-                        <p className="gf-footage-status" role="status">
+                        <p
+                          className="gf-footage-status"
+                          role="status"
+                          id={findBlocked && headline === blocker ? reasonId : undefined}
+                        >
                           {headline}
                         </p>
+                        {findBlocked && headline !== blocker && (
+                          <p className="gf-footage-status" id={reasonId}>
+                            {blocker}
+                          </p>
+                        )}
                         {typeof status.progress === "number" && (
                           <progress
                             aria-label={`Progress for ${source.name}`}
