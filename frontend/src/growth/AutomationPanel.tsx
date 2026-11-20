@@ -445,18 +445,14 @@ export function AutomationPanel({
     >
       <div className="gf-automation-heading">
         <div>
-          <span className="gf-kicker">
-            {full ? "The learning loop" : "Instagram accounts"}
-          </span>
+          {full && <span className="gf-kicker">The learning loop</span>}
           <h2 id="automation-title">
-            {full
-              ? "A better next draft. With receipts."
-              : "Connect, track and measure"}
+            {full ? "A better next draft. With receipts." : "Instagram"}
           </h2>
           <p>
             {full
               ? "Real post metrics → one creative hypothesis → a new draft for your review."
-              : "Choose the account, how long to wait before measuring, and which approved clip each post uses."}
+              : "Choose the account and when to measure each post."}
           </p>
         </div>
         <span className="gf-automation-policy">
@@ -580,11 +576,11 @@ export function AutomationPanel({
       {!accountId && (
         <p className="gf-automation-help">
           {selectedAccounts.length
-            ? "Choose your verified Instagram account to enable Start the loop."
-            : "Connect your Instagram account below. Then Start the loop becomes available."}
+            ? "Choose an account to start the loop."
+            : "Connect an account below to start the loop."}
         </p>
       )}
-      <details open={selectedAccounts.length === 0 || undefined}>
+      <details className="gf-ui-disclosure" open={selectedAccounts.length === 0 || undefined}>
         <summary>Connect an Instagram account</summary>
         <ConnectInstagram
           profileId={w.profileId}
@@ -597,7 +593,7 @@ export function AutomationPanel({
           }}
           onNeedsDashboard={() => setAdvanced(true)}
         />
-        <details
+        <details className="gf-ui-disclosure"
           open={advanced || !configured || undefined}
           onToggle={(e) => setAdvanced(e.currentTarget.open)}
         >
@@ -682,7 +678,7 @@ export function AutomationPanel({
         </details>
       </details>
       {!!selectedAccounts.length && (
-        <details>
+        <details className="gf-ui-disclosure">
           <summary>Find a post from your Instagram account</summary>
           <p>
             Your six latest posts. Not used for learning until you match a clip.
@@ -742,7 +738,7 @@ export function AutomationPanel({
           {postAccount === accountId && <p>{postLimits}</p>}
         </details>
       )}
-      <details>
+      <details className="gf-ui-disclosure">
         <summary>Track an existing published clip</summary>
         <p>
           Match an approved clip to its Instagram media ID. Nothing is published.
@@ -902,7 +898,7 @@ export function AutomationPanel({
                   Editing rule proposed · waiting for your approval
                 </span>
               )}
-              <details>
+              <details className="gf-ui-disclosure">
                 <summary>Evidence & execution receipt</summary>
                 <pre>{JSON.stringify(row, null, 2)}</pre>
               </details>
@@ -994,7 +990,7 @@ export function AutomationPanel({
         )}
       </section>}
       {!!snapshots.length && (
-        <details>
+        <details className="gf-ui-disclosure">
           <summary>
             Observed metrics · {snapshots.length} saved readings
           </summary>

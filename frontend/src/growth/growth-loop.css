@@ -20,6 +20,7 @@
 .gf-growth-clip-list { display: flex; flex-direction: column; gap: 12px; }
 .gf-growth-clip-list[open] > summary { margin-bottom: 0; }
 .gf-growth-clip-list summary { font-size: 13px; cursor: pointer; }
+.gf-app .gf-growth-clip-list.gf-ui-disclosure > :not(summary) { margin-top: 0; }
 .gf-growth-clip-list > div { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 12px; font-size: 13px; }
 
 .gf-growth-receipts h4 { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin: 0; font-size: 14px; }

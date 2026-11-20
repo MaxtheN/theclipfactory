@@ -251,6 +251,45 @@ details.gf-ui-list-row { flex-direction: column; align-items: stretch; gap: var(
 details.gf-ui-list-row > summary { cursor: pointer; font-weight: 500; }
 .gf-ui-list-row small { color: var(--subtle-foreground); font-size: 12px; }
 
+/* Disclosure: a plain summary row with a chevron, the body spaced below it.
+   Use on <details className="gf-ui-disclosure"> instead of the native marker. */
+.gf-app .gf-ui-disclosure,
+.gf-ui-disclosure { margin: 0; padding: 0; }
+.gf-app .gf-ui-disclosure > summary,
+.gf-ui-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: none;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.gf-ui-disclosure > summary::-webkit-details-marker { display: none; }
+.gf-ui-disclosure > summary::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  background: var(--muted-foreground);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3.5 10.5 8 6 12.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3.5 10.5 8 6 12.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform 150ms ease;
+}
+.gf-ui-disclosure[open] > summary::before { transform: rotate(90deg); }
+.gf-app .gf-ui-disclosure > summary:hover,
+.gf-ui-disclosure > summary:hover { color: var(--foreground); background: none; }
+.gf-ui-disclosure > summary:hover::before { background: var(--foreground); }
+.gf-ui-disclosure > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.gf-app .gf-ui-disclosure > :not(summary),
+.gf-ui-disclosure > :not(summary) { margin-top: var(--section-head-gap, 12px); margin-bottom: 0; }
+@media (prefers-reduced-motion: reduce) { .gf-ui-disclosure > summary::before { transition: none; } }
+
 /* Text-sized link button used inside rows and empty lines. */
 .gf-app .gf-ui-text-button,
 .gf-ui-text-button {

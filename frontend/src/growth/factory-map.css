@@ -64,12 +64,12 @@
 .gf-fmap-head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--gf-s4, 16px) var(--gf-s5, 24px);
   flex-wrap: wrap;
 }
 .gf-fmap-head h2 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 20px;
   font-weight: 640;
   letter-spacing: -0.3px;
@@ -85,11 +85,7 @@
 .gf-fmap-actions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 10px;
-  border: 1px solid var(--fmap-line);
-  background: var(--fmap-card);
+  gap: 8px;
 }
 .gf-fmap-actions-rule {
   width: 1px;
@@ -100,12 +96,16 @@
 .gf-fmap-live {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  height: 26px;
   padding: 0 10px;
-  min-height: 28px;
-  font-size: 12.5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full, 999px);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
-  color: var(--fmap-muted);
+  color: var(--muted-foreground);
 }
 .gf-fmap-live i {
   width: 7px;
@@ -1090,11 +1090,43 @@
   }
 }
 /* The default view is a single growth loop. Engine anatomy is an optional disclosure. */
-.gf-fmap-overview{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:0;margin:6px 0;list-style:none;gap:0}
-.gf-fmap-overview li{min-width:0;position:relative;border-top:2px solid var(--fmap-line)}
-.gf-fmap-overview li:not(:last-child)::after{content:"";position:absolute;right:0;top:-4px;width:6px;height:6px;border-radius:50%;background:var(--fmap-line)}
-.gf-fmap-overview button{width:100%;min-height:105px;display:flex;flex-direction:column;gap:7px;align-items:flex-start;text-align:left;padding:13px 14px 12px 0;background:transparent;border:0;color:var(--fmap-muted);cursor:pointer;font:inherit}
-.gf-fmap-overview-step{font-size:10px;letter-spacing:.06em;font-variant-numeric:tabular-nums}.gf-fmap-overview strong{font-size:13px;color:var(--fmap-ink);font-weight:600;letter-spacing:-.15px}.gf-fmap-overview button>span:last-child{font-size:11px;line-height:1.5;max-width:24ch}.gf-fmap-overview li.is-current{border-top-color:#9c41ae}.gf-fmap-overview li.is-current .gf-fmap-overview-step{color:#af85f3;font-weight:650}.gf-fmap-overview button:focus-visible{outline:2px solid #af85f3;outline-offset:2px;border-radius:4px}.gf-fmap-overview li.is-transition{animation:gf-loop-overview-confirm 750ms ease-out 1}
-.gf-fmap-overview-detail{padding:16px 20px;border:1px solid var(--fmap-line);border-radius:12px;background:var(--fmap-card)}.gf-fmap-overview-detail header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:12px}.gf-fmap-overview-detail h3{font-size:14px;margin:0}.gf-fmap-overview-detail header>span,.gf-fmap-overview-detail p{font-size:12px;color:var(--fmap-muted);margin:0}.gf-fmap-overview-detail dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 24px;margin:0}.gf-fmap-overview-detail dl>div{min-width:0}.gf-fmap-overview-detail dt{font-size:11px;color:var(--fmap-muted)}.gf-fmap-overview-detail dd{font-size:12px;line-height:1.6;margin:3px 0 0;color:var(--fmap-ink)}
-.gf-fmap-engine-details{border-top:1px solid var(--fmap-line);padding-top:14px}.gf-fmap-engine-details>summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--fmap-ink);min-height:28px}.gf-fmap-engine-details>summary>span{font-size:11px;font-weight:400;color:var(--fmap-muted);margin-left:10px}.gf-fmap-engine-details[open]>.gf-fmap-canvas{margin-top:12px}.gf-fmap-engine-details .gf-fmap-ledger{margin-top:14px}
-@keyframes gf-loop-overview-confirm{from{border-top-color:#514360}to{border-top-color:#9c41ae}}@media(max-width:700px){.gf-fmap-overview{grid-template-columns:1fr;gap:0}.gf-fmap-overview li{border-top:0;border-left:2px solid var(--fmap-line)}.gf-fmap-overview li.is-current{border-left-color:#9c41ae}.gf-fmap-overview li:not(:last-child)::after{display:none}.gf-fmap-overview button{padding:8px 12px;min-height:60px;display:grid;grid-template-columns:22px 1fr;gap:2px 8px}.gf-fmap-overview button>span:last-child{grid-column:2;max-width:none}.gf-fmap-overview-detail header{align-items:flex-start;flex-direction:column;gap:5px}.gf-fmap-engine-details>summary>span{display:block;margin-left:16px}}@media(prefers-reduced-motion:reduce){.gf-fmap-overview li.is-transition{animation:none}}
+/* Stage overview: five equal stage cards; the selected card's stations are listed below. */
+.gf-fmap-overview { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.gf-fmap-overview li { display: flex; min-width: 0; }
+.gf-app .gf-fmap-overview button { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 6px; width: 100%; min-height: 96px; margin: 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-card, 12px); background: var(--surface); color: var(--muted-foreground); font: inherit; text-align: left; cursor: pointer; transition: background var(--fmap-fast) var(--fmap-ease), border-color var(--fmap-fast) var(--fmap-ease); }
+.gf-app .gf-fmap-overview button:hover { background: var(--surface-raised); border-color: var(--border-control); }
+.gf-app .gf-fmap-overview button[aria-pressed="true"] { background: color-mix(in srgb, var(--gf-violet-400) 10%, var(--surface)); border-color: var(--gf-violet-600); box-shadow: inset 0 0 0 1px var(--gf-violet-600); }
+.gf-app .gf-fmap-overview button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.gf-fmap-overview-step { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; font-variant-numeric: tabular-nums; color: var(--subtle-foreground); }
+.gf-fmap-overview strong { font-size: 14px; font-weight: 600; letter-spacing: -.15px; color: var(--foreground); }
+.gf-fmap-overview button > span:last-child { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 12px; line-height: 1.45; color: var(--muted-foreground); }
+.gf-fmap-overview button[aria-pressed="true"] .gf-fmap-overview-step { color: var(--accent-text); }
+.gf-fmap-overview li.is-current .gf-fmap-overview-step::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--action); }
+.gf-fmap-overview li.is-transition button { animation: gf-loop-overview-confirm 750ms ease-out 1; }
+@keyframes gf-loop-overview-confirm { from { border-color: var(--gf-violet-800); } to { border-color: var(--gf-violet-400); } }
+
+/* Selected stage: one row per station, with its state and a way into its sheet. */
+.gf-fmap-stage-rows { display: grid; gap: 8px; }
+.gf-fmap-stage .gf-ui-list-row-body strong { font-weight: 550; color: var(--foreground); }
+.gf-fmap-stage .gf-ui-list-row-body span { font-size: 12px; color: var(--muted-foreground); }
+.gf-fmap-stage-actions { display: flex; align-items: center; gap: 16px; }
+.gf-fmap-stage-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); white-space: nowrap; }
+.gf-fmap-stage-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--status-neutral); }
+.gf-fmap-stage-state[data-state="active"]::before { background: var(--status-running); }
+.gf-fmap-stage-state[data-state="done"]::before { background: var(--status-success); }
+.gf-fmap-stage-state[data-state="waiting"]::before { background: var(--status-warning); }
+.gf-fmap-stage-state[data-state="failed"]::before { background: var(--status-danger); }
+
+.gf-fmap-engine-details { border-top: 1px solid var(--divider); padding-top: 12px; }
+.gf-fmap-engine-details > summary > span { font-size: 11px; font-weight: 400; color: var(--muted-foreground); margin-left: 10px; }
+
+@media (max-width: 1100px) { .gf-fmap-overview { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .gf-fmap-overview { grid-template-columns: 1fr; }
+  .gf-app .gf-fmap-overview button { display: grid; grid-template-columns: 28px 1fr; gap: 2px 8px; min-height: 0; padding: 12px 14px; }
+  .gf-fmap-overview-step { grid-row: 1 / span 2; }
+  .gf-fmap-overview button > span:last-child { grid-column: 2; }
+  .gf-fmap-stage .gf-ui-list-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .gf-fmap-engine-details > summary > span { display: block; margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .gf-fmap-overview li.is-transition button { animation: none; } .gf-app .gf-fmap-overview button { transition: none; } }

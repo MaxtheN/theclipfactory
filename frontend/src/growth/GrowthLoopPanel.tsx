@@ -178,7 +178,7 @@ function GrowthLoopBody({ profileId, campaignId, strategyVersionId, clips, visib
           </Section>
         </Panel>
       </Grid>}
-      {view && scoped.length > 0 && <details className="gf-growth-clip-list"><summary>Inspect clip quality ({scoped.length})</summary><Stack gap="xs">{scoped.map(c => <ListRow key={c.id} action={<button type="button" className="gf-ui-text-button" onClick={() => setScoreClip(c)}>Scorecard<span className="gf-growth-sr"> for {c.hook || c.name}</span></button>}><span>{c.hook || c.name}</span>{tasteNote(c) && <small className="gf-growth-note">{tasteNote(c)}</small>}</ListRow>)}</Stack></details>}
+      {view && scoped.length > 0 && <details className="gf-growth-clip-list gf-ui-disclosure"><summary>Inspect clip quality ({scoped.length})</summary><Stack gap="xs">{scoped.map(c => <ListRow key={c.id} action={<button type="button" className="gf-ui-text-button" onClick={() => setScoreClip(c)}>Scorecard<span className="gf-growth-sr"> for {c.hook || c.name}</span></button>}><span>{c.hook || c.name}</span>{tasteNote(c) && <small className="gf-growth-note">{tasteNote(c)}</small>}</ListRow>)}</Stack></details>}
       {view && <Section as="div" level={3} title="Loop history" count={loops.length || undefined} className="gf-growth-receipts" infoLabel="About loop history" info={<p>Real production loops for this campaign. Rehearsal data is kept separate.</p>}>
         {!loops.length && <EmptyLine>No loops yet.</EmptyLine>}
         {loops.map(loop => <Panel as="article" padding="compact" key={loop.id}>

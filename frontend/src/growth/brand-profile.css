@@ -24,8 +24,15 @@
 .gf-app .gf-brand-quick-links .gf-link-row { flex: 0 1 auto; min-height: 32px; width: auto; padding: 0; border: 0; background: transparent; font-size: 12px; color: var(--material-secondary); }
 .gf-app .gf-brand-quick-links .gf-link-row:hover { color: var(--material-ink); }
 .gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings { margin-left: 194px; padding: 0; border: 0; border-top: 1px solid var(--material-divider); border-radius: 0; box-shadow: none; background: transparent; backdrop-filter: none; }
-.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings > summary { padding: 16px 0; font-size: 12px; }
-.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings .gf-disclosure-body { padding: 0 0 16px; }
+.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings > summary { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0; border-radius: 0; background: transparent; color: var(--foreground); font-size: 13px; font-weight: 600; }
+.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings > summary:is(:hover, :active, :focus-visible) { background: transparent; color: var(--foreground); }
+.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings > summary svg { color: var(--muted-foreground); }
+.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings[open] > summary svg:last-child { transform: rotate(180deg); }
+.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings .gf-disclosure-body { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 4px 0 24px; }
+.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings .gf-disclosure-body > * { margin: 0; }
+.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings .gf-disclosure-body > .gf-field { align-self: stretch; max-width: 640px; }
+.gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings .gf-advanced-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; }
 @keyframes gf-profile-summary-in { from { opacity: .5; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 @media (max-width: 680px) { .gf-app .gf-brand-overview { grid-template-columns: 1fr; gap: 16px; } .gf-profile-sections { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 0; } .gf-app .gf-brand-quick-links { padding-left: 0; } .gf-app .gf-channel-settings-grid.gf-brand-profile > .gf-advanced-settings { margin-left: 0; } .gf-profile-summary { padding: 22px; } }
 @media (prefers-reduced-motion: reduce) { .gf-profile-summary { animation: none; } .gf-app .gf-profile-sections button { transition: none; } }
