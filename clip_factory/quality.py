@@ -25,6 +25,7 @@ MIN_SECONDS, MAX_SECONDS = 7.0, 90.0
 BLACK_SECONDS, FROZEN_SECONDS = 1.0, 2.0
 VIDEO_CODECS = {"h264", "hevc"}
 GATE_VERSION = 4
+MAX_BYTES = MAX_VIDEO_BYTES  # the smallest platform limit (Instagram Reels)
 
 
 def detect_black_frozen(path: Path, *, timeout: float = 120) -> dict | None:
@@ -116,7 +117,7 @@ def evaluate(clip: dict, path: Path, *, expected_sha256: str | None = None,
                              "Caption timing was not checked for this render; burned captions alone do not verify it."))
     try:
         size = path.stat().st_size
-        checks.append(_check("size", "Within 300 MB posting limit", "pass" if 0 < size <= MAX_VIDEO_BYTES else "fail",
+        checks.append(_check("size", "Within 300 MB posting limit", "pass" if 0 < size <= MAX_BYTES else "fail",
                              f"{size / 1048576:.1f} MB"))
     except OSError:
         checks.append(_check("size", "Within 300 MB posting limit", "fail", "File is unreadable."))

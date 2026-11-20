@@ -234,7 +234,7 @@ def test_connect_binds_the_one_new_account_and_callback_needs_no_token(api):
 
 
 def test_two_new_accounts_are_ambiguous_and_need_an_explicit_binding(api):
-    session, app, server, _sha = api
+    session, _app, server, _sha = api
     body = session.post("/api/posting/connect", json={"platform": "youtube", "profile_id": "prof-1"}).json()
     first, second = zernio_id("yt-1"), zernio_id("yt-2")
     server.remote += [{"id": first, "platform": "youtube", "connected": True},
@@ -273,7 +273,7 @@ def test_disconnect_revokes_upstream_and_reconnect_needs_binding_again(api):
 
 
 def test_tiktok_creator_info_is_read_through_the_server(api):
-    session, app, server, _sha = api
+    session, app, _server, _sha = api
     tiktok = zernio_id("tiktok-2")
     app.state.store.put("connected_accounts", {"id": tiktok, "profile_id": "prof-1", "provider": "zernio",
                                                "platform": "tiktok", "zernio_account_id": tiktok,
