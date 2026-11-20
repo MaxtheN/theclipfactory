@@ -23,6 +23,8 @@ import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
 import { QuickActions, type QuickAction } from "./QuickActions";
 import { PlanBadge, UpgradePrompt } from "./PlanBilling";
+import { HelpButton } from "./Help";
+import { requestHelp } from "./guideLinks";
 import { BrandMark } from "./BrandMark";
 import { Dormant } from "./Dormant";
 import "./tokens.css";
@@ -491,6 +493,16 @@ export function GrowthApp() {
       run: () => go("settings", { section: "plan" }),
     },
     {
+      id: "help",
+      label: "Help",
+      icon: "info",
+      group: "App",
+      disabled: blocked,
+      keywords: "help guide docs documentation manual how support faq tutorial",
+      hint: "Open the user guide in your browser",
+      run: () => requestHelp(),
+    },
+    {
       id: "refresh",
       label: "Refresh",
       icon: "refresh",
@@ -612,6 +624,7 @@ export function GrowthApp() {
                 <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
                 <span>Settings</span>
               </button>
+              <HelpButton disabled={blocked} />
               <PlanBadge
                 disabled={blocked || !usable || onboarding}
                 onOpen={() => go("settings", { section: "plan" })}
