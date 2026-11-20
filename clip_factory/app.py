@@ -571,6 +571,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     def valid_session(value: str) -> bool:
         return hmac.compare_digest(value.encode("utf-8"), auth.encode("utf-8"))
 
+    from .billing import install_gate as install_plan_gate
+
+    # Plan Limits (billing.py) run inside the session check below: middleware added later runs first.
+    install_plan_gate(app)
+
     @app.middleware("http")
     async def local_session(request: Request, call_next):
         if request.url.hostname not in {"127.0.0.1", "localhost", "::1"}:
@@ -3064,6 +3069,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     from .cloud_api import install as install_cloud_api
 
     install_cloud_api(app, lambda: default_account(store))
+
+    from .billing import install as install_billing
+
+    # Plans: the Entitlement confirmed by the cloud ``billing`` function, local Plan Limits, Checkout/Portal.
+    install_billing(app, store, app.state.cloud_account, open_url=lambda url: runtime.open_url(url))
 
     from .publish_api import install as install_publish_api
 

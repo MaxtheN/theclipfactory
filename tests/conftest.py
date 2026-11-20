@@ -134,3 +134,21 @@ def speech_host(monkeypatch):
 def mac_host(speech_host):
     """The Apple Silicon behaviour the MLX tests describe, on every CI runner."""
     speech_host("Darwin", "arm64")
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "plans: apply real Plan Limits (other tests run with every limit lifted)")
+
+
+@pytest.fixture(autouse=True)
+def unlimited_plan(request, monkeypatch):
+    """The bundled cloud config makes every test app signed out, i.e. on the Free plan. Tests not about
+    plans run with every limit lifted; tests marked ``plans`` (tests/test_billing.py) get the real rules."""
+    if request.node.get_closest_marker("plans"):
+        return
+    from clip_factory import billing
+
+    lifted = {**billing.free_entitlement("confirmed"), "plan": "business", "name": "Business",
+              "limits": {"brands": 10**6, "clips_per_month": None, "posting": True, "connected_accounts": 10**6,
+                         "factory_builder": True}}
+    monkeypatch.setattr(billing.EntitlementService, "current", lambda self, refresh=False: dict(lifted))
