@@ -28,6 +28,8 @@
 .gf-results-story strong { font-size: 13px; font-weight: 600; }
 .gf-results-story small { font-size: 11px; color: var(--rs-muted); line-height: 1.45; }
 .gf-app .gf-results-now { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--rs-line); color: var(--rs-ink); font-size: 16px; font-weight: 550; line-height: 1.5; letter-spacing: -.2px; }
+/* The way to the approvals the headline mentions; sits at its own width under the headline. */
+.gf-app .gf-results-review { align-self: flex-start; justify-self: start; }
 .gf-results-now > span { font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--rs-muted); }
 .gf-results-workspace-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
 .gf-results-workspace-switch { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px; border-radius: 10px; border: 1px solid var(--rs-line); background: #2d2d2d; }

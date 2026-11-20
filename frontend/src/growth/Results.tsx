@@ -957,6 +957,7 @@ function PostedClips({
                 {row.postedAt
                   ? ` · posted ${new Date(row.postedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
                   : ""}
+                {row.untitled && row.mediaId ? ` · post ID ${row.mediaId}` : ""}
               </span>
             </div>
             {row.demo && (
@@ -1245,6 +1246,16 @@ export function Results({
     now,
   });
   const [moreOpen, setMoreOpen] = useState(false);
+  const more = useRef<HTMLDetailsElement>(null);
+  const toReview = pendingCount + drafts.length;
+  // "Waiting for your approval" leads to the approvals: open them, bring them into view, focus them.
+  const openReview = () => {
+    setMoreOpen(true);
+    window.setTimeout(() => {
+      more.current?.scrollIntoView?.({ block: "start" });
+      more.current?.querySelector<HTMLElement>("summary")?.focus({ preventScroll: true });
+    }, 0);
+  };
   const [demoShown, setDemoShown] = useState(demoOpen);
   const demoPanel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1338,6 +1349,12 @@ export function Results({
       )}
       {demoView && sim && <DemoOutcome demo={demoView} sim={sim} onReplay={demoOpen ? undefined : onRehearse} />}
       {!demoMode && <p id="gf-results-now" className="gf-results-now" role="status">{story.headline}</p>}
+      {!demoMode && toReview > 0 && (
+        <button type="button" className="gf-button secondary compact gf-results-review" aria-describedby="gf-results-now" onClick={openReview}>
+          Review and approve
+          <Icon name="arrow" size={14} />
+        </button>
+      )}
       {!demoMode && posted === 0 && (
         <section className="gf-results-empty gf-results-start" aria-labelledby="gf-results-start-title">
           <div>
@@ -1385,8 +1402,8 @@ export function Results({
           </button>
         </div>
       )}
-      {!demoMode && <details className="gf-results-more gf-ui-disclosure" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
-        <summary>Strategist and tools{pendingCount + drafts.length > 0 ? ` · ${pendingCount + drafts.length} to review` : ""}</summary>
+      {!demoMode && <details ref={more} className="gf-results-more gf-ui-disclosure" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
+        <summary>Strategist and tools{toReview > 0 ? ` · ${toReview} to review` : ""}</summary>
       {visible && w.profileId && (
         <StrategistPanel
           key={w.profileId}
