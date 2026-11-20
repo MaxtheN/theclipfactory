@@ -572,6 +572,11 @@
   padding: var(--card-pad);
   border-radius: var(--radius-card);
 }
+/* Notices under the drop box (needs a local model, import errors, success) keep
+   the standard gap from the box and from each other. */
+.gf-app.gf-flow-app .gf-factory-home > .gf-message {
+  margin: var(--stack-gap, 16px) 0 0;
+}
 .gf-app.gf-flow-app .gf-footage-list,
 .gf-app.gf-flow-app .gf-flow-empty {
   border-radius: var(--radius-card);

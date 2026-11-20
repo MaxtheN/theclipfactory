@@ -918,7 +918,7 @@ export function FactoryMap({
               const members = model.stations.filter((s) => s.family === family);
               const done = members.filter((s) => s.state === "done").length;
               return (
-                <div key={family} className="gf-fmap-col" role="group" aria-label={FAMILY_LABEL[family]}>
+                <div key={family} className={`gf-fmap-col${index === overview ? " is-selected" : ""}`} role="group" aria-label={FAMILY_LABEL[family]}>
                   <div className="gf-fmap-phase">
                     <span className="gf-fmap-phase-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
                     <span>{FAMILY_LABEL[family]}</span>
