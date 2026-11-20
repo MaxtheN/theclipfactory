@@ -114,6 +114,8 @@ human approve → post to Instagram → measure → learn → better next clips.
   patterns, strategist ideas use cloud; clip agents + scene descriptions only
   when "Use cloud model for clip agents too" (+ "still frames") is on. Haiku
   runs with reasoning off; Sonnet needs `reasoning.effort: low` (fixed).
+- **Posting server** (2026-11-20): a Zernio-backed Edge Function, live on `spdtisizhcepmsogjvnr`; see
+  [posting-server.md](posting-server.md). The engine does not call it yet (WO-23).
 - **Posting** (`publisher.py`, `post_package.py`, `post_schedule.py`):
   Approve & post via Composio (`INSTAGRAM_POST_IG_USER_MEDIA` +
   `..._PUBLISH`), video+cover hosted in Supabase Storage, durable attempt state
