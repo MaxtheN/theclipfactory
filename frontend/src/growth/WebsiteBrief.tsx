@@ -138,7 +138,7 @@ export function WebsiteBrief({
   function fail(message: string) {
     current.current = undefined;
     window.clearTimeout(timer.current);
-    setError(message || "We couldn't read that site.");
+    setError(message || "We couldn’t read that site.");
     setPhase("error");
   }
 
@@ -171,7 +171,7 @@ export function WebsiteBrief({
     } else if (next.status === "cancelled") {
       setPhase("input");
     } else {
-      fail(next.error || "We couldn't read that site.");
+      fail(next.error || "We couldn’t read that site.");
     }
   }
 
@@ -199,7 +199,7 @@ export function WebsiteBrief({
       schedule(started.id);
     } catch (e) {
       if (mounted.current)
-        fail(e instanceof Error ? e.message : "We couldn't start reading that site.");
+        fail(e instanceof Error ? e.message : "We couldn’t start reading that site.");
     }
   }
 
@@ -244,7 +244,7 @@ export function WebsiteBrief({
     error: "We couldn’t draft it this time",
   };
   const descriptions: Record<Phase, string> = {
-    input: "We'll draft your brand brief from it. You review it first.",
+    input: "We’ll draft your brand brief from it. You review it first.",
     reading: "Reading your pages for your audience, voice, and what makes you different.",
     review: "Make it sound like you. Confirm the details you want your agents to use.",
     error: "Your details are safe. You can type them yourself instead.",

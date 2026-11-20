@@ -394,6 +394,19 @@ describe("guided workspace onboarding", () => {
     ).toHaveFocus();
     noWrites();
   });
+  it("says what is missing in plain words, not as a character range", () => {
+    start();
+    next();
+    expect(screen.getByRole("alert")).toHaveTextContent("Name your brand or podcast to continue.");
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Name your brand / podcast" }),
+      { target: { value: "Founder stories" } },
+    );
+    next();
+    expect(screen.getByRole("alert")).toHaveTextContent("Pick who you’re speaking to, or add your own.");
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/between|\d–\d/);
+    noWrites();
+  });
   it("revalidates an earlier edit before progress navigation can return to launch", () => {
     start();
     toReview();
@@ -404,7 +417,7 @@ describe("guided workspace onboarding", () => {
         name: "Go to Review & launch",
       }),
     );
-    expect(screen.getByRole("alert")).toHaveTextContent("1–3,000 characters");
+    expect(screen.getByRole("alert")).toHaveTextContent("Pick who you’re speaking to, or add your own.");
     expect(
       screen.queryByRole("button", { name: "Open my factory" }),
     ).not.toBeInTheDocument();
@@ -755,7 +768,7 @@ describe("onboarding validation and write recovery", () => {
     fillAudience();
     setPills("Who are we speaking to?", "a".repeat(3001));
     next();
-    expect(screen.getByRole("alert")).toHaveTextContent("1–3,000 characters");
+    expect(screen.getByRole("alert")).toHaveTextContent("Keep the audience to 3,000 characters or fewer.");
     noWrites();
     expect(pillsDisabled("Who are we speaking to?")).toBe(false);
   });
@@ -879,6 +892,7 @@ describe("onboarding validation and write recovery", () => {
   it("creates no Style rules unless the creator approves the clip style", async () => {
     const { complete } = start();
     toReview();
+    expect(screen.getByText(/Agents start once you approve a clip style above/)).toBeInTheDocument();
     launch();
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());
     expect(workspaceApi.propose).not.toHaveBeenCalled();
@@ -892,6 +906,8 @@ describe("onboarding validation and write recovery", () => {
     fireEvent.click(screen.getByRole("button", { name: "45s" }));
     fireEvent.click(screen.getByRole("button", { name: "Use this style" }));
     expect(screen.getByText("Approved ✓")).toBeInTheDocument();
+    expect(screen.queryByText(/Agents start once you approve/)).toBeNull();
+    expect(screen.getByText(/You choose when to add footage and start production/)).toBeInTheDocument();
     noWrites();
     launch();
     await waitFor(() => expect(complete).toHaveBeenCalledOnce());
