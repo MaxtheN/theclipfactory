@@ -1,5 +1,6 @@
 """Whole-source storyboard: deterministic planning and a scripted vision model, no FFmpeg or weights."""
 
+import contextlib
 import json
 from itertools import pairwise
 from pathlib import Path
@@ -221,6 +222,24 @@ def test_build_watches_every_scene_and_records_what_was_measured_and_seen(studio
     assert not (service.root / "v1.building").exists()
     assert jobs.updates[0]["message"].startswith("Measuring") and jobs.updates[-1]["progress"] == 95
     assert any(u.get("message") == "Watching the footage: scene 9 of 15" for u in jobs.updates)
+
+
+def test_one_model_load_serves_every_batch_of_the_watch(studio):
+    service, _, _, models, video, _ = studio
+    events = []
+
+    @contextlib.contextmanager
+    def warm(model):
+        events.append(("hold", model))
+        yield
+        events.append(("release", model))
+
+    batch = models.run_batch
+    models.warm = warm
+    models.run_batch = lambda job, model, requests: events.append(("batch", model)) or batch(job, model, requests)
+    service.build("job", video, "qwen-small")
+    assert events == [("hold", "qwen-small"), ("batch", "qwen-small"), ("batch", "qwen-small"),
+                      ("release", "qwen-small")]
 
 
 def test_public_view_serves_frames_by_url_and_hides_internals(studio):
