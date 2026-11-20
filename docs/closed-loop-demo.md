@@ -61,7 +61,7 @@ Automatic A/B is opt-in per brand. It retains the original as A and renders one 
 1. Generate and inspect the fresh current-engine batch.
 2. Select the exact video revision; preview its cover and final caption together and show them to Kartik.
 3. Obtain approval of that exact clip/caption before the external publication action.
-4. Verify the selected connected account is @kartik._builds, then use the reviewed Approve & post flow. Sign-in/account import is setup, not content approval.
+4. Verify the selected connected account is @kartik._builds, then approve that exact revision in review and post it with Post to Instagram (two separate actions). Sign-in/account import is setup, not content approval.
 5. Preserve provider attempt/media IDs. If the outcome is unknown, Check status; never click another blind publish attempt.
 6. The confirmed publication starts a real3/6-day measurement window. App-open collection and any early measurement/demo override remain visibly labelled. No accelerated animation can replace those real days.
 
