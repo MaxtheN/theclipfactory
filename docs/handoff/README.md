@@ -104,8 +104,8 @@ Add `?fixtures=flow` to the URL for Factory-map sample data.
 ```sh
 python -m pytest tests scripts/tests -q
 python -m ruff check clip_factory scripts
-cd frontend && npx tsc --noEmit -p . && npx vitest run && npm run build
-cd frontend && npm run perf   # optional render benchmark (vitest.perf.config.ts)
+(cd frontend && npx tsc --noEmit -p . && npx vitest run && npm run build)
+(cd frontend && npm run perf)   # optional render benchmark (vitest.perf.config.ts)
 ```
 
 Passing checks don't replace watching a real render, verifying an account or making a real post.
