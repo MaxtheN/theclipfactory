@@ -615,6 +615,14 @@
   margin-bottom: var(--stack-gap);
   padding-bottom: var(--stack-gap);
 }
+/* The filter matches the height of the tabs beside it. */
+.gf-app.gf-flow-app .gf-library-filter input {
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
 
 /* Results */
 .gf-app.gf-flow-app .gf-results-page.is-minimal {
