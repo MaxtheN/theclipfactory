@@ -465,6 +465,28 @@ class PlanGate:
         return self.refusal((POSTING, OVER_LIMIT))
 
 
+class PlanLimitMiddleware:
+    """Plain ASGI, so requests that are not gated pass straight through at no cost."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            limits = route_limits(scope["method"], scope["path"])
+            gate = getattr(scope["app"].state, "plan_gate", None) if limits and "app" in scope else None
+            if gate is not None:
+                try:
+                    refusal = await run_in_threadpool(gate.refusal, limits)
+                except Exception:  # a broken plan check must not stop the creator's work
+                    log.warning("Plan check failed; allowing the request.", exc_info=True)
+                    refusal = None
+                if refusal is not None:
+                    await refusal.response()(scope, receive, send)
+                    return
+        await self.app(scope, receive, send)
+
+
 def install_gate(app) -> None:
     """Register before the local session middleware, so the session check runs first (Starlette runs the
     most recently added middleware outermost). The gate itself is attached later by ``install``."""
@@ -473,19 +495,7 @@ def install_gate(app) -> None:
     async def plan_limit(request: Request, error: PlanLimitError):
         return error.response()
 
-    @app.middleware("http")
-    async def plan_limits(request: Request, call_next):
-        gate = getattr(request.app.state, "plan_gate", None)
-        limits = route_limits(request.method, request.url.path) if gate is not None else ()
-        if limits:
-            try:
-                refusal = await run_in_threadpool(gate.refusal, limits)
-            except Exception:  # a broken plan check must not stop the creator's work
-                log.warning("Plan check failed; allowing the request.", exc_info=True)
-                refusal = None
-            if refusal is not None:
-                return refusal.response()
-        return await call_next(request)
+    app.add_middleware(PlanLimitMiddleware)
 
 
 # ---------------------------------------------------------------------------------------------- routes
