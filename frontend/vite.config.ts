@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { viteSingleFile } from "vite-plugin-singlefile";
 export default defineConfig({
@@ -15,6 +15,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: "./src/test-setup.ts",
+    // The render benchmark runs on its own: `npm run perf`.
+    exclude: [...configDefaults.exclude, "src/perf/**"],
     clearMocks: true,
     // Keep full-app jsdom suites within laptop and CI runner memory/CPU budgets.
     maxWorkers: 2,
