@@ -575,7 +575,12 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     async def local_session(request: Request, call_next):
         if request.url.hostname not in {"127.0.0.1", "localhost", "::1"}:
             return JSONResponse({"detail": "Only loopback hosts are allowed."}, status_code=403)
-        oauth_callback = request.url.path == "/api/instagram/oauth/callback" and request.method == "GET"
+        # Browser redirects back from a provider sign-in carry no local session. The posting callback only
+        # re-reads accounts for an unguessable pending request this app started (publish_api.connected).
+        oauth_callback = request.method == "GET" and (
+            request.url.path == "/api/instagram/oauth/callback"
+            or re.fullmatch(r"/api/posting/connected/[A-Za-z0-9_-]{1,200}", request.url.path) is not None
+        )
         if request.headers.get("sec-fetch-site") == "cross-site" and not oauth_callback:
             return JSONResponse({"detail": "Cross-site requests are forbidden."}, status_code=403)
         origin = request.headers.get("origin")
@@ -3062,8 +3067,9 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
     from .publish_api import install as install_publish_api
 
-    # Approve & post: human-approved, quality-gated Reels via Composio with durable attempts.
-    install_publish_api(app, runtime, engine, campaigns)
+    # Approve & post: human-approved, quality-gated posts through the posting server (Zernio) with
+    # durable attempts. Off until publishing is enabled in Settings.
+    install_publish_api(app, runtime, engine, campaigns, enabled=lambda: settings()["publishing_enabled"])
 
     from .references_api import install as install_references_api
 

@@ -1,16 +1,19 @@
-"""Human-approved Instagram Reel publishing through Composio, with durable attempts.
+"""Human-approved clip posting through the Growth Factory posting server (Zernio), with durable attempts.
 
-Every external effect is preceded by a durable ``pending_effect`` write. An effect whose
-outcome is uncertain (timeout, network loss, crash) moves the attempt to ``unknown``;
-an unknown attempt is never retried until ``reconcile`` has read the provider state.
+One attempt posts one approved clip revision to one connected account. Every external write is
+preceded by a durable ``pending_effect`` record. A post whose outcome is uncertain (timeout, lost
+connection, crash, server 5xx) moves the attempt to ``unknown``; an unknown attempt is never sent
+again until ``reconcile`` has read the server's state (find by external id). Reconcile reads only and
+never reposts under a new idempotency key.
 
-States: created → uploading → uploaded(url) → container_created(id) → container_ready
-→ published(media_id) → mapped; plus failed (definite, nothing published) and unknown.
-A scheduled post waits in ``scheduled`` (nothing external yet) until the person's chosen time
-or click moves it to ``created``; ``cancelled`` is terminal and nothing was published.
+States: created → uploading → uploaded(video_url) → submitted(zernio_post_id) → published(url)
+→ mapped; plus failed (definite: nothing was published), cancelled and unknown.
+A scheduled post waits in ``scheduled`` (nothing external yet) until the person's chosen time or
+click moves it to ``created``. Scheduling happens in the app (post_schedule); the posting server is
+always asked to publish now.
 
-Every attempt carries its ``package`` (caption hash/features, share_to_feed, cover source and
-frame time, collaborators, scheduled_for) and ``posted_at`` so learning can use them later.
+Every attempt carries its ``package`` (caption hash/features, platform options, cover, scheduled_for)
+and ``posted_at`` so learning can use them later.
 """
 
 from __future__ import annotations
@@ -21,29 +24,33 @@ import re
 import threading
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi import HTTPException
 
 from . import post_package, quality
-from .composio import ComposioError, ComposioPublishingClient, _instagram_permalink
 from .learning import Publication
-from .publish_storage import PublishStorageError
+from .posting_server import PLATFORM_LABELS, PLATFORMS, ZERNIO_ID, PostingServerError, platform_entry
 from .store import new_id, now
 
 KIND = "publish_attempts"
 REPORTS = "quality_reports"
-STATES = ("scheduled", "created", "uploading", "uploaded", "container_created", "container_ready",
-          "published", "mapped", "failed", "cancelled", "unknown")
-RESUMABLE = {"created", "uploaded", "container_created", "container_ready", "published"}
+PROVIDER = "zernio"
+STATES = ("scheduled", "created", "uploading", "uploaded", "submitted", "published", "mapped", "failed",
+          "cancelled", "unknown")
+RESUMABLE = {"created", "uploaded", "submitted", "published"}
 FINAL = {"mapped", "failed", "cancelled"}
-# Attempt states that never reached Instagram and do not block a new attempt for the account.
+# Attempt states that never reached a platform and do not block a new attempt for the account.
 CLOSED_UNSENT = {"failed", "cancelled"}
-# Raised by our adapter before any provider write: the write certainly did not happen.
-LOCAL_CODES = {"invalid_schema", "invalid_arguments", "unsupported_tool", "invalid_id", "invalid_user",
-               "missing_key", "invalid_key", "invalid_version", "invalid_timeout", "invalid_url"}
-_MEDIA_ID = re.compile(r"^\d{1,100}$")
+# Definite refusals that leave the attempt resumable: nothing was created, and the cause is fixable.
+RETRYABLE = {"sign_in_required", "session_expired", "rate_limited", "zernio_rate_limited", "not_configured",
+             "posting_plan_limit", "workspace_forbidden"}
+# Legacy Composio/Instagram states from before the posting server.
+LEGACY_SENT = {"container_created", "container_ready", "published", "unknown"}
+CAPTION_LIMITS = {"instagram": 2200, "tiktok": 2200, "youtube": 5000, "facebook": 63206, "linkedin": 3000,
+                  "twitter": 280, "threads": 500}
+YOUTUBE_VISIBILITY = {"public", "unlisted", "private"}
+TIKTOK_TOGGLES = ("allow_comment", "allow_duet", "allow_stitch")
 
 
 class PublishError(Exception):
@@ -52,65 +59,39 @@ class PublishError(Exception):
         self.status, self.message, self.code, self.details = status, message, code, details
 
 
+def _from_server(error: PostingServerError) -> PublishError:
+    return PublishError(error.status if 400 <= error.status < 600 else 502, error.message, error.code)
+
+
 def normalize_caption(value: str) -> str:
     return re.sub(r"[\x00-\x1f\x7f\s]+", " ", value or "").strip()
 
 
-def validate_caption(caption) -> str:
+def validate_caption(caption, platform: str = "instagram") -> str:
+    label = PLATFORM_LABELS.get(platform, platform)
     if not isinstance(caption, str) or not caption.strip():
         raise PublishError(422, "Write a caption for the post.", "invalid_caption")
-    if len(caption) > 2200:
-        raise PublishError(422, "Instagram captions are limited to 2,200 characters.", "invalid_caption")
+    limit = CAPTION_LIMITS.get(platform, 2200)
+    if len(caption) > limit:
+        raise PublishError(422, f"{label} captions are limited to {limit:,} characters.", "invalid_caption")
     if any(ord(c) < 32 and c not in "\n\t" for c in caption) or "\x7f" in caption:
         raise PublishError(422, "Remove control characters from the caption.", "invalid_caption")
-    if len(re.findall(r"(?:^|\s)#\w", caption)) > 30:
-        raise PublishError(422, "Instagram allows at most 30 hashtags.", "invalid_caption")
-    if len(re.findall(r"(?:^|\s)@\w", caption)) > 20:
-        raise PublishError(422, "Instagram allows at most 20 mentions.", "invalid_caption")
+    if platform == "instagram":
+        if len(re.findall(r"(?:^|\s)#\w", caption)) > 30:
+            raise PublishError(422, "Instagram allows at most 30 hashtags.", "invalid_caption")
+        if len(re.findall(r"(?:^|\s)@\w", caption)) > 20:
+            raise PublishError(422, "Instagram allows at most 20 mentions.", "invalid_caption")
     return caption
 
 
-def _container_status(payload, container_id):
-    """INSTAGRAM_GET_MULTIPLE_NODES result keyed by node ID; parsed defensively (shape unverified)."""
-    # Verified live shape (Nov 14): {"data": {"objects": {"<id>": {"id", "status", "status_code"}}}}.
-    candidates = [payload]
-    for container in list(candidates):
-        if isinstance(container, dict):
-            for key in ("data", "nodes", "results", "objects"):
-                if key in container:
-                    candidates.append(container[key])
-                    if isinstance(container[key], dict) and "objects" in container[key]:
-                        candidates.append(container[key]["objects"])
-    for item in candidates:
-        if isinstance(item, dict) and isinstance(item.get(container_id), dict):
-            item = item[container_id]
-        if isinstance(item, list):
-            item = next((n for n in item if isinstance(n, dict) and n.get("id") == container_id), None)
-        if isinstance(item, dict) and item.get("id", container_id) == container_id:
-            code = item.get("status_code")
-            if isinstance(code, str) and code in {"FINISHED", "IN_PROGRESS", "ERROR", "EXPIRED", "PUBLISHED"}:
-                return code
-    return None
-
-
-def _quota(payload):
-    rows = payload.get("data") if isinstance(payload, dict) and "data" in payload else payload
-    row = rows[0] if isinstance(rows, list) and rows else rows
-    if not isinstance(row, dict):
-        return None, None
-    usage = row.get("quota_usage")
-    total = (row.get("config") or {}).get("quota_total") if isinstance(row.get("config"), dict) else None
-    return (usage if type(usage) is int else None), (total if type(total) is int else None)
-
-
 class Publisher:
-    def __init__(self, store, *, root: Path, client_factory: Callable[[], ComposioPublishingClient],
-                 storage_factory: Callable, learning, campaigns, gate: Callable = quality.evaluate,
+    def __init__(self, store, *, root: Path, server_factory: Callable, learning, campaigns,
+                 gate: Callable = quality.evaluate, enabled: Callable[[], bool] = lambda: True,
                  sleep: Callable[[float], None] = time.sleep, poll_interval: float = 5, max_polls: int = 60,
                  item_gap: float = 5, start_worker: bool = True, covers: post_package.Covers | None = None):
         self.store, self.root = store, Path(root)
         self.covers = covers or post_package.Covers(self.root)
-        self.client_factory, self.storage_factory = client_factory, storage_factory
+        self.server_factory, self.enabled = server_factory, enabled
         self.learning, self.campaigns, self.gate = learning, campaigns, gate
         self.sleep, self.poll_interval, self.max_polls, self.item_gap = sleep, poll_interval, max_polls, item_gap
         self.lock = threading.RLock()
@@ -148,15 +129,39 @@ class Publisher:
             return current
 
     def recover(self):
-        """After a crash: an effect in flight has an unknown outcome; everything else is resumable."""
+        """After a restart: a post in flight has an unknown outcome; an upload in flight is simply redone;
+        attempts from the retired Composio publisher are closed or flagged for a manual check."""
         for row in self.store.all(KIND):
+            if row.get("provider") != PROVIDER:
+                self._recover_legacy(row)
+                continue
             if not row.get("active"):
                 continue
-            if row.get("pending_effect"):
-                self._save(row, "App stopped during an external step; outcome unknown. Check status.",
+            if row.get("pending_effect") == "upload":
+                self._save(row, "App stopped during the upload; it will upload again on resume.",
+                           state="created", pending_effect=None, active=False)
+            elif row.get("pending_effect"):
+                self._save(row, "App stopped while posting; outcome unknown. Check status.",
                            state="unknown", previous_state=row["state"], active=False)
             else:
                 self._save(row, "App stopped; resume when ready.", active=False)
+
+    def _recover_legacy(self, row: dict):
+        if row.get("legacy") or row["state"] in {"mapped", "failed", "cancelled"}:
+            return
+        if row["state"] in LEGACY_SENT:
+            self._save(row, "Posted with the retired Instagram connection. Check Instagram directly; "
+                       "this app will not resume it.", legacy=True, active=False)
+        else:
+            self._save(row, "Posting moved to the new posting service; nothing was published. "
+                       "Post this clip again from a connected account.", state="cancelled", legacy=True,
+                       active=False, pending_effect=None)
+
+    @staticmethod
+    def _require_current(row: dict):
+        if row.get("provider") != PROVIDER:
+            raise PublishError(409, "This attempt used the retired Instagram connection. Check Instagram "
+                                    "directly; it cannot be resumed here.", "legacy_attempt")
 
     # ------------------------------------------------------------------ validation
     def clip_path(self, clip: dict) -> Path:
@@ -212,26 +217,34 @@ class Publisher:
 
     def _require_account(self, account_id: str, clip: dict) -> dict:
         account = self.store.get("connected_accounts", account_id)
-        if (not account or account.get("status") != "active" or account.get("provider") != "composio"
-                or account.get("toolkit") != "instagram" or not account.get("verified_at")
-                or not isinstance(account.get("user_id"), str) or not account["user_id"].strip()
-                or not isinstance(account.get("instagram_user_id"), str)
-                or not account["instagram_user_id"].isdigit()):
-            raise PublishError(422, "Choose an active, verified Instagram account.", "account_unverified")
+        if (not account or account.get("status") != "active" or account.get("provider") != PROVIDER
+                or account.get("platform") not in PLATFORMS
+                or not ZERNIO_ID.fullmatch(account.get("zernio_account_id") or "")):
+            raise PublishError(422, "Choose an active connected account.", "account_unverified")
         if account.get("profile_id") != clip.get("profile_id"):
             raise PublishError(422, "This account is bound to another workspace profile.", "account_unbound")
+        if account.get("publishing_permitted") is not True:
+            raise PublishError(403, "Posting is turned off for this account. Allow posting for it first.",
+                               "account_not_permitted")
         return account
 
-    def _require_storage(self):
-        storage = self.storage_factory()
-        if storage is None:
-            raise PublishError(409, "Growth Factory cloud is not configured; posting needs cloud hosting.",
+    def _require_server(self):
+        """Posting must be enabled in Settings and the cloud session must be usable."""
+        if not self.enabled():
+            raise PublishError(403, "Posting is turned off. Turn on publishing in Settings first.",
+                               "publishing_disabled")
+        return self._server()
+
+    def _server(self):
+        server = self.server_factory()
+        if server is None:
+            raise PublishError(409, "Growth Factory cloud is not configured; posting needs the posting server.",
                                "cloud_not_configured")
         try:
-            storage.user_id()
-        except PublishStorageError as error:
-            raise PublishError(error.status, error.message, error.code) from None
-        return storage
+            server.workspace_id()
+        except PostingServerError as error:
+            raise _from_server(error) from None
+        return server
 
     def _check_quality(self, clip: dict, override_reason: str | None) -> tuple[dict, str | None]:
         report = self.quality_report(clip)
@@ -252,9 +265,48 @@ class Publisher:
                 return row
         return None
 
-    def _package(self, clip: dict, caption: str, package: dict | None) -> dict:
+    def _tiktok(self, clip: dict, account: dict, settings) -> dict:
+        """TikTok requires the creator's own preview confirmation, consent, privacy level and interaction
+        choices on every post, checked against the creator's current options."""
+        settings = settings if isinstance(settings, dict) else {}
+        if settings.get("content_preview_confirmed") is not True or settings.get("express_consent_given") is not True:
+            raise PublishError(422, "TikTok needs you to preview the video and agree to TikTok's terms before "
+                                    "posting.", "tiktok_consent_required")
+        privacy = settings.get("privacy_level")
+        toggles = {name: settings.get(name) for name in TIKTOK_TOGGLES}
+        if not isinstance(privacy, str) or any(type(v) is not bool for v in toggles.values()):
+            raise PublishError(422, "Choose who can see the TikTok post and whether comments, duets and "
+                                    "stitches are allowed.", "tiktok_settings_required")
+        try:
+            info = self._server().creator_info(account["zernio_account_id"])
+        except PostingServerError as error:
+            raise _from_server(error) from None
+        creator = info.get("creator") if isinstance(info.get("creator"), dict) else {}
+        if creator.get("canPostMore") is False:
+            raise PublishError(409, "TikTok says this account cannot post more right now. Try again later.",
+                               "tiktok_cannot_post")
+        levels = {item.get("value") for item in info.get("privacyLevels") or [] if isinstance(item, dict)}
+        if privacy not in levels:
+            raise PublishError(422, "That TikTok privacy option is not available for this account.",
+                               "invalid_privacy_level")
+        limits = info.get("postingLimits") if isinstance(info.get("postingLimits"), dict) else {}
+        interaction = limits.get("interactionSettings") if isinstance(limits.get("interactionSettings"), dict) else {}
+        for name, value in toggles.items():
+            option = interaction.get(name) if isinstance(interaction.get(name), dict) else {}
+            if value and option.get("enabled") is False:
+                raise PublishError(422, f"This TikTok account has {name.removeprefix('allow_')}s turned off.",
+                                   "tiktok_interaction_disabled")
+        longest, length = limits.get("maxVideoDurationSec"), post_package.duration_of(clip)
+        if isinstance(longest, (int, float)) and length and length > longest:
+            raise PublishError(422, f"TikTok allows videos up to {int(longest)} seconds for this account.",
+                               "too_long")
+        return {"privacy_level": privacy, **toggles, "content_preview_confirmed": True,
+                "express_consent_given": True, "nickname": creator.get("nickname")}
+
+    def _package(self, clip: dict, caption: str, package: dict | None, account: dict | None = None) -> dict:
         """The exact post package recorded on the attempt (and later usable as learning variables)."""
         package = package or {}
+        platform = (account or {}).get("platform", "instagram")
         share = package.get("share_to_feed", True)
         if type(share) is not bool:
             raise PublishError(422, "share_to_feed must be true or false.", "invalid_package")
@@ -262,20 +314,32 @@ class Publisher:
             collaborators = post_package.clean_collaborators(package.get("collaborators"))
         except ValueError as error:
             raise PublishError(422, str(error), "invalid_collaborators") from None
-        if collaborators and not post_package.COLLABORATORS_SUPPORTED:
-            raise PublishError(422, "Collaborator invites are not available through the connected Instagram "
-                                    "tool. Mention them with @ in the caption instead.", "collaborators_unsupported")
+        if collaborators and platform != "instagram":
+            raise PublishError(422, "Collaborator invites are only available for Instagram Reels.",
+                               "collaborators_unsupported")
         try:
             cover = self.covers.resolve(clip, self.clip_path(clip), package.get("cover_time_ms"))
         except ValueError as error:
             raise PublishError(422, str(error), "invalid_cover") from None
-        return {**post_package.caption_features(caption), "share_to_feed": share,
-                "collaborators": collaborators, "location_id": None, "cover": cover}
+        result = {**post_package.caption_features(caption), "platform": platform, "share_to_feed": share,
+                  "collaborators": collaborators, "location_id": None, "cover": cover}
+        if platform == "youtube":
+            title = (package.get("youtube_title") or clip.get("hook") or caption).strip()
+            title = normalize_caption(title)[:100].strip()
+            visibility = package.get("youtube_visibility") or "public"
+            if not title:
+                raise PublishError(422, "Give the YouTube video a title.", "invalid_title")
+            if visibility not in YOUTUBE_VISIBILITY:
+                raise PublishError(422, "YouTube visibility must be public, unlisted or private.", "invalid_package")
+            result["youtube"] = {"title": title, "visibility": visibility}
+        if platform == "tiktok" and account is not None:
+            result["tiktok"] = self._tiktok(clip, account, package.get("tiktok"))
+        return result
 
     def _validate(self, clip_id, account_id, caption, sha256, override_reason, package=None):
         clip = self._require_clip(clip_id, sha256)
         account = self._require_account(account_id, clip)
-        caption = validate_caption(caption)
+        caption = validate_caption(caption, account["platform"])
         existing = self._existing(clip_id, account_id)
         if existing:
             message = ("Already posted to this account." if existing["state"] in {"published", "mapped"}
@@ -285,24 +349,27 @@ class Publisher:
             raise PublishError(409, message, "attempt_exists", {"attempt_id": existing["id"]})
         report, override = self._check_quality({**clip, "caption": caption}, override_reason)
         self.clip_path(clip)
-        return clip, account, caption, report, override, self._package(clip, caption, package)
+        return clip, account, caption, report, override, self._package(clip, caption, package, account)
 
     def _new_attempt(self, clip, account, caption, report, override, package=None, batch_id=None, *,
                      state="created", scheduled_for=None, schedule_id=None) -> dict:
         stamp = now()
+        identifier = new_id()
         row = {
-            "id": new_id(), "clip_id": clip["id"], "campaign_id": clip.get("campaign_id"),
-            "profile_id": clip.get("profile_id"), "account_id": account["id"],
-            "account_name": account.get("display_name"), "instagram_user_id": account["instagram_user_id"],
+            "id": identifier, "provider": PROVIDER, "clip_id": clip["id"], "campaign_id": clip.get("campaign_id"),
+            "profile_id": clip.get("profile_id"), "account_id": account["id"], "platform": account["platform"],
+            "zernio_account_id": account["zernio_account_id"], "account_name": account.get("display_name"),
             "sha256": clip["sha256"].lower(), "revision_number": clip.get("revision_number") or 1,
             "caption": caption, "state": state, "pending_effect": None, "active": False,
-            "video_url": None, "storage_object": None, "container_id": None, "container_status": None,
-            "media_id": None, "permalink": None, "published_at": None, "readback": None,
+            # The same key and external id are reused for every send of this attempt, so a resend after an
+            # uncertain outcome can never create a second post.
+            "idempotency_key": f"gf-attempt-{identifier}", "external_id": f"gf-{identifier}",
+            "video_url": None, "cover_url": None, "cover_mode": None, "zernio_post_id": None,
+            "platform_status": None, "platform_post_id": None, "permalink": None, "published_at": None,
             "mapping": {"status": "pending"}, "warnings": [], "error": None, "batch_id": batch_id,
             "quality": {k: report.get(k) for k in ("verdict", "reasons", "rubric", "gate_version", "evaluated_at")},
             "override_reason": override, "created_at": stamp, "updated_at": stamp,
-            "package": package or self._package(clip, caption, None),
-            "cover_mode": None, "cover_url": None, "cover_object": None,
+            "package": package or self._package(clip, caption, None, account),
             "scheduled_for": scheduled_for, "schedule_id": schedule_id, "posted_at": None,
             "history": [{"at": stamp, "state": state, "pending_effect": None,
                          "note": f"Scheduled for {scheduled_for}." if state == "scheduled"
@@ -314,7 +381,7 @@ class Publisher:
     # ------------------------------------------------------------------ requests
     def request_post(self, clip_id, account_id, caption, sha256, override_reason=None, package=None) -> dict:
         with self.lock:
-            self._require_storage()
+            self._require_server()
             row = self._new_attempt(*self._validate(clip_id, account_id, caption, sha256, override_reason,
                                                     package))
             self._enqueue(row)
@@ -334,10 +401,11 @@ class Publisher:
             if row["state"] != "scheduled":
                 return row
             try:
-                self._require_storage()
+                self._require_current(row)
+                self._require_server()
                 clip = self._require_clip(row["clip_id"], row["sha256"])
-                self._require_account(row["account_id"], clip)
-                validate_caption(row["caption"])
+                account = self._require_account(row["account_id"], clip)
+                validate_caption(row["caption"], account["platform"])
                 self._check_quality({**clip, "caption": row["caption"]}, row.get("override_reason"))
             except PublishError as error:
                 return self._save(row, "Scheduled post stopped before anything was sent.", state="failed",
@@ -365,7 +433,7 @@ class Publisher:
         if len(set(account_ids)) != len(account_ids) or len(set(clip_ids)) != len(clip_ids):
             raise PublishError(422, "Choose each account and clip once.", "duplicate_items")
         with self.lock:
-            self._require_storage()
+            self._require_server()
             accepted, problems = [], []
             for clip_id in clip_ids:
                 clip = self.store.get("clips", clip_id)
@@ -374,6 +442,14 @@ class Publisher:
                     continue
                 caption = captions.get(clip_id) or (clip or {}).get("caption") or (clip or {}).get("hook")
                 for account_id in account_ids:
+                    account = self.store.get("connected_accounts", account_id) or {}
+                    if account.get("platform") == "tiktok":
+                        # TikTok needs the creator to preview each video and consent per post.
+                        problems.append({"clip_id": clip_id, "account_id": account_id,
+                                         "code": "tiktok_consent_required",
+                                         "message": "Post to TikTok from each clip so you can preview it and "
+                                                    "give TikTok's consent."})
+                        continue
                     try:
                         accepted.append(self._validate(clip_id, account_id, caption, None,
                                                        override_reasons.get(clip_id)))
@@ -393,13 +469,15 @@ class Publisher:
     def resume(self, identifier: str) -> dict:
         with self.lock:
             row = self.get(identifier)
+            self._require_current(row)
             if row.get("active"):
                 raise PublishError(409, "This attempt is already running.", "active")
             if row["state"] == "unknown":
                 raise PublishError(409, "Outcome unknown. Check status before continuing.", "needs_reconcile")
-            if row["state"] not in RESUMABLE or (row["state"] == "published"
-                                                  and row["mapping"].get("status") == "mapped"):
+            if row["state"] not in RESUMABLE:
                 raise PublishError(409, f"Nothing to resume from state {row['state']}.", "not_resumable")
+            if row["state"] in {"created", "uploaded"}:
+                self._require_server()
             self._enqueue(row)
             return self.get(identifier)
 
@@ -436,15 +514,24 @@ class Publisher:
         if not row:
             return
         try:
+            self._require_current(row)
             self._advance(row)
         except Exception as exc:  # noqa: BLE001 - lane boundary; errors are recorded, never lost
-            message = exc.message if isinstance(exc, (PublishError, PublishStorageError)) else (
-                str(exc) if isinstance(exc, ComposioError) else "Posting stopped on an unexpected local error.")
+            message = exc.message if isinstance(exc, (PublishError, PostingServerError)) else (
+                "Posting stopped on an unexpected local error.")
             code = getattr(exc, "code", None) or "error"
             current = self.store.get(KIND, identifier) or row
-            if current.get("pending_effect"):
-                self._save(current, "Outcome of the external step is unknown.", state="unknown",
+            definite = isinstance(exc, PublishError) or (isinstance(exc, PostingServerError) and not exc.uncertain)
+            effect = current.get("pending_effect")
+            if effect == "create_post" and not definite:
+                self._save(current, "Outcome of the post is unknown.", state="unknown",
                            previous_state=current["state"], error={"code": code, "message": message})
+            elif effect == "upload":
+                # An upload publishes nothing, so it is safe to redo.
+                self._save(current, "Upload stopped; resume to upload again.", state="created",
+                           pending_effect=None, error={"code": code, "message": message})
+            elif effect:
+                self._save(current, None, pending_effect=None, error={"code": code, "message": message})
             else:
                 self._save(current, None, error={"code": code, "message": message})
         finally:
@@ -452,56 +539,54 @@ class Publisher:
             if current and current.get("active"):
                 self._save(current, None, active=False)
 
-    def _precheck(self, row: dict) -> tuple[dict, dict]:
+    def _precheck(self, row: dict) -> dict:
+        """Before anything is sent: the clip, account, caption and gate must all still hold."""
         clip = self._require_clip(row["clip_id"], row["sha256"])
         account = self._require_account(row["account_id"], clip)
-        if account["instagram_user_id"] != row["instagram_user_id"]:
-            raise PublishError(409, "The Instagram identity for this account changed. Start a new post.",
-                               "account_changed")
-        if row["state"] != "published":
-            self._check_quality({**clip, "caption": validate_caption(row["caption"])}, row.get("override_reason"))
-        return clip, account
+        if account["zernio_account_id"] != row["zernio_account_id"]:
+            raise PublishError(409, "The connected account changed. Start a new post.", "account_changed")
+        self._check_quality({**clip, "caption": validate_caption(row["caption"], row["platform"])},
+                            row.get("override_reason"))
+        return clip
 
     def _advance(self, row: dict):
-        clip, account = self._precheck(row)
-        client = None
+        server = None
         while not self.stopping.is_set():
             state = row["state"]
-            if state in {"created", "uploading"}:
-                if not self._upload(row, clip):
+            if state in {"created", "uploading", "uploaded"}:
+                clip = self._precheck(row)
+                server = self._require_server()
+                step = self._upload(row, clip, server) if state != "uploaded" else self._submit(row, server)
+                if not step:
                     return
-            elif state in {"uploaded", "container_created", "container_ready", "published"}:
-                client = client or self.client_factory()
-                step = {"uploaded": self._create_container, "container_created": self._poll,
-                        "container_ready": self._publish, "published": self._finish}[state]
-                if not step(row, client, account) or state == "published":
+            elif state == "submitted":
+                server = server or self._server()
+                if not self._poll(row, server):
                     return
+            elif state == "published":
+                self._map(row)
+                return
             else:
                 return
 
     # ------------------------------------------------------------------ steps
-    def _upload(self, row, clip) -> bool:
+    def _upload(self, row, clip, server) -> bool:
         path = self.clip_path(clip)
         if quality.media.sha256_file(path) != row["sha256"]:
             raise PublishError(409, "Clip bytes no longer match the approved revision.", "revision_changed")
-        storage = self._require_storage()
-        user = storage.user_id()
-        name = storage.object_path(user, row["sha256"])
-        self._save(row, "Uploading the approved MP4 to cloud hosting.", state="uploading",
-                   pending_effect="upload", storage_object=name, video_url=storage.public_url(name),
-                   bytes=path.stat().st_size, external_started_at=row.get("external_started_at") or now())
+        self._save(row, "Uploading the approved video.", state="uploading", pending_effect="upload",
+                   bytes=path.stat().st_size)
         try:
-            hosted = storage.upload(path, row["sha256"])
-        except PublishStorageError as error:
-            if error.code in {"timeout", "network"}:
+            url = server.upload(path, "video/mp4", filename=f"{row['sha256'][:16]}.mp4")
+        except PostingServerError as error:
+            if error.code in RETRYABLE or error.code in {"upload_timeout", "upload_failed", "network", "timeout"}:
                 raise
-            # Upload refused or not publicly readable: nothing was given to Instagram.
             self._save(row, error.message, state="failed", pending_effect=None,
                        error={"code": error.code, "message": error.message})
             return False
-        cover = self._host_cover(row, storage)
-        self._save(row, "Hosted at a public URL and verified." + (" (reused)" if hosted["reused"] else ""),
-                   state="uploaded", pending_effect=None, video_url=hosted["url"], **cover)
+        cover = self._host_cover(row, server)
+        self._save(row, "Uploaded; ready to post.", state="uploaded", pending_effect=None, video_url=url,
+                   uploaded_at=now(), **cover)
         return True
 
     def _cover_file(self, row) -> tuple[Path | None, dict]:
@@ -514,166 +599,119 @@ class Publisher:
             return None, cover
         return path, cover
 
-    def _host_cover(self, row, storage) -> dict:
-        """Best effort: host the cover still for ``cover_url``; otherwise fall back to ``thumb_offset``
-        (the same frame's time). A cover upload never touches Instagram, so failure is not unknown."""
+    def _host_cover(self, row, server) -> dict:
+        """Instagram only, best effort: upload the cover still as the Reel cover; otherwise fall back to the
+        same frame's time offset. A cover upload publishes nothing, so a failure is never unknown."""
+        if row["platform"] != "instagram":
+            return {"cover_mode": "time_offset"}
         path, cover = self._cover_file(row)
         warnings = list(row.get("warnings") or [])
         if path is None:
             if cover.get("local_path"):
                 warnings.append("cover_file_missing")
-            return {"cover_mode": "thumb_offset", "warnings": warnings}
+            return {"cover_mode": "time_offset", "warnings": warnings}
         try:
-            hosted = storage.upload_cover(path, cover["sha256"])
-        except (PublishStorageError, AttributeError) as error:
+            url = server.upload(path, "image/jpeg", filename=f"{cover['sha256'][:16]}.jpg")
+        except PostingServerError as error:
             warnings.append("cover_upload_failed")
-            return {"cover_mode": "thumb_offset", "warnings": warnings,
-                    "cover_error": getattr(error, "message", "Cover hosting is unavailable.")}
-        return {"cover_mode": "cover_url", "cover_url": hosted["url"], "cover_object": hosted["object"]}
+            return {"cover_mode": "time_offset", "warnings": warnings, "cover_error": error.message}
+        return {"cover_mode": "cover_url", "cover_url": url}
 
-    def _cover_arguments(self, row) -> tuple[dict, dict]:
-        """``cover_url`` when the hosted still is publicly readable right now, else ``thumb_offset``."""
-        cover = (row.get("package") or {}).get("cover") or {}
-        offset = cover.get("time_ms") if type(cover.get("time_ms")) is int else 0
-        if row.get("cover_url"):
-            try:
-                storage = self.storage_factory()
-                ok = bool(storage and storage.verify_public(row["cover_url"], cover.get("bytes"), "image/jpeg"))
-            except PublishStorageError:
-                ok = False
-            if ok:
-                return {"cover_url": row["cover_url"]}, {"cover_mode": "cover_url"}
-            return {"thumb_offset": offset}, {"cover_mode": "thumb_offset",
-                                              "warnings": [*row["warnings"], "cover_url_unavailable"]}
-        return {"thumb_offset": offset}, {"cover_mode": "thumb_offset"}
-
-    def _call(self, client, account, slug, arguments):
-        return client.run(slug, arguments, connected_account_id=account["id"], user_id=account["user_id"])
-
-    def _check_quota(self, row, client, account):
-        try:
-            usage, total = _quota(self._call(client, account, "INSTAGRAM_GET_IG_USER_CONTENT_PUBLISHING_LIMIT",
-                                             {"ig_user_id": account["instagram_user_id"],
-                                              "fields": "quota_usage,config"}))
-        except ComposioError:
-            self._save(row, None, warnings=[*row["warnings"], "Publishing quota could not be read."])
-            return True
-        if usage is not None and total is not None and usage >= total:
-            self._save(row, "Daily publishing limit reached.", state="failed",
-                       error={"code": "quota", "message": f"Instagram daily publishing limit reached ({usage}/{total})."})
-            return False
-        return True
-
-    def _create_container(self, row, client, account) -> bool:
-        identity = client.account_identity(account["id"], account["user_id"],
-                                           version=client.PINNED_VERSION)
-        if identity["instagram_user_id"] != row["instagram_user_id"]:
-            raise PublishError(409, "Connected Instagram identity changed; nothing was posted.", "account_changed")
-        if not self._check_quota(row, client, account):
-            return False
+    def payload(self, row: dict) -> dict:
+        """The posting-server request for this attempt: one account, publish now, our external id."""
         package = row.get("package") or {}
-        cover_args, cover_changes = self._cover_arguments(row)
-        # Only parameters the pinned INSTAGRAM_POST_IG_USER_MEDIA schema accepts (no collaborators).
-        arguments = {"ig_user_id": row["instagram_user_id"], "media_type": "REELS", "video_url": row["video_url"],
-                     "caption": row["caption"], "share_to_feed": package.get("share_to_feed", True), **cover_args}
-        self._save(row, "Creating the Reel container.", pending_effect="create_container",
-                   external_started_at=row.get("external_started_at") or now(),
-                   container_arguments={k: v for k, v in arguments.items() if k != "caption"}, **cover_changes)
+        cover = package.get("cover") or {}
+        offset = cover.get("time_ms") if type(cover.get("time_ms")) is int else 0
+        specific: dict = {}
+        if row["platform"] == "instagram":
+            specific["shareToFeed"] = package.get("share_to_feed", True)
+            if row.get("cover_url"):
+                specific["instagramThumbnail"] = row["cover_url"]
+            else:
+                specific["thumbOffset"] = offset
+            if package.get("collaborators"):
+                specific["collaborators"] = list(package["collaborators"])
+        elif row["platform"] == "youtube":
+            specific.update(package.get("youtube") or {})
+        elif row["platform"] == "tiktok":
+            tiktok = package.get("tiktok") or {}
+            specific.update({k: tiktok.get(k) for k in ("privacy_level", *TIKTOK_TOGGLES,
+                                                         "content_preview_confirmed", "express_consent_given")})
+            specific["video_cover_timestamp_ms"] = offset
+        target = {"accountId": row["zernio_account_id"], **({"platformSpecificData": specific} if specific else {})}
+        return {"content": row["caption"], "mediaItems": [{"url": row["video_url"], "type": "video"}],
+                "platforms": [target], "publishNow": True, "externalId": row["external_id"]}
+
+    def _submit(self, row, server) -> bool:
+        if not row.get("video_url"):
+            self._save(row, "No uploaded video recorded; uploading again.", state="created")
+            return True
+        self._save(row, "Posting.", pending_effect="create_post", posted_at=row.get("posted_at") or now())
         try:
-            data = self._call(client, account, "INSTAGRAM_POST_IG_USER_MEDIA", arguments)
-        except ComposioError as error:
-            if error.code in LOCAL_CODES or error.code == "account_mismatch":
-                self._save(row, "Stopped before contacting Instagram.", pending_effect=None,
-                           error={"code": error.code, "message": str(error)})
+            reply = server.create_post(self.payload(row), row["idempotency_key"])
+        except PostingServerError as error:
+            if error.uncertain:
+                raise
+            if error.code == "in_progress":
+                self._save(row, "The post is still being created. Check status shortly.", state="unknown",
+                           previous_state="uploaded", error={"code": error.code, "message": error.message})
                 return False
-            if error.code == "tool_failed":
-                self._save(row, "Instagram refused the container.", state="failed", pending_effect=None,
-                           error={"code": error.code, "message": "Instagram refused the Reel container. "
-                                  "Check the publish permission (instagram_business_content_publish) and the video."})
+            if error.code in RETRYABLE:
+                self._save(row, "Nothing was posted; resume when ready.", pending_effect=None,
+                           error={"code": error.code, "message": error.message})
                 return False
-            raise
-        container = data.get("id") if isinstance(data, dict) else None
-        if not isinstance(container, str) or not _MEDIA_ID.fullmatch(container):
-            raise PublishError(502, "Instagram returned no container ID.", "invalid_response")
-        self._save(row, "Container created; Instagram is processing the video.", state="container_created",
-                   pending_effect=None, container_id=container, container_created_at=now())
-        return True
+            self._save(row, "The post was refused; nothing was published.", state="failed", pending_effect=None,
+                       error={"code": error.code, "message": error.message})
+            return False
+        post = reply["post"]
+        self._save(row, "Sent to the posting service." + (" (already sent earlier)" if reply["replayed"] else ""),
+                   state="submitted", pending_effect=None, zernio_post_id=post["id"], submitted_at=now())
+        return self._apply(row, post) != "stop"
 
-    def _read_container(self, row, client, account):
-        payload = self._call(client, account, "INSTAGRAM_GET_MULTIPLE_NODES",
-                             {"object_ids": [row["container_id"]], "fields": "id,status_code,status"})
-        return _container_status(payload, row["container_id"])
+    def _apply(self, row, post: dict) -> str:
+        """Fold the server's view of the post into the attempt: ``published``, ``pending`` or ``stop``."""
+        entry = platform_entry(post, row["zernio_account_id"]) or {}
+        status = entry.get("status")
+        changes = {"platform_status": status}
+        if entry.get("platformPostId"):
+            changes["platform_post_id"] = str(entry["platformPostId"])[:200]
+        if entry.get("url"):
+            changes["permalink"] = str(entry["url"])[:500]
+        if status == "published":
+            self._save(row, "Published.", state="published", published_at=post.get("publishedAt") or now(),
+                       error=None, **changes)
+            return "published"
+        if status in {"failed", "cancelled"}:
+            label = PLATFORM_LABELS.get(row["platform"], row["platform"])
+            message = entry.get("error") or f"{label} did not publish this post."
+            self._save(row, f"{label} did not publish the post.", state="failed",
+                       error={"code": entry.get("errorCategory") or f"platform_{status}", "message": message,
+                              "source": entry.get("errorSource")}, **changes)
+            return "stop"
+        self._save(row, None, **changes)
+        return "pending"
 
-    def _poll(self, row, client, account) -> bool:
+    def _poll(self, row, server) -> bool:
         failures = 0
         for attempt in range(self.max_polls):
             if self.stopping.is_set():
                 return False
             try:
-                status = self._read_container(row, client, account)
+                result = self._apply(row, server.get_post(row["zernio_post_id"])["post"])
                 failures = 0
-            except ComposioError:
-                status, failures = None, failures + 1
+            except PostingServerError:
+                result, failures = "pending", failures + 1
                 if failures >= 3:
-                    self._save(row, "Container status could not be read; check status later.")
+                    self._save(row, "Post status could not be read; check status later.")
                     return False
-            if status:
-                self._save(row, None, container_status=status)
-            if status == "FINISHED":
-                self._save(row, "Container is ready to publish.", state="container_ready")
+            if result == "published":
                 return True
-            if status in {"ERROR", "EXPIRED"}:
-                self._save(row, f"Container {status.lower()}; nothing was published.", state="failed",
-                           error={"code": status.lower(),
-                                  "message": "Instagram could not process this video. Nothing was published."})
-                return False
-            if status == "PUBLISHED":
-                self._save(row, "Container already published; identify the post before anything else.",
-                           state="unknown", previous_state=row["state"], pending_effect="publish")
+            if result == "stop":
                 return False
             if attempt + 1 < self.max_polls:
                 self.sleep(self.poll_interval)
-        self._save(row, "Instagram is still processing. Check status in a few minutes.")
+        self._save(row, "Still publishing. Check status in a few minutes.")
         return False
-
-    def _publish(self, row, client, account) -> bool:
-        self._save(row, "Publishing the Reel.", pending_effect="publish")
-        try:
-            data = self._call(client, account, "INSTAGRAM_POST_IG_USER_MEDIA_PUBLISH", {
-                "ig_user_id": row["instagram_user_id"], "creation_id": row["container_id"],
-                "max_wait_seconds": 0})
-        except ComposioError as error:
-            if error.code in LOCAL_CODES or error.code == "account_mismatch":
-                self._save(row, "Stopped before publishing.", pending_effect=None,
-                           error={"code": error.code, "message": str(error)})
-                return False
-            raise  # any provider-side failure is treated as unknown and reconciled by reading
-        media_id = data.get("id") if isinstance(data, dict) else None
-        if not isinstance(media_id, str) or not _MEDIA_ID.fullmatch(media_id):
-            raise PublishError(502, "Instagram returned no media ID.", "invalid_response")
-        self._save(row, "Published.", state="published", pending_effect=None, media_id=media_id,
-                   posted_at=now())
-        return True
-
-    def _finish(self, row, client, account) -> bool:
-        if not row.get("published_at"):
-            identity = client.media_identity(account["id"], account["user_id"], row["media_id"],
-                                             version=client.PINNED_VERSION,
-                                             instagram_user_id=row["instagram_user_id"])
-            media = self._call(client, account, "INSTAGRAM_GET_IG_MEDIA", {
-                "ig_media_id": row["media_id"], "fields": "id,caption,permalink,timestamp,media_product_type"})
-            media = media if isinstance(media, dict) else {}
-            caption = media.get("caption") if isinstance(media.get("caption"), str) else None
-            matches = caption is not None and normalize_caption(caption) == normalize_caption(row["caption"])
-            warnings = row["warnings"] + ([] if matches else ["caption_readback_mismatch"])
-            self._save(row, "Read back from Instagram: owner and time verified.",
-                       published_at=identity["published_at"], permalink=_instagram_permalink(media.get("permalink")),
-                       readback={"owner_verified": True, "owner_id_namespace": identity.get("owner_id_namespace"),
-                                 "caption_matches": matches, "media_product_type": media.get("media_product_type")},
-                       warnings=warnings)
-        self._map(row)
-        self._cleanup(row)
-        return True
 
     def _map(self, row):
         if row["mapping"].get("status") == "mapped":
@@ -689,109 +727,50 @@ class Publisher:
         try:
             publication = self.learning.register_publication(Publication(
                 policy_id=policies[0]["id"], clip_id=row["clip_id"], account_id=row["account_id"],
-                media_id=row["media_id"], published_at=row["published_at"], sha256=row["sha256"]))
+                media_id=row["zernio_post_id"], published_at=row["published_at"], sha256=row["sha256"]))
         except HTTPException as error:
             self._save(row, "Learning mapping was refused.", mapping={"status": "refused", "detail": error.detail})
             return
         self.store.patch("learning_publications", publication["id"], mapping_source="app_published",
-                         mapping_detail="App uploaded these exact bytes (sha256) and published them; provider "
-                                        "verified owner, media identity and timestamp.",
-                         publish_attempt_id=row["id"])
+                         mapping_detail="App uploaded these exact bytes (sha256) and posted them through the "
+                                        "posting service, which reported the platform post.",
+                         publish_attempt_id=row["id"], provider=PROVIDER, platform=row["platform"],
+                         platform_post_id=row.get("platform_post_id"), permalink=row.get("permalink"))
         self._save(row, "Learning will measure this post.", state="mapped",
                    mapping={"status": "mapped", "publication_id": publication["id"], "policy_id": policies[0]["id"]})
 
-    def _cleanup(self, row):
-        for field, stamp in (("storage_object", "hosted_deleted_at"), ("cover_object", "cover_deleted_at")):
-            name = row.get(field)
-            if not name or row.get(stamp):
-                continue
-            others = [r for r in self.store.all(KIND) if r["id"] != row["id"] and r.get(field) == name
-                      and r["state"] not in {"published", "mapped", "failed", "cancelled"}]
-            if others:
-                continue
-            try:
-                storage = self.storage_factory()
-                if storage and storage.delete(name):
-                    self._save(row, None, **{stamp: now()})
-            except PublishStorageError:
-                pass  # best effort; the object is public anyway and is reused on a later post
-
     # ------------------------------------------------------------------ reconcile (reads only)
-    def _match_recent(self, row, client, account):
-        page = client.list_media(account["id"], account["user_id"], instagram_user_id=row["instagram_user_id"],
-                                 limit=10, version=client.PINNED_VERSION)
-        started = row.get("external_started_at") or row["created_at"]
-        floor = datetime.fromisoformat(started).astimezone(UTC) - timedelta(minutes=2)
-        claimed = {r.get("media_id") for r in self.store.all(KIND) if r["id"] != row["id"]}
-        wanted = normalize_caption(row["caption"])[:160]
-        found = [item for item in page["items"]
-                 if item["media_type"] == "VIDEO" and item["media_id"] not in claimed
-                 and datetime.fromisoformat(item["published_at"]) >= floor
-                 and (item.get("caption_excerpt") or "") == wanted]
-        return found
-
     def reconcile(self, identifier: str) -> dict:
         with self.lock:
             row = self.get(identifier)
+            self._require_current(row)
             if row.get("active"):
                 raise PublishError(409, "This attempt is running; wait for it to stop.", "active")
-            effect = row.get("pending_effect") if row["state"] == "unknown" else None
-            if row["state"] == "unknown" and effect == "upload":
-                storage = self.storage_factory()
-                ok = bool(storage and row.get("video_url") and storage.verify_public(row["video_url"], row["bytes"]))
-                return self._save(row, "Hosting checked." if ok else "Upload not found; safe to upload again.",
-                                  state="uploaded" if ok else "created", pending_effect=None, error=None)
-            if row["state"] not in {"unknown", "container_created"}:
+            if row["state"] == "unknown" and row.get("pending_effect") == "upload":
+                return self._save(row, "Upload outcome does not matter; it will upload again.", state="created",
+                                  pending_effect=None, error=None)
+            if row["state"] not in {"unknown", "submitted", "published"}:
                 return row
-            client = self.client_factory()
-            account = self.store.get("connected_accounts", row["account_id"]) or {}
+            server = self._server()
             try:
-                if effect == "create_container":
-                    found = self._match_recent(row, client, account)
-                    if len(found) == 1:
-                        return self._save(row, "Found the post on Instagram.", state="published",
-                                          pending_effect=None, media_id=found[0]["media_id"], error=None)
-                    if found:
-                        return self._save(row, "Several matching posts; check Instagram manually.")
-                    return self._save(row, "No post found. A leftover unpublished container (if any) expires "
-                                      "in 24 hours; safe to create a new one.", state="uploaded",
-                                      pending_effect=None, error=None)
-                if not row.get("container_id"):
-                    return self._save(row, "No container ID recorded; check Instagram manually.")
-                status = self._read_container(row, client, account)
-                if status == "PUBLISHED":
-                    found = self._match_recent(row, client, account)
-                    if len(found) == 1:
-                        return self._save(row, "Container published; matched the post.", state="published",
-                                          pending_effect=None, media_id=found[0]["media_id"],
-                                          container_status=status, error=None)
-                    return self._save(row, "Container is published but the post could not be matched uniquely. "
-                                      "Check Instagram; do not post again.", state="unknown",
-                                      container_status=status)
-                target = {"FINISHED": "container_ready", "IN_PROGRESS": "container_created",
-                          "ERROR": "failed", "EXPIRED": "failed"}.get(status)
-                if not target:
-                    return self._save(row, "Container status unreadable; still unknown.")
-                return self._save(row, f"Container status {status}.", state=target, pending_effect=None,
-                                  container_status=status, error=None if target != "failed" else
-                                  {"code": status.lower(), "message": "Instagram did not publish this container."})
-            except ComposioError as error:
+                if not row.get("zernio_post_id"):
+                    found = server.find_posts(row["external_id"])
+                    if len(found) > 1:
+                        return self._save(row, "Several posts match this attempt; check the account directly.")
+                    if not found:
+                        return self._save(row, "No post was created; resume to send it (the same request key "
+                                          "is reused, so it cannot post twice).", state="uploaded",
+                                          pending_effect=None, error=None)
+                    self._save(row, "Found the post on the posting service.", state="submitted",
+                               pending_effect=None, zernio_post_id=found[0]["id"], error=None)
+                    post = found[0]
+                else:
+                    post = server.get_post(row["zernio_post_id"])["post"]
+                    if row["state"] == "unknown":
+                        self._save(row, None, state="submitted", pending_effect=None, error=None)
+                if self._apply(row, post) == "published":
+                    self._map(row)
+                return self.get(identifier)
+            except PostingServerError as error:
                 return self._save(row, "Status check failed; still unknown.",
-                                  last_reconcile_error={"code": error.code, "message": str(error)})
-
-    # ------------------------------------------------------------------ readiness (read-only)
-    def readiness(self, account_id: str) -> dict:
-        account = self.store.get("connected_accounts", account_id)
-        if not account or account.get("status") != "active" or not account.get("instagram_user_id"):
-            raise PublishError(404, "Active connected account not found.", "not_found")
-        client = self.client_factory()
-        try:
-            usage, total = _quota(self._call(client, account, "INSTAGRAM_GET_IG_USER_CONTENT_PUBLISHING_LIMIT",
-                                             {"ig_user_id": account["instagram_user_id"],
-                                              "fields": "quota_usage,config"}))
-        except ComposioError as error:
-            return {"account_id": account_id, "status": "missing_publish_scope_or_error", "code": error.code,
-                    "message": "The read-only publishing-limit check failed. The account may lack "
-                               "instagram_business_content_publish; reconnect with that scope."}
-        return {"account_id": account_id, "status": "ready", "quota_usage": usage, "quota_total": total,
-                "tool_version": ComposioPublishingClient.PINNED_VERSION}
+                                  last_reconcile_error={"code": error.code, "message": error.message})

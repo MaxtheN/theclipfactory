@@ -86,7 +86,7 @@ class PostScheduler:
             raise PublishError(422, "Choose one to three different accounts.", "invalid_accounts")
         with self.publisher.lock:
             # Same checks as posting now, for every account, before anything is saved (all-or-nothing).
-            self.publisher._require_storage()
+            self.publisher._require_server()
             validated, problems = [], []
             for account_id in account_ids:
                 try:

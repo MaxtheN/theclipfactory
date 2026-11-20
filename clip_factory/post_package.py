@@ -25,8 +25,8 @@ CAPTION_MAX = 2200
 HASHTAG_MAX = 30
 MENTION_MAX = 20
 COLLABORATORS_MAX = 3
-# The pinned Composio tool schema has no `collaborators` parameter (additionalProperties false).
-COLLABORATORS_SUPPORTED = False
+# Instagram Reels collaborators (up to 3 usernames) go out through the posting server.
+COLLABORATORS_SUPPORTED = True
 COVER_MAX_BYTES = 8 * 1024 * 1024
 CANDIDATES = 6
 CTA_LINK_IN_BIO = "link in bio"

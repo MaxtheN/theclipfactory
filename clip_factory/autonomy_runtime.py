@@ -256,7 +256,9 @@ class AutonomyRuntime:
 
         account = self.store.get("connected_accounts", policy["account_id"])
         if not account or account.get("profile_id") != policy["profile_id"] or account.get("status") != "active":
-            raise WorkError("Reconnect the selected Instagram account before collecting metrics.")
+            raise WorkError("Reconnect the selected account before collecting metrics.")
+        if account.get("provider") == "zernio":
+            return self._collect_posting(account, publication)
         if not account.get("instagram_user_id"):
             raise WorkError("Verify the selected Instagram identity before collecting metrics.")
         reply = self.client().collect_insights(account["id"], account["user_id"], publication["media_id"],
@@ -269,6 +271,30 @@ class AutonomyRuntime:
             "units": {metric: "count" for metric in reply["metrics"]},
             "window_start": publication["published_at"], "window_end": stamp,
             "source": "Composio Instagram media insights", "cumulative": True}
+
+    def _collect_posting(self, account, publication):
+        """Metrics for a post made through the posting server. A metric the platform does not report is
+        recorded as unavailable (None), never as zero."""
+        from .posting_server import PLATFORM_LABELS, PostingServerError, parse_analytics
+
+        accounts = getattr(self.app.state, "posting_accounts", None)
+        server = accounts.server_factory() if accounts is not None else None
+        if server is None:
+            raise WorkError("Sign in to Growth Factory cloud to collect metrics.")
+        try:
+            reply = server.analytics(publication["media_id"])
+        except PostingServerError as error:
+            raise WorkError(f"Metrics could not be read: {error.message}") from None
+        result = parse_analytics(reply, account["platform"])
+        if result["status"] == "syncing":
+            raise WorkError("The posting service is still syncing metrics for this post. It will retry.")
+        stamp = now()
+        metrics = result["metrics"] or {name: None for name in ("views", "likes", "comments", "shares")}
+        label = PLATFORM_LABELS.get(account["platform"], account["platform"])
+        return {"account_id": account["id"], "media_id": publication["media_id"], "metrics": metrics,
+            "collected_at": stamp, "units": {metric: "count" for metric in metrics},
+            "window_start": publication["published_at"], "window_end": stamp,
+            "source": f"{label} post metrics via the posting service (Zernio)", "cumulative": True}
 
     def analyze(self, context):
         jobs = self.app.state.jobs

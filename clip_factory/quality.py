@@ -16,7 +16,7 @@ from pathlib import Path
 
 from . import creative_score, media
 from .jobs import WorkError
-from .publish_storage import MAX_BYTES
+from .posting_server import MAX_VIDEO_BYTES
 from .ranking import caption_checks
 from .store import now
 
@@ -24,7 +24,7 @@ WIDTH, HEIGHT = 1080, 1920
 MIN_SECONDS, MAX_SECONDS = 7.0, 90.0
 BLACK_SECONDS, FROZEN_SECONDS = 1.0, 2.0
 VIDEO_CODECS = {"h264", "hevc"}
-GATE_VERSION = 3
+GATE_VERSION = 4
 
 
 def detect_black_frozen(path: Path, *, timeout: float = 120) -> dict | None:
@@ -116,10 +116,10 @@ def evaluate(clip: dict, path: Path, *, expected_sha256: str | None = None,
                              "Caption timing was not checked for this render; burned captions alone do not verify it."))
     try:
         size = path.stat().st_size
-        checks.append(_check("size", "Within 50 MB hosting limit", "pass" if 0 < size <= MAX_BYTES else "fail",
+        checks.append(_check("size", "Within 300 MB posting limit", "pass" if 0 < size <= MAX_VIDEO_BYTES else "fail",
                              f"{size / 1048576:.1f} MB"))
     except OSError:
-        checks.append(_check("size", "Within 50 MB hosting limit", "fail", "File is unreadable."))
+        checks.append(_check("size", "Within 300 MB posting limit", "fail", "File is unreadable."))
     playback = (clip.get("technical_checks") or {}).get("playback_format_passed")
     if playback is not None:
         checks.append(_check("playback", "Render playback checks", "pass" if playback else "fail",
