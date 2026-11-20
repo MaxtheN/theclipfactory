@@ -79,8 +79,8 @@ check those two files first.
 | `growth-factory-groq` | `api-key` | Groq free key (GPT-OSS 120B/20B, Qwen 3.8 27B; 8k tokens/min; no vision). Saved but **not wired** into the app |
 | `growth-factory-supabase` | `refresh-token` | Signed-in user session (created by the app) |
 
-Supabase project `nywbjxmratokyplwjjhu` (CLI installed at `~/.local/bin/supabase`,
-logged in + linked). Applied: `202611140001_growth_factory.sql`,
+Supabase project `spdtisizhcepmsogjvnr` (moved from `nywbjxmratokyplwjjhu` on
+2026-11-19; see `docs/cloud-state.md`). Applied: `202611140001_growth_factory.sql`,
 `202611140002_publish_bucket.sql` (public bucket `gf-publish`, MP4),
 `202611140003_publish_bucket_covers.sql` (JPEG covers). Email confirmation is
 OFF (email+password sign-up works instantly). Publishable key is bundled in
