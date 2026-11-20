@@ -1,0 +1,9 @@
+# Supabase CLI settings for the Growth Factory cloud project (spdtisizhcepmsogjvnr).
+project_id = "growth-factory"
+
+[functions.posting]
+# Zernio's webhook cannot send a Supabase JWT, so the gateway check is off and the function
+# verifies the caller itself: a valid signed-in session that owns the X-GF-Workspace workspace,
+# or a Zernio webhook signature.
+verify_jwt = false
+entrypoint = "./functions/posting/index.ts"
