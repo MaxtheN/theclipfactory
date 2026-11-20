@@ -35,6 +35,13 @@ def test_pages_match_the_guide_files():
     assert len(help_api.PAGES) == len(set(help_api.PAGES))
 
 
+def test_frontend_guide_pages_and_url_match_the_engine():
+    source = (GUIDE.parents[1] / "frontend" / "src" / "growth" / "guideLinks.ts").read_text()
+    union = source.split("export type GuidePage =", 1)[1].split(";", 1)[0]
+    assert re.findall(r'"([^"]*)"', union) == list(help_api.PAGES)
+    assert f'GUIDE_URL = "{help_api.DEFAULT_GUIDE_URL}"' in source
+
+
 def test_guide_url_uses_the_default_base_and_clean_urls(monkeypatch):
     monkeypatch.delenv("GF_GUIDE_URL", raising=False)
     assert help_api.guide_url() == "https://growth-factory-landing.vercel.app/guide/"
