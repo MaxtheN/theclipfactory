@@ -63,3 +63,21 @@ jobs:
         run: python scripts/smoke-managed-python.py
       - name: Headless bootstrap smoke (not a native desktop test)
         run: python scripts/smoke-headless.py
+  posting-server:
+    # The Zernio posting Edge Function (supabase/functions/posting); platform-independent.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Format, lint and type-check
+        run: |
+          deno fmt --check posting/
+          deno lint posting/
+          deno check posting/index.ts posting/handler_test.ts
+      - name: Tests
+        run: deno test posting/

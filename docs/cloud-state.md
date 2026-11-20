@@ -18,6 +18,14 @@ This is **single-owner privacy**, not team membership/sharing. Administrators an
 
 Allowed record/event kinds are `profiles`, `campaigns`, `strategy_versions`, `campaign_observations`, `clips`, `feedback`, `learning_policies`, `learning_publications`, `learning_snapshots`, and `learning_experiments`. They designate future **metadata projections**, never permission to upload the raw Store objects. Config, connected accounts, OAuth intents, jobs, raw video, exports and runtime records are excluded.
 
+## Posting server tables
+
+The `posting` Edge Function (2026-11-20, [posting server](posting-server.md)) adds five `gf_posting_*` tables
+(workspace→Zernio profile, presigned uploads, owned posts, webhook events, rate windows) and `gf_posting_take`. They
+force RLS with **no** policies and no `anon`/`authenticated` grants: only the function's `service_role` touches them,
+insert-only except the rate table. Apply and probe them with `202611200001_posting_server.sql` and
+`supabase/tests/posting_server_rls.sql`.
+
 ## Apply and verify
 
 1. Confirm the exact project above and inspect existing `public.gf_*` objects. Do not apply over any existing namespace.
