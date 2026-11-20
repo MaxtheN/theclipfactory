@@ -32,6 +32,8 @@ import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { reviewPreview, workspaceApi } from "./workspaceApi";
 import { Disclosure, Empty, Field, Pill, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
+import { PillSelect } from "./PillField";
+import { LEARN, METRIC, METRIC_LABELS } from "./choiceOptions";
 import { ListRow, Panel, Section, Stack, StatRow } from "./layout";
 
 const productionKeys: (keyof Direction)[] = [
@@ -493,15 +495,13 @@ export function HandEnteredResults({
               </select>
             )}
           </Field>
-          <Field label="Metric name">
-            {(id) => (
-              <input
-                id={id}
-                value={metric}
-                onChange={(e) => setMetric(e.target.value)}
-              />
-            )}
-          </Field>
+          <PillSelect
+            label="Metric name"
+            options={METRIC}
+            labels={METRIC_LABELS}
+            value={metric}
+            onChange={setMetric}
+          />
           <Field
             label="Observed count"
             hint="Leave blank for unknown. Only enter a measured number."
@@ -598,16 +598,13 @@ export function HandEnteredResults({
             <span>02</span>
             <div>
               <strong>Question</strong>
-              <Field label="What would we like to learn?">
-                {(id) => (
-                  <AutoTextarea
-                    id={id}
-                    rows={2}
-                    value={hypothesis}
-                    onChange={(e) => setHypothesis(e.target.value)}
-                  />
-                )}
-              </Field>
+              <PillSelect
+                label="What would we like to learn?"
+                options={LEARN}
+                maxLength={500}
+                value={hypothesis}
+                onChange={setHypothesis}
+              />
             </div>
           </div>
           <i />

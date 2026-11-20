@@ -1,4 +1,6 @@
 import { Field } from "./parts";
+import { PillSelect } from "./PillField";
+import { CTA } from "./choiceOptions";
 import type { CraftRequest } from "./productionContracts";
 import { ExtensionToggles } from "./FactoryUpgrades";
 
@@ -63,7 +65,7 @@ export function CraftControls({ value, onChange }: { value: CraftState; onChange
     {toggle("loudness", "normalize", "off", "Normalise loudness (−14 LUFS)")}
     {toggle("cover", "best_frame", "first_frame", "Pick the best cover frame")}
     {toggle("crop_focus", "auto_face", "fixed", "Follow the speaker's face (9:16 crop)")}
-    <Field label="End card call to action">{id => <input id={id} type="text" maxLength={80} placeholder="None" value={v.cta_text} onChange={e => set("cta_text", e.target.value)} />}</Field>
+    <PillSelect label="End card call to action" hint="None picked shows no end card." options={CTA} maxLength={80} value={v.cta_text} onChange={text => set("cta_text", text)} />
     <ExtensionToggles value={value.extensions ?? {}} onChange={extensions => onChange({ ...value, extensions })} />
     <Field label="A/B variants">{id => <select id={id} value={value.ab} onChange={e => onChange({ ...value, ab: e.target.value as AbVariable })}><option value="">One version</option><option value="structure">Hook first vs in order</option><option value="hook_format">Title card vs text strip</option><option value="caption_style">Word-pop vs plain captions</option></select>}</Field>
   </>;

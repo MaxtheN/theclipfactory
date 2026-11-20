@@ -29,7 +29,7 @@ vi.mock("../api", async () => {
 });
 import { GrowthApp } from "./GrowthApp";
 import { saveDemoResult, type DemoResult } from "./demoStore";
-import { setPills, pillValue, pillGroup, pickPill } from "../test-pills";
+import { setPills, pillValue, pickPill, pillGroup } from "../test-pills";
 const path = "/api/campaigns/preview-campaign";
 // Style rules belong to the workspace (profile), inherited by its campaigns.
 const workspacePath = "/api/profiles/preview-profile-allin";
@@ -431,9 +431,9 @@ describe("approval transition regressions", () => {
     await waitFor(() => expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"));
     openEditingRules();
     fireEvent.click(screen.getByText("Notes & reference"));
-    expect(screen.getByLabelText("Why try this?")).toHaveValue(active.reason);
+    expect(pillValue("Why try this?")).toBe(active.reason);
     expect(screen.queryByRole("button", { name: /^Save draft\b/ })).toBeNull();
-    fireEvent.change(screen.getByLabelText("Why try this?"), { target: { value: "Compare the same rules with a clearer reason." } });
+    setPills("Why try this?", "Compare the same rules with a clearer reason.");
     fireEvent.click(screen.getByRole("button", { name: /^Save draft\b/ }));
     await screen.findByRole("button", { name: /^Approve style rules\b/ });
     expect(screen.getByRole("heading", { name: "Style rules" })).toBeVisible();

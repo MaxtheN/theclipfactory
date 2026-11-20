@@ -121,15 +121,6 @@ export const LEARN = [
   "Which topics travel?",
 ] as const;
 
-export const NEXT_EDIT = [
-  "Open on the claim",
-  "Cut to under 30 seconds",
-  "Add a cold open",
-  "New hook text",
-  "Tighter pauses",
-  "Bigger captions",
-] as const;
-
 export const ANGLE = [
   "Put the point before the context",
   "Contrarian take",

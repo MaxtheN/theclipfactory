@@ -29,6 +29,8 @@ import { CloudSignIn } from "./CloudSignIn";
 import { PostPreview } from "./PostPreview";
 import { PanelDialog } from "./PanelDialog";
 import { Icon } from "./Icon";
+import { PillSelect } from "./PillField";
+import { OVERRIDE_REASON } from "./choiceOptions";
 import { clipMediaUrl } from "./productionApi";
 
 export interface PostableClip {
@@ -307,7 +309,7 @@ export function PostToInstagram({
           <summary>Details</summary>
           <ul>{report.reasons.map(r => <li key={r}>{r}</li>)}</ul>
         </details>}
-        {held && !compact && <Field label="Override reason (required to post a held clip)">{id => <AutoTextarea id={id} rows={2} value={override} onChange={e => setOverride(e.target.value)} placeholder="Why is it fine to post anyway?" />}</Field>}
+        {held && !compact && <PillSelect label="Override reason (required to post a held clip)" options={OVERRIDE_REASON} maxLength={500} value={override} onChange={setOverride} />}
       </> : !error && <p className="gf-help">Checking quality…</p>}
     </section>
 
@@ -419,7 +421,7 @@ export function PostToInstagram({
         </div>}
       </fieldset>
       {captionProblems.length > 0 && <div className="gf-inline-error" role="alert">{[...new Set(captionProblems)].join(" ")}</div>}
-      {compact && held && <div className="gf-post-group"><p className="gf-post-recovery-note">{verdict}</p><Field label="Override reason (required to post a held clip)">{id => <AutoTextarea id={id} rows={2} value={override} onChange={e => setOverride(e.target.value)} placeholder="Why is it fine to post anyway?" />}</Field></div>}
+      {compact && held && <div className="gf-post-group"><p className="gf-post-recovery-note">{verdict}</p><PillSelect label="Override reason (required to post a held clip)" options={OVERRIDE_REASON} maxLength={500} value={override} onChange={setOverride} /></div>}
       {needsApproval && !compact && <p className="gf-help" role="status">{approvalNote}</p>}
       <button className="gf-button full gf-post-submit" disabled={!ready} onClick={() => void submit()}>{submitLabel}</button>
       {notice && <p role="status">{notice}</p>}
