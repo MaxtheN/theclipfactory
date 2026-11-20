@@ -43,6 +43,7 @@ import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { workspaceApi } from "./workspaceApi";
 import { Icon } from "./Icon";
 import { LoopRehearsalControls, LoopRehearsalInspector, rehearsalModel, useLoopRehearsal } from "./LoopRehearsal";
+import { ListRow, Panel, Section } from "./layout";
 import "./factory-map.css";
 
 const FAMILIES: Family[] = ["understand", "create", "judge", "ship", "learn"];
@@ -736,14 +737,23 @@ const OVERVIEW_STAGES: { label: string; ids: StationId[]; detail: string }[] = [
   { label: "Ship", ids: ["post", "measure"], detail: "Instagram and measurement" },
   { label: "Learn", ids: ["strategist", "rules", "builder"], detail: "Strategist and style rules" },
 ];
-function FactoryOverview({ model, rehearsal, selected, onSelect }: { model: FactoryMapModel; rehearsal?: ReturnType<typeof useLoopRehearsal>; selected: number; onSelect: (index: number) => void }) {
+function FactoryOverview({ model, rehearsal, selected, onSelect, onOpen }: { model: FactoryMapModel; rehearsal?: ReturnType<typeof useLoopRehearsal>; selected: number; onSelect: (index: number) => void; onOpen: (id: StationId) => void }) {
   const activeStage = rehearsal ? [0, 1, 2, 3, 4, 4][rehearsal.phase] : OVERVIEW_STAGES.findIndex(group => model.stations.some(s => group.ids.includes(s.id) && s.state === "active"));
-  return <ol className="gf-fmap-overview" aria-label="Factory growth loop">{OVERVIEW_STAGES.map((group, index) => {
+  const picked = OVERVIEW_STAGES[selected] ?? OVERVIEW_STAGES[0];
+  const pickedStations = model.stations.filter(s => picked.ids.includes(s.id));
+  return <><ol className="gf-fmap-overview" aria-label="Factory growth loop">{OVERVIEW_STAGES.map((group, index) => {
     const members = model.stations.filter(s => group.ids.includes(s.id));
     const current = members.find(s => s.state === "failed") || members.find(s => s.state === "active") || members.find(s => s.state === "waiting") || members.find(s => s.state === "done") || members[0];
     const status = rehearsal ? index === activeStage ? rehearsal.result?.status === "completed" ? "Draft saved" : rehearsal.title : index < activeStage ? "Inspected" : "Next" : current?.status || "No work recorded";
     return <li key={group.label} className={`${index === activeStage ? "is-current" : ""}${rehearsal?.transition && index === activeStage ? " is-transition" : ""}`}><button type="button" aria-current={index === activeStage ? "step" : undefined} aria-pressed={selected === index} onClick={() => onSelect(index)}><span className="gf-fmap-overview-step">{String(index + 1).padStart(2, "0")}</span><strong>{group.label}</strong><span>{status}</span></button></li>;
-  })}</ol>;
+  })}</ol>
+  <Panel as="section" padding="compact" className="gf-fmap-stage" aria-label="Selected factory stage">
+    <Section as="div" level={3} title={picked.label} meta={picked.detail}>
+      <div className="gf-fmap-stage-rows">
+        {pickedStations.map(s => <ListRow key={s.id} action={<div className="gf-fmap-stage-actions"><span className="gf-fmap-stage-state" data-state={s.state}>{STATE_LABEL[s.state]}</span><button type="button" className="gf-ui-text-button" aria-label={`Open ${s.title} details`} onClick={() => onOpen(s.id)}>Details</button></div>}><strong>{s.title}</strong><span>{s.status}</span></ListRow>)}
+      </div>
+    </Section>
+  </Panel></>;
 }
 
 export function FactoryMap({
@@ -826,10 +836,10 @@ export function FactoryMap({
           </span>
         </div>
       </header>
-      <FactoryOverview model={model} rehearsal={mode === "demo" ? rehearsal : undefined} selected={overview} onSelect={setOverview} />
+      <FactoryOverview model={model} rehearsal={mode === "demo" ? rehearsal : undefined} selected={overview} onSelect={setOverview} onOpen={setOpen} />
       {mode === "demo" && <><LoopRehearsalControls state={rehearsal} /><LoopRehearsalInspector state={rehearsal} /></>}
       {mode === "real" && <RunLedgerCard runs={runs} clips={clips} />}
-      <details className="gf-fmap-engine-details"><summary>Open full map</summary>
+      <details className="gf-fmap-engine-details gf-ui-disclosure"><summary>Open full map</summary>
       {mode === "real" && replay.on && replayRun && (
         <div className="gf-fmap-replay" role="status">
           <strong>Demo replay · recorded run, {REPLAY_SPEED}× speed</strong>
