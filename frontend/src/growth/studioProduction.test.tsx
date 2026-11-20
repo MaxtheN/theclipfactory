@@ -179,11 +179,25 @@ describe("Studio production integration", () => {
     expect(productionApi.campaignProduce).not.toHaveBeenCalled();
   });
   it("requires playable exact output and an explicit acceptance before export", async () => {
-    render(<Studio w={workspace()} factory={factory([clip])} next={() => {}} />);
-    expect(screen.getByRole("button", { name: "Approve this clip" })).toBeDisabled();
+    const revision = { ...clip, revision_number: 2 };
+    render(<Studio w={workspace()} factory={factory([revision])} next={() => {}} />);
+    expect(screen.getByRole("button", { name: "Approve revision 2" })).toBeDisabled();
     loaded();
-    fireEvent.click(screen.getByRole("button", { name: "Approve this clip" }));
-    await waitFor(() => expect(productionApi.review).toHaveBeenCalledExactlyOnceWith(clip, true));
+    // Approve and export are separate controls; export waits for approval (AC-CPR-019.1).
+    expect(screen.getByRole("button", { name: "Export approved MP4" })).toBeDisabled();
+    expect(screen.getByText("Export and posting unlock after you approve revision 2.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve revision 2" }));
+    // The approval is recorded on the exact revision shown, and nothing is exported (AC-CPR-019.2, AC-CPR-019.3).
+    await waitFor(() => expect(productionApi.review).toHaveBeenCalledExactlyOnceWith(revision, true));
+    expect(productionApi.createVerifiedExport).not.toHaveBeenCalled();
+  });
+  it("shows an approved revision with export and posting as separate later actions", () => {
+    render(<Studio w={workspace()} factory={factory([{ ...clip, approved: true, revision_number: 3 }])} next={() => {}} />);
+    loaded();
+    expect(screen.getByText(/Revision 3 approved\. Exporting and posting are separate steps\./)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Approve/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /approve.*(post|schedule)/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export approved MP4" })).toBeEnabled();
     expect(productionApi.createVerifiedExport).not.toHaveBeenCalled();
   });
   it("submits export once and reconciles history after a response-unknown failure", async () => {
@@ -230,7 +244,7 @@ describe("Studio production integration", () => {
   it("retains critique as a separate gate from playback and human acceptance", () => {
     render(<Studio w={workspace()} factory={factory([{ ...clip, team_run_id: "run", team_review_status: "fail" }])} next={() => {}} />);
     loaded();
-    expect(screen.getByRole("button", { name: "Approve this clip" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Approve this revision" })).toBeDisabled();
     expect(screen.getByText(/Resolve the team critique/)).toBeInTheDocument();
     expect(productionApi.review).not.toHaveBeenCalled();
   });
