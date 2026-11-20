@@ -29,7 +29,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("Post copy in Post to Instagram", () => {
   it("prefills the caption with saved copy and labels a template fallback", async () => {
     vi.spyOn(postCopyApi, "get").mockResolvedValue({ clip_id: "c1", post_copy: copy(), job: null });
-    render(<PostToInstagram clip={clip} approve={vi.fn()} />);
+    render(<PostToInstagram clip={clip} />);
     const field = await screen.findByLabelText("Caption");
     await waitFor(() => expect((field as HTMLTextAreaElement).value).toContain("link in bio"));
     expect(screen.getByText(/Template \(no model\)/)).toBeTruthy();
@@ -40,7 +40,7 @@ describe("Post copy in Post to Instagram", () => {
       .mockResolvedValueOnce({ clip_id: "c1", post_copy: copy(), job: null })
       .mockResolvedValueOnce({ clip_id: "c1", post_copy: copy({ caption: "Model copy", source: "model", label: "Written by the local model", model_id: "ollama:qwen3-vl:4b-instruct", fallback_reason: null }), job: { id: "j", status: "completed", message: "", error: null } });
     const regen = vi.spyOn(postCopyApi, "regenerate").mockResolvedValue({ clip_id: "c1", post_copy: copy(), job: { id: "j", status: "queued", message: "Queued", error: null } });
-    render(<PostToInstagram clip={clip} approve={vi.fn()} pollMs={1} />);
+    render(<PostToInstagram clip={clip} pollMs={1} />);
     const field = await screen.findByLabelText("Caption") as HTMLTextAreaElement;
     await waitFor(() => expect(field.value).toContain("link in bio"));
     fireEvent.change(field, { target: { value: "My own words" } });

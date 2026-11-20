@@ -568,7 +568,7 @@ describe("approval transition regressions", () => {
     );
     expect(screen.getByLabelText("Production mode")).toHaveValue("agent");
     expect(
-      screen.queryByRole("button", { name: /^Approve this clip\b/ }),
+      screen.queryByRole("button", { name: /^Approve (revision \d+|this revision)$/ }),
     ).not.toBeInTheDocument();
     expect(await previewRequest<Clip[]>("/api/clips")).toHaveLength(1);
   });

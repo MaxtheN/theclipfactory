@@ -483,7 +483,10 @@ describe("standalone onboarding shell", () => {
     expect(
       screen.queryByRole("dialog", { name: "Quick actions" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Factory" })).toHaveFocus();
+    // The shell moves focus in an effect after the heading renders; slow runners need the wait.
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Factory" })).toHaveFocus(),
+    );
     expect(
       screen.getByRole("navigation", { name: "Main navigation" }),
     ).toBeVisible();

@@ -64,7 +64,7 @@ beforeEach(() => {
 
 describe("PostToInstagram", () => {
   it("keeps quality visible and preserves posting drafts when the review sheet closes", async () => {
-    const view = render(<PostToInstagram compact clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} now={() => NOW} />);
+    const view = render(<PostToInstagram compact clip={{ ...clip, approved: true }} pollMs={60000} now={() => NOW} />);
     expect(await screen.findByText("Passed: ready to post")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Clip with burned-in captions")).not.toBeInTheDocument();
@@ -80,9 +80,9 @@ describe("PostToInstagram", () => {
     await userEvent.click(screen.getByRole("button", { name: "Prepare your post" }));
     expect(screen.getByLabelText("Caption")).toHaveValue("A caption I am still editing");
     expect(screen.getByLabelText("Date and time")).toHaveValue(savedDate);
-    view.rerender(<PostToInstagram compact activeSurface={false} clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} now={() => NOW} />);
+    view.rerender(<PostToInstagram compact activeSurface={false} clip={{ ...clip, approved: true }} pollMs={60000} now={() => NOW} />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    view.rerender(<PostToInstagram compact activeSurface clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} now={() => NOW} />);
+    view.rerender(<PostToInstagram compact activeSurface clip={{ ...clip, approved: true }} pollMs={60000} now={() => NOW} />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Prepare your post" }));
     expect(screen.getByLabelText("Caption")).toHaveValue("A caption I am still editing");
@@ -93,7 +93,7 @@ describe("PostToInstagram", () => {
 
   it("keeps unknown posting outcomes visible outside the closed sheet", async () => {
     api.targets.mockResolvedValue(targets({ attempts: [attempt({ state: "unknown", active: false })] }));
-    render(<PostToInstagram compact clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    render(<PostToInstagram compact clip={{ ...clip, approved: true }} pollMs={60000} />);
     expect(await screen.findByText(/A post needs a status check/)).toBeInTheDocument();
     expect(screen.getByLabelText("Posting activity")).toHaveTextContent("Outcome unknown · check status: 1");
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
@@ -105,7 +105,7 @@ describe("PostToInstagram", () => {
 
   it("keeps a held clip's override editable in the compact posting sheet", async () => {
     api.quality.mockResolvedValue({ ...pass, verdict: "hold", reasons: ["Check the crop"] });
-    render(<PostToInstagram compact clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    render(<PostToInstagram compact clip={{ ...clip, approved: true }} pollMs={60000} />);
     await screen.findByText("Quality gate: hold");
     await userEvent.click(screen.getByRole("button", { name: "Prepare your post" }));
     const dialog = screen.getByRole("dialog", { name: "Prepare your post" });
@@ -118,47 +118,57 @@ describe("PostToInstagram", () => {
 
   it("shows sign in required and disables posting", async () => {
     api.targets.mockResolvedValue(targets({ signed_in: false }));
-    render(<PostToInstagram clip={clip} approve={vi.fn()} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} />);
     expect(await screen.findByText("Sign in required.")).toBeInTheDocument();
     await userEvent.click(screen.getByLabelText(/brand/));
-    expect(screen.getByRole("button", { name: "Approve & post" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Post to Instagram" })).toBeDisabled();
   });
 
   it("offers sign in right where it is needed and says why", async () => {
     api.targets.mockResolvedValue(targets({ signed_in: false }));
-    render(<PostToInstagram clip={clip} approve={vi.fn()} />);
+    render(<PostToInstagram clip={clip} />);
     expect(await screen.findByText(/so Instagram can fetch it/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  it("approves the exact revision then posts to each chosen account", async () => {
-    const approve = vi.fn().mockResolvedValue({ ...clip, approved: true });
+  it("posts an already-approved revision to each chosen account", async () => {
     api.post.mockResolvedValueOnce(attempt()).mockResolvedValueOnce(attempt({ id: "at-2", account_id: "acct-2", account_name: "second" }));
-    render(<PostToInstagram clip={clip} approve={approve} pollMs={60000} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} pollMs={60000} />);
     expect(await screen.findByDisplayValue("Default caption")).toBeInTheDocument();
     expect(screen.getByText("Quality gate: pass")).toBeInTheDocument();
     await userEvent.click(screen.getByLabelText(/brand/));
     await userEvent.click(screen.getByLabelText(/second/));
-    await userEvent.click(screen.getByRole("button", { name: "Approve & post" }));
+    await userEvent.click(screen.getByRole("button", { name: "Post to Instagram" }));
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
-    expect(approve).toHaveBeenCalledTimes(1);
     expect(api.post).toHaveBeenNthCalledWith(1, "c1", { account_id: "acct-1", caption: "Default caption", sha256: SHA,
       share_to_feed: true, cover_time_ms: null });
     expect(await screen.findAllByText("Queued")).toHaveLength(2);
   });
 
-  it("does not post when approval is not recorded", async () => {
-    render(<PostToInstagram clip={clip} approve={vi.fn().mockResolvedValue(false)} />);
+  it("never approves or posts an unapproved revision, and offers no combined action (AC-CPR-019.3, AC-CPR-019.4)", async () => {
+    render(<PostToInstagram clip={clip} />);
     await userEvent.click(await screen.findByLabelText(/brand/));
-    await userEvent.click(screen.getByRole("button", { name: "Approve & post" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("nothing was posted");
+    expect(screen.getByRole("button", { name: "Post to Instagram" })).toBeDisabled();
+    expect(screen.getByText(/Approve this revision to post it\. Approving never posts on its own\./)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText("Schedule"));
+    expect(screen.getByRole("button", { name: "Schedule post" })).toBeDisabled();
     expect(api.post).not.toHaveBeenCalled();
+    expect(api.schedule).not.toHaveBeenCalled();
+  });
+
+  it("keeps the compact post editor closed until the revision is approved", async () => {
+    const view = render(<PostToInstagram compact clip={clip} pollMs={60000} />);
+    expect(screen.getByRole("button", { name: /Prepare your post/ })).toBeDisabled();
+    expect(screen.getByText(/Approve this revision to post it/)).toBeInTheDocument();
+    view.rerender(<PostToInstagram compact clip={{ ...clip, approved: true }} pollMs={60000} />);
+    expect(screen.getByRole("button", { name: /Prepare your post/ })).toBeEnabled();
   });
 
   it("requires an override reason when the gate holds", async () => {
     api.quality.mockResolvedValue({ ...pass, verdict: "hold", reasons: ["Captions burned in: none"] });
     api.post.mockResolvedValue(attempt());
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} pollMs={60000} />);
     expect(await screen.findByText("Captions burned in: none")).toBeInTheDocument();
     await userEvent.click(screen.getByLabelText(/brand/));
     const button = screen.getByRole("button", { name: "Post to Instagram" });
@@ -174,7 +184,7 @@ describe("PostToInstagram", () => {
       attempt({ id: "at-2", account_id: "acct-2", account_name: "second", state: "mapped", active: false, permalink: "https://www.instagram.com/reel/X/" }),
     ] }));
     api.reconcile.mockResolvedValue(attempt({ state: "container_ready", active: false }));
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} />);
     expect(await screen.findByText("Outcome unknown · check status")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open reel" })).toHaveAttribute("href", "https://www.instagram.com/reel/X/");
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
@@ -186,7 +196,7 @@ describe("PostToInstagram", () => {
   });
 
   it("counts caption limits live and blocks posting over a limit", async () => {
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} />);
     const field = await screen.findByLabelText("Caption");
     await userEvent.click(screen.getByLabelText(/brand/));
     expect(screen.getByText("15 / 2,200 characters")).toBeInTheDocument();
@@ -201,7 +211,7 @@ describe("PostToInstagram", () => {
 
   it("adds link in bio, picks a cover frame and turns off feed sharing", async () => {
     api.post.mockResolvedValue(attempt());
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} pollMs={60000} />);
     await screen.findByDisplayValue("Default caption");
     await userEvent.click(screen.getByRole("button", { name: "Add “Link in bio”" }));
     expect(screen.getByLabelText("Caption")).toHaveValue("Default caption\n\nLink in bio.");
@@ -222,7 +232,7 @@ describe("PostToInstagram", () => {
   it("previews the post on a Reels-style phone with a truncated caption", async () => {
     const long = "First line of the caption that is pretty long\nSecond line keeps going\nThird line is hidden until more";
     api.targets.mockResolvedValue(targets({ default_caption: long }));
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} />);
     const preview = await screen.findByLabelText("Post preview");
     await waitFor(() => expect(within(preview).getByTestId("preview-caption")).toHaveTextContent(/pretty long… more$/));
     expect(within(preview).getByText("brand")).toBeInTheDocument();
@@ -234,7 +244,7 @@ describe("PostToInstagram", () => {
 
   it("uses a per-account caption override for the second account", async () => {
     api.post.mockResolvedValueOnce(attempt()).mockResolvedValueOnce(attempt({ id: "at-2", account_id: "acct-2" }));
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} pollMs={60000} />);
     await screen.findByDisplayValue("Default caption");
     await userEvent.click(screen.getByLabelText(/brand/));
     await userEvent.click(screen.getByLabelText(/second/));
@@ -250,7 +260,7 @@ describe("PostToInstagram", () => {
 
   it("schedules for later with a suggestion chip, local timezone and the app-open warning", async () => {
     api.schedule.mockResolvedValue(schedule());
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} now={() => NOW} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} now={() => NOW} />);
     await screen.findByDisplayValue("Default caption");
     await userEvent.click(screen.getByLabelText(/brand/));
     await userEvent.click(screen.getByLabelText("Schedule"));
@@ -272,7 +282,7 @@ describe("PostToInstagram", () => {
     api.targets.mockResolvedValue(targets({ schedules: [schedule({ overdue_at: "2026-11-14T20:00:00+00:00" })],
       attempts: [attempt({ state: "scheduled", active: false })] }));
     api.decide.mockResolvedValue(schedule({ status: "submitted", attempts: [attempt({ state: "created" })] }));
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} now={() => NOW} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} pollMs={60000} now={() => NOW} />);
     expect(await screen.findByText("Missed while the app was closed.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reschedule" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
@@ -284,7 +294,7 @@ describe("PostToInstagram", () => {
   });
   it("summarises quality as four score pills and a one-line verdict, reasons behind Details", async () => {
     api.quality.mockResolvedValue({ ...pass, verdict: "hold", reasons: ["No captions burned in"], rubric: { hook_clarity: 4, standalone_context: 3, caption_legibility: 1, technical: null } });
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} pollMs={60000} />);
     const gate = await screen.findByLabelText("Quality gate");
     const pills = within(within(gate).getByLabelText("Quality scores")).getAllByRole("listitem");
     expect(pills.map(p => p.textContent)).toEqual(["Hook4/5", "Context3/5", "Captions1/5", "Technical–/5"]);
@@ -295,13 +305,13 @@ describe("PostToInstagram", () => {
   });
 
   it("shows the override reason only when the gate holds", async () => {
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} pollMs={60000} />);
     expect(await screen.findByText("Passed: ready to post")).toBeInTheDocument();
     expect(screen.queryByLabelText(/Override reason/)).not.toBeInTheDocument();
   });
 
   it("uses a switch for feed sharing and a segmented control for timing", async () => {
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} now={() => NOW} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} pollMs={60000} now={() => NOW} />);
     await screen.findByDisplayValue("Default caption");
     expect(screen.getByRole("switch", { name: /Also show in the main feed/ })).toBeChecked();
     const when = screen.getByRole("radiogroup", { name: "When to post" });
@@ -312,7 +322,7 @@ describe("PostToInstagram", () => {
   });
 
   it("renders a Reels-style screen with the selected account handle", async () => {
-    render(<PostToInstagram clip={{ ...clip, approved: true }} approve={vi.fn()} pollMs={60000} />);
+    render(<PostToInstagram clip={{ ...clip, approved: true }} pollMs={60000} />);
     const preview = await screen.findByLabelText("Post preview");
     await waitFor(() => expect(within(preview).getByText("brand")).toBeInTheDocument());
     expect(within(preview).getByText("Reels")).toBeInTheDocument();

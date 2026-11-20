@@ -1,4 +1,8 @@
-# Instagram publishing (Approve & post)
+# Instagram publishing (post an approved revision)
+
+Approval and posting are separate decisions. Approve the exact revision in review first
+("Approve revision N"); approving never exports or posts. **Post to Instagram** and
+**Schedule post** are offered only for an approved revision.
 
 **Current status (2026-11-14):** publishing and storage migrations are implemented/applied according to the current handoff; the first real app publication remains a live acceptance gate. Earlier metadata-only research below is historical evidence, not proof of a successful publish.
 
@@ -204,9 +208,10 @@ clip × account on the same sequential lane, with a short gap between items.
    later.
 3. In the app: sign in to Growth Factory cloud; then call
    `GET /api/publish/accounts/{account_id}/readiness` (read-only) and expect `ready`.
-4. Pick one short approved clip on a test/owned account; open it in Studio, check
-   the quality gate, write a caption without hashtags for the first try, and press
-   **Approve & post** for exactly one account.
+4. Pick one short clip for a test/owned account; open it in Studio, check the
+   quality gate and press **Approve revision N**. Then open **Prepare your post**,
+   write a caption without hashtags for the first try, and press
+   **Post to Instagram** for exactly one account.
 5. Watch the attempt: `uploaded` → `container_created` → `container_ready` →
    `published` → `mapped` (or `published` awaiting policy). Open the reel link.
 6. If it shows `unknown`, press **Check status** — never post again from the UI or
