@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { setPlatformOs } from "./platform";
 import type { Data, Resource } from "./types";
@@ -43,6 +43,9 @@ export function useFactory() {
   const mounted = useRef(true);
   const inflight = useRef(new Set<Resource>());
   const actionLock = useRef(false);
+  // The last response body per resource. A poll that returns the same body keeps the previous
+  // object, so an idle factory causes no re-render anywhere in the tree.
+  const seen = useRef(new Map<Resource, string>());
   const refresh = useCallback(
     async (resources: Resource[] = Object.keys(paths) as Resource[]) => {
       await Promise.all(
@@ -67,20 +70,23 @@ export function useFactory() {
             if (mounted.current) {
               // Wording, shortcuts and setup steps follow the OS the local service reports.
               if (key === "system") setPlatformOs((value as { os?: unknown }).os);
-              setData((old) => ({ ...old, [key]: value }));
+              const body = JSON.stringify(value);
+              if (seen.current.get(key) !== body) {
+                seen.current.set(key, body);
+                setData((old) => ({ ...old, [key]: value }));
+              }
               setErrors((old) => {
+                if (!(key in old)) return old;
                 const next = { ...old };
                 delete next[key];
                 return next;
               });
             }
           } catch (error) {
-            if (mounted.current)
-              setErrors((old) => ({
-                ...old,
-                [key]:
-                  error instanceof Error ? error.message : "Request failed.",
-              }));
+            if (mounted.current) {
+              const text = error instanceof Error ? error.message : "Request failed.";
+              setErrors((old) => (old[key] === text ? old : { ...old, [key]: text }));
+            }
           } finally {
             inflight.current.delete(key);
           }
@@ -126,19 +132,14 @@ export function useFactory() {
     },
     [refresh],
   );
-  return {
-    data,
-    errors,
-    loading,
-    notice,
-    actionError,
-    busy,
-    refresh,
-    run,
-    dismiss: () => {
-      setNotice("");
-      setActionError("");
-    },
-  };
+  const dismiss = useCallback(() => {
+    setNotice("");
+    setActionError("");
+  }, []);
+  // One object per actual change, so screens can memoize on it.
+  return useMemo(
+    () => ({ data, errors, loading, notice, actionError, busy, refresh, run, dismiss }),
+    [data, errors, loading, notice, actionError, busy, refresh, run, dismiss],
+  );
 }
 export type FactoryState = ReturnType<typeof useFactory>;

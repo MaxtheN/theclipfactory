@@ -1,4 +1,5 @@
 import { SHOW_FACTORY_MAP } from "./appEvents";
+import { keepIfSame } from "./stable";
 import {
   useCallback,
   useEffect,
@@ -88,10 +89,10 @@ function useMapData(w: Workspace, factory: FactoryState, active: boolean) {
         factoryBuilderApi.view().catch(() => null),
       ]);
       if (!live) return;
-      if (r) setRuns(r);
+      if (r) setRuns((old) => keepIfSame(old, r));
       try {
         const parsed = state ? parseAutomationState(state) : null;
-        setAutomation(
+        const next: AutomationSnapshot | null =
           parsed
             ? {
                 ...parsed,
@@ -101,13 +102,13 @@ function useMapData(w: Workspace, factory: FactoryState, active: boolean) {
                     ) as Row[])
                   : [],
               }
-            : null,
-        );
+            : null;
+        setAutomation((old) => keepIfSame(old, next));
       } catch {
         setAutomation(null);
       }
-      setStrategist(view);
-      setBuilder(upgrades);
+      setStrategist((old) => keepIfSame(old, view));
+      setBuilder((old) => keepIfSame(old, upgrades));
     };
     void load();
     const timer = window.setInterval(() => {
