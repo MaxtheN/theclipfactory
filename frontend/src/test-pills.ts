@@ -50,3 +50,16 @@ export function pillsDisabled(name: string | RegExp, scope: Scope = screen): boo
   const buttons = [...pillGroup(name, scope).querySelectorAll("button")];
   return buttons.length > 0 && buttons.every((b) => b.disabled);
 }
+
+/** Add one typed value to the existing picks via "Add your own". */
+export function addPill(name: string | RegExp, value: string, scope: Scope = screen) {
+  const group = pillGroup(name, scope);
+  const add = group.querySelector<HTMLButtonElement>("button.is-add");
+  if (!add) throw new Error(`No "Add your own" on ${String(name)}`);
+  fireEvent.click(add);
+  const input = group.querySelector<HTMLInputElement>("input.gf-pill-field-input")!;
+  fireEvent.change(input, { target: { value } });
+  fireEvent.keyDown(input, { key: "Enter" });
+  const open = group.querySelector<HTMLInputElement>("input.gf-pill-field-input");
+  if (open) fireEvent.blur(open);
+}

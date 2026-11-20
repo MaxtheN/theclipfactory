@@ -28,7 +28,7 @@ import { Setup } from "./Setup";
 import { workspaceApi } from "./workspaceApi";
 import { resetPreview } from "./previewApi";
 import { GrowthApp } from "./GrowthApp";
-import { setPills, pillValue, pillsDisabled, pillGroup } from "../test-pills";
+import { setPills, pillValue, pillsDisabled, pillGroup, addPill, pickPill } from "../test-pills";
 
 const nativeShowModal = HTMLDialogElement.prototype.showModal;
 const nativeClose = HTMLDialogElement.prototype.close;
@@ -720,6 +720,7 @@ describe("app routing", () => {
 
 describe("campaign brief in the Campaign brief screen", () => {
   const addChip = (label: string, value: string) => {
+    if (screen.queryByRole("group", { name: label })) return addPill(label, value);
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
     fireEvent.click(screen.getByRole("button", { name: `Add to ${label}` }));
   };
@@ -727,10 +728,8 @@ describe("campaign brief in the Campaign brief screen", () => {
   it("saves only the brief with an exact campaign PUT, keeps membership and reads it back", async () => {
     const { api, store } = fixture({ part: "campaign", latestVideos: ["source-a", "source-new"] });
     addChip("Key messages", "Agents need human review");
-    addChip("Must avoid", "market predictions");
-    fireEvent.change(screen.getByLabelText("Call to action"), {
-      target: { value: "Listen to the full episode" },
-    });
+    pickPill("Must avoid", "Market predictions");
+    setPills("Call to action", "Listen to the full episode");
     expect(screen.getByRole("list", { name: "Key messages" })).toHaveTextContent(
       "Agents need human review",
     );
@@ -756,7 +755,7 @@ describe("campaign brief in the Campaign brief screen", () => {
       audience: "Builders",
       constraints: ["Keep meaning"],
       key_messages: ["Agents need human review"],
-      must_avoid: ["market predictions"],
+      must_avoid: ["Market predictions"],
       cta: "Listen to the full episode",
       cta_link: null,
     });
@@ -771,7 +770,7 @@ describe("campaign brief in the Campaign brief screen", () => {
       "A topic can't be both must-include and must-avoid.",
     );
     expect(screen.getByRole("button", { name: "Save brief" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Remove Crypto" }));
+    fireEvent.click(screen.getByRole("button", { name: "Crypto, remove" }));
     api.save.mockImplementation(async () => ({}) as Campaign); // written nowhere
     fireEvent.click(screen.getByRole("button", { name: "Save brief" }));
     await waitFor(() =>

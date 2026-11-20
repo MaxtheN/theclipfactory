@@ -29,7 +29,7 @@ vi.mock("../api", async () => {
 });
 import { GrowthApp } from "./GrowthApp";
 import { saveDemoResult, type DemoResult } from "./demoStore";
-import { setPills, pillValue, pillGroup } from "../test-pills";
+import { setPills, pillValue, pillGroup, pickPill } from "../test-pills";
 const path = "/api/campaigns/preview-campaign";
 // Style rules belong to the workspace (profile), inherited by its campaigns.
 const workspacePath = "/api/profiles/preview-profile-allin";
@@ -153,9 +153,8 @@ describe("Growth Factory interface", () => {
     fireEvent.change(within(form).getByLabelText("Campaign name"), { target: { value: "Episode 210 launch" } });
     fireEvent.change(within(form).getByLabelText("Key messages"), { target: { value: "Agents need review" } });
     fireEvent.keyDown(within(form).getByLabelText("Key messages"), { key: "Enter" });
-    fireEvent.change(within(form).getByLabelText("Call to action"), { target: { value: "Listen to the full episode" } });
-    fireEvent.change(within(form).getByLabelText("Must avoid"), { target: { value: "market predictions" } });
-    fireEvent.click(within(form).getByRole("button", { name: "Add to Must avoid" }));
+    setPills("Call to action", "Listen to the full episode", within(form));
+    pickPill("Must avoid", "Market predictions", within(form));
     fireEvent.click(within(form).getByRole("button", { name: /^Create campaign\b/ }));
     const picker = await screen.findByRole("combobox", { name: "Current campaign" });
     const campaigns = await previewRequest<Campaign[]>("/api/campaigns");
@@ -164,7 +163,7 @@ describe("Growth Factory interface", () => {
     expect(created.objective).toBe("discovery");
     // The brief carries only what this campaign adds; workspace boundaries are not copied in.
     expect(created.brief).toMatchObject({ key_messages: ["Agents need review"], cta: "Listen to the full episode",
-      must_avoid: ["market predictions"], constraints: [], audience: "" });
+      must_avoid: ["Market predictions"], constraints: [], audience: "" });
     // No campaign approval chain: it inherits the workspace's rules.
     expect(created.active_strategy_id).toBeUndefined();
     await waitFor(() => expect(picker).toHaveValue(created.id));

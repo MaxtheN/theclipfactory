@@ -49,6 +49,7 @@ export function PillField({
   className = "",
   labels,
   format,
+  labelledBy,
 }: {
   label: string;
   hint?: string;
@@ -69,6 +70,8 @@ export function PillField({
   labels?: Readonly<Record<string, string>>;
   /** Storage format, exposed as data-format for tests and tooling. */
   format?: ListFormat;
+  /** Use an existing label elsewhere on the page instead of rendering one. */
+  labelledBy?: string;
 }) {
   const labelId = useId();
   const inputId = useId();
@@ -110,7 +113,6 @@ export function PillField({
         aria-pressed={on}
         data-value={v}
         aria-label={isCustom ? `${text}, remove` : undefined}
-        title={text.length > 40 ? text : undefined}
         disabled={disabled || (!on && full)}
         onClick={() => toggle(v)}
       >
@@ -121,8 +123,8 @@ export function PillField({
   };
 
   return (
-    <div className={`gf-field gf-pill-field ${className}`.trim()} role="group" aria-labelledby={labelId} data-format={format ?? (single ? "single" : undefined)}>
-      <label id={labelId} htmlFor={adding ? inputId : undefined}>{label}</label>
+    <div className={`gf-field gf-pill-field ${className}`.trim()} role="group" aria-labelledby={labelledBy ?? labelId} data-format={format ?? (single ? "single" : undefined)}>
+      {!labelledBy && <label id={labelId} htmlFor={adding ? inputId : undefined}>{label}</label>}
       <div className="gf-pill-field-options">
         {choices.map((v) => pill(v, false))}
         {custom.map((v) => pill(v, true))}

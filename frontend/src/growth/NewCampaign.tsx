@@ -6,6 +6,8 @@ import type { Workspace } from "./useCampaignWorkspace";
 import { workspaceApi } from "./workspaceApi";
 import { Field, FieldGroup, PrimaryAction, formatTime } from "./parts";
 import { Icon } from "./Icon";
+import { PillList, PillSelect } from "./PillField";
+import { CREATIVE_NOTES, METRIC, METRIC_LABELS } from "./choiceOptions";
 import { objectiveLabels } from "./Setup";
 import { BriefFields } from "./CampaignBrief";
 import { briefBody, briefProblem, emptyBrief } from "./briefModel";
@@ -118,33 +120,23 @@ export function NewCampaign({
           )}
         </Field>
         {metricNeeded && (
-          <Field label="Metric">
-            {(id) => (
-              <input
-                id={id}
-                maxLength={200}
-                placeholder="e.g. full_episode_visits"
-                value={metric}
-                onChange={(e) => setMetric(e.target.value)}
-              />
-            )}
-          </Field>
+          <PillSelect
+            label="Metric"
+            options={METRIC}
+            labels={METRIC_LABELS}
+            value={metric}
+            onChange={setMetric}
+          />
         )}
-        <Field
+        <PillList
           label="Campaign notes"
           hint="Optional. Added to the agents' instructions for this campaign only."
-        >
-          {(id) => (
-            <AutoTextarea
-              rows={2}
-              id={id}
-              maxLength={2000}
-              placeholder="e.g. Favour the guest's founding story"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          )}
-        </Field>
+          format="lines"
+          maxLength={500}
+          options={CREATIVE_NOTES}
+          value={notes}
+          onChange={setNotes}
+        />
         <FieldGroup title="Campaign brief">
           <BriefFields
             value={brief}

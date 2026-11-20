@@ -11,9 +11,9 @@
   min-height: 32px;
   height: auto;
   margin: 0;
-  padding: 0 12px;
+  padding: 6px 12px;
   border: 1px solid var(--border-control);
-  border-radius: var(--radius-full, 999px);
+  border-radius: 16px;
   background: transparent;
   box-shadow: none;
   color: var(--muted-foreground);
@@ -42,7 +42,7 @@
 .gf-app .gf-pill-field .gf-pill-choice.is-add { border-style: dashed; color: var(--muted-foreground); }
 .gf-app .gf-pill-field .gf-pill-choice:disabled { opacity: .45; cursor: not-allowed; }
 .gf-app .gf-pill-field .gf-pill-choice:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.gf-pill-choice-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 44ch; }
+.gf-pill-choice-text { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .gf-app .gf-pill-field input.gf-pill-field-input,
 .gf-pill-field input.gf-pill-field-input {
   flex: 0 1 280px;
