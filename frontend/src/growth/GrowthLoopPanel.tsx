@@ -3,6 +3,7 @@ import { api, ApiError, post, put } from "../api";
 import type { Clip } from "../types";
 import { PanelDialog } from "./PanelDialog";
 import { reviewPreview } from "./workspaceApi";
+import { Cluster, EmptyLine, Grid, ListRow, Panel, Section, Stack, StatusLine } from "./layout";
 import "./growth-loop.css";
 
 type Outcomes = { status: string; label: string; comparison?: { status: string; metric?: string; before_value?: number | null; after_value?: number | null; reasons?: string[]; caveat?: string } | null; evidence_ids?: string[]; caveat?: string };
@@ -151,21 +152,44 @@ function GrowthLoopBody({ profileId, campaignId, strategyVersionId, clips, visib
     } finally { if (mounted.current) setBusy(null); }
   }
   const canStart = !reviewPreview && !!view && ((!!strategyVersionId && !!eligible.length) || !!retry) && !busy;
-  return <section className="gf-growth-loop" aria-label="Growth loop">
-    <header><div><h2>Make the next round count.</h2><p>Inspect the rubric, learn your preferences, and render one-variable tests.</p></div></header>
-    {reviewPreview ? <p className="gf-growth-note">Design preview · synthetic data.</p> : <>
-      {error && <p role="alert" className="gf-growth-error">{error}</p>}
-      {!view && !error && visible && <p role="status">Loading growth-loop receipts…</p>}
-      {view && <>
-        <div className="gf-growth-preference"><strong>Your taste</strong><span>{view.taste.sample_size} reviewed revisions · {view.taste.positive} approvals · {view.taste.negative} change or reject decisions</span><p>{view.taste.status === "ready" ? "Preference alignment is available. It changes review order by at most five points; the quality rubric stays intact." : `Keep reviewing: at least ${view.taste.minimum} decisions, including approval and change/reject examples, are needed.`}</p><small>Preference alignment is an index, not a probability or Instagram result.</small></div>
-        <label className="gf-growth-policy"><input type="checkbox" checked={view.policy.auto_ab} disabled={!!busy} onChange={e => void changePolicy(e.target.checked)} /><span>Automatically make a hook-format B variant for the top three picks.<small>New drafts only. Each publication still needs your approval.</small></span></label>
-        {retry?.kind === "rehearse" && <p className="gf-growth-note">A rehearsal may still be running. Check the Factory map first.</p>}
-        <div className="gf-growth-actions"><button type="button" className="gf-button secondary" disabled={!canStart || (!!retry && retry.kind !== "ab")} onClick={() => void start("ab")}>{retry?.kind === "ab" ? "Retry same A/B request" : "Make top-three A/B drafts"}</button><button type="button" className="gf-button secondary" disabled={!canStart || (!!retry && retry.kind !== "recut")} onClick={() => void start("recut")}>{retry?.kind === "recut" ? "Retry same re-cut request" : "Apply learning → re-cut"}</button><button type="button" className="gf-growth-link" onClick={() => void load()} disabled={!!busy}>Refresh receipts</button></div>
-        <p className="gf-growth-note">{eligible.length ? `${eligible.length} eligible ranked clips in this campaign.` : "Generate and rank a fresh batch to prepare experiments."} Re-cut applies one changed, approved Style rule. {onEditingRules && <button type="button" className="gf-growth-link" onClick={onEditingRules}>Review Style rules</button>}</p>
-        {scoped.length > 0 && <details className="gf-growth-clip-list"><summary>Inspect clip quality ({scoped.length})</summary>{scoped.map(c => <div key={c.id}><span>{c.hook || c.name}{tasteNote(c) && <small className="gf-growth-note">{tasteNote(c)}</small>}</span><span className="gf-growth-clip-actions"><button type="button" className="gf-growth-link" onClick={() => setScoreClip(c)}>Scorecard<span className="gf-growth-sr"> for {c.hook || c.name}</span></button></span></div>)}</details>}
-        <div className="gf-growth-receipts"><h3>Production loop receipts</h3>{!loops.length && <p>No loop receipts yet. Rehearsal data is kept separate.</p>}{loops.map(loop => <article key={loop.id}><h4>{view.loops.find(parent => parent.id === loop.parent_loop_id) ? `Loop #${view.loops.find(parent => parent.id === loop.parent_loop_id)!.number} → Loop #${loop.number}` : `Loop #${loop.number}`}<span>{human(loop.kind)} · {human(loop.status)}</span></h4>{loop.simulated_evidence && <p className="gf-growth-synthetic">{rehearsalLabel(loop)}</p>}{loop.proposal && <div className="gf-growth-rubric-proposal"><p><strong>Rubric decision:</strong> {human(loop.proposal.status)}{loop.proposal.weak_dimension && ` · ${human(loop.proposal.weak_dimension)}`}</p><p>{loop.proposal.reason}</p><p><strong>Before:</strong> {loop.proposal.before || "No opening text"}</p><p><strong>Proposed:</strong> {loop.proposal.after || "No supported edit"}</p>{loop.proposal.assessment_id && <p className="gf-growth-note">Assessment: {loop.proposal.assessment_id}</p>}</div>}{loop.simulated_evidence && loop.comparison && <OutcomeReadout outcomes={{ status: loop.comparison.status, label: "synthetic", comparison: loop.comparison }} />}{loop.slots.filter(s => s.campaign_id === campaignId).map(slot => { const output = scoped.find(c => c.id === slot.clip_id); return <div className="gf-growth-slot" key={slot.id}><p><strong>{human(slot.variable)}</strong> · {human(slot.status)}</p><p>{slot.reason}</p>{slot.outcomes && <OutcomeReadout outcomes={slot.outcomes} />}{slot.status === "unknown" && <p className="gf-growth-error">Outcome unknown. Refresh to reconcile; do not start a duplicate render.</p>}{output && <button type="button" className="gf-growth-link" onClick={() => onReview?.(output)} disabled={!onReview}>Review {output.approved ? "version" : "draft"}: {output.hook || output.name}</button>}{slot.clip_id && !output && <p className="gf-growth-note">Draft saved. Refresh the Library to load this version.</p>}</div>; })}</article>)}</div>
-      </>}
-    </>}
+  const tasteReady = view?.taste.status === "ready";
+  const tasteDone = view ? Math.min(view.taste.sample_size, view.taste.minimum) : 0;
+  const parentOf = (loop: LoopReceipt) => view?.loops.find(parent => parent.id === loop.parent_loop_id);
+  return <Section className="gf-growth-loop" aria-label="Growth loop" title="Experiments" infoLabel="About experiments" info={<p>Inspect the quality rubric, learn your preferences and render one-variable tests. Every publication still needs your approval.</p>} actions={view && !reviewPreview ? <button type="button" className="gf-ui-text-button" onClick={() => void load()} disabled={!!busy}>Refresh</button> : undefined}>
+    {reviewPreview ? <EmptyLine>Design preview · synthetic data.</EmptyLine> : <Stack gap="md">
+      {error && <StatusLine tone="danger" alert>{error}</StatusLine>}
+      {!view && !error && visible && <StatusLine tone="running">Loading experiments…</StatusLine>}
+      {view && <Grid min={320}>
+        <Panel as="section" padding="compact" aria-label="Your taste">
+          <Section as="div" level={3} title="Your taste" meta={`${view.taste.sample_size} reviewed revisions · ${view.taste.positive} approvals · ${view.taste.negative} change or reject decisions`} infoLabel="About taste alignment" info={<><p>{tasteReady ? "Preference alignment changes review order by at most five points; the quality rubric stays intact." : `Needs at least ${view.taste.minimum} decisions, including approval and change/reject examples.`}</p><p>Preference alignment is an index, not a probability or Instagram result.</p></>}>
+            <div className="gf-growth-taste-meter" role="meter" aria-label="Reviews toward taste alignment" aria-valuemin={0} aria-valuemax={view.taste.minimum} aria-valuenow={tasteDone}><span style={{ width: `${view.taste.minimum ? (tasteDone / view.taste.minimum) * 100 : 100}%` }} /></div>
+            <small className="gf-growth-note">{tasteReady ? "Ready · shapes review order" : `${tasteDone} of ${view.taste.minimum} decisions`}</small>
+          </Section>
+        </Panel>
+        <Panel as="section" padding="compact" aria-label="Next round">
+          <Section as="div" level={3} title="Next round" meta={eligible.length ? `${eligible.length} ranked clip${eligible.length === 1 ? "" : "s"} ready` : "Rank a fresh batch first"} infoLabel="About the next round" info={<p>A/B drafts change one variable on the top three picks. Re-cut applies one changed, approved Style rule.</p>}>
+            <Cluster>
+              <button type="button" className="gf-button secondary compact" disabled={!canStart || (!!retry && retry.kind !== "ab")} onClick={() => void start("ab")}>{retry?.kind === "ab" ? "Retry same A/B request" : "Make top-three A/B drafts"}</button>
+              <button type="button" className="gf-button secondary compact" disabled={!canStart || (!!retry && retry.kind !== "recut")} onClick={() => void start("recut")}>{retry?.kind === "recut" ? "Retry same re-cut request" : "Apply learning → re-cut"}</button>
+              {onEditingRules && <button type="button" className="gf-ui-text-button" onClick={onEditingRules}>Style rules</button>}
+            </Cluster>
+            <label className="gf-growth-policy"><input type="checkbox" checked={view.policy.auto_ab} disabled={!!busy} onChange={e => void changePolicy(e.target.checked)} /><span>Auto-make a hook B variant for the top three</span></label>
+            {retry?.kind === "rehearse" && <StatusLine tone="warning">A rehearsal may still be running. Check the Factory map first.</StatusLine>}
+          </Section>
+        </Panel>
+      </Grid>}
+      {view && scoped.length > 0 && <details className="gf-growth-clip-list"><summary>Inspect clip quality ({scoped.length})</summary><Stack gap="xs">{scoped.map(c => <ListRow key={c.id} action={<button type="button" className="gf-ui-text-button" onClick={() => setScoreClip(c)}>Scorecard<span className="gf-growth-sr"> for {c.hook || c.name}</span></button>}><span>{c.hook || c.name}</span>{tasteNote(c) && <small className="gf-growth-note">{tasteNote(c)}</small>}</ListRow>)}</Stack></details>}
+      {view && <Section as="div" level={3} title="Loop history" count={loops.length || undefined} className="gf-growth-receipts" infoLabel="About loop history" info={<p>Real production loops for this campaign. Rehearsal data is kept separate.</p>}>
+        {!loops.length && <EmptyLine>No loops yet.</EmptyLine>}
+        {loops.map(loop => <Panel as="article" padding="compact" key={loop.id}>
+          <Cluster justify="between"><h4>{parentOf(loop) ? `Loop #${parentOf(loop)!.number} → Loop #${loop.number}` : `Loop #${loop.number}`}</h4><span className="gf-growth-note">{human(loop.kind)} · {human(loop.status)}</span></Cluster>
+          {loop.simulated_evidence && <p className="gf-growth-synthetic">{rehearsalLabel(loop)}</p>}
+          {loop.proposal && <div className="gf-growth-rubric-proposal"><p><strong>Rubric decision:</strong> {human(loop.proposal.status)}{loop.proposal.weak_dimension && ` · ${human(loop.proposal.weak_dimension)}`}</p><p>{loop.proposal.reason}</p><p><strong>Before:</strong> {loop.proposal.before || "No opening text"}</p><p><strong>Proposed:</strong> {loop.proposal.after || "No supported edit"}</p>{loop.proposal.assessment_id && <p className="gf-growth-note">Assessment: {loop.proposal.assessment_id}</p>}</div>}
+          {loop.simulated_evidence && loop.comparison && <OutcomeReadout outcomes={{ status: loop.comparison.status, label: "synthetic", comparison: loop.comparison }} />}
+          {loop.slots.filter(s => s.campaign_id === campaignId).map(slot => { const output = scoped.find(c => c.id === slot.clip_id); return <div className="gf-growth-slot" key={slot.id}><p><strong>{human(slot.variable)}</strong> · {human(slot.status)}</p><p>{slot.reason}</p>{slot.outcomes && <OutcomeReadout outcomes={slot.outcomes} />}{slot.status === "unknown" && <p className="gf-growth-error">Outcome unknown. Refresh to reconcile; do not start a duplicate render.</p>}{output && <button type="button" className="gf-ui-text-button" onClick={() => onReview?.(output)} disabled={!onReview}>Review {output.approved ? "version" : "draft"}: {output.hook || output.name}</button>}{slot.clip_id && !output && <p className="gf-growth-note">Draft saved. Refresh the Library to load this version.</p>}</div>; })}
+        </Panel>)}
+      </Section>}
+    </Stack>}
     {scoreClip && <ScorecardDialog key={`${scoreClip.id}:${scoreClip.sha256}`} clip={scoreClip} open={visible && !!scoreClip} onClose={() => setScoreClip(null)} />}
-  </section>;
+  </Section>;
 }

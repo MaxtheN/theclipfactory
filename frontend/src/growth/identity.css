@@ -663,21 +663,20 @@
 .gf-app.gf-flow-app .gf-results-page.is-minimal .gf-results-demo-panel:not(.is-open) + * {
   margin-top: calc(-1 * var(--section-gap));
 }
-.gf-app.gf-flow-app .gf-results-page .gf-strategist-lanes {
-  margin: var(--stack-gap) 0 0;
-  gap: var(--grid-gap);
-}
-.gf-app.gf-flow-app .gf-results-page .gf-results-typical {
-  margin-top: var(--stack-gap);
-  padding: var(--stack-gap) 0;
-}
-.gf-app.gf-flow-app .gf-results-page .gf-strategist-section {
-  margin-top: var(--section-gap);
-  padding-top: var(--stack-gap);
-}
 .gf-app.gf-flow-app .gf-results-page .gf-growth-loop {
   margin-top: var(--section-gap);
-  padding-top: var(--stack-gap);
+  padding-top: var(--section-gap);
+}
+
+/* The strategist is laid out by layout.tsx primitives: no surface of its own. */
+.gf-app.gf-flow-app .gf-results-page .gf-strategist {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* Settings and Brand profile share one in-page section list. */

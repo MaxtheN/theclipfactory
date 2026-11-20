@@ -345,3 +345,29 @@ details.gf-strategist-proposal {
     transition: none;
   }
 }
+
+/* Beliefs inside a lane panel: a plain list with dividers. */
+.gf-app .gf-strategist-belief-list .gf-strategist-belief {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--divider);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.gf-app .gf-strategist-belief-list .gf-strategist-belief:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.gf-app .gf-strategist-belief-list .gf-strategist-belief:last-child { padding-bottom: 0; }
+.gf-app .gf-strategist-belief-list .gf-strategist-belief > * { margin: 0; }
+.gf-app .gf-strategist-belief-list .gf-strategist-belief header { display: flex; gap: 6px; }
+.gf-app .gf-strategist-belief-list .gf-strategist-statement { font-size: 13.5px; line-height: 1.4; }
+.gf-app .gf-strategist-belief-list .gf-strategist-meter { align-self: stretch; }
+.gf-app .gf-strategist-belief-list .gf-strategist-belief small { color: var(--subtle-foreground); font-size: 12px; }
+.gf-app .gf-strategist-belief-list .gf-ui-text-button { font-size: 12px; }

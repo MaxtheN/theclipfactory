@@ -176,7 +176,7 @@ describe("Results page", () => {
     fireEvent.click(within(start).getByRole("button", { name: "Try Demo Mode (simulated data)" }));
     expect(onRehearse).toHaveBeenCalledOnce();
     expect(document.querySelector("iframe")).toBeNull();
-    expect(await screen.findByRole("heading", { name: "What we've learned" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Strategist" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "See how it learns (simulated data)" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
     // Instagram accounts are owned by Settings > Accounts and connections; Results links there.
