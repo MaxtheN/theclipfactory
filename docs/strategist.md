@@ -48,7 +48,7 @@ Source: `clip_factory/strategist.py` (engine), `clip_factory/strategist_api.py`
 | --- | --- | --- | --- |
 | Craft | hook_style, duration_bucket, opening_type, caption_style, framing | each new measured snapshot | Proposed Style-rules revision: `duration_seconds`, `caption_style` (standard/high_contrast), `framing` (fit/fill) where mappable, plus a bounded guidance block in `editing_preferences` |
 | Selection | moment_type (the swarm hypothesis), speaker_role | every ≥3 new tagged measured posts | Proposed revision whose `moment_selection` carries a bounded guidance block; once **approved**, team/swarm prompts receive it as `selection_guidance` |
-| Campaign | posting_window (UTC), day_type | every ≥8 new tagged measured posts, or manual run | `campaign_strategy_proposals` record; `POST /api/strategist/campaign-proposals/{id}/decision` records the human's choice |
+| Campaign | posting_window (creator's time zone), day_type | every ≥8 new tagged measured posts, or manual run | `campaign_strategy_proposals` record; `POST /api/strategist/campaign-proposals/{id}/decision` records the human's choice |
 
 A manual "Run strategist" reviews all three layers. Beliefs are per workspace
 (`profile_id`). Craft and selection write ONE proposal per layer to the
@@ -71,8 +71,12 @@ least three more matching posts.
 - `caption_style`, `framing`: from the edit plan.
 - `moment_type`: the clip's swarm `hypothesis`. Team-mode clips have no such field yet, so it is null.
 - `speaker_role`: only if a clip records it (nothing does today), else null.
-- `posting_window`, `day_type`: from the verified publication time, in **UTC**
-  (the account's local timezone is not known).
+- `posting_window`, `day_type`: from the verified publication time, read in the creator's time zone.
+  That is the `time_zone` setting (an IANA name such as `America/Los_Angeles`, set with
+  `PATCH /api/settings`), or this computer's zone when it is empty or unknown. Daylight-saving
+  changes are followed. Windows: morning 05–12, afternoon 12–17, evening 17–22, night 22–05.
+  Pattern-scan statements name the zone, e.g. "posting in the evening (America/Los_Angeles)".
+  The simulated demo and library callers keep UTC so their results do not depend on the machine.
 
 Unknown is always null and is never matched.
 
@@ -174,7 +178,7 @@ receipt is closed as failed.
 - The posts compared differ in age at measurement, because the latest
   cumulative snapshot is not age-normalized. Audience and time also differ.
 - Every belief is observational, and testing many variable/value pairs inflates false positives.
-- Posting window uses UTC hours. Moment type exists only for swarm clips.
+- Posting windows use one zone for the whole app; an audience in another zone is not modelled. Moment type exists only for swarm clips.
 - The campaign layer records an approved plan; nothing yet acts on it automatically.
 
 ## Honest demo script

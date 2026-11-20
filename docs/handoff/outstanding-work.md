@@ -100,8 +100,6 @@ These branches are already merged and can be deleted from origin:
 
 ## 4. Not started
 
-- **Strategist timing:** posting windows use the UTC hour of a post (`strategist.py`). They should
-  use the creator's time zone.
 - **Strategist variables:** cover source, caption length, hashtag count and CTA were listed as
   follow-ups on 2026-11-14. None of them appears in `strategist.py`, which varies hook style and
   posting window.
