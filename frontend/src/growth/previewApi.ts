@@ -15,6 +15,7 @@ import type { ProductionClip } from "./productionContracts";
 import type { PostingAccount, TikTokCreatorInfo } from "./publishApi";
 import { normalizeBrief } from "./briefModel";
 import { flowFixture } from "./previewFlowFixtures";
+import { guideLink } from "./guideLinks";
 
 /** Explicit review-only transport. Never calls fetch or the desktop service. */
 const STORAGE_KEY = "growth-factory-preview-v2";
@@ -786,6 +787,7 @@ export async function previewRequest<T>(
     } as T;
   if (path.startsWith("/api/cloud/")) return previewCloud(path, options) as T;
   if (path.startsWith("/api/billing")) return previewBilling(path) as T;
+  if (path === "/api/help/open") return previewHelp(options.body) as T;
   // The Strategist reads real measured posts; the preview has none, so it
   // shows the honest empty state rather than an unsupported-route error.
   const strategist = /^\/api\/strategist\/([^/]+)$/.exec(path);
@@ -859,6 +861,18 @@ const PREVIEW_PLANS = [
   { id: "pro", name: "Pro", price: { month: 24, year: 19 }, limits: { brands: 3, clips_per_month: null, posting: true, connected_accounts: 5, factory_builder: false } },
   { id: "business", name: "Business", price: { month: 200, year: 160 }, limits: { brands: 25, clips_per_month: null, posting: true, connected_accounts: 50, factory_builder: true } },
 ] as const;
+/** The preview cannot open the system browser: return the guide link for the page to offer. */
+function previewHelp(raw: unknown) {
+  let parsed: { page?: string; anchor?: string } = {};
+  try {
+    parsed = JSON.parse(String(raw ?? "{}")) as typeof parsed;
+  } catch {
+    parsed = {};
+  }
+  const { page = "", anchor = "" } = parsed;
+  return { url: guideLink(page, anchor), opened: false };
+}
+
 function previewBilling(path: string) {
   if (path === "/api/billing/checkout" || path === "/api/billing/portal")
     fail("billing opens only in the desktop app.");
