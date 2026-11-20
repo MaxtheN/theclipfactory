@@ -3087,6 +3087,11 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     # Plans: the Entitlement confirmed by the cloud ``billing`` function, local Plan Limits, Checkout/Portal.
     install_billing(app, store, app.state.cloud_account, open_url=lambda url: runtime.open_url(url))
 
+    from .help_api import install as install_help_api
+
+    # Help: open a user-guide page (allowlisted) in the system browser.
+    install_help_api(app, open_url=lambda url: runtime.open_url(url))
+
     from .publish_api import install as install_publish_api
 
     # Approve & post: human-approved, quality-gated posts through the posting server (Zernio) with
