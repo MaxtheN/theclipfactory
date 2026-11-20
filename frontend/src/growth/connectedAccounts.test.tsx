@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -134,6 +135,20 @@ describe("ConnectedAccounts", () => {
     api.accounts.mockRejectedValue(new Error("Sign in to Growth Factory cloud first."));
     render(<ConnectedAccounts profileId="brand" />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Sign in to Growth Factory cloud first.");
+  });
+
+  it("loads the list when React mounts it twice, as StrictMode does", async () => {
+    render(<StrictMode><ConnectedAccounts profileId="brand" /></StrictMode>);
+    const list = await screen.findByLabelText("Connected accounts");
+    expect(within(list).getAllByRole("listitem")).toHaveLength(3);
+    expect(screen.queryByText("Loading connected accounts…")).toBeNull();
+  });
+
+  it("stops loading when the reply is not a list of accounts", async () => {
+    api.accounts.mockResolvedValue(undefined as never);
+    render(<ConnectedAccounts profileId="brand" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Connected accounts are unavailable.");
+    expect(screen.queryByText("Loading connected accounts…")).toBeNull();
   });
 });
 
