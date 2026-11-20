@@ -19,6 +19,8 @@ import { CloudAccountFields, useCloudAccount } from "./CloudSignIn";
 import type { CloudStatus } from "./cloudApi";
 import { WebsiteBrief } from "./WebsiteBrief";
 import { OnboardingIntro, introSeen } from "./OnboardingIntro";
+import { ContourField } from "./ContourField";
+import { contoursSupported } from "./contours";
 import {
   ClipStylePicker,
   DEFAULT_CLIP_STYLE,
@@ -197,6 +199,9 @@ export function Onboarding({
   intro?: boolean;
 }) {
   const [showIntro, setShowIntro] = useState(() => intro && !introSeen());
+  // The moving map behind the welcome and every step; one instance spans both, so it ripples
+  // on from the welcome instead of restarting.
+  const [contours] = useState(contoursSupported);
   // The brand list loads after mount, so `intro` can turn true later; show the welcome then,
   // but only once and never after the creator has already moved past the first screen.
   const introOffered = useRef(intro);
@@ -636,15 +641,20 @@ export function Onboarding({
 
   if (showIntro)
     return (
-      <section className="gf-onboarding gf-onboarding-wizard" aria-label="Brand onboarding">
-        <OnboardingIntro onStart={() => setShowIntro(false)} />
+      <section
+        className={`gf-onboarding gf-onboarding-wizard${contours ? " has-contours" : ""}`}
+        aria-label="Brand onboarding"
+      >
+        {contours && <ContourField pulseKey="intro" />}
+        <OnboardingIntro onStart={() => setShowIntro(false)} contours={contours} />
       </section>
     );
   return (
     <section
-      className={`gf-onboarding gf-onboarding-wizard${launchPhase ? " is-launching" : ""}`}
+      className={`gf-onboarding gf-onboarding-wizard${contours ? " has-contours" : ""}${launchPhase ? " is-launching" : ""}`}
       aria-label="Brand onboarding"
     >
+      {contours && <ContourField pulseKey={website ? "website" : step} />}
       <header className="gf-onboarding-header">
         <div className="gf-onboarding-brand">
           <BrandMark />
@@ -694,7 +704,11 @@ export function Onboarding({
                 disabled={locked || index > furthest}
                 onClick={() => goToProgress(index)}
               >
-                <span className="gf-onboarding-marker" aria-hidden="true">
+                <span
+                  className="gf-onboarding-marker"
+                  aria-hidden="true"
+                  data-ripple-origin={index === step ? "" : undefined}
+                >
                   {index < step ? (
                     <Check size={13} strokeWidth={1.8} />
                   ) : (

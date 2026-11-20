@@ -1,0 +1,32 @@
+/* The moving map behind onboarding (ContourField). It sits under everything in the section. */
+.gf-app .gf-onboarding.has-contours {
+  position: relative;
+  isolation: isolate;
+}
+.gf-contours {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  animation: gf-contours-in 1.2s var(--gf-ease) both;
+}
+.gf-contours > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* The welcome lets the map show through instead of painting its own backdrop. */
+.gf-app .gf-onboarding.has-contours .gf-intro {
+  background: transparent;
+}
+@keyframes gf-contours-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-contours { animation: none; }
+}
+@media (forced-colors: active) {
+  .gf-contours { display: none; }
+}
