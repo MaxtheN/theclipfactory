@@ -117,14 +117,16 @@ ALTER TABLE public.gf_posting_events FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.gf_posting_rate ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.gf_posting_rate FORCE ROW LEVEL SECURITY;
 
--- No policies: app roles see nothing. service_role bypasses RLS and gets explicit grants.
+-- No policies: app roles see nothing. service_role bypasses RLS, so its default
+-- Supabase grants are reset to exactly what the function needs: ownership rows and
+-- events are insert-only, never updated or deleted.
 REVOKE ALL ON public.gf_posting_profiles, public.gf_posting_uploads, public.gf_posting_posts,
-  public.gf_posting_events, public.gf_posting_rate FROM PUBLIC, anon, authenticated;
+  public.gf_posting_events, public.gf_posting_rate FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT, INSERT ON public.gf_posting_profiles, public.gf_posting_uploads, public.gf_posting_posts,
   public.gf_posting_events TO service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.gf_posting_rate TO service_role;
 
-REVOKE ALL ON FUNCTION public.gf_posting_take(uuid, text, integer, integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.gf_posting_take(uuid, text, integer, integer) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.gf_posting_take(uuid, text, integer, integer) TO service_role;
 
 COMMIT;
