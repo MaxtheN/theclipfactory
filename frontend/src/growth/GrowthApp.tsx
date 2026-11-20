@@ -396,13 +396,19 @@ export function GrowthApp() {
   }
   // Failed actions from either store; the factory's only ever holds a notice or an error.
   const actionErrors = [...new Set([w.actionError, factory.actionError].filter(Boolean))];
+  // The dismiss button leaves with its banner; keep keyboard focus on the page, not <body>.
+  function keepFocusInPage() {
+    document.getElementById("growth-main")?.focus({ preventScroll: true });
+  }
   function dismissActionErrors() {
     w.clearActionError();
     if (factory.actionError) factory.dismiss();
+    keepFocusInPage();
   }
   function dismissNotices() {
     w.clearNotice();
     if (factory.notice) factory.dismiss();
+    keepFocusInPage();
   }
   const quickActions: QuickAction[] = [
     ...(["factory", "library", "results", "setup", "settings"] as const).map((id) => ({

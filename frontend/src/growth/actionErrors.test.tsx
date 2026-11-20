@@ -101,8 +101,11 @@ describe("rejected actions", () => {
     expect(pillValue("Who it's for")).toBe("Founders who ship weekly");
     // Saving again is not held back as stale data.
     await waitFor(() => expect(screen.getByRole("button", { name: "Save brand" })).toBeEnabled());
+    dismiss.focus();
     fireEvent.click(dismiss);
     expect(screen.queryByRole("button", { name: "Dismiss error" })).toBeNull();
+    // Keyboard focus stays on the page instead of falling to <body>.
+    expect(document.getElementById("growth-main")).toHaveFocus();
   });
 
   it("in Settings say what happened instead of failing silently", async () => {
@@ -115,7 +118,10 @@ describe("rejected actions", () => {
     fireEvent.click(posting);
     const dismiss = await screen.findByRole("button", { name: "Dismiss error" });
     expect(dismiss.closest("[role=alert]")).toHaveTextContent("Posting needs a signed-in account.");
+    dismiss.focus();
     fireEvent.click(dismiss);
     expect(screen.queryByRole("button", { name: "Dismiss error" })).toBeNull();
+    // Keyboard focus stays on the page instead of falling to <body>.
+    expect(document.getElementById("growth-main")).toHaveFocus();
   });
 });
