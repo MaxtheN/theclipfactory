@@ -8,6 +8,7 @@ import {
   type QualityReport,
 } from "./publishApi";
 import { PostPreview, truncateForFeed } from "./PostPreview";
+import { setPills, pillGroup } from "../test-pills";
 
 vi.mock("./publishApi", async (original) => {
   const actual = await original<typeof import("./publishApi")>();
@@ -115,7 +116,7 @@ describe("PostClip", () => {
     const dialog = screen.getByRole("dialog", { name: "Prepare your post" });
     await userEvent.click(within(dialog).getByLabelText(/brand/));
     expect(within(dialog).getByRole("button", { name: "Post to Instagram" })).toBeDisabled();
-    fireEvent.change(within(dialog).getByLabelText(/Override reason/), { target: { value: "The full sentence and subject are visible." } });
+    setPills(/Override reason/, "The full sentence and subject are visible.", within(dialog));
     expect(within(dialog).getByRole("button", { name: "Post to Instagram" })).toBeEnabled();
     expect(api.post).not.toHaveBeenCalled();
   });
@@ -177,7 +178,7 @@ describe("PostClip", () => {
     await userEvent.click(screen.getByLabelText(/brand/));
     const button = screen.getByRole("button", { name: "Post to Instagram" });
     expect(button).toBeDisabled();
-    await userEvent.type(screen.getByLabelText(/Override reason/), "Captions are in the description.");
+    setPills(/Override reason/, "Captions are in the description.");
     await userEvent.click(button);
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("c1", expect.objectContaining({ override_reason: "Captions are in the description." })));
   });
@@ -307,13 +308,13 @@ describe("PostClip", () => {
     expect(pills[2]).toHaveClass("is-low");
     expect(within(gate).getByText("Held: no captions burned in")).toBeInTheDocument();
     expect(within(gate).getByText("No captions burned in").closest("details")).not.toBeNull();
-    expect(within(gate).getByLabelText(/Override reason/)).toBeInTheDocument();
+    expect(pillGroup(/Override reason/, within(gate))).toBeInTheDocument();
   });
 
   it("shows the override reason only when the gate holds", async () => {
     render(<PostClip clip={{ ...clip, approved: true }} pollMs={60000} />);
     expect(await screen.findByText("Passed: ready to post")).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Override reason/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: /Override reason/ })).not.toBeInTheDocument();
   });
 
   it("uses a switch for feed sharing and a segmented control for timing", async () => {

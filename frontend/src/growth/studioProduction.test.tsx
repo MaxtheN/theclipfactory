@@ -8,6 +8,7 @@ import { Studio } from "./Studio";
 import { productionApi } from "./productionApi";
 import { workspaceApi } from "./workspaceApi";
 import type { ProductionClip } from "./productionContracts";
+import { setPills } from "../test-pills";
 const mode = vi.hoisted(() => ({ preview: false }));
 vi.mock("./workspaceApi", async () => {
   const actual = await vi.importActual<typeof import("./workspaceApi")>("./workspaceApi");
@@ -96,7 +97,7 @@ describe("Studio production integration", () => {
   it("requires an actual revision delta and records parent, reason and changed fields", async () => {
     render(<Studio w={workspace()} factory={factory([clip])} next={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Request a change" }));
-    fireEvent.change(screen.getByLabelText("What would make it better?"), { target: { value: "Remove dead air" } });
+    setPills("What would make it better?", "Remove dead air");
     expect(screen.getByRole("button", { name: "Render a new revision" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Start (seconds)"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Render a new revision" }));
@@ -153,9 +154,7 @@ describe("Studio production integration", () => {
     vi.mocked(productionApi.campaignProduce).mockResolvedValue({ job: { ...queued("agent-1"), kind: "team" } as never, run });
     render(<Studio w={workspace()} factory={factory()} next={() => {}} preferredMode="agent" />);
     await waitFor(() => expect(screen.getByLabelText("Installed vision model")).toHaveValue("ollama:vision:latest"));
-    const box = screen.getByLabelText("What should the agents look for? (optional)");
-    expect(box).toHaveAttribute("maxlength", "500");
-    fireEvent.change(box, { target: { value: "  the spiciest takes on AI policy, under 40s  " } });
+    setPills("What should the agents look for? (optional)", "  the spiciest takes on AI policy, under 40s  ");
     fireEvent.click(screen.getByRole("button", { name: "Let agents find clips" }));
     await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("camp", expect.objectContaining({ direction: "the spiciest takes on AI policy, under 40s" })));
   });

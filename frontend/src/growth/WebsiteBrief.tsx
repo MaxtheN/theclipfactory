@@ -18,6 +18,8 @@ import {
 } from "./websiteBriefApi";
 import { AiModelHint, llmApi, type LlmView } from "./AiModelCard";
 import "./website-brief.css";
+import { PillList, PillSelect } from "./PillField";
+import { AUDIENCE, CTA, METRIC, METRIC_LABELS, MUST_AVOID, TONE } from "./choiceOptions";
 import { platformWords } from "../platform";
 
 type Phase = "input" | "reading" | "review" | "error";
@@ -496,9 +498,9 @@ function Review({
             onChange={(e) => onChange({ oneLiner: e.target.value })} />
         ))}
         {field("audience", "Who it’s for", (id) => (
-          <AutoTextarea id={id} rows={2} maxLength={3000} value={edited.audience} disabled={disabled}
-            placeholder="Who watches, and what do they care about?"
-            onChange={(e) => onChange({ audience: e.target.value })} />
+          <PillList labelledBy={`${id}-label`} label="Who it’s for" format="comma" options={AUDIENCE}
+            value={edited.audience} disabled={disabled}
+            onChange={(audience) => onChange({ audience })} />
         ))}
         {field("suggested_goal", "Goal", (id) => (
           <span className="gf-wb-pair">
@@ -511,18 +513,20 @@ function Review({
                 <option key={g.objective} value={g.objective}>{g.label}</option>
               ))}
             </select>
-            {edited.objective !== "discovery" && (
-              <input type="text" aria-label="Primary metric" maxLength={200} value={edited.metric}
-                disabled={disabled} placeholder={goal?.metric || "metric"}
-                onChange={(e) => onChange({ metric: e.target.value })} />
-            )}
           </span>
         ))}
+        {edited.objective !== "discovery" && (
+          <div className="gf-wb-field">
+            <PillSelect label="Primary metric" className="gf-wb-pills" options={METRIC} labels={METRIC_LABELS}
+              suggested={[goal?.metric]} value={edited.metric} disabled={disabled}
+              onChange={(metric) => onChange({ metric })} />
+          </div>
+        )}
         {field("voice", "Voice", (id) => (
           <span className="gf-wb-voice">
-            <input id={id} type="text" maxLength={220} value={edited.adjectives} disabled={disabled}
-              placeholder="3 to 5 words, comma separated"
-              onChange={(e) => onChange({ adjectives: e.target.value })} />
+            <PillList labelledBy={`${id}-label`} label="Voice" format="comma" options={TONE} max={5}
+              maxLength={40} value={edited.adjectives} disabled={disabled}
+              onChange={(adjectives) => onChange({ adjectives })} />
             <label>
               <span>Do</span>
               <input type="text" maxLength={240} value={edited.voiceDo} disabled={disabled}
@@ -544,15 +548,15 @@ function Review({
             onChange={(e) => onChange({ topics: e.target.value })} />
         ), "One per line, up to 8.")}
         {field("must_avoid", "Never touch", (id) => (
-          <AutoTextarea id={id} rows={2} value={edited.mustAvoid} disabled={disabled}
-            placeholder="Topics or claims to stay away from"
-            onChange={(e) => onChange({ mustAvoid: e.target.value })} />
-        ), "One per line. These become hard limits for every clip.")}
+          <PillList labelledBy={`${id}-label`} label="Never touch" format="lines" options={MUST_AVOID}
+            maxLength={120} value={edited.mustAvoid} disabled={disabled}
+            onChange={(mustAvoid) => onChange({ mustAvoid })} />
+        ), "These become hard limits for every clip.")}
         {field("cta", "Call to action", (id) => (
           <span className="gf-wb-pair">
-            <input id={id} type="text" maxLength={80} value={edited.ctaText} disabled={disabled}
-              placeholder="e.g. Listen to the full episode"
-              onChange={(e) => onChange({ ctaText: e.target.value })} />
+            <PillSelect labelledBy={`${id}-label`} label="Call to action" options={CTA} maxLength={80}
+              value={edited.ctaText} disabled={disabled}
+              onChange={(ctaText) => onChange({ ctaText })} />
             <input type="url" aria-label="Call to action link" maxLength={500} value={edited.ctaLink}
               disabled={disabled} placeholder="https://"
               onChange={(e) => onChange({ ctaLink: e.target.value })} />
@@ -692,7 +696,7 @@ function DraftField({
   return (
     <div className={`gf-wb-field${dropped ? " is-dropped" : ""}`}>
       <span className="gf-wb-field-head">
-        <label className="gf-wb-field-label" htmlFor={id}>
+        <label className="gf-wb-field-label" htmlFor={id} id={`${id}-label`}>
           {label}
         </label>
         {evidence.length > 0 && (

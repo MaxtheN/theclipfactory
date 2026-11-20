@@ -1,0 +1,95 @@
+/* Pill picker: choose instead of type. Shares field label and hint styles via .gf-field. */
+.gf-app .gf-pill-field,
+.gf-pill-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; border: 0; margin: 0; padding: 0; }
+.gf-pill-field-options { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.gf-app .gf-pill-field .gf-pill-choice,
+.gf-pill-field .gf-pill-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 32px;
+  height: auto;
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--border-control);
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  transform: none;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.gf-app .gf-pill-field .gf-pill-choice:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--border-field);
+  color: var(--foreground);
+  transform: none;
+}
+.gf-app .gf-pill-field .gf-pill-choice[aria-pressed="true"],
+.gf-app .gf-pill-field .gf-pill-choice[aria-pressed="true"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--gf-violet-400) 14%, var(--surface));
+  border-color: var(--gf-violet-600);
+  color: var(--foreground);
+}
+.gf-pill-field .gf-pill-choice[aria-pressed="true"] svg { color: var(--accent-text); flex: 0 0 auto; }
+.gf-app .gf-pill-field .gf-pill-choice.is-add { border-style: dashed; color: var(--muted-foreground); }
+.gf-app .gf-pill-field .gf-pill-choice:disabled { opacity: .45; cursor: not-allowed; }
+.gf-app .gf-pill-field .gf-pill-choice:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.gf-pill-choice-text { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.gf-app .gf-pill-field input.gf-pill-field-input,
+.gf-pill-field input.gf-pill-field-input {
+  flex: 0 1 280px;
+  min-width: 180px;
+  height: 32px;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--focus);
+  border-radius: var(--radius-full, 999px);
+  background: var(--surface-sunken);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+.gf-app .gf-pill-field > small { margin: 0; }
+@media (prefers-reduced-motion: reduce) { .gf-pill-field .gf-pill-choice { transition: none; } }
+
+/* Inside the clip style picker: same row grid, pill size and selected state as its other choices. */
+.gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--gf-s3, 12px);
+}
+.gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes > label {
+  margin: 0;
+  padding-top: 7px;
+  color: var(--material-secondary, var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 550;
+}
+.gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes > small { grid-column: 2; }
+.gf-app .gf-clip-style .gf-pill-field .gf-pill-choice { min-height: 30px; font-size: 12px; }
+.gf-app .gf-clip-style .gf-clip-style-option[aria-pressed="true"],
+.gf-app .gf-clip-style .gf-clip-style-option[aria-pressed="true"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--gf-violet-400) 14%, var(--surface));
+  border-color: var(--gf-violet-600);
+  color: var(--foreground);
+}
+.gf-app .gf-review-inspector .gf-clip-style .gf-pill-field.gf-clip-style-notes { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.gf-app .gf-review-inspector .gf-clip-style .gf-pill-field.gf-clip-style-notes > label { padding-top: 0; }
+.gf-app .gf-review-inspector .gf-clip-style .gf-pill-field.gf-clip-style-notes > small { grid-column: auto; }
+@media (max-width: 720px) {
+  .gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes > label { padding-top: 0; }
+  .gf-app .gf-clip-style .gf-pill-field.gf-clip-style-notes > small { grid-column: auto; }
+}

@@ -43,6 +43,7 @@ vi.mock("./workspaceApi", async () => {
 import { GrowthApp } from "./GrowthApp";
 import { workspaceApi } from "./workspaceApi";
 import { LAUNCH_FADE_MS, LAUNCH_SWEEP_MS } from "./LaunchTransition";
+import { setPills, pillValue } from "../test-pills";
 
 const showModal = HTMLDialogElement.prototype.showModal;
 const close = HTMLDialogElement.prototype.close;
@@ -170,12 +171,7 @@ describe("standalone onboarding shell", () => {
           target: { value: "First-run workspace" },
         },
       );
-      fireEvent.change(
-        screen.getByRole("textbox", { name: "Who are we speaking to?" }),
-        {
-          target: { value: "First-time podcast producers" },
-        },
-      );
+      setPills("Who are we speaking to?", "First-time podcast producers");
       next();
       fireEvent.click(screen.getByRole("button", { name: "Explore first" }));
       next();
@@ -277,9 +273,7 @@ describe("standalone onboarding shell", () => {
     });
     expect(question).toHaveFocus();
     expect(screen.getByLabelText("Name your brand / podcast")).toHaveValue("");
-    expect(
-      screen.getByRole("textbox", { name: "Who are we speaking to?" }),
-    ).toHaveValue("");
+    expect(pillValue("Who are we speaking to?")).toBe("");
     expect(
       screen.queryByRole("navigation", { name: "Main navigation" }),
     ).not.toBeInTheDocument();
@@ -304,11 +298,7 @@ describe("standalone onboarding shell", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Brand & voice" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit brand details" }));
     await waitFor(() =>
-      expect(
-        screen.getByRole("textbox", {
-          name: "Who it's for",
-        }),
-      ).toHaveValue("Builders and founders"),
+      expect(pillValue("Who it's for")).toBe("Builders and founders"),
     );
     fireEvent.click(screen.getByRole("button", { name: "Close Brand, audience & voice" }));
     expect(
@@ -348,12 +338,7 @@ describe("standalone onboarding shell", () => {
     fireEvent.change(screen.getByLabelText("Name your brand / podcast"), {
       target: { value: "Direct preview workspace" },
     });
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Who are we speaking to?" }),
-      {
-        target: { value: "Independent podcast creators" },
-      },
-    );
+    setPills("Who are we speaking to?", "Independent podcast creators");
     next();
     fireEvent.click(screen.getByRole("button", { name: "Explore first" }));
     next();
@@ -399,16 +384,9 @@ describe("standalone onboarding shell", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Brand & voice" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit brand details" }));
     await waitFor(() =>
-      expect(
-        screen.getByRole("textbox", { name: "Who it's for" }),
-      ).toHaveValue("Builders and founders"),
+      expect(pillValue("Who it's for")).toBe("Builders and founders"),
     );
-    const audience = screen.getByRole("textbox", {
-      name: "Who it's for",
-    });
-    fireEvent.change(audience, {
-      target: { value: "An unsaved workspace audience" },
-    });
+    setPills("Who it's for", "An unsaved workspace audience");
     fireEvent.click(screen.getByRole("button", { name: "Close Brand, audience & voice" }));
     const question = await enterOnboarding();
     expect(question).toHaveFocus();
@@ -441,9 +419,7 @@ describe("standalone onboarding shell", () => {
     fireEvent.keyDown(search, { key: "Enter" });
     fireEvent.click(screen.getByRole("button", { name: "Brand & voice" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit brand details" }));
-    expect(
-      screen.getByRole("textbox", { name: "Who it's for" }),
-    ).toHaveValue("An unsaved workspace audience");
+    expect(pillValue("Who it's for")).toBe("An unsaved workspace audience");
   });
   it("saves only on explicit final launch and restores Factory with the created workspace/profile scope", async () => {
     const before = await Promise.all([
@@ -458,10 +434,7 @@ describe("standalone onboarding shell", () => {
       screen.getByRole("textbox", { name: "Name your brand / podcast" }),
       { target: { value: "Producer launch test" } },
     );
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Who are we speaking to?" }),
-      { target: { value: "Podcast producers and company marketers" } },
-    );
+    setPills("Who are we speaking to?", "Podcast producers and company marketers");
     next();
     fireEvent.click(screen.getByRole("radio", { name: /^Reach new people/ }));
     next();

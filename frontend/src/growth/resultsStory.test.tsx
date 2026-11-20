@@ -12,6 +12,7 @@ import {
 import { strategistApi } from "./strategistApi";
 import type { Workspace } from "./useCampaignWorkspace";
 import type { DemoResult } from "./demoStore";
+import { setPills, pillValue } from "../test-pills";
 
 vi.mock("../api", () => ({ api: vi.fn(), post: vi.fn(), put: vi.fn() }));
 
@@ -186,10 +187,10 @@ describe("Results page", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(within(start).getByRole("button", { name: "Add a result by hand" }));
     const manual = screen.getByRole("dialog", { name: "Add a result by hand" });
-    fireEvent.change(within(manual).getByLabelText("What would we like to learn?"), { target: { value: "Does a direct opening help?" } });
+    setPills("What would we like to learn?", "Does a direct opening help?", within(manual));
     fireEvent.click(screen.getByRole("button", { name: "Close Add a result by hand" }));
     fireEvent.click(within(start).getByRole("button", { name: "Add a result by hand" }));
-    expect(within(screen.getByRole("dialog", { name: "Add a result by hand" })).getByLabelText("What would we like to learn?")).toHaveValue("Does a direct opening help?");
+    expect(pillValue("What would we like to learn?", within(screen.getByRole("dialog", { name: "Add a result by hand" })))).toBe("Does a direct opening help?");
     fireEvent.click(screen.getByRole("button", { name: "Close Add a result by hand" }));
     const text = document.querySelector(".gf-results-top")?.textContent ?? "";
     for (const word of [/No winner/i, /\bpolicy\b/i, /snapshot/i, /publication mapping/i, /PLAN THE NEXT/])

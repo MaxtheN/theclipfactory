@@ -15,6 +15,7 @@ import {
   type ResearchEvent,
   type WebsiteBriefApi,
 } from "./websiteBriefApi";
+import { pillValue } from "../test-pills";
 
 const draft: BrandDraft = {
   brand_name: "All-In",
@@ -286,13 +287,13 @@ describe("WebsiteBrief", () => {
     const boxes = screen.getAllByRole("checkbox");
     expect(boxes).toHaveLength(4);
     boxes.forEach((box) => expect(box).not.toBeChecked());
-    expect(screen.getByLabelText("Never touch")).toHaveValue("");
+    expect(pillValue("Never touch")).toBe("");
 
     fireEvent.click(screen.getByRole("checkbox", { name: /No financial advice/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Watch the full episode/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Drive full-episode visits/ }));
-    expect(screen.getByLabelText("Never touch")).toHaveValue("No financial advice");
-    expect(screen.getByLabelText("Call to action")).toHaveValue("Watch the full episode");
+    expect(pillValue("Never touch")).toBe("No financial advice");
+    expect(pillValue("Call to action")).toBe("Watch the full episode");
     expect(screen.getByLabelText("Goal")).toHaveValue("traffic");
     // Untick the goal: the creator's earlier choice comes back.
     fireEvent.click(screen.getByRole("checkbox", { name: /Drive full-episode visits/ }));
@@ -394,7 +395,7 @@ describe("onboarding step 1: your website", () => {
     expect(await screen.findByRole("heading", { name: "Who should care?" })).toBeInTheDocument();
     expect(screen.getByText(/Drafted from your website/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Name your brand / podcast" })).toHaveValue("All-In");
-    expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
+    expect(pillValue("Who are we speaking to?")).toBe(
       "Founders and investors who follow tech and markets.",
     );
     expect(profile).not.toHaveBeenCalled();

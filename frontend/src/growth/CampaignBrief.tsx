@@ -6,6 +6,8 @@ import type { Workspace } from "./useCampaignWorkspace";
 import { workspaceApi, type CampaignInput } from "./workspaceApi";
 import { Field, FieldGroup, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
+import { PillField, PillList, PillSelect, splitList } from "./PillField";
+import { AUDIENCE, CTA, MUST_AVOID, MUST_INCLUDE, TONE } from "./choiceOptions";
 import {
   BRIEF_LIMITS as L,
   briefBody,
@@ -130,18 +132,15 @@ export function BriefFields({
           placeholder="e.g. Agents still need human review"
           disabled={disabled}
         />
-        <Field label="Call to action" hint="Shown on the closing card of every clip.">
-          {(id) => (
-            <input
-              id={id}
-              maxLength={L.cta}
-              value={value.cta}
-              disabled={disabled}
-              placeholder="e.g. Listen to the full episode"
-              onChange={(e) => set({ cta: e.target.value })}
-            />
-          )}
-        </Field>
+        <PillSelect
+          label="Call to action"
+          hint="Shown on the closing card of every clip."
+          options={CTA}
+          maxLength={L.cta}
+          value={value.cta}
+          disabled={disabled}
+          onChange={(cta) => set({ cta })}
+        />
         <Field label="Call-to-action link" hint="Optional. Not shown in the video.">
           {(id) => (
             <input
@@ -157,54 +156,43 @@ export function BriefFields({
         </Field>
       </FieldGroup>
       <FieldGroup title="Audience and tone">
-        <Field
+        <PillList
           label="Target audience"
-          hint={workspaceAudience ? `Blank uses the brand's audience: ${workspaceAudience.slice(0, 80)}` : "Blank uses the brand's audience."}
-        >
-          {(id) => (
-            <AutoTextarea
-              id={id}
-              rows={1}
-              maxLength={L.audience}
-              value={value.audience}
-              disabled={disabled}
-              placeholder="e.g. Engineering leads evaluating AI agents"
-              onChange={(e) => set({ audience: e.target.value })}
-            />
-          )}
-        </Field>
-        <Field label="Tone">
-          {(id) => (
-            <AutoTextarea
-              id={id}
-              rows={1}
-              maxLength={L.tone}
-              value={value.tone}
-              disabled={disabled}
-              placeholder="e.g. Dry, specific, no hype"
-              onChange={(e) => set({ tone: e.target.value })}
-            />
-          )}
-        </Field>
+          hint={workspaceAudience ? `None picked uses the brand's audience: ${workspaceAudience.slice(0, 80)}` : "None picked uses the brand's audience."}
+          format="comma"
+          suggested={splitList(workspaceAudience, "comma")}
+          options={AUDIENCE}
+          value={value.audience}
+          disabled={disabled}
+          onChange={(audience) => set({ audience })}
+        />
+        <PillList
+          label="Tone"
+          format="comma"
+          options={TONE}
+          value={value.tone}
+          disabled={disabled}
+          onChange={(tone) => set({ tone })}
+        />
       </FieldGroup>
       <FieldGroup title="Topics">
-        <Chips
+        <PillField
           label="Must include"
+          options={MUST_INCLUDE}
           values={value.must_include}
           onChange={(must_include) => set({ must_include })}
           max={L.topics}
           maxLength={L.topic}
-          placeholder="e.g. agent evaluation"
           disabled={disabled}
         />
-        <Chips
+        <PillField
           label="Must avoid"
           hint="Up to 8. Matching moments are skipped."
+          options={MUST_AVOID}
           values={value.must_avoid}
           onChange={(must_avoid) => set({ must_avoid })}
           max={L.topics}
           maxLength={L.topic}
-          placeholder="e.g. market predictions"
           disabled={disabled}
         />
       </FieldGroup>

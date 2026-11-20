@@ -12,6 +12,8 @@ import { reviewPreview, workspaceApi } from "./workspaceApi";
 import { endpoint } from "../api";
 import { Disclosure, Empty, Field, Pill, Poster, PrimaryAction, formatTime } from "./parts";
 import { Icon } from "./Icon";
+import { PillList } from "./PillField";
+import { CLIP_FEEDBACK, LOOK_FOR } from "./choiceOptions";
 import { ClipEvidence } from "./ClipEvidence";
 import { SourceTranscript } from "./SourceTranscript";
 import { CraftControls, craftFromPlan, craftPlan, freshCraft } from "./CraftControls";
@@ -356,10 +358,10 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
       {making ? <div className="gf-form-fields">
         {!revisionParent && (() => { const summary = briefSummary(w.campaign!.brief, w.campaign!.objective, w.campaign!.primary_metric); return <p className="gf-brief-summary" aria-label="Goals and brief summary"><span title={summary}>{summary}</span>{onEditBrief && <button type="button" className="gf-button ghost compact" onClick={onEditBrief}>Edit brief</button>}</p>; })()}
         {sources.length > 1 && <Field label="Episode">{id => <select id={id} value={sourceId} disabled={!!revisionParent || busy} onChange={e => { setSourceId(e.target.value); setStart("0"); const s = sources.find(v => v.id === e.target.value); setEnd(String(Math.min(direction?.duration_seconds || 30, s?.duration || 30))); }}><option value="" disabled>Choose an episode</option>{sources.map(s => <option value={s.id} key={s.id}>{sourceLabel(s.id, w.campaign!.video_ids)}</option>)}</select>}</Field>}
-        {revisionParent && <Field label="What would make it better?">{id => <AutoTextarea id={id} value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="What should change, and why?" rows={3} />}</Field>}
+        {revisionParent && <PillList label="What would make it better?" format="comma" options={CLIP_FEEDBACK} maxLength={300} value={feedback} onChange={setFeedback} />}
         {revisionDirty && <UnsavedNote>Change request not sent</UnsavedNote>}
         {/* One reason at a time: the first thing to fix. */}
-        {mode === "agent" && !revisionParent && <Field label="What should the agents look for? (optional)" hint="Used for this run only, within your style rules.">{id => <AutoTextarea id={id} rows={2} maxLength={DIRECTION_MAX} value={lookFor} disabled={busy} placeholder="e.g. the spiciest takes on AI policy, under 40s" onChange={e => setLookFor(e.target.value)} />}</Field>}
+        {mode === "agent" && !revisionParent && <PillList label="What should the agents look for? (optional)" hint="Used for this run only, within your style rules." format="comma" options={LOOK_FOR} max={6} maxLength={Math.floor(DIRECTION_MAX / 6) - 2} value={lookFor} disabled={busy} onChange={setLookFor} />}
         {!direction ? <ClipStyleSheet w={w} onFullRules={onDirection} /> : agentFirst ? <AgentSetup factory={factory} variant="inline" /> : blockers[0] && <p className="gf-help">{blockers[0]}</p>}
         {mode === "agent" && !!source && source.has_audio !== false && source.transcript == null && <SpeechSetup factory={factory} />}
         <PrimaryAction full label={busy ? "Queuing…" : mode === "agent" ? "Let agents find clips" : revisionParent ? "Render a new revision" : "Make this clip"} intent="produce" disabled={busy || blockers.length > 0} onClick={() => void render()} />

@@ -18,6 +18,7 @@ import {
   LAUNCH_SWEEP_MS,
 } from "./LaunchTransition";
 import { workspaceApi } from "./workspaceApi";
+import { setPills, pillValue, pillsDisabled, pillGroup } from "../test-pills";
 
 vi.mock("./workspaceApi", () => ({
   workspaceApi: {
@@ -52,10 +53,7 @@ function fillAudience() {
     screen.getByRole("textbox", { name: "Name your brand / podcast" }),
     { target: { value: "Founder stories" } },
   );
-  fireEvent.change(
-    screen.getByRole("textbox", { name: "Who are we speaking to?" }),
-    { target: { value: "Founders" } },
-  );
+  setPills("Who are we speaking to?", "Founders");
 }
 function next() {
   fireEvent.click(
@@ -80,7 +78,7 @@ function boundaries() {
     .getByText("Voice & boundaries")
     .closest("details")
     ?.setAttribute("open", "");
-  return screen.getByLabelText("What should every edit respect?");
+  return "What should every edit respect?";
 }
 function noWrites() {
   expect(workspaceApi.profile).not.toHaveBeenCalled();
@@ -236,9 +234,7 @@ describe("guided workspace onboarding", () => {
     expect(
       screen.getByRole("textbox", { name: "Name your brand / podcast" }),
     ).toHaveValue("Founder stories");
-    expect(
-      screen.getByRole("textbox", { name: "Who are we speaking to?" }),
-    ).toHaveValue("Founders");
+    expect(pillValue("Who are we speaking to?")).toBe("Founders");
     next();
     next();
     expect(
@@ -341,9 +337,7 @@ describe("guided workspace onboarding", () => {
     });
     next();
     expect(screen.getByRole("alert")).toHaveTextContent(/primary metric/);
-    fireEvent.change(screen.getByLabelText("Primary metric"), {
-      target: { value: "qualified_demo_requests" },
-    });
+    setPills("Primary metric", "qualified_demo_requests");
     next();
     fireEvent.click(screen.getByRole("radio", { name: /^Other/ }));
     next();
@@ -377,12 +371,10 @@ describe("guided workspace onboarding", () => {
     start();
     toReview(/^Bring people to my website/);
     fireEvent.click(screen.getByRole("button", { name: "Edit audience" }));
-    expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
+    expect(pillValue("Who are we speaking to?")).toBe(
       "Founders",
     );
-    fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
-      target: { value: "Early-stage founders" },
-    });
+    setPills("Who are we speaking to?", "Early-stage founders");
     next();
     expect(
       screen.getByRole("heading", { name: "Your direction is set." }),
@@ -406,9 +398,7 @@ describe("guided workspace onboarding", () => {
     start();
     toReview();
     fireEvent.click(screen.getByRole("button", { name: "Edit audience" }));
-    fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
-      target: { value: "" },
-    });
+    setPills("Who are we speaking to?", "");
     fireEvent.click(
       screen.getByRole("button", {
         name: "Go to Review & launch",
@@ -419,9 +409,7 @@ describe("guided workspace onboarding", () => {
       screen.queryByRole("button", { name: "Open my factory" }),
     ).not.toBeInTheDocument();
     noWrites();
-    fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
-      target: { value: "A corrected audience" },
-    });
+    setPills("Who are we speaking to?", "A corrected audience");
     fireEvent.click(
       screen.getByRole("button", {
         name: "Go to Review & launch",
@@ -714,10 +702,10 @@ describe("onboarding validation and write recovery", () => {
         screen.getByRole("button", { name: "Open my factory" }),
       ).toBeEnabled();
       fireEvent.click(screen.getByRole("button", { name: "Edit audience" }));
-      expect(screen.getByLabelText("Who are we speaking to?")).toHaveValue(
+      expect(pillValue("Who are we speaking to?")).toBe(
         "Founders",
       );
-      expect(screen.getByLabelText("Who are we speaking to?")).toBeEnabled();
+      expect(pillsDisabled("Who are we speaking to?")).toBe(false);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2000);
       });
@@ -734,10 +722,6 @@ describe("onboarding validation and write recovery", () => {
       "Keep each voice or boundary line within 1,200 characters.",
     ],
     [
-      Array.from({ length: 31 }, (_, i) => `Boundary ${i}`).join("\n"),
-      "Use up to 30 voice and boundary lines.",
-    ],
-    [
       "x".repeat(4001),
       "Keep voice and boundaries within 4,000 characters in total.",
     ],
@@ -747,27 +731,33 @@ describe("onboarding validation and write recovery", () => {
       const { complete } = start();
       toVoice();
       const field = boundaries();
-      fireEvent.change(field, { target: { value } });
+      setPills(field, value);
       next();
       expect(screen.getByRole("alert")).toHaveTextContent(message);
       noWrites();
-      expect(field).toBeEnabled();
-      fireEvent.change(field, { target: { value: "Keep context." } });
+      expect(pillsDisabled(field)).toBe(false);
+      setPills(field, "Keep context.");
       next();
       launch();
       await waitFor(() => expect(complete).toHaveBeenCalledOnce());
     },
   );
+  it("caps voice and boundary picks at 30", () => {
+    start();
+    toVoice();
+    const field = boundaries();
+    setPills(field, Array.from({ length: 31 }, (_, i) => `Boundary ${i}`).join("\n"));
+    expect(pillValue(field).split("\n")).toHaveLength(30);
+    expect(pillGroup(field).querySelector("button.is-add")).toBeNull();
+  });
   it("validates the narrower profile audience limit before progressing or creating", () => {
     start();
     fillAudience();
-    fireEvent.change(screen.getByLabelText("Who are we speaking to?"), {
-      target: { value: "a".repeat(3001) },
-    });
+    setPills("Who are we speaking to?", "a".repeat(3001));
     next();
     expect(screen.getByRole("alert")).toHaveTextContent("1–3,000 characters");
     noWrites();
-    expect(screen.getByLabelText("Who are we speaking to?")).toBeEnabled();
+    expect(pillsDisabled("Who are we speaking to?")).toBe(false);
   });
   it("enforces optional voice and natural-language outcome limits in the shared body builder", () => {
     const body = {
@@ -794,9 +784,8 @@ describe("onboarding validation and write recovery", () => {
     await screen.findByRole("alert");
     fireEvent.click(screen.getByRole("button", { name: "Edit audience" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Correct your details");
-    const audience = screen.getByLabelText("Who are we speaking to?");
-    expect(audience).toBeEnabled();
-    fireEvent.change(audience, { target: { value: "Early-stage founders" } });
+    expect(pillsDisabled("Who are we speaking to?")).toBe(false);
+    setPills("Who are we speaking to?", "Early-stage founders");
     next();
     expect(screen.getByRole("alert")).toHaveTextContent("Correct your details");
     launch();

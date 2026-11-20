@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Direction, StrategyVersion } from "../types";
-import { AutoTextarea } from "../components/AutoTextarea";
 import { Icon } from "./Icon";
+import { PillList } from "./PillField";
+import { EDIT_RULES } from "./choiceOptions";
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { initialDirection, workspaceApi } from "./workspaceApi";
 
@@ -156,17 +157,16 @@ export function ClipStylePicker({
           </div>
         </div>
       ))}
-      <label className="gf-clip-style-notes">
-        <span className="gf-clip-style-label">Anything to always or never do?</span>
-        <AutoTextarea
-          rows={1}
-          maxLength={1500}
-          value={value.notes}
-          disabled={disabled}
-          placeholder="e.g. Never cut mid-sentence. Always keep the guest's name on screen."
-          onChange={(e) => onChange({ ...value, notes: e.target.value })}
-        />
-      </label>
+      <PillList
+        className="gf-clip-style-notes"
+        label="Anything to always or never do?"
+        format="lines"
+        options={EDIT_RULES}
+        maxLength={300}
+        value={value.notes}
+        disabled={disabled}
+        onChange={(notes) => onChange({ ...value, notes })}
+      />
     </div>
   );
 }
