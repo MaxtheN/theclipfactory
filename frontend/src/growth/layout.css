@@ -150,8 +150,9 @@
   padding: 0;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  /* 24px: the WCAG 2.2 minimum target size. */
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-full, 999px);
   color: var(--subtle-foreground);
   cursor: pointer;
@@ -296,7 +297,7 @@ details.gf-ui-list-row > summary { cursor: pointer; font-weight: 500; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 0;
+  min-height: 24px; /* WCAG 2.2 minimum target size; the text stays centred. */
   padding: 0;
   border: 0;
   background: none;
