@@ -785,6 +785,7 @@ export async function previewRequest<T>(
       sources: [],
     } as T;
   if (path.startsWith("/api/cloud/")) return previewCloud(path, options) as T;
+  if (path.startsWith("/api/billing")) return previewBilling(path) as T;
   // The Strategist reads real measured posts; the preview has none, so it
   // shows the honest empty state rather than an unsupported-route error.
   const strategist = /^\/api\/strategist\/([^/]+)$/.exec(path);
@@ -848,6 +849,46 @@ function previewCloud(path: string, options: RequestInit) {
     signed_in: configured && !!previewCloudEmail,
     email: configured ? previewCloudEmail : null,
     workspace_id: configured && previewCloudEmail ? "preview-workspace" : null,
+  };
+}
+
+/** Review preview of Plans and Billing: Free while signed out, an illustrative
+ * Pro plan once the preview account is signed in. Nothing is bought here. */
+const PREVIEW_PLANS = [
+  { id: "free", name: "Free", price: { month: 0, year: 0 }, limits: { brands: 1, clips_per_month: 10, posting: false, connected_accounts: 0, factory_builder: false } },
+  { id: "pro", name: "Pro", price: { month: 24, year: 19 }, limits: { brands: 3, clips_per_month: null, posting: true, connected_accounts: 5, factory_builder: false } },
+  { id: "business", name: "Business", price: { month: 200, year: 160 }, limits: { brands: 25, clips_per_month: null, posting: true, connected_accounts: 50, factory_builder: true } },
+] as const;
+function previewBilling(path: string) {
+  if (path === "/api/billing/checkout" || path === "/api/billing/portal")
+    fail("billing opens only in the desktop app.");
+  if (path !== "/api/billing" && path !== "/api/billing/refresh") fail("Only preview API routes are supported.");
+  const signedIn = previewCloudEmail !== null;
+  const plan = signedIn ? PREVIEW_PLANS[1] : PREVIEW_PLANS[0];
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const resets = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const renews = new Date(now.getTime() + 21 * 86_400_000);
+  return {
+    entitlement: {
+      plan: plan.id,
+      name: plan.name,
+      status: signedIn ? "active" : "none",
+      interval: signedIn ? "month" : null,
+      current_period_end: signedIn ? renews.toISOString() : null,
+      cancel_at_period_end: false,
+      payment_problem: false,
+      has_subscription: signedIn,
+      limits: { ...plan.limits },
+      state: signedIn ? "confirmed" : "signed_out",
+      confirmed_at: signedIn ? now.toISOString() : null,
+      grace_ends_at: null,
+      message: signedIn ? null : "Sign in to use a paid plan.",
+    },
+    usage: { brands: 1, clips_this_month: signedIn ? 18 : 4, connected_accounts: signedIn ? 2 : 0, month_start: monthStart.toISOString(), resets_at: resets.toISOString() },
+    plans: PREVIEW_PLANS.map((p) => ({ ...p, price: { ...p.price }, limits: { ...p.limits } })),
+    signed_in: signedIn,
+    available: true,
   };
 }
 
