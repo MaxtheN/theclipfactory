@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#ffffff" />
+  <title>Library and clip review — Growth Factory guide</title><meta name="description" content="Library lists every episode and the clips made from it. Open a clip to review it in Studio. If you have no footage yet, Add footage takes you to Factory." />
+  <link rel="canonical" href="https://growth-factory-landing.vercel.app/guide/library" />
+  <meta property="og:type" content="website" /><meta property="og:site_name" content="Growth Factory" /><meta property="og:title" content="Library and clip review — Growth Factory guide" /><meta property="og:description" content="Library lists every episode and the clips made from it. Open a clip to review it in Studio. If you have no footage yet, Add footage takes you to Factory." /><meta property="og:url" content="https://growth-factory-landing.vercel.app/guide/library" /><meta property="og:image" content="https://growth-factory-landing.vercel.app/assets/social-card.jpg" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" /><link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" />
+  <link rel="stylesheet" href="/styles.css" /><link rel="stylesheet" href="/pages.css" /><link rel="stylesheet" href="/site.css" /><script src="/app.js" defer></script>
+</head>
+<body class="product-pages docs-page"><a class="skip-link" href="#main">Skip to content</a>
+<!-- site:header --><header class="site-header"><div class="wrap header-row">
+  <a class="brand header-logo" href="/" aria-label="Growth Factory home"><img src="/assets/icon.svg" alt="" width="36" height="36" /><span class="header-title">Growth Factory</span></a>
+  <nav class="nav-desktop" aria-label="Main navigation"><a href="/product.html">Product</a><a href="/learning.html">Learning</a><a href="/pricing.html">Pricing</a><a href="/guide/" aria-current="page">Docs</a></nav>
+  <a class="btn btn-dark btn-sm header-download" href="/download.html">Get started</a>
+  <button class="menu-btn" type="button" aria-label="Open menu" aria-controls="mobile-nav" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
+</div><nav id="mobile-nav" class="nav-mobile" aria-label="Mobile navigation" hidden><a href="/product.html">Product</a><a href="/learning.html">Learning</a><a href="/pricing.html">Pricing</a><a href="/guide/" aria-current="page">Docs</a><a class="btn btn-dark" href="/download.html">Get started free</a></nav></header><!-- /site:header -->
+<main id="main">
+<div class="wrap docs-layout">
+<nav class="docs-nav" aria-label="Documentation"><div><h2>Start here</h2><ul><li><a href="/guide/">Overview</a></li><li><a href="/guide/getting-started.html">Your first clip</a></li><li><a href="/guide/faq.html">Questions and answers</a></li></ul></div><div><h2>Using the app</h2><ul><li><a href="/guide/factory.html">Factory and episodes</a></li><li><a href="/guide/factory-map.html">Factory map</a></li><li><a href="/guide/library.html" aria-current="page">Library and clip review</a></li><li><a href="/guide/studio.html">Studio</a></li><li><a href="/guide/results.html">Results and Strategist</a></li><li><a href="/guide/references.html">References</a></li><li><a href="/guide/brand-profile.html">Brand profile and onboarding</a></li><li><a href="/guide/posting.html">Posting</a></li></ul></div><div><h2>Setup and account</h2><ul><li><a href="/guide/models.html">Models and AI settings</a></li><li><a href="/guide/settings-privacy.html">Settings and privacy</a></li><li><a href="/guide/plans.html">Plans and billing</a></li></ul></div><div><h2>Under the hood</h2><ul><li><a href="/architecture.html">Architecture</a></li><li><a href="/guide/self-hosting.html">Self-hosting the cloud</a></li></ul></div></nav>
+<article class="docs-article"><p class="page-kicker">User guide</p><h1>Library and clip review</h1>
+<div class="prose">
+<p><strong>Library</strong> lists every episode and the clips made from it. Open a clip to review it in <a href="/guide/studio.html">Studio</a>. If you have no footage yet, <strong>Add footage</strong> takes you to Factory.</p>
+<h2 id="review-states">Review states</h2>
+<ul><li><strong>Needs review</strong>: a finished clip waiting for you. The factory's own checks passing does not approve it.</li><li><strong>Approved</strong>: you approved this exact revision. Approval is recorded against that revision, so editing the clip creates a new revision that needs approval again.</li><li><strong>Illustrative edit</strong>: a sample shown in preview mode, not a real clip.</li></ul>
+<p>Approving, exporting and posting are three separate decisions. Approving does not export or post anything.</p>
+<h2 id="exporting">Exporting</h2>
+<p><strong>Export</strong> saves the approved file to a folder you choose. You get the exact file you reviewed: the same revision, with the checksum shown in the clip details. Every plan can export. Free makes up to 20 clips a month, and posting from the app needs Pro (see <a href="/guide/plans.html">Plans and billing</a>).</p>
+<h2 id="clip-evidence">Clip evidence</h2>
+<p>Each clip's details show its evidence: the scenes and transcript lines it was cut from, technical checks (duration, captions, framing), critic findings, version history and timings. Two things to keep in mind when reading them:</p>
+<ul><li><strong>Processing time</strong> is the time the factory spent working on that clip. It does not include time waiting in the queue or the time you spent reviewing.</li><li><strong>Direct render cost</strong> (local compute, plus any cloud model calls) is not the fully loaded cost of a usable clip. It leaves out your review time, the clips you rejected and your equipment. Don't quote it as cost per published asset.</li></ul>
+<p>Comparisons between engines (for example swarm and Deep edit on the same episode) are only shown as comparable when they used the same source and settings. The app does not compute a success rate or ROI for you.</p>
+</div>
+<nav class="docs-pager" aria-label="Previous and next page"><a class="docs-prev" href="/guide/factory-map.html"><span>Previous</span>Factory map</a><a class="docs-next" href="/guide/studio.html"><span>Next</span>Studio</a></nav>
+<p class="docs-edit"><a href="https://github.com/MaxtheN/theclipfactory/blob/master/docs/guide/library.md" target="_blank" rel="noopener noreferrer">Edit this page on GitHub ↗</a></p></article>
+<aside class="docs-toc" aria-labelledby="toc-title"><h2 id="toc-title">On this page</h2><ul><li><a href="#review-states">Review states</a></li><li><a href="#exporting">Exporting</a></li><li><a href="#clip-evidence">Clip evidence</a></li></ul></aside>
+</div>
+</main>
+<!-- site:footer --><footer class="site-foot"><div class="wrap site-foot-grid">
+  <div class="site-foot-brand"><a class="brand sm" href="/" aria-label="Growth Factory home"><img src="/assets/icon.svg" alt="" width="28" height="28" /><span>Growth Factory</span></a><p>Agents that turn long videos into short clips on your computer. You approve every post.</p><p><a href="mailto:jamesbodebiyi@gmail.com">jamesbodebiyi@gmail.com</a></p></div>
+  <nav aria-label="Footer"><div><h2>Product</h2><ul><li><a href="/">Overview</a></li><li><a href="/product.html">Product</a></li><li><a href="/learning.html">Learning loop</a></li><li><a href="/pricing.html">Pricing</a></li><li><a href="/download.html">Download</a></li></ul></div><div><h2>Docs</h2><ul><li><a href="/guide/">User guide</a></li><li><a href="/guide/getting-started.html">Your first clip</a></li><li><a href="/guide/faq.html">Questions and answers</a></li><li><a href="/architecture.html">Architecture</a></li><li><a href="/guide/self-hosting.html">Self-hosting</a></li></ul></div><div><h2>Company</h2><ul><li><a href="mailto:jamesbodebiyi@gmail.com">Contact</a></li><li><a href="/privacy.html">Privacy</a></li><li><a href="/terms.html">Terms</a></li><li><a href="https://github.com/MaxtheN/theclipfactory" target="_blank" rel="noopener noreferrer">Source code ↗</a></li></ul></div></nav>
+</div><div class="wrap site-foot-base"><span>© 2026 Growth Factory</span><span>Mac · Windows · Linux</span></div></footer><!-- /site:footer -->
+</body></html>

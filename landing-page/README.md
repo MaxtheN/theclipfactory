@@ -1,31 +1,49 @@
 # Growth Factory website
 
-Static product website, separate from the Mac backend. Plain HTML, CSS and JavaScript; no runtime npm dependency or build step.
+The public website: product pages, pricing, the user guide, architecture, legal pages and the Checkout return pages. Plain HTML, CSS and JavaScript with no runtime dependencies. The generated pages are committed, so hosting serves the files as they are, with no build step.
 
 ## Pages
 
-- `/` — the growth-department overview, production team and illustrative app tour.
-- `/product.html` — how Factory, Library, Results and Brand profile connect the daily work.
-- `/learning.html` — quality evidence, observations, creative experiments, Style rules and factory-builder upgrades.
-- `/download.html` — honest Mac availability, prerequisites and source setup. No public release file is currently linked.
+| Page | Source |
+|---|---|
+| `/` home: the loop, agents, platforms, privacy, pricing, FAQ | `index.html` (hand-written) |
+| `/product.html`, `/learning.html` | hand-written |
+| `/pricing.html` plans, monthly and yearly, comparison table | `site/pages/pricing.html` + `plans.json` |
+| `/download.html` setup on Mac, Windows and Linux | `site/pages/download.html` |
+| `/architecture.html` five system diagrams | `site/pages/architecture.html` + `site/diagrams.mjs` |
+| `/guide/…` the user guide | `../docs/guide/*.md` |
+| `/privacy.html`, `/terms.html` | `site/pages/` |
+| `/billing/success.html`, `/billing/cancel.html`, `/billing/return.html` Stripe returns (noindex) | `site/pages/billing/` |
+| `/404.html`, `/sitemap.xml` | generated |
 
-The logo, orange/white palette, Manrope headings and shared navigation are consistent across pages. The Mac app uses the same color family while retaining its native system typography. Illustrative photos and sample metrics are labeled; no website animation is presented as a live agent run or measured audience growth. Loop rehearsal happens inside the app, not a separate promoted web demo.
+`build.mjs` (no dependencies) does the generating:
+
+- stamps the shared header and footer (`site/layout.mjs`) into every page, between `<!-- site:header -->` and `<!-- site:footer -->` markers;
+- fills `<!-- build:pricing-cards -->` and `<!-- build:pricing-table -->` from `plans.json`, the mirror of `supabase/functions/_shared/plans.ts`;
+- draws `<!-- build:diagram NAME -->` as inline SVG;
+- renders the user guide from `docs/guide/` with a small Markdown renderer (`site/markdown.mjs`), with the sidebar order in `DOCS_NAV`.
+
+Edit the sources, then run `npm run generate` and commit the output. `npm run check` fails when the committed pages are stale. Keep `docs/architecture.md` (Mermaid) in step with `site/diagrams.mjs`.
+
+No page links an installer until a signed release exists. Illustrative photos and sample metrics are labeled; no animation is presented as a live agent run or measured growth.
 
 ## Preview and checks
 
 ```sh
-npm run dev
-# http://127.0.0.1:4174/
+npm run dev        # http://127.0.0.1:4174/
+npm run generate   # after editing site/, plans.json or docs/guide/
 npm run check
 npm test
 ```
 
-Checks cover local route/asset/anchor resolution, tabs, navigation and release-link honesty. Browser checks cover actual page navigation, mobile menu/Escape, scroll header, overflow and console errors. The download CTA is a direct link to the Mac availability/setup page, rather than an invented download or an empty button.
+The tests check that the output is current, that every page has the shared chrome, a unique title and one H1, that links, assets and anchors resolve, that pricing matches `plans.json`, that the sitemap and noindex pages agree, that the billing pages exist where the billing function sends people, that diagram boxes and labels do not overlap, and that no installer link appears.
 
 ## Publication
 
-Current public site: https://growth-factory-landing.vercel.app/ . Local changes are preview-only until explicitly published. Keep the existing Vercel project/team configuration; do not create or transfer a deployment from this task. Static deployment includes all four HTML pages, shared CSS/JS, metadata and assets. `vercel.json` supports clean URLs on the hosted site; explicit `.html` links also work in the simple local server.
+Vercel project with root directory `landing-page`, no framework and no build command. `vercel.json` turns on clean URLs, so `/pricing` serves `pricing.html`; explicit `.html` links also work on the local server. `.vercelignore` keeps the build sources and tests out of the upload. Vercel serves `404.html` for unknown paths.
 
-No Developer ID/notarized release, clean-Mac certification or downloadable artifact is established by this website. A local ad-hoc app build is separate from a public release. Do not add a release URL until the exact reviewed artifact exists and publication is authorized.
+Set the billing function's `BILLING_RETURN_URL` to the site origin (for example `https://growth-factory-landing.vercel.app`) so Checkout returns to `/billing/success.html` and `/billing/cancel.html`. See [self-hosting](../docs/guide/self-hosting.md).
+
+The privacy and terms pages are drafts for the owner to review before launch.
 
 Asset provenance and font licenses: [ASSETS.md](ASSETS.md).

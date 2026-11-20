@@ -147,3 +147,16 @@ const siteHeader = document.querySelector(".site-header");
 const updateHeader = () => siteHeader?.classList.toggle("is-scrolled", window.scrollY > 48);
 window.addEventListener("scroll", updateHeader, { passive: true });
 updateHeader();
+
+/* Pricing: monthly or yearly. Without JavaScript the toggle stays hidden and monthly prices show, with the yearly
+   price in the line below each. */
+document.querySelectorAll("[data-pricing]").forEach((pricing) => {
+  const buttons = [...pricing.querySelectorAll(".pricing-toggle button")];
+  pricing.classList.add("is-interactive");
+  buttons.forEach((button) =>
+    button.addEventListener("click", () => {
+      pricing.dataset.interval = button.dataset.interval;
+      buttons.forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
+    }),
+  );
+});
