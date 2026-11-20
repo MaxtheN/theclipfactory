@@ -1012,8 +1012,8 @@ export function Setup({
             <nav className="gf-profile-sections" aria-label="Profile sections">
               {([
                 ["identity", "Brand & voice", "headphones"],
-                ...(goals ? [["goals", "Goals & brief", "results"]] : []),
-                ["kit", "Brand kit", "studio"],
+                ...(goals ? [["goals", "Goals & brief", "target"]] : []),
+                ["kit", "Brand kit", "palette"],
               ] as [typeof section, string, string][]).map(([key, label, icon]) => (
                 <button type="button" key={key} aria-current={section === key ? "page" : undefined} aria-controls={summaryId} onClick={() => setSection(key)}>
                   <span className="gf-profile-section-icon"><Icon name={icon} size={17} /></span><span>{label}</span>
@@ -1071,7 +1071,7 @@ export function Setup({
               disabled={w.busy || checking}
               onClick={onAccounts}
             >
-              <Icon name="results" size={16} />
+              <Icon name="link" size={16} />
               <span>Connected accounts</span>
               <Icon name="arrow" size={14} />
             </button>

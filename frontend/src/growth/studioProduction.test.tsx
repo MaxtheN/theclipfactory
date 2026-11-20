@@ -138,6 +138,17 @@ describe("Studio production integration", () => {
     await waitFor(() => expect(productionApi.campaignProduce).toHaveBeenCalledWith("camp", { expected_strategy_version_id: "strategy", video_id: "v1", profile_id: "profile", model_id: "ollama:vision:latest", strategy: "swarm" }));
     expect(productionApi.campaignRender).not.toHaveBeenCalled();
   });
+  it("shows a refused agent run once, beside the work, not again in the shell", async () => {
+    vi.mocked(productionApi.campaignProduce).mockRejectedValue(new Error("The model is busy with another run."));
+    const clearActionError = vi.fn();
+    const w = Object.assign(workspace(), { clearActionError });
+    render(<Studio w={w} factory={factory()} next={() => {}} preferredMode="agent" />);
+    await waitFor(() => expect(screen.getByLabelText("Installed vision model")).toHaveValue("ollama:vision:latest"));
+    fireEvent.click(screen.getByRole("button", { name: "Let agents find clips" }));
+    const refusal = await screen.findByText("The model is busy with another run.");
+    expect(refusal.closest("[role=alert]")).not.toBeNull();
+    expect(clearActionError).toHaveBeenCalled();
+  });
   it("keeps Deep edit (team mode) selectable under Fine-tune with its correction budget", async () => {
     const run = { id: "run-1", tasks: [], job_id: "agent-1" } as unknown as TeamRun;
     vi.mocked(productionApi.campaignProduce).mockResolvedValue({ job: { ...queued("agent-1"), kind: "team" } as never, run });

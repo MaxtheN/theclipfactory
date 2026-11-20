@@ -418,14 +418,21 @@ export function AutomationPanel({
       if (alive.current) setBusy(false);
     }
   }
+  // In Settings this is one block among Account and Connected accounts, so it takes their level.
+  const Title = full ? "h2" : "h3";
   if (reviewPreview)
-    return (
-      <section className="gf-automation" id={full ? undefined : "gf-accounts"}>
-        <span className="gf-kicker">{full ? "The learning loop" : "Accounts"}</span>
-        <h2>{full ? "Every result informs the next draft." : "Connect and track your posts"}</h2>
+    return full ? (
+      <section className="gf-automation">
+        <span className="gf-kicker">The learning loop</span>
+        <h2>Every result informs the next draft.</h2>
         <p>
           Illustrative data. Connect accounts in the desktop app.
         </p>
+      </section>
+    ) : (
+      <section className="gf-automation is-accounts" id="gf-accounts" aria-labelledby="automation-title">
+        <h3 id="automation-title">Result tracking</h3>
+        <p className="gf-help">Posts are measured from the desktop app. This preview tracks nothing.</p>
       </section>
     );
   return (
@@ -437,13 +444,13 @@ export function AutomationPanel({
       <div className="gf-automation-heading">
         <div>
           {full && <span className="gf-kicker">The learning loop</span>}
-          <h2 id="automation-title">
-            {full ? "A better next draft. With receipts." : "Instagram"}
-          </h2>
+          <Title id="automation-title">
+            {full ? "A better next draft. With receipts." : "Result tracking"}
+          </Title>
           <p>
             {full
               ? "Real post metrics → one creative hypothesis → a new draft for your review."
-              : "Choose the account and when to measure each post."}
+              : "Choose the Instagram account and when to measure each post."}
           </p>
         </div>
         <span className="gf-automation-policy">

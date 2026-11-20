@@ -352,7 +352,8 @@ function route(
   if (method === "GET" && path === "/api/team/runs") return [];
   if (method === "GET" && path === "/api/publish-attempts") return [];
   if (method === "GET" && path === "/api/post-schedules") return [];
-  if (method === "GET" && path === "/api/posting/accounts") return copy(PREVIEW_ACCOUNTS);
+  // The first read asks for a refresh (?refresh=true); it is the same list.
+  if (method === "GET" && /^\/api\/posting\/accounts(\?.*)?$/.test(path)) return copy(PREVIEW_ACCOUNTS);
   if (method === "GET" && /^\/api\/posting\/accounts\/[^/]+\/tiktok-creator-info$/.test(path))
     return previewCreatorInfo;
   if (method === "GET" && resource === "exports") return [];
@@ -759,7 +760,7 @@ function route(
       return job;
     }
   }
-  return fail(`Unsupported ${method} ${path}. No external action was taken.`);
+  return fail(`this step runs in the desktop app (${method} ${path}). Nothing was sent.`);
 }
 
 export async function previewRequest<T>(

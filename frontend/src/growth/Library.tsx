@@ -292,7 +292,9 @@ export function Library({
                   ? "Try a different name or opening."
                   : olderCount && !olderTests
                     ? "Generate fresh clips in Factory. Your older test drafts are available above."
-                    : "Add footage in Factory to get your first clips."}
+                    : sources.length
+                      ? `${sources.length === 1 ? "Your episode is" : `Your ${sources.length} episodes are`} ready. Press Find clips in Factory and new clips land here.`
+                      : "Add footage in Factory to get your first clips."}
               </p>
               {!normalized && <button type="button" className="gf-button secondary" onClick={onFactory}>Go to Factory<Icon name="arrow" size={15} /></button>}
             </div>
@@ -330,21 +332,12 @@ export function Library({
                     <div className="gf-episode-body">
                       <div className="gf-episode-title">
                         <strong>{sourceLabel(source.id, ids)}</strong>
-                        <Pill
-                          tone={
-                            waiting
-                              ? "sand"
-                              : made.length
-                                ? "mint"
-                                : "quiet"
-                          }
-                        >
-                          {waiting
-                            ? `${made.length} clips generated`
-                            : made.length
-                              ? "Clips generated"
-                              : "No clips yet"}
-                        </Pill>
+                        {/* The meta line counts the clips; the pill says what is left to do. */}
+                        {made.length > 0 && (
+                          <Pill tone={waiting ? "sand" : "mint"}>
+                            {waiting ? `${waiting} to review` : "All approved"}
+                          </Pill>
+                        )}
                       </div>
                       <p className="gf-episode-meta">
                         <span className="gf-num">
@@ -573,7 +566,11 @@ function ReviewWall({
       <div className="gf-flow-empty">
         <Icon name="studio" size={26} />
         <h2>No clips yet</h2>
-        <p>Add an episode in Factory and new clips land here.</p>
+        <p>
+          {sourceIds.length
+            ? "Press Find clips on an episode in Factory and new clips land here."
+            : "Add an episode in Factory and new clips land here."}
+        </p>
         <button type="button" className="gf-button secondary" onClick={onFactory}>
           Go to Factory
           <Icon name="arrow" size={15} />

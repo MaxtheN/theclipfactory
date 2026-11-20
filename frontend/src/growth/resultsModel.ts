@@ -135,6 +135,8 @@ export interface PostedRow {
   mediaId: string;
   clipId: string;
   title: string;
+  /** The clip is not in this library (deleted, or posted elsewhere): the title is a placeholder. */
+  untitled: boolean;
   account: string;
   postedAt: number | null;
   /** 0..1 progress through the current measurement window. */
@@ -182,7 +184,8 @@ export function postedRows(args: {
         id: p.id,
         mediaId: text(p.media_id),
         clipId: text(p.clip_id),
-        title: clip?.hook || clip?.name || `Post ${text(p.media_id)}`,
+        title: clip?.hook || clip?.name || "Untitled post",
+        untitled: !(clip?.hook || clip?.name),
         account: text(account?.display_name) || text(p.account_id) || "Instagram",
         postedAt: posted,
         window,

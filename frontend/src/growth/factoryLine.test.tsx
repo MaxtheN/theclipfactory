@@ -179,6 +179,10 @@ describe("production line on the Factory screen", () => {
     const blocked = screen.getByRole("button", { name: "Find clips" });
     expect(blocked).toBeDisabled();
     expect(blocked).toHaveAttribute("title", "Pick your clip style first.");
+    // The reason is on screen and tied to the button, not only in a hover tooltip, and the
+    // row no longer claims to be ready.
+    expect(blocked).toHaveAccessibleDescription("Pick your clip style first.");
+    expect(screen.queryByText("Ready to make clips")).toBeNull();
     first.unmount();
     const onSettings = vi.fn();
     home(workspace(), factory({}, { model: null }), onSettings);
@@ -189,6 +193,18 @@ describe("production line on the Factory screen", () => {
     // The missing prerequisite links to the Settings section that resolves it.
     fireEvent.click(screen.getByRole("button", { name: "Open Settings → Models" }));
     expect(onSettings).toHaveBeenCalledOnce();
+    expect(productionApi.campaignProduce).not.toHaveBeenCalled();
+  });
+
+  it("says agents need the desktop app in the review preview instead of failing the request", () => {
+    mode.preview = true;
+    home(workspace(), factory());
+    const blocked = screen.getByRole("button", { name: "Find clips" });
+    expect(blocked).toBeDisabled();
+    expect(blocked).toHaveAccessibleDescription(
+      "Agents run in the desktop app, not in this preview.",
+    );
+    fireEvent.click(blocked);
     expect(productionApi.campaignProduce).not.toHaveBeenCalled();
   });
 
@@ -394,6 +410,33 @@ describe("review wall in the Library", () => {
     expect(within(wall).queryByRole("button", { name: /Approve|Needs review/ })).not.toBeInTheDocument();
     expect(within(wall).getByRole("button", { name: /Quality holds/ })).toBeInTheDocument();
     expect(requests.filter(request => request.method === "PUT")).toEqual([]);
+  });
+
+  it("episode cards say what is left to review instead of repeating the count", () => {
+    const episodes = (f: FactoryState) =>
+      <Library w={workspace()} factory={f} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="footage" />;
+    const card = () => document.querySelector(".gf-episode-body") as HTMLElement;
+    const view = render(episodes(factory({}, { clips: [made("a"), made("b", { approved: true })] })));
+    expect(within(card()).getByText("1 to review")).toBeInTheDocument();
+    expect(within(card()).getByText("2 clips")).toBeInTheDocument();
+    view.rerender(episodes(factory({}, { clips: [made("a", { approved: true })] })));
+    expect(within(card()).getByText("All approved")).toBeInTheDocument();
+    view.rerender(episodes(factory()));
+    expect(within(card()).getByText("0 clips")).toBeInTheDocument();
+    expect(within(card()).queryByText(/to review|All approved|No clips yet/)).not.toBeInTheDocument();
+  });
+
+  it("empty clip lists point at the episode that is ready, not at adding footage", () => {
+    const onFactory = vi.fn();
+    const library = (view: "edits" | "wall") =>
+      <Library w={workspace()} factory={factory()} onReview={vi.fn()} onProduce={vi.fn()} onFactory={onFactory} view={view} />;
+    const view = render(library("edits"));
+    expect(screen.getByText("Your episode is ready. Press Find clips in Factory and new clips land here.")).toBeInTheDocument();
+    expect(screen.queryByText(/Add footage in Factory/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go to Factory" }));
+    expect(onFactory).toHaveBeenCalledTimes(1);
+    view.rerender(library("wall"));
+    expect(screen.getByText("Press Find clips on an episode in Factory and new clips land here.")).toBeInTheDocument();
   });
 
   describe("freeing space", () => {

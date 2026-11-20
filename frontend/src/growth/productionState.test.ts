@@ -22,6 +22,10 @@ describe("real production readiness",()=>{
   it("keeps source work, stale reads and missing local media tools blocked",()=>{
     expect(readiness({...base,subtitles:false,jobs:[{...job,status:"running"}]}).canRender).toBe(false);
     expect(readiness({...base,subtitles:false,stale:true}).canRender).toBe(false);
+    // A read in flight says so; data that did not load points at Reconnect, in plain words.
+    expect(readiness({...base,subtitles:false,stale:"loading"}).manual).toEqual(["Loading the latest episodes and clips…"]);
+    expect(readiness({...base,subtitles:false,stale:true}).manual.join()).toMatch(/did not load\. Press Reconnect/);
+    expect(readiness({...base,subtitles:false,approved:false}).manual).toEqual(["Pick your clip style first."]);
     expect(readiness({...base,subtitles:false,system:{ffmpeg:true,ffprobe:false}}).canRender).toBe(false);
   });
 });
@@ -60,5 +64,7 @@ describe("scope, edits and retries",()=>{
     expect(reviewBlocker(clip,[],false)).toMatch(/critique/);
     expect(reviewBlocker({...clip,team_review_status:"pass"},[],false)).toBeNull();
     expect(reviewBlocker({...clip,team_review_status:"pass"},[{...job,status:"running",context:{clip_id:"clip"}}],false)).toMatch(/task/);
+    expect(reviewBlocker({...clip,team_review_status:"pass"},[],"loading")).toBe("Loading the latest clips…");
+    expect(reviewBlocker({...clip,team_review_status:"pass"},[],true)).toMatch(/Reconnect/);
   });
 });
