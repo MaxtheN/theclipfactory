@@ -5,6 +5,7 @@ import type { Campaign, Clip, FactoryLine, Job } from "../types";
 import type { FactoryState } from "../useFactory";
 import { Icon } from "./Icon";
 import { PanelDialog } from "./PanelDialog";
+import { platformLabel } from "./publishApi";
 import type { SettingsSection } from "./SettingsScreen";
 import "./activity.css";
 
@@ -22,8 +23,12 @@ export interface PublishAttemptSummary {
   clip_id?: string | null;
   campaign_id?: string | null;
   account_name?: string | null;
+  platform?: string | null;
   state: string;
-  error?: string | null;
+  active?: boolean;
+  permalink?: string | null;
+  /** The publisher records {code, message}; older rows may hold plain text. */
+  error?: string | { code?: string; message?: string } | null;
   created_at?: string;
   updated_at?: string;
   history?: { at?: string; state?: string; note?: string }[];
@@ -53,6 +58,8 @@ export interface ActivityItem {
   cancel?: { jobId: string; production: boolean };
   /** Uncertain posting outcome: offer Check status (reconcile), never retry. */
   reconcile?: string;
+  /** The live post on its platform. */
+  link?: { href: string; label: string };
   target?: ActivityTarget;
 }
 
@@ -75,7 +82,7 @@ const labels: Record<string, string> = {
   runtime: "Runtime setup",
   inference: "Local inference",
   narration: "Narration",
-  publish: "Instagram post",
+  publish: "Post",
   reconcile: "Post check",
   insights: "Results check",
   paid_insights: "Paid results check",
@@ -193,19 +200,25 @@ export function activityItems(
     if (!isCurrent(status) && !(now - time(updatedAt) < RECENT_MS)) continue;
     const clip = attempt.clip_id ? clips.find((c) => c.id === attempt.clip_id) : undefined;
     const before = [...(attempt.history ?? [])].reverse().find((h) => h.state && h.state !== "failed" && h.state !== "unknown")?.state;
+    const platform = platformLabel(attempt.platform);
+    const error = typeof attempt.error === "string" ? attempt.error : attempt.error?.message;
+    // A post the lane stopped watching while the platform was still processing is checked, never retried.
+    const uncertain = attempt.state === "unknown"
+      || ((attempt.state === "submitted" || attempt.state === "container_created") && attempt.active === false);
     items.push({
       id: `post:${attempt.id}`,
-      type: attempt.account_name ? `Instagram post to ${attempt.account_name}` : "Instagram post",
+      type: attempt.account_name ? `${platform} post to ${attempt.account_name}` : `${platform} post`,
       campaign: campaignFor(campaigns, clips, { clip: attempt.clip_id ?? undefined, campaign: attempt.campaign_id ?? undefined }),
       stage: stopped ? "Stopped when the app closed. Choose Post now, Reschedule or Cancel."
         : attempt.state === "unknown" ? "Check posting status" : attemptStages[attempt.state] ?? attempt.state,
       status,
       updatedAt,
       reason: failed
-        ? attempt.error || (attempt.state === "unknown" ? "The outcome is unknown. Check the post on Instagram before trying again." : "No reason was reported.")
+        ? error || (attempt.state === "unknown" ? `The outcome is unknown. Check the post on ${platform} before trying again.` : "No reason was reported.")
         : undefined,
       failedStage: failed && before ? attemptStages[before] ?? before : undefined,
-      reconcile: attempt.state === "unknown" ? attempt.id : undefined,
+      reconcile: uncertain ? attempt.id : undefined,
+      link: attempt.permalink && /^https:\/\//.test(attempt.permalink) ? { href: attempt.permalink, label: `Open on ${platform}` } : undefined,
       target: clip ? { to: "clip", clip } : { to: "results" },
     });
   }
@@ -396,8 +409,11 @@ export function ActivityCenter({
           <strong>{item.failedStage ? `Failed while ${item.failedStage.toLowerCase()}` : "Failed (stage not reported)"}:</strong> {item.reason}
         </p>
       )}
-      {(item.target || item.cancel || item.reconcile) && (
+      {(item.target || item.cancel || item.reconcile || item.link) && (
         <div className="gf-activity-actions">
+          {item.link && (
+            <a className="gf-button secondary compact" href={item.link.href} target="_blank" rel="noreferrer noopener">{item.link.label}</a>
+          )}
           {item.target && (
             <button type="button" className="gf-button secondary compact" onClick={() => { setOpen(false); onOpen(item.target!); }}>
               {needsYou(item.status) ? "Open to fix" : "Open"}
@@ -441,7 +457,7 @@ export function ActivityCenter({
           {jobsUnavailable && (
             <p className="gf-help" role="alert">Job status unavailable: {factory.errors.jobs}. Reconnect to the local service to see production, render and model jobs.</p>
           )}
-          {attemptsError && <p className="gf-help" role="alert">Posting status unavailable. Instagram posts may be missing from this list.</p>}
+          {attemptsError && <p className="gf-help" role="alert">Posting status unavailable. Posts may be missing from this list.</p>}
           {cancelError && <p className="gf-message error" role="alert">{cancelError}</p>}
           {!items.length && !jobsUnavailable && <p className="gf-activity-empty">Nothing is running. Recent jobs from the last day appear here.</p>}
           {current.length > 0 && <section aria-label="Active jobs"><h3>Active</h3><ul>{current.map(row)}</ul></section>}

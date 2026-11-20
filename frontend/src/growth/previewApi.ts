@@ -12,6 +12,7 @@ import type {
 } from "../types";
 
 import type { ProductionClip } from "./productionContracts";
+import type { PostingAccount, TikTokCreatorInfo } from "./publishApi";
 import { normalizeBrief } from "./briefModel";
 import { flowFixture } from "./previewFlowFixtures";
 
@@ -351,6 +352,9 @@ function route(
   if (method === "GET" && path === "/api/team/runs") return [];
   if (method === "GET" && path === "/api/publish-attempts") return [];
   if (method === "GET" && path === "/api/post-schedules") return [];
+  if (method === "GET" && path === "/api/posting/accounts") return copy(PREVIEW_ACCOUNTS);
+  if (method === "GET" && /^\/api\/posting\/accounts\/[^/]+\/tiktok-creator-info$/.test(path))
+    return previewCreatorInfo;
   if (method === "GET" && resource === "exports") return [];
   if (
     method === "GET" &&
@@ -871,9 +875,14 @@ function previewPostPackage(clip: ProductionClip, action: string): unknown {
     };
   if (action === "post-targets")
     return {
-      accounts: [{ id: "preview-account", display_name: "allin_clips" }],
+      accounts: PREVIEW_ACCOUNTS.filter((a) => a.status === "active").map((a) => ({
+        id: a.id, display_name: a.display_name, verified_at: a.verified_at, platform: a.platform,
+        platform_label: a.platform_label, publishing_permitted: a.publishing_permitted === true,
+      })),
       cloud_configured: true,
       signed_in: true,
+      // The review preview never posts.
+      publishing_enabled: false,
       attempts: [],
       schedules: [],
       default_caption: clip.caption || clip.hook || "",
@@ -894,10 +903,38 @@ function previewPostPackage(clip: ProductionClip, action: string): unknown {
       job: null,
     };
   return {
-    limits: { caption_chars: 2200, hashtags: 30, mentions: 20, collaborators: 3, collaborators_supported: false },
+    limits: { caption_chars: 2200, hashtags: 30, mentions: 20, collaborators: 3, collaborators_supported: true },
     auto_cover: { source: "preview", time_ms: times[1], url: previewFrame(192) },
     candidates: times.map((t, i) => ({ time_ms: t, url: previewFrame(170 + i * 22), auto: i === 1 })),
     duration: 30,
-    collaborators_note: "The connected Instagram tool has no collaborators option; mention people with @ in the caption instead.",
+    collaborators_note: "Instagram only: up to 3 public Business or Creator usernames. A rejected invite does not stop the post.",
   };
 }
+
+// Illustrative connected accounts: one allowed, one not yet allowed, one waiting to be linked.
+const PREVIEW_ACCOUNTS: PostingAccount[] = [
+  { id: "6a0000000000000000000001", platform: "instagram", platform_label: "Instagram", display_name: "allin_clips", status: "active", publishing_permitted: true },
+  { id: "6a0000000000000000000002", platform: "tiktok", platform_label: "TikTok", display_name: "allin.clips", status: "active", publishing_permitted: false },
+  { id: "6a0000000000000000000003", platform: "youtube", platform_label: "YouTube", display_name: "All-In Clips", status: "unbound", publishing_permitted: false },
+].map((a) => ({
+  ...a, provider: "zernio", zernio_account_id: a.id, username: a.display_name, avatar_url: null,
+  profile_id: a.status === "active" ? "preview-profile-allin" : null, verified_at: "2026-11-01T12:00:00+00:00",
+  updated_at: "2026-11-01T12:00:00+00:00",
+})) as PostingAccount[];
+
+const previewCreatorInfo: TikTokCreatorInfo = {
+  creator: { nickname: "allin.clips", isVerified: false, canPostMore: true },
+  privacyLevels: [
+    { value: "PUBLIC_TO_EVERYONE", label: "Everyone" },
+    { value: "MUTUAL_FOLLOW_FRIENDS", label: "Friends" },
+    { value: "SELF_ONLY", label: "Only me" },
+  ],
+  postingLimits: {
+    maxVideoDurationSec: 600,
+    interactionSettings: {
+      allow_comment: { enabled: true, label: "Allow Comment" },
+      allow_duet: { enabled: true, label: "Allow Duet" },
+      allow_stitch: { enabled: false, label: "Allow Stitch" },
+    },
+  },
+};

@@ -106,6 +106,25 @@ describe("activityItems", () => {
     expect(post.target).toEqual({ to: "clip", clip: clips[0] });
   });
 
+  it("names each post's platform, links the live post and checks a post the lane stopped watching", () => {
+    const attempts: PublishAttemptSummary[] = [
+      { id: "a1", clip_id: "k1", account_name: "channel", platform: "youtube", state: "mapped", active: false,
+        permalink: "https://youtube.com/shorts/abc", updated_at: ago(3) },
+      { id: "a2", clip_id: "k1", account_name: "tiktoker", platform: "tiktok", state: "submitted", active: false, updated_at: ago(2) },
+      { id: "a3", clip_id: "k1", account_name: "brand", platform: "threads", state: "failed", active: false, updated_at: ago(1),
+        error: { code: "caption_too_long", message: "Threads captions are limited to 500 characters." }, history: [{ state: "uploading" }] },
+    ];
+    const items = activityItems([], attempts, opts);
+    const byId = Object.fromEntries(items.map((i) => [i.id, i]));
+    expect(byId["post:a1"]).toMatchObject({ type: "YouTube post to channel", status: "done",
+      link: { href: "https://youtube.com/shorts/abc", label: "Open on YouTube" } });
+    expect(byId["post:a1"].reconcile).toBeUndefined();
+    expect(byId["post:a2"]).toMatchObject({ type: "TikTok post to tiktoker", stage: "Platform is processing", reconcile: "a2" });
+    // The publisher records {code, message}; the reason is the message text, never the object.
+    expect(byId["post:a3"]).toMatchObject({ type: "Threads post to brand", status: "failed",
+      reason: "Threads captions are limited to 500 characters." });
+  });
+
   it("keeps every current job but only the latest 20 finished ones", () => {
     const done = Array.from({ length: 25 }, (_, n) =>
       job({ id: `d${n}`, kind: "render", status: "completed", updated_at: ago(n + 1) }));

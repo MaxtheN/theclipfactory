@@ -1,0 +1,27 @@
+.gf-connected-accounts { display: grid; gap: 12px; }
+.gf-connected-accounts > p { margin: 0; }
+.gf-connected-master,
+.gf-connected-permit { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+.gf-connected-master { padding: 12px 14px; border: 1px solid var(--border-control); border-radius: var(--radius-control, 8px); background: var(--surface-raised); }
+.gf-connected-master > span { display: grid; gap: 2px; min-width: 0; }
+.gf-connected-master small { color: var(--muted-foreground); font-size: 12px; }
+.gf-connected-permit { font-size: 13px; color: var(--muted-foreground); }
+.gf-connected-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.gf-connected-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-control); border-radius: var(--radius-control, 8px); }
+.gf-connected-avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, var(--foreground) 10%, transparent); font-weight: 700; font-size: 13px; }
+.gf-connected-name { display: grid; gap: 1px; min-width: 0; }
+.gf-connected-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gf-connected-name small { color: var(--muted-foreground); font-size: 12px; }
+.gf-connected-actions,
+.gf-connected-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.gf-connected-warning { grid-column: 2 / -1; margin: 0; }
+.gf-app .gf-button.gf-connected-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.gf-connected-connect { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gf-connected-connect-label { font-size: 13px; font-weight: 600; margin-right: 4px; }
+.gf-app button.gf-connected-platform { min-height: 32px; padding: 0 12px; border: 1px solid var(--border-control); border-radius: 999px; background: var(--surface-raised); color: var(--foreground); font-size: 13px; font-weight: 600; cursor: pointer; }
+.gf-app button.gf-connected-platform:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 7%, var(--surface-raised)); }
+.gf-app button.gf-connected-platform:disabled { opacity: 0.55; cursor: not-allowed; }
+@media (max-width: 560px) {
+  .gf-connected-row { grid-template-columns: 32px minmax(0, 1fr); }
+  .gf-connected-actions { grid-column: 1 / -1; justify-content: flex-start; }
+}

@@ -20,7 +20,7 @@ import { SpeechSetup, SpeechlessChip } from "./SpeechSetup";
 import { AgentSetup, agentsBlocker } from "./AgentSetup";
 import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
-import { PostToInstagram } from "./PostToInstagram";
+import { PostClip } from "./PostClip";
 import { PanelDialog } from "./PanelDialog";
 import { ReferenceResearchLauncher } from "./ReferenceResearch";
 import { briefSummary } from "./briefModel";
@@ -380,7 +380,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
             <button className="gf-button secondary full" disabled={busy} onClick={() => revise(selected)}>Request a change<Icon name="settings" size={15} /></button>
           </div>
           {/* The hosted preview shows the post package with illustrative data; posting stays off there. */}
-          {(reviewPreview || !illustrativeSelected) && <PostToInstagram compact activeSurface={activeSurface} clip={selected} disabled={!reviewReady || reviewPreview} />}
+          {(reviewPreview || !illustrativeSelected) && <PostClip compact activeSurface={activeSurface} clip={selected} disabled={!reviewReady || reviewPreview} />}
         </div>
         <div className="gf-review-details">
           <button type="button" className="gf-review-detail-trigger" onClick={() => setDetailsOpen(true)}><Icon name="info" size={16} /><span>Checks & version details<small>Technical evidence and export history</small></span><Icon name="arrow" size={16} /></button>
