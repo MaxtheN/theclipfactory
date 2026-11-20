@@ -7,7 +7,7 @@ name = "clip-factory"
 version = "0.1.0"
 description = "Local-first Instagram content factory for Apple Silicon"
 requires-python = ">=3.11,<3.14"
-dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "python-multipart>=0.0.20", "httpx>=0.28,<1", "certifi>=2025.1.31", "platformdirs>=4,<5", "keyring>=25,<26", "huggingface-hub>=0.30,<2", "psutil>=6,<8", "pyobjc-framework-Vision>=10,<14; sys_platform == 'darwin'", "opencv-contrib-python>=4.10,<6; sys_platform != 'darwin'", "mediapipe>=1.2.3,<2; sys_platform != 'darwin'"]
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "python-multipart>=0.0.20", "httpx>=0.28,<1", "certifi>=2025.1.31", "platformdirs>=4,<5", "keyring>=25,<26", "huggingface-hub>=0.30,<2", "psutil>=6,<8", "pyobjc-framework-Vision>=10,<14; sys_platform == 'darwin'", "opencv-contrib-python>=4.10,<6; sys_platform != 'darwin'", "mediapipe>=1.2.3,<2; sys_platform != 'darwin'", "tzdata>=2024.1; sys_platform == 'win32'"]
 
 [project.optional-dependencies]
 desktop = ["pywebview>=5,<7"]

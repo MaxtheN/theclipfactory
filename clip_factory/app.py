@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from platformdirs import user_data_path
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from . import __version__, craft, local_agents, media, ranking, scouts, speech
 from .ads import AdsClient
@@ -42,6 +42,7 @@ from .ollama import LlmId, is_ollama
 from .store import Store, new_id, now
 from .storyboard import Storyboards, scene_index, speech_between
 from .storyboard import digest as storyboard_digest
+from .strategist import posting_zone
 from .team import MAX_CLIPS, TeamEngine, fit_range, snap_to_speech
 
 Objective = Literal[
@@ -77,6 +78,8 @@ class Settings(Body):
     clip_count: int = Field(default=3, ge=1, le=MAX_CLIPS, strict=True)
     # Making clips again for a video first removes its earlier drafts that nobody approved.
     replace_drafts: bool = True
+    # IANA zone the Strategist measures posting windows in. Empty: this computer's zone.
+    time_zone: str = Field(default="", max_length=64)
 
 
 class SettingsPatch(Body):
@@ -98,6 +101,14 @@ class SettingsPatch(Body):
     )
     clip_count: int | None = Field(default=None, ge=1, le=MAX_CLIPS, strict=True)
     replace_drafts: bool | None = None
+    time_zone: str | None = Field(default=None, max_length=64)
+
+    @field_validator("time_zone")
+    @classmethod
+    def _known_zone(cls, value: str | None) -> str | None:
+        if value and posting_zone(value) is None:
+            raise ValueError("Use an IANA time zone such as America/Los_Angeles, or leave it empty.")
+        return value
 
 
 class Render(craft.CraftOptions, Body):
@@ -3062,6 +3073,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
     app.state.strategist = Strategist(
         store, propose_rules=campaigns.propose_from_beliefs,
         model_factory=lambda job_id: LocalModel(app, runtime, job_id),
+        zone=lambda: posting_zone(settings()["time_zone"]),
     )
     install_strategist_api(app, app.state.strategist)
 

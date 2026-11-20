@@ -40,7 +40,8 @@ datas += copy_metadata("keyring")
 # their plugins and data files are found at run time, which PyInstaller's import scan misses.
 # OpenCV (cv2) is left to pyinstaller-hooks-contrib, whose hook handles its loader configuration.
 packages = ["webview", "keyring", "uvicorn", "mediapipe"]
-packages += ["win32ctypes"] if TARGET == "windows" else ["secretstorage", "jeepney"]
+# Windows has no system zone database: zoneinfo reads the tzdata package (Strategist posting windows).
+packages += ["win32ctypes", "tzdata"] if TARGET == "windows" else ["secretstorage", "jeepney"]
 for package in packages:
     package_datas, package_binaries, package_hidden = collect_all(package)
     datas += package_datas
