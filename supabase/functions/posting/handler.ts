@@ -95,6 +95,15 @@ function upstream(response: ZernioResponse): HttpError {
   if (response.status === 401) {
     return new HttpError(502, "server_misconfigured", "The posting server's Zernio key was rejected.");
   }
+  if (response.status === 402) {
+    // Plan limit on the shared Zernio account (e.g. free tier: 2 connected accounts). Not retryable by
+    // the creator; Zernio's billing links are not forwarded to clients.
+    return new HttpError(
+      402,
+      "posting_plan_limit",
+      "The posting service has reached its plan limit. The Growth Factory administrator must add billing before more accounts or workspaces can connect.",
+    );
+  }
   const message = clip(body.error, 500) ?? "Zernio rejected the request.";
   return new HttpError(response.status, code, message);
 }

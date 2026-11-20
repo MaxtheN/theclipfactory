@@ -575,6 +575,21 @@ Deno.test("Zernio failures map to retryable gateway errors", async () => {
   assertEquals((await body(response)).error.code, "zernio_unavailable");
 });
 
+Deno.test("a Zernio plan limit becomes a clear, non-retryable error without billing links", async () => {
+  const t = setup();
+  t.zernio.overrides.set("POST /profiles", () =>
+    Response.json({
+      error: "Add a payment method to connect more than 2 accounts.",
+      code: "PAYMENT_REQUIRED",
+      dashboard_url: "https://zernio.com/dashboard/billing",
+    }, { status: 402 }));
+  const response = await t.call("POST", "/register");
+  assertEquals(response.status, 402);
+  const payload = await body(response);
+  assertEquals(payload.error.code, "posting_plan_limit");
+  assertFalse(JSON.stringify(payload).includes("zernio.com"));
+});
+
 Deno.test("request logs carry no captions, tokens or identifiers", async () => {
   const t = setup();
   const a = await readyWorkspace(t);
