@@ -226,8 +226,8 @@ class ComposioClient:
             "INSTAGRAM_GET_IG_MEDIA_INSIGHTS",
         }
     )
-    # Tools this adapter may resolve/execute. The base read adapter never widens this;
-    # publishing is only possible through ComposioPublishingClient's separate allowlist.
+    # Tools this adapter may resolve/execute: reads only. Posting goes through the posting server
+    # (clip_factory.posting_server), never through Composio.
     PERMITTED_TOOLS = READ_TOOLS
     METRICS = ("views", "reach", "saved", "shares", "likes", "comments", "total_interactions")
 
@@ -693,40 +693,3 @@ class ComposioClient:
             "tool_slug": schema.slug,
             "tool_version": schema.version,
         }
-
-
-class ComposioPublishingClient(ComposioClient):
-    """Publisher-only adapter: the read tools plus an explicit, version-pinned publish allowlist.
-
-    Used solely by clip_factory.publisher for human-approved posts. Every call still
-    resolves and pins the schema, validates arguments and re-reads the exact connected
-    account + user. Write calls are never retried here; the publisher reconciles by reading.
-    """
-
-    PUBLISH_TOOLS = frozenset(
-        {
-            "INSTAGRAM_POST_IG_USER_MEDIA",
-            "INSTAGRAM_POST_IG_USER_MEDIA_PUBLISH",
-            "INSTAGRAM_GET_MULTIPLE_NODES",
-            "INSTAGRAM_GET_IG_USER_CONTENT_PUBLISHING_LIMIT",
-        }
-    )
-    # Observed 2026-11-14 as the only available version of each tool; a change fails closed.
-    PINNED_VERSION = "20261112_00"
-    PERMITTED_TOOLS = ComposioClient.READ_TOOLS | PUBLISH_TOOLS
-
-    def __init__(self, api_key: str, *, transport=None, timeout=90):
-        super().__init__(api_key, transport=transport, timeout=timeout)
-
-    def run(self, tool_slug, arguments, *, connected_account_id, user_id):
-        if tool_slug not in self.PERMITTED_TOOLS:
-            raise ComposioError("Tool is not on the publishing allowlist.", code="unsupported_tool")
-        schema = self.tool_schema(tool_slug, self.PINNED_VERSION)
-        return self.execute_tool(
-            schema.slug,
-            arguments,
-            connected_account_id=connected_account_id,
-            user_id=user_id,
-            version=schema.version,
-            schema=schema,
-        )

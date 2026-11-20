@@ -4,6 +4,8 @@ import { workspaceApi, initialDirection } from "./workspaceApi";
 import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { Disclosure, Field, Pill, Empty, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
+import { PillList, PillSelect } from "./PillField";
+import { ANGLE, LOOK_FOR, WHY_TRY } from "./choiceOptions";
 import { ReferenceResearchLauncher } from "./ReferenceResearch";
 
 /** The selected workspace's ONE Style-rules set, inherited by every campaign in it. */
@@ -102,28 +104,20 @@ export function Research({ w, onFactory }: { w: Workspace; onFactory: () => void
           </Pill>
         </div>
         <div className="gf-form-fields gf-style-rule-fields">
-          <Field label="What moments to look for">
-            {(id) => (
-              <AutoTextarea
-                id={id}
-                value={selection}
-                onChange={(e) => setSelection(e.target.value)}
-                rows={2}
-              />
-            )}
-          </Field>
-          <Field label="The angle">
-            {(id) => (
-              <AutoTextarea
-                rows={1}
-                className="gf-idea-input"
-                id={id}
-                value={angle}
-                onChange={(e) => setAngle(e.target.value)}
-                placeholder="Put the point before the context"
-              />
-            )}
-          </Field>
+          <PillList
+            label="What moments to look for"
+            format="comma"
+            options={LOOK_FOR}
+            value={selection}
+            onChange={setSelection}
+          />
+          <PillSelect
+            label="The angle"
+            options={ANGLE}
+            maxLength={300}
+            value={angle}
+            onChange={setAngle}
+          />
           <div className="gf-form-pair">
             <Field label="Opening A">
               {(id) => (
@@ -149,16 +143,14 @@ export function Research({ w, onFactory }: { w: Workspace; onFactory: () => void
             </Field>
           </div>
           <Disclosure title="Notes & reference" icon="info">
-            <Field label="Why try this?">
-              {(id) => (
-                <AutoTextarea
-                  id={id}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={2}
-                />
-              )}
-            </Field>
+            <PillList
+              label="Why try this?"
+              format="lines"
+              options={WHY_TRY}
+              maxLength={500}
+              value={reason}
+              onChange={setReason}
+            />
             <Field
               label="Reference link or source locator"
               hint="Saved as a note. Links aren't opened or analyzed."

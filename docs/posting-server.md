@@ -9,6 +9,16 @@ account), so it lives only in the function's secrets and never ships in the desk
 - Schema: `supabase/migrations/202611200001_posting_server.sql`; probe: `supabase/tests/posting_server_rls.sql`.
 - URL: `https://spdtisizhcepmsogjvnr.supabase.co/functions/v1/posting/<route>`.
 
+## Desktop client
+
+The engine calls the server through `clip_factory/posting_server.py` (`PostingServerClient`), built
+from the signed-in cloud account. It sends `X-GF-Workspace`, `apikey` and the session bearer token,
+refreshes an expired token once, and adds `Idempotency-Key` on post creation. A write whose outcome
+is unknown (timeout, network loss, or a 5xx after sending) raises `PostingServerError` with
+`uncertain=True`; the publisher then reads the post back by external id instead of resending.
+Uploads presign with `POST /uploads` and PUT the exact bytes. Accounts, posting and metrics on the
+engine side are described in [instagram-publishing.md](instagram-publishing.md).
+
 ## Authentication and scoping
 
 Every route except the webhook needs:

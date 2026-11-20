@@ -1,6 +1,7 @@
 import { AutoTextarea } from "../components/AutoTextarea";
+import { keepIfSame } from "./stable";
 import { ClipStyleSheet } from "./ClipStyle";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { UnsavedNote, useUnsavedDraft } from "./unsavedDrafts";
 import { activeJob, installedLlms } from "../productionPreflight";
 import type { Job, TeamRun } from "../types";
@@ -11,6 +12,8 @@ import { reviewPreview, workspaceApi } from "./workspaceApi";
 import { endpoint } from "../api";
 import { Disclosure, Empty, Field, Pill, Poster, PrimaryAction, formatTime } from "./parts";
 import { Icon } from "./Icon";
+import { PillList } from "./PillField";
+import { CLIP_FEEDBACK, LOOK_FOR } from "./choiceOptions";
 import { ClipEvidence } from "./ClipEvidence";
 import { SourceTranscript } from "./SourceTranscript";
 import { CraftControls, craftFromPlan, craftPlan, freshCraft } from "./CraftControls";
@@ -19,7 +22,7 @@ import { SpeechSetup, SpeechlessChip } from "./SpeechSetup";
 import { AgentSetup, agentsBlocker } from "./AgentSetup";
 import { sourceLabel } from "./sourcePresentation";
 import { clipMediaUrl, exportManifestUrl, exportMediaUrl, productionApi } from "./productionApi";
-import { PostToInstagram } from "./PostToInstagram";
+import { PostClip } from "./PostClip";
 import { PanelDialog } from "./PanelDialog";
 import { ReferenceResearchLauncher } from "./ReferenceResearch";
 import { briefSummary } from "./briefModel";
@@ -45,9 +48,14 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   onEditBrief?: () => void;
   activeSurface?: boolean;
 }) {
-  const sources = factory.data.videos.filter(v => w.campaign?.video_ids.includes(v.id));
-  const scope = { campaignId: w.campaign?.id || "", profileId: w.profileId, sourceIds: sources.map(v => v.id) };
-  const scopeKey = `${scope.campaignId}/${scope.profileId}/${scope.sourceIds.join("|")}`;
+  const campaignVideoIds = w.campaign?.video_ids;
+  const sources = useMemo(() => {
+    const ids = new Set(campaignVideoIds);
+    return factory.data.videos.filter(v => ids.has(v.id));
+  }, [factory.data.videos, campaignVideoIds]);
+  const scopeKey = `${w.campaign?.id || ""}/${w.profileId}/${sources.map(v => v.id).join("|")}`;
+  // Stable while the campaign, brand and its episodes stay the same, so the work below is reused.
+  const scope = useMemo(() => ({ campaignId: w.campaign?.id || "", profileId: w.profileId, sourceIds: sources.map(v => v.id) }), [scopeKey]);
   const [sourceId, setSourceId] = useState(preferredSource || sources[0]?.id || "");
   const [selectedId, setSelectedId] = useState(preferredClip || "");
   const [freshProduction, setFreshProduction] = useState(false);
@@ -79,12 +87,16 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const active = w.versions.find(v => v.id === activeRulesId(w) && v.status === "approved");
   const direction = active?.directions[w.profileId];
   const source = sources.find(v => v.id === sourceId);
-  const clipErrors: string[] = [];
-  const clips = factory.data.clips.filter(c => clipInScope(c, scope)).flatMap(c => {
-    try { return [parseProductionClip(c, c.id, { campaign_id: scope.campaignId, profile_id: scope.profileId, video_id: c.video_id })]; }
-    catch (e) { clipErrors.push(`${c.id}: ${message(e)}`); return []; }
-  });
-  const ordered = reviewOrder(clips);
+  // Parsing and ranking every clip is the heaviest work here; redo it only when the clips change.
+  const { clips, clipErrors } = useMemo(() => {
+    const clipErrors: string[] = [];
+    const clips = factory.data.clips.filter(c => clipInScope(c, scope)).flatMap(c => {
+      try { return [parseProductionClip(c, c.id, { campaign_id: scope.campaignId, profile_id: scope.profileId, video_id: c.video_id })]; }
+      catch (e) { clipErrors.push(`${c.id}: ${message(e)}`); return []; }
+    });
+    return { clips, clipErrors };
+  }, [factory.data.clips, scope]);
+  const ordered = useMemo(() => reviewOrder(clips), [clips]);
   const selected = freshProduction ? undefined : clips.find(c => c.id === selectedId) || ordered.above[0] || clips[0];
   const jobs = factory.data.jobs.filter(j => jobInScope(j, scope, runs));
   const models = installedLlms(factory.data.models, { needsVision: true });
@@ -152,12 +164,14 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   useEffect(() => {
     let live = true;
     const load = async () => {
-      try { const rows = await workspaceApi.teamRuns(); if (live) { setRuns(rows); setLedgerError(""); } }
+      try { const rows = await workspaceApi.teamRuns(); if (live) { setRuns(old => keepIfSame(old, rows)); setLedgerError(""); } }
       catch (e) { if (live) { setRuns([]); setLedgerError(message(e)); } }
     };
+    // Studio stays mounted behind other destinations; it only follows the ledger while shown.
+    if (!activeSurface) return () => { live = false; };
     void load(); const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 4000);
     return () => { live = false; window.clearInterval(timer); };
-  }, [scopeKey]);
+  }, [scopeKey, activeSurface]);
   useEffect(() => { if (!models.some(m => m.id === modelId)) setModelId(models[0]?.id || ""); }, [models.map(m => m.id).join("|"), modelId]);
   useEffect(() => { setPlaybackError(""); setPlaybackReady(false); }, [selected?.id]);
   useEffect(() => {
@@ -344,10 +358,10 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
       {making ? <div className="gf-form-fields">
         {!revisionParent && (() => { const summary = briefSummary(w.campaign!.brief, w.campaign!.objective, w.campaign!.primary_metric); return <p className="gf-brief-summary" aria-label="Goals and brief summary"><span title={summary}>{summary}</span>{onEditBrief && <button type="button" className="gf-button ghost compact" onClick={onEditBrief}>Edit brief</button>}</p>; })()}
         {sources.length > 1 && <Field label="Episode">{id => <select id={id} value={sourceId} disabled={!!revisionParent || busy} onChange={e => { setSourceId(e.target.value); setStart("0"); const s = sources.find(v => v.id === e.target.value); setEnd(String(Math.min(direction?.duration_seconds || 30, s?.duration || 30))); }}><option value="" disabled>Choose an episode</option>{sources.map(s => <option value={s.id} key={s.id}>{sourceLabel(s.id, w.campaign!.video_ids)}</option>)}</select>}</Field>}
-        {revisionParent && <Field label="What would make it better?">{id => <AutoTextarea id={id} value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="What should change, and why?" rows={3} />}</Field>}
+        {revisionParent && <PillList label="What would make it better?" format="comma" options={CLIP_FEEDBACK} maxLength={300} value={feedback} onChange={setFeedback} />}
         {revisionDirty && <UnsavedNote>Change request not sent</UnsavedNote>}
         {/* One reason at a time: the first thing to fix. */}
-        {mode === "agent" && !revisionParent && <Field label="What should the agents look for? (optional)" hint="Used for this run only, within your style rules.">{id => <AutoTextarea id={id} rows={2} maxLength={DIRECTION_MAX} value={lookFor} disabled={busy} placeholder="e.g. the spiciest takes on AI policy, under 40s" onChange={e => setLookFor(e.target.value)} />}</Field>}
+        {mode === "agent" && !revisionParent && <PillList label="What should the agents look for? (optional)" hint="Used for this run only, within your style rules." format="comma" options={LOOK_FOR} max={6} maxLength={Math.floor(DIRECTION_MAX / 6) - 2} value={lookFor} disabled={busy} onChange={setLookFor} />}
         {!direction ? <ClipStyleSheet w={w} onFullRules={onDirection} /> : agentFirst ? <AgentSetup factory={factory} variant="inline" /> : blockers[0] && <p className="gf-help">{blockers[0]}</p>}
         {mode === "agent" && !!source && source.has_audio !== false && source.transcript == null && <SpeechSetup factory={factory} />}
         <PrimaryAction full label={busy ? "Queuing…" : mode === "agent" ? "Let agents find clips" : revisionParent ? "Render a new revision" : "Make this clip"} intent="produce" disabled={busy || blockers.length > 0} onClick={() => void render()} />
@@ -368,7 +382,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
             <button className="gf-button secondary full" disabled={busy} onClick={() => revise(selected)}>Request a change<Icon name="settings" size={15} /></button>
           </div>
           {/* The hosted preview shows the post package with illustrative data; posting stays off there. */}
-          {(reviewPreview || !illustrativeSelected) && <PostToInstagram compact activeSurface={activeSurface} clip={selected} disabled={!reviewReady || reviewPreview} />}
+          {(reviewPreview || !illustrativeSelected) && <PostClip compact activeSurface={activeSurface} clip={selected} disabled={!reviewReady || reviewPreview} />}
         </div>
         <div className="gf-review-details">
           <button type="button" className="gf-review-detail-trigger" onClick={() => setDetailsOpen(true)}><Icon name="info" size={16} /><span>Checks & version details<small>Technical evidence and export history</small></span><Icon name="arrow" size={16} /></button>

@@ -6,6 +6,7 @@ import type { Workspace } from "./useCampaignWorkspace";
 import { Onboarding, OFFLINE_KEY } from "./Onboarding";
 import { workspaceApi } from "./workspaceApi";
 import { cloudApi, type CloudStatus } from "./cloudApi";
+import { setPills } from "../test-pills";
 
 vi.mock("./workspaceApi", () => ({
   workspaceApi: {
@@ -51,10 +52,7 @@ function toAccount() {
     screen.getByRole("textbox", { name: "Name your brand / podcast" }),
     { target: { value: "Founder stories" } },
   );
-  fireEvent.change(
-    screen.getByRole("textbox", { name: "Who are we speaking to?" }),
-    { target: { value: "Founders" } },
-  );
+  setPills("Who are we speaking to?", "Founders");
   next();
   fireEvent.click(screen.getByRole("radio", { name: /^Reach new people/ }));
   next();

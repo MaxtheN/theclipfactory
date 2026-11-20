@@ -32,6 +32,8 @@ import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { reviewPreview, workspaceApi } from "./workspaceApi";
 import { Disclosure, Empty, Field, Pill, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
+import { PillSelect } from "./PillField";
+import { LEARN, METRIC, METRIC_LABELS } from "./choiceOptions";
 import { ListRow, Panel, Section, Stack, StatRow } from "./layout";
 
 const productionKeys: (keyof Direction)[] = [
@@ -493,15 +495,13 @@ export function HandEnteredResults({
               </select>
             )}
           </Field>
-          <Field label="Metric name">
-            {(id) => (
-              <input
-                id={id}
-                value={metric}
-                onChange={(e) => setMetric(e.target.value)}
-              />
-            )}
-          </Field>
+          <PillSelect
+            label="Metric name"
+            options={METRIC}
+            labels={METRIC_LABELS}
+            value={metric}
+            onChange={setMetric}
+          />
           <Field
             label="Observed count"
             hint="Leave blank for unknown. Only enter a measured number."
@@ -598,16 +598,13 @@ export function HandEnteredResults({
             <span>02</span>
             <div>
               <strong>Question</strong>
-              <Field label="What would we like to learn?">
-                {(id) => (
-                  <AutoTextarea
-                    id={id}
-                    rows={2}
-                    value={hypothesis}
-                    onChange={(e) => setHypothesis(e.target.value)}
-                  />
-                )}
-              </Field>
+              <PillSelect
+                label="What would we like to learn?"
+                options={LEARN}
+                maxLength={500}
+                value={hypothesis}
+                onChange={setHypothesis}
+              />
             </div>
           </div>
           <i />
@@ -945,7 +942,7 @@ function PostedClips({
             className="gf-button secondary compact"
             onClick={onAccounts}
           >
-            Instagram accounts
+            Accounts
             <Icon name="arrow" size={14} />
           </button>
         </div>
@@ -1173,7 +1170,7 @@ export function Results({
   visible?: boolean;
   onReview?: (clip: Clip) => void;
   onEditingRules?: () => void;
-  /** Opens Settings > Accounts and connections, which owns the Instagram accounts. */
+  /** Opens Settings > Accounts and connections, which owns the connected accounts. */
   onAccounts?: () => void;
   onRehearse?: () => void;
   /** The learning-loop demo's simulated outcome (its own store, never account history). */
@@ -1298,7 +1295,7 @@ export function Results({
         </dl>
         <div className="gf-results-top-actions">
           <button type="button" className={`gf-results-ig${connected ? " is-on" : ""}`} onClick={toAccounts}>
-            <i aria-hidden="true" /> Instagram: {connected ? "connected" : "connect"}
+            <i aria-hidden="true" /> Accounts: {connected ? "connected" : "connect"}
           </button>
         </div>
       </header>
@@ -1346,12 +1343,12 @@ export function Results({
           <div>
             <h2 id="gf-results-start-title">No results yet</h2>
             <p>
-              Results appear once a clip is posted. Connect Instagram or add one by hand.
+              Results appear once a clip is posted. Connect an account or add one by hand.
             </p>
           </div>
           <div className="gf-results-start-actions">
             <button type="button" className="gf-button" onClick={toAccounts}>
-              {connected ? "Track a post" : "Connect Instagram"}
+              {connected ? "Track a post" : "Connect accounts"}
             </button>
             <button type="button" className="gf-button secondary" onClick={() => setManualOpen(true)}>
               Add a result by hand

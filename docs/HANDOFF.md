@@ -1,5 +1,9 @@
 # Growth Factory — engineering handoff
 
+> **Current handoff packet (2026-11-20): [handoff/README.md](handoff/README.md) and
+> [handoff/outstanding-work.md](handoff/outstanding-work.md).** The status sections below are
+> from 2026-11-14. Keep this file for the local Mac setup, Keychain service names and test data.
+
 Current documentation refresh: 2026-11-14, after published master **`5e6c6a0`**.
 The operational snapshot below began at `e869666`; this update supersedes its old
 UI/status and submission instructions. Read [submission/README.md](submission/README.md)
@@ -82,7 +86,8 @@ check those two files first.
 Supabase project `spdtisizhcepmsogjvnr` (moved from `nywbjxmratokyplwjjhu` on
 2026-11-19; see `docs/cloud-state.md`). Applied: `202611140001_growth_factory.sql`,
 `202611140002_publish_bucket.sql` (public bucket `gf-publish`, MP4),
-`202611140003_publish_bucket_covers.sql` (JPEG covers). Email confirmation is
+`202611140003_publish_bucket_covers.sql` (JPEG covers; the bucket is no longer used by the app
+since WO-23). Email confirmation is
 OFF (email+password sign-up works instantly). Publishable key is bundled in
 `clip_factory/cloud_config.json`; never ship a secret/service key.
 
@@ -115,13 +120,17 @@ human approve → post to Instagram → measure → learn → better next clips.
   when "Use cloud model for clip agents too" (+ "still frames") is on. Haiku
   runs with reasoning off; Sonnet needs `reasoning.effort: low` (fixed).
 - **Posting server** (2026-11-20): a Zernio-backed Edge Function, live on `spdtisizhcepmsogjvnr`; see
-  [posting-server.md](posting-server.md). The engine does not call it yet (WO-23).
-- **Posting** (`publisher.py`, `post_package.py`, `post_schedule.py`):
-  Approve & post via Composio (`INSTAGRAM_POST_IG_USER_MEDIA` +
-  `..._PUBLISH`), video+cover hosted in Supabase Storage, durable attempt state
-  machine (never blind-retries an unknown outcome), cover picker, caption
-  limits, schedule (app must be open; overdue needs a click), multi-account.
-  **No real post has been made yet.** Composio has no collaborators field.
+  [posting-server.md](posting-server.md).
+- **Posting** (`posting_server.py`, `posting_accounts.py`, `publisher.py`, `post_package.py`,
+  `post_schedule.py`): the engine posts through the posting server to Instagram, TikTok, YouTube,
+  Facebook, LinkedIn, X and Threads (WO-23). Connected accounts are bound to a profile and need
+  explicit posting permission; Settings "publishing enabled" gates everything. Durable attempt
+  state machine with fixed idempotency key and external id (never blind-retries an unknown
+  outcome; reconcile reads by external id), cover picker, per-platform caption limits, TikTok
+  consent and creator options, schedule (app must be open; overdue needs a click), multi-account.
+  Metrics come from the server's analytics; unreported metrics are unavailable, never zero.
+  **No real post has been made yet.** The account UI is WO-24; the Composio connect screens and
+  manual "track a post" remain until then. See [instagram-publishing.md](instagram-publishing.md).
 - **Learning**: durable loop (`learning.py`, 3/6-day windows, memory digest,
   proposed rules), Strategist three layers (`strategist.py`, deterministic
   confidence, explore/exploit, Simulation mode), "Measure now (demo)" labelled.

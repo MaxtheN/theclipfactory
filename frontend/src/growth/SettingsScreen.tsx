@@ -1,4 +1,5 @@
-import { useId } from "react";
+import { useId, useState } from "react";
+import { patch } from "../api";
 import { Jobs } from "../components/Jobs";
 import type { Clip, SystemInfo } from "../types";
 import type { FactoryState } from "../useFactory";
@@ -6,6 +7,7 @@ import type { Workspace } from "./useCampaignWorkspace";
 import { AiModelCard } from "./AiModelCard";
 import { AutomationPanel } from "./AutomationPanel";
 import { CloudAccountRow } from "./CloudSignIn";
+import { ConnectedAccounts } from "./ConnectedAccounts";
 import { EngineSetup } from "./EngineSetup";
 import { Icon } from "./Icon";
 import "./settings.css";
@@ -99,6 +101,15 @@ export function SettingsScreen({
     </button>
   );
   const gaps = system ? missing(system) : [];
+  const [savingPublishing, setSavingPublishing] = useState(false);
+  const settings = factory.errors.settings ? null : factory.data.settings;
+  async function setPublishing(enabled: boolean) {
+    setSavingPublishing(true);
+    try {
+      await factory.run(() => patch("/api/settings", { publishing_enabled: enabled }),
+        enabled ? "Posting from Growth Factory is on." : "Posting from Growth Factory is off.");
+    } finally { setSavingPublishing(false); }
+  }
   return (
     <div className="gf-settings">
       <nav className="gf-settings-sections" aria-label="Settings sections">
@@ -136,9 +147,15 @@ export function SettingsScreen({
           <EngineSetup factory={factory} jobs={false} />
         </>}
         {section === "accounts" && <>
-          <header><h2>Accounts and connections</h2><p>Your account and connected Instagram accounts.</p></header>
-          <NeedsInternet>signing in, syncing, and connecting or measuring Instagram accounts.</NeedsInternet>
+          <header><h2>Accounts and connections</h2><p>Your account and the social accounts you post to.</p></header>
+          <NeedsInternet>signing in, syncing, and connecting, posting to or measuring social accounts.</NeedsInternet>
           <section className="gf-settings-block" aria-label="Your account"><h3>Account</h3><CloudAccountRow showLocal /></section>
+          <section className="gf-settings-block" aria-label="Connected accounts"><h3>Connected accounts</h3>
+            {w.profileId
+              ? <ConnectedAccounts profileId={w.profileId}
+                  publishing={settings ? { enabled: settings.publishing_enabled === true, saving: savingPublishing || factory.busy, onChange: setPublishing } : undefined} />
+              : <p className="gf-help">Save a brand first, then connect its accounts.</p>}
+          </section>
           <div className="gf-settings-block gf-results-accounts">
             <AutomationPanel w={w} factory={factory} visible={visible} onReview={onReview} onEditingRules={onEditingRules} layout="accounts" />
           </div>

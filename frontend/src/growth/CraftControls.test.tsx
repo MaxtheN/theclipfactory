@@ -3,6 +3,7 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { CraftControls, craftFromPlan, craftPlan, freshCraft, type CraftState } from "./CraftControls";
 import { changedEditFields } from "./productionState";
+import { setPills } from "../test-pills";
 
 function Harness({ onPlan }: { onPlan: (plan: object) => void }) {
   const [state, setState] = useState<CraftState>(freshCraft);
@@ -18,7 +19,7 @@ describe("editing craft controls", () => {
     fireEvent.change(screen.getByLabelText("Tighten pauses"), { target: { value: "silences_and_fillers" } });
     fireEvent.click(screen.getByLabelText("Normalise loudness (−14 LUFS)"));
     fireEvent.click(screen.getByLabelText("Follow the speaker's face (9:16 crop)"));
-    fireEvent.change(screen.getByLabelText("End card call to action"), { target: { value: " Follow for part 2 " } });
+    setPills("End card call to action", " Follow for part 2 ");
     fireEvent.change(screen.getByLabelText("A/B variants"), { target: { value: "structure" } });
     expect(plan).toEqual({
       jump_cuts: "silences_and_fillers", loudness: "off", crop_focus: "fixed", cta_text: "Follow for part 2", end_card: "cta",

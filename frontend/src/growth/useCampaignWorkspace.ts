@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { workspaceApi } from "./workspaceApi";
 import type { Campaign, Observation, Profile, StrategyVersion } from "../types";
 
@@ -33,7 +33,12 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
   const mounted = useRef(true),
     generation = useRef(0),
     actionLock = useRef(false);
-  const campaign = campaigns.find((c) => c.id === selected);
+  const campaign = useMemo(() => campaigns.find((c) => c.id === selected), [campaigns, selected]);
+  // Read by the stable actions below without re-creating them on every change.
+  const busyNow = useRef(busy);
+  busyNow.current = busy;
+  const loadingNow = useRef(loading);
+  loadingNow.current = loading;
   const currentId = useRef(selected);
   currentId.current = selected;
   const currentProfile = useRef(profileId);
@@ -91,24 +96,24 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
       /* optional preferences */
     }
   }, [selected, profileId]);
-  async function select(id: string) {
-    if (busy) return;
+  const select = useCallback(async (id: string) => {
+    if (busyNow.current) return;
     setNotice("");
     await load(id).catch(() => {});
-  }
+  }, [load]);
   /** Switch workspace: its own Style rules are loaded with it. */
-  function chooseProfile(id: string) {
+  const chooseProfile = useCallback((id: string) => {
     setProfileId(id);
     currentProfile.current = id;
     if (id !== loadedProfile.current)
       void load(currentId.current, id).catch(() => {});
-  }
-  async function run(
+  }, [load]);
+  const run = useCallback(async (
     task: () => Promise<unknown>,
     success: string,
     reloadId?: string,
-  ) {
-    if (actionLock.current || loading) return false;
+  ) => {
+    if (actionLock.current || loadingNow.current) return false;
     actionLock.current = true;
     setBusy(true);
     setError("");
@@ -130,24 +135,29 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
       actionLock.current = false;
       if (mounted.current) setBusy(false);
     }
-  }
-  return {
-    campaigns,
-    profiles,
-    versions,
-    observations,
-    campaign,
-    profileId,
-    setProfileId: chooseProfile,
-    selected,
-    select,
-    loading,
-    busy,
-    error,
-    notice,
-    load,
-    run,
-    clearNotice: () => setNotice(""),
-  };
+  }, [load, refreshFactory]);
+  const clearNotice = useCallback(() => setNotice(""), []);
+  // One object per actual change, so screens can memoize on it.
+  return useMemo(
+    () => ({
+      campaigns,
+      profiles,
+      versions,
+      observations,
+      campaign,
+      profileId,
+      setProfileId: chooseProfile,
+      selected,
+      select,
+      loading,
+      busy,
+      error,
+      notice,
+      load,
+      run,
+      clearNotice,
+    }),
+    [campaigns, profiles, versions, observations, campaign, profileId, chooseProfile, selected, select, loading, busy, error, notice, load, run, clearNotice],
+  );
 }
 export type Workspace = ReturnType<typeof useCampaignWorkspace>;

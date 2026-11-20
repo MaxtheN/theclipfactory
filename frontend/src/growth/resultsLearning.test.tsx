@@ -13,6 +13,7 @@ import type { Workspace } from "./useCampaignWorkspace";
 import { HandEnteredResults as Results } from "./Results";
 import { Setup } from "./Setup";
 import { workspaceApi } from "./workspaceApi";
+import { setPills, pillValue } from "../test-pills";
 
 const direction = (): Direction => ({
   angles: ["Useful claim"],
@@ -174,9 +175,7 @@ describe("selected campaign goal control", () => {
     expect(
       screen.getByRole("button", { name: "Save goals" }),
     ).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Primary metric"), {
-      target: { value: "full_episode_visits" },
-    });
+    setPills("Primary metric", "full_episode_visits");
     fireEvent.click(
       screen.getByRole("button", { name: "Save goals" }),
     );
@@ -191,7 +190,7 @@ describe("selected campaign goal control", () => {
     expect(screen.getByLabelText("What are we working toward?")).toHaveValue(
       "traffic",
     );
-    expect(screen.getByLabelText("Primary metric")).toHaveValue(
+    expect(pillValue("Primary metric")).toBe(
       "full_episode_visits",
     );
     expect(profiles[1].primary_metric).toBe("qualified_visits");

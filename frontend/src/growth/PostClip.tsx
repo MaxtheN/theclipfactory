@@ -3,32 +3,40 @@ import { AutoTextarea } from "../components/AutoTextarea";
 import { UnsavedNote, useUnsavedDraft } from "./unsavedDrafts";
 import { Field, Pill } from "./parts";
 import {
-  DEFAULT_LIMITS,
+  TIKTOK_TOGGLES,
   addLinkInBio,
   canResume,
   checkCaption,
   hasLinkInBio,
   hashtagsOf,
   inFlight,
+  limitsFor,
   localInputValue,
   localTimezone,
+  platformLabel,
   publishApi,
   scheduleSuggestions,
   stateLabel,
   toggleHashtag,
   withOffset,
-  type PostLimits,
+  type PackageFields,
   type PostPackageView,
   type PostSchedule,
   type PostTargets,
   type PublishAttempt,
   type QualityReport,
+  type TikTokCreatorInfo,
+  type TikTokSettings,
+  type TikTokToggle,
+  type YoutubeVisibility,
 } from "./publishApi";
 import { postCopyApi, type PostCopy } from "./referencesApi";
 import { CloudSignIn } from "./CloudSignIn";
 import { PostPreview } from "./PostPreview";
 import { PanelDialog } from "./PanelDialog";
 import { Icon } from "./Icon";
+import { PillSelect } from "./PillField";
+import { OVERRIDE_REASON } from "./choiceOptions";
 import { clipMediaUrl } from "./productionApi";
 
 export interface PostableClip {
@@ -46,22 +54,36 @@ const rubricLabels: [keyof QualityReport["rubric"], string][] = [
   ["caption_legibility", "Captions"],
   ["technical", "Technical"],
 ];
+/** Uncertain outcomes are checked against the platform, never retried blindly. */
+const needsCheck = (a: PublishAttempt) =>
+  a.state === "unknown" || ((a.state === "container_created" || a.state === "submitted") && !a.active);
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 const localTime = (iso: string) => {
   const at = new Date(iso);
   return Number.isNaN(at.getTime()) ? iso : at.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 };
 
-function Counters({ text, limits, label }: { text: string; limits: PostLimits; label?: string }) {
-  const check = checkCaption(text, limits);
+function Counters({ text, platform, label, named }: { text: string; platform: string; label?: string; named?: boolean }) {
+  const check = checkCaption(text, platform), limits = limitsFor(platform);
   const item = (value: number, max: number, unit: string) =>
     <span className={value > max ? "over" : ""}>{value.toLocaleString()} / {max.toLocaleString()} {unit}</span>;
   return <div className="gf-caption-counters" aria-label={label || "Caption limits"} aria-live="polite">
-    {item(check.chars, limits.caption_chars, "characters")}
-    {item(check.hashtags, limits.hashtags, "hashtags")}
-    {item(check.mentions, limits.mentions, "mentions")}
+    {item(check.chars, limits.caption_chars, named ? `characters (${platformLabel(platform)})` : "characters")}
+    {limits.hashtags !== null && item(check.hashtags, limits.hashtags, "hashtags")}
+    {limits.mentions !== null && item(check.mentions, limits.mentions, "mentions")}
   </div>;
 }
+
+const NO_TIKTOK: TikTokSettings = {
+  privacy_level: "", allow_comment: false, allow_duet: false, allow_stitch: false,
+  content_preview_confirmed: false, express_consent_given: false,
+};
+const TOGGLE_LABELS: Record<TikTokToggle, string> = { allow_comment: "Comments", allow_duet: "Duets", allow_stitch: "Stitches" };
+const MUSIC_TERMS = "https://www.tiktok.com/legal/page/global/music-usage-confirmation/en";
+const COLLABORATOR = /^[A-Za-z0-9._]{1,30}$/;
+export const collaboratorsOf = (value: string) =>
+  [...new Set(value.split(/[\s,]+/).map(v => v.trim().replace(/^@/, "")).filter(Boolean))];
+type CreatorInfo = TikTokCreatorInfo | { error: string };
 
 /**
  * Posts an already-approved revision, now or at a scheduled time, to the chosen accounts. Approval is
@@ -71,11 +93,11 @@ function Counters({ text, limits, label }: { text: string; limits: PostLimits; l
  */
 function PostEditorSurface({ compact, open, onClose, children }: { compact: boolean; open: boolean; onClose: () => void; children: ReactNode }) {
   return compact
-    ? <PanelDialog open={open} onClose={onClose} title="Prepare your post" description="Preview, pick accounts, then post or schedule." size="wide">{children}</PanelDialog>
+    ? <PanelDialog open={open} onClose={onClose} title="Prepare your post" description="Preview, pick accounts and platforms, then post or schedule." size="wide">{children}</PanelDialog>
     : <>{children}</>;
 }
 
-export function PostToInstagram({
+export function PostClip({
   clip,
   disabled = false,
   compact = false,
@@ -104,6 +126,12 @@ export function PostToInstagram({
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [coverMs, setCoverMs] = useState<number | null>(null);
   const [shareToFeed, setShareToFeed] = useState(true);
+  const [collaborators, setCollaborators] = useState("");
+  const [youtubeTitle, setYoutubeTitle] = useState("");
+  const [youtubeVisibility, setYoutubeVisibility] = useState<YoutubeVisibility>("public");
+  // TikTok has no defaults: the creator picks privacy and interactions and confirms every post.
+  const [tiktok, setTiktok] = useState<TikTokSettings>(NO_TIKTOK);
+  const [creatorInfo, setCreatorInfo] = useState<Record<string, CreatorInfo>>({});
   const [mode, setMode] = useState<"now" | "schedule">("now");
   const [when, setWhen] = useState("");
   const [previewAccount, setPreviewAccount] = useState<string>();
@@ -120,7 +148,6 @@ export function PostToInstagram({
   // Generated copy prefills the caption until the person edits it themselves.
   const edited = useRef(false), prefilled = useRef(false);
   const live = useRef(true);
-  const limits = pkg?.limits ?? DEFAULT_LIMITS;
 
   function applyTargets(t: PostTargets) {
     setTargets(t); setAttempts(t.attempts); setSchedules(t.schedules ?? []);
@@ -131,6 +158,7 @@ export function PostToInstagram({
     live.current = true;
     setTargets(undefined); setReport(undefined); setAttempts([]); setSchedules([]); setChosen([]); setError("");
     setOverride(""); setOverrides({}); setCoverMs(null); setShareToFeed(true); setMode("now"); setNotice("");
+    setCollaborators(""); setYoutubeTitle(""); setYoutubeVisibility("public"); setTiktok(NO_TIKTOK); setCreatorInfo({});
     edited.current = false; prefilled.current = false; setCopy(undefined); setPkg(undefined); setCaptionDirty(false);
     publishApi.targets(clip.id).then(t => {
       if (!live.current) return;
@@ -159,17 +187,80 @@ export function PostToInstagram({
   const blocked = new Set(attempts.filter(a => a.state !== "failed" && a.state !== "cancelled").map(a => a.account_id));
   const held = report?.verdict === "hold";
   const signInRequired = !!targets && (!targets.cloud_configured || !targets.signed_in);
+  const postingOff = !!targets && !targets.publishing_enabled;
+  const target = (id: string) => targets?.accounts.find(a => a.id === id);
+  const platformOf = (id: string) => target(id)?.platform || "instagram";
   const captionFor = (account: string) => overrides[account] ?? caption;
-  const captionProblems = (chosen.length ? chosen.map(captionFor) : [caption])
-    .flatMap(text => checkCaption(text, limits).problems);
+  const captionProblems = chosen.flatMap(a => checkCaption(captionFor(a), platformOf(a)).problems);
+  // The shared caption is measured against the strictest platform still using it.
+  const sharing = chosen.filter(a => overrides[a] === undefined).map(platformOf);
+  const sharedPlatform = sharing.sort((a, b) => limitsFor(a).caption_chars - limitsFor(b).caption_chars)[0]
+    ?? targets?.accounts[0]?.platform ?? "instagram";
+  const platforms = new Set(chosen.map(platformOf));
+  const hasInstagram = platforms.has("instagram"), hasYoutube = platforms.has("youtube");
+  const collaboratorList = hasInstagram ? collaboratorsOf(collaborators) : [];
+  const collaboratorProblem = collaboratorList.length > (pkg?.limits.collaborators ?? 3)
+    ? `Invite at most ${pkg?.limits.collaborators ?? 3} collaborators.`
+    : collaboratorList.some(u => !COLLABORATOR.test(u)) ? "Collaborators are Instagram usernames: letters, numbers, dots and underscores." : "";
+  const youtubeProblem = hasYoutube && youtubeTitle.length > 100 ? "YouTube titles are limited to 100 characters." : "";
+  const tiktokAccounts = chosen.filter(a => platformOf(a) === "tiktok");
+  const tiktokInfos = tiktokAccounts.map(a => creatorInfo[a]);
+  const tiktokLoaded = tiktokInfos.every((i): i is TikTokCreatorInfo => !!i && !("error" in i));
+  const tiktokError = tiktokInfos.find((i): i is { error: string } => !!i && "error" in i)?.error;
+  const loaded = tiktokLoaded ? tiktokInfos as TikTokCreatorInfo[] : [];
+  // Several TikTok accounts share one choice, so only options every one of them allows are offered.
+  const privacyOptions = (loaded[0]?.privacyLevels ?? []).filter(o => loaded.every(i => i.privacyLevels?.some(p => p.value === o.value)));
+  const toggleAllowed = (name: TikTokToggle) => loaded.every(i => i.postingLimits?.interactionSettings?.[name]?.enabled !== false);
+  const nicknames = loaded.map(i => i.creator?.nickname).filter(Boolean);
+  const maxSeconds = Math.min(...loaded.map(i => i.postingLimits?.maxVideoDurationSec ?? Infinity));
+  const tiktokBlocker = !tiktokAccounts.length ? ""
+    : tiktokError ? tiktokError
+    : !tiktokLoaded ? "Checking the TikTok account…"
+    : loaded.some(i => i.creator?.canPostMore === false) ? "TikTok says this account cannot post more right now. Try again later."
+    : pkg?.duration && Number.isFinite(maxSeconds) && pkg.duration > maxSeconds ? `TikTok allows videos up to ${maxSeconds} seconds for this account.`
+    : !privacyOptions.length ? "TikTok returned no privacy options for this account." : "";
+  const tiktokReady = !tiktokAccounts.length || (!tiktokBlocker && privacyOptions.some(o => o.value === tiktok.privacy_level)
+    && tiktok.content_preview_confirmed && tiktok.express_consent_given);
+  const tiktokKey = tiktokAccounts.join(",");
+  useEffect(() => {
+    for (const id of tiktokKey ? tiktokKey.split(",") : []) {
+      if (creatorInfo[id] && !("error" in creatorInfo[id])) continue;
+      publishApi.tiktokCreatorInfo(id)
+        .then(info => { if (live.current) setCreatorInfo(old => ({ ...old, [id]: info })); })
+        .catch(e => { if (live.current) setCreatorInfo(old => ({ ...old, [id]: { error: message(e) } })); });
+    }
+    // creatorInfo is read, not watched: each account is fetched once per selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiktokKey]);
+  useEffect(() => {
+    // A toggle the creator turned off in TikTok can never be sent on.
+    if (!tiktokLoaded) return;
+    setTiktok(old => {
+      const next = { ...old };
+      for (const name of TIKTOK_TOGGLES) if (!toggleAllowed(name)) next[name] = false;
+      if (next.privacy_level && !privacyOptions.some(o => o.value === next.privacy_level)) next.privacy_level = "";
+      return TIKTOK_TOGGLES.every(n => next[n] === old[n]) && next.privacy_level === old.privacy_level ? old : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiktokLoaded, tiktokKey, creatorInfo]);
   const scheduledAt = mode === "schedule" ? withOffset(when) : null;
   const scheduleProblem = mode !== "schedule" ? "" : !scheduledAt ? "Pick a date and time."
     : new Date(scheduledAt).getTime() <= now().getTime() + 60_000 ? "Pick a time at least a minute from now." : "";
   const needsApproval = !clip.approved;
-  const ready = !needsApproval && !!targets && !!report && !signInRequired && chosen.length > 0
+  const ready = !needsApproval && !!targets && !!report && !signInRequired && !postingOff && chosen.length > 0
+    && chosen.every(a => target(a)?.publishing_permitted === true)
     && chosen.every(a => captionFor(a).trim().length > 0) && captionProblems.length === 0 && !scheduleProblem
+    && !collaboratorProblem && !youtubeProblem && tiktokReady
     && (!held || override.trim().length >= 10) && !busy && !disabled;
-  const accountName = (id: string) => targets?.accounts.find(a => a.id === id)?.display_name || id;
+  const accountName = (id: string) => target(id)?.display_name || id;
+  const accountLabel = (id: string) => target(id) ? `${accountName(id)} on ${target(id)?.platform_label || platformLabel(platformOf(id))}` : id;
+  /** Only the fields each platform uses: the server refuses collaborators outside Instagram. */
+  const packageFor = (group: Set<string>): PackageFields => ({
+    share_to_feed: shareToFeed, cover_time_ms: coverMs,
+    ...([...group].every(p => p === "instagram") ? { collaborators: collaboratorList } : {}),
+    ...(group.has("youtube") ? { youtube_title: youtubeTitle.trim() || null, youtube_visibility: youtubeVisibility } : {}),
+    ...(group.has("tiktok") ? { tiktok } : {}),
+  });
   const shownAccount = previewAccount && chosen.includes(previewAccount) ? previewAccount : chosen[0];
   const coverUrl = coverMs === null ? pkg?.auto_cover.url : pkg?.candidates.find(c => c.time_ms === coverMs)?.url;
   const suggested = copy?.hashtags ?? [];
@@ -183,31 +274,51 @@ export function PostToInstagram({
       const current = clip;
       if (!current.approved) throw new Error("Approve this revision before posting it.");
       if (!current.sha256) throw new Error("This revision has no recorded file hash; it cannot be posted.");
-      const options = { share_to_feed: shareToFeed, cover_time_ms: coverMs, ...(held ? { override_reason: override.trim() } : {}) };
+      const reason = held ? { override_reason: override.trim() } : {};
       if (mode === "schedule" && scheduledAt) {
-        const row = await publishApi.schedule(current.id, {
-          account_ids: chosen, captions: Object.fromEntries(chosen.map(a => [a, captionFor(a)])),
-          sha256: current.sha256, publish_at: scheduledAt, timezone: zone, ...options,
-        });
+        // One schedule shares one package, so Instagram collaborators get their own schedule.
+        const instagram = chosen.filter(a => platformOf(a) === "instagram"), rest = chosen.filter(a => platformOf(a) !== "instagram");
+        const groups = collaboratorList.length && instagram.length && rest.length ? [instagram, rest] : [chosen];
+        const rows: PostSchedule[] = [], failures: string[] = [];
+        for (const group of groups) {
+          try {
+            rows.push(await publishApi.schedule(current.id, {
+              account_ids: group, captions: Object.fromEntries(group.map(a => [a, captionFor(a)])),
+              sha256: current.sha256, publish_at: scheduledAt, timezone: zone, ...reason,
+              ...packageFor(new Set(group.map(platformOf))),
+            }));
+          } catch (e) {
+            failures.push(groups.length > 1 ? `${group.map(accountLabel).join(", ")}: ${message(e)}` : message(e));
+          }
+        }
         if (live.current) {
-          setSchedules(old => [...old.filter(s => s.id !== row.id), row]);
-          setAttempts(old => [...row.attempts, ...old.filter(a => !row.attempts.some(m => m.id === a.id))]);
-          setChosen([]); setCaptionDirty(false); setNotice(`Scheduled for ${localTime(row.publish_at)}. The app must be open at that time.`);
+          const made = rows.flatMap(r => r.attempts);
+          setSchedules(old => [...old.filter(s => !rows.some(r => r.id === s.id)), ...rows]);
+          setAttempts(old => [...made, ...old.filter(a => !made.some(m => m.id === a.id))]);
+          if (rows.length) {
+            const scheduled = new Set(rows.flatMap(r => r.account_ids));
+            setChosen(old => old.filter(a => !scheduled.has(a))); setCaptionDirty(false);
+            setNotice(`Scheduled for ${localTime(rows[0].publish_at)}. The app must be open at that time.`);
+          }
+          if (failures.length) setError(failures.join(" "));
         }
         return;
       }
       const made: PublishAttempt[] = [], failures: string[] = [];
       for (const account of chosen) {
         try {
-          made.push(await publishApi.post(current.id, { account_id: account, caption: captionFor(account), sha256: current.sha256, ...options }));
+          made.push(await publishApi.post(current.id, {
+            account_id: account, caption: captionFor(account), sha256: current.sha256, ...reason,
+            ...packageFor(new Set([platformOf(account)])),
+          }));
         } catch (e) {
-          failures.push(`${accountName(account)}: ${message(e)}`);
+          failures.push(`${accountLabel(account)}: ${message(e)}`);
         }
       }
       if (live.current) {
         setAttempts(old => [...made, ...old.filter(a => !made.some(m => m.id === a.id))]);
-        setChosen([]);
-        if (made.length) setCaptionDirty(false);
+        setChosen(old => old.filter(a => !made.some(m => m.account_id === a)));
+        if (made.length) { setCaptionDirty(false); setTiktok(NO_TIKTOK); }
         if (failures.length) setError(failures.join(" "));
       }
     } catch (e) {
@@ -280,7 +391,11 @@ export function PostToInstagram({
     },
   });
   const pending = schedules.filter(s => s.status === "scheduled");
-  const submitLabel = busy ? "Working…" : mode === "schedule" ? "Schedule post" : "Post to Instagram";
+  // Names where it goes: the chosen platforms, or every available one before anything is chosen.
+  const destinations = [...new Set((chosen.length ? chosen : targets?.accounts.map(a => a.id) ?? []).map(platformOf))].map(platformLabel);
+  const postLabel = destinations.length === 0 ? "Post" : destinations.length === 1 ? `Post to ${destinations[0]}`
+    : destinations.length === 2 ? `Post to ${destinations[0]} and ${destinations[1]}` : `Post to ${destinations.length} platforms`;
+  const submitLabel = busy ? "Working…" : mode === "schedule" ? "Schedule post" : postLabel;
   const approvalNote = "Approve this revision to post it. Approving never posts on its own.";
 
   const verdict = !report ? "" : held
@@ -307,7 +422,7 @@ export function PostToInstagram({
           <summary>Details</summary>
           <ul>{report.reasons.map(r => <li key={r}>{r}</li>)}</ul>
         </details>}
-        {held && !compact && <Field label="Override reason (required to post a held clip)">{id => <AutoTextarea id={id} rows={2} value={override} onChange={e => setOverride(e.target.value)} placeholder="Why is it fine to post anyway?" />}</Field>}
+        {held && !compact && <PillSelect label="Override reason (required to post a held clip)" options={OVERRIDE_REASON} maxLength={500} value={override} onChange={setOverride} />}
       </> : !error && <p className="gf-help">Checking quality…</p>}
     </section>
 
@@ -316,18 +431,18 @@ export function PostToInstagram({
       <p className="gf-post-note">{needsApproval ? approvalNote : "Preview, caption, accounts and timing."}</p>
       {captionDirty && <UnsavedNote>Caption not saved</UnsavedNote>}
       {attempts.length > 0 && <p className="gf-post-note" role="status" aria-label="Posting activity">{[...new Set(attempts.map(a => a.state))].map(state => `${stateLabel[state]}: ${attempts.filter(a => a.state === state).length}`).join(" · ")}</p>}
-      {attempts.some(a => a.state === "unknown" || (a.state === "container_created" && !a.active)) && <p className="gf-post-recovery-note" role="status">A post needs a status check. Open posting to check the exact attempt before trying again.</p>}
+      {attempts.some(needsCheck) && <p className="gf-post-recovery-note" role="status">A post needs a status check. Open posting to check the exact attempt before trying again.</p>}
       {pending.some(row => row.overdue_at) && <p className="gf-post-recovery-note" role="status">A scheduled post was missed while the app was closed. Nothing was posted. Open posting to choose what happens next.</p>}
       {pending.some(row => !row.overdue_at) && <p className="gf-post-note">Scheduled posts are waiting. The app must be open at their scheduled time.</p>}
       {notice && <p className="gf-post-note" role="status">{notice}</p>}
       {error && <div className="gf-inline-error" role="alert">{error}</div>}
     </section>}
     <PostEditorSurface compact={compact} open={editorOpen && activeSurface} onClose={() => setEditorOpen(false)}>
-    <section className={`gf-review-section gf-post-section${compact ? " gf-post-sheet" : ""}`} aria-label="Post to Instagram">
-      <div className="gf-review-section-head"><h3>Post to Instagram</h3></div>
+    <section className={`gf-review-section gf-post-section${compact ? " gf-post-sheet" : ""}`} aria-label="Post">
+      <div className="gf-review-section-head"><h3>Post</h3></div>
       {signInRequired && <div className="gf-post-signin">
         <div>
-          <p role="status"><strong>Sign in required.</strong> We host the approved video briefly so Instagram can fetch it.</p>
+          <p role="status"><strong>Sign in required.</strong> Posting goes through Growth Factory cloud, which hosts the approved video briefly so each platform can fetch it.</p>
           {targets?.cloud_configured && !signingIn && <button type="button" className="gf-button compact" onClick={() => setSigningIn(true)}>Sign in</button>}
         </div>
         {!targets?.cloud_configured && <p>Posting is off until accounts are set up.</p>}
@@ -339,8 +454,8 @@ export function PostToInstagram({
       </div>}
       {pending.length > 0 && <ul className="gf-schedule-list" aria-label="Scheduled posts">{pending.map(row => <li key={row.id}>
         {row.overdue_at
-          ? <p role="status"><strong>Missed while the app was closed.</strong> Was set for {localTime(row.publish_at)} · {row.account_ids.map(accountName).join(", ")}. Nothing was posted.</p>
-          : <p>Scheduled for <strong>{localTime(row.publish_at)}</strong> · {row.account_ids.map(accountName).join(", ")}. The app must be open at that time.</p>}
+          ? <p role="status"><strong>Missed while the app was closed.</strong> Was set for {localTime(row.publish_at)} · {row.account_ids.map(accountLabel).join(", ")}. Nothing was posted.</p>
+          : <p>Scheduled for <strong>{localTime(row.publish_at)}</strong> · {row.account_ids.map(accountLabel).join(", ")}. The app must be open at that time.</p>}
         <div className="gf-schedule-actions">
           {row.overdue_at && <button type="button" className="gf-button compact" disabled={busy} onClick={() => void decide(row, "post_now")}>Post now</button>}
           {row.overdue_at && <button type="button" className="gf-button secondary compact" disabled={busy} onClick={() => void decide(row, "reschedule")}>Reschedule</button>}
@@ -357,17 +472,23 @@ export function PostToInstagram({
         when={mode === "schedule" && scheduledAt ? `Posts ${localTime(scheduledAt)} (${zone})` : null}
       />}
       </div><div className="gf-post-composer-fields">
+      {postingOff && <p className="gf-post-recovery-note" role="status">Posting is off. Turn on <strong>Post from Growth Factory</strong> in Settings → Accounts and connections.</p>}
       {targets && (targets.accounts.length === 0
-        ? <p className="gf-help">Connect an Instagram account for this brand first.</p>
-        : <fieldset className="gf-post-group gf-post-accounts"><legend>Account</legend>{targets.accounts.map(account => <label key={account.id} className="gf-post-account">
-          <input type="checkbox" checked={chosen.includes(account.id)} disabled={blocked.has(account.id) || busy}
-            onChange={e => setChosen(old => e.target.checked ? [...old, account.id] : old.filter(id => id !== account.id))} />
-          <span className="gf-post-account-avatar" aria-hidden="true">{(account.display_name || account.id).replace(/^@/, "").slice(0, 1).toUpperCase()}</span>
-          <span className="gf-post-account-name">{account.display_name || account.id}{blocked.has(account.id) ? " · already has a post attempt" : ""}</span>
-        </label>)}</fieldset>)}
+        ? <p className="gf-help">Connect an account for this brand in Settings → Accounts and connections first.</p>
+        : <fieldset className="gf-post-group gf-post-accounts"><legend>Accounts</legend>{targets.accounts.map(account => {
+          const allowed = account.publishing_permitted === true;
+          const label = account.platform_label || platformLabel(account.platform);
+          return <label key={account.id} className="gf-post-account">
+            <input type="checkbox" checked={chosen.includes(account.id)} disabled={blocked.has(account.id) || !allowed || postingOff || busy}
+              onChange={e => setChosen(old => e.target.checked ? [...old, account.id] : old.filter(id => id !== account.id))} />
+            <span className="gf-post-account-avatar" aria-hidden="true">{(account.display_name || account.id).replace(/^@/, "").slice(0, 1).toUpperCase()}</span>
+            <span className="gf-post-account-name">{account.display_name || account.id} <small>{label}</small>
+              {blocked.has(account.id) ? " · already has a post attempt" : !allowed ? " · allow posting in Settings first" : ""}</span>
+          </label>;
+        })}</fieldset>)}
       <div className="gf-post-group">
         <Field label="Caption" hint={copy ? `${copy.label}${copy.fallback_reason ? ` · ${copy.fallback_reason}` : ""}` : undefined}>{id => <AutoTextarea id={id} rows={4} value={caption} onChange={e => editCaption(e.target.value)} />}</Field>
-        <Counters text={caption} limits={limits} />
+        <Counters text={caption} platform={sharedPlatform} named={platforms.size > 1} />
         {captionDirty && <UnsavedNote>Caption not saved</UnsavedNote>}
         <div className="gf-chip-row" aria-label="Caption extras">
           {suggested.map(tag => <button key={tag} type="button" className="gf-chip" aria-pressed={present.has(tag.toLowerCase())}
@@ -378,19 +499,65 @@ export function PostToInstagram({
         </div>
         {chosen.length > 1 && <div className="gf-post-overrides" aria-label="Per-account captions">
           {chosen.map(account => overrides[account] === undefined
-            ? <button key={account} type="button" className="gf-chip" onClick={() => { setOverrides(old => ({ ...old, [account]: caption })); setPreviewAccount(account); }}>Own caption for {accountName(account)}</button>
+            ? <button key={account} type="button" className="gf-chip" onClick={() => { setOverrides(old => ({ ...old, [account]: caption })); setPreviewAccount(account); }}>Own caption for {accountLabel(account)}</button>
             : <div key={account} className="gf-post-group">
-              <Field label={`Caption for ${accountName(account)}`}>{id => <AutoTextarea id={id} rows={3} value={overrides[account]} onFocus={() => setPreviewAccount(account)} onChange={e => setOverrides(old => ({ ...old, [account]: e.target.value }))} />}</Field>
-              <Counters text={overrides[account]} limits={limits} label={`Caption limits for ${accountName(account)}`} />
+              <Field label={`Caption for ${accountLabel(account)}`}>{id => <AutoTextarea id={id} rows={3} value={overrides[account]} onFocus={() => setPreviewAccount(account)} onChange={e => setOverrides(old => ({ ...old, [account]: e.target.value }))} />}</Field>
+              <Counters text={overrides[account]} platform={platformOf(account)} label={`Caption limits for ${accountLabel(account)}`} />
               <button type="button" className="gf-text-button" onClick={() => setOverrides(old => { const next = { ...old }; delete next[account]; return next; })}>Use the shared caption</button>
             </div>)}
         </div>}
       </div>
-      <label className="gf-toggle-row">
-        <span>Also show in the main feed<small>Off posts to Reels only</small></span>
-        <input type="checkbox" role="switch" checked={shareToFeed} onChange={e => setShareToFeed(e.target.checked)} />
-      </label>
-      <p className="gf-post-note">{pkg?.collaborators_note ?? "Mention people with @ in the caption."} No location is added.</p>
+      {hasInstagram && <fieldset className="gf-post-group" aria-label="Instagram options">
+        <legend>Instagram</legend>
+        <label className="gf-toggle-row">
+          <span>Also show in the main feed<small>Off posts to Reels only</small></span>
+          <input type="checkbox" role="switch" checked={shareToFeed} onChange={e => setShareToFeed(e.target.checked)} />
+        </label>
+        <Field label="Collaborators" hint={pkg?.collaborators_note ?? "Up to 3 public Business or Creator usernames."}>{id =>
+          <input id={id} value={collaborators} placeholder="@partner, @friend" autoComplete="off" onChange={e => setCollaborators(e.target.value)} />}</Field>
+        {collaboratorProblem && <p className="gf-help" role="alert">{collaboratorProblem}</p>}
+        <p className="gf-post-note">No location is added.</p>
+      </fieldset>}
+      {hasYoutube && <fieldset className="gf-post-group" aria-label="YouTube options">
+        <legend>YouTube</legend>
+        <Field label="YouTube title" hint={`Optional · ${youtubeTitle.length} / 100. The hook is used when empty.`}>{id =>
+          <input id={id} value={youtubeTitle} maxLength={120} placeholder={clip.hook || ""} onChange={e => setYoutubeTitle(e.target.value)} />}</Field>
+        {youtubeProblem && <p className="gf-help" role="alert">{youtubeProblem}</p>}
+        <Field label="Visibility">{id => <select id={id} value={youtubeVisibility} onChange={e => setYoutubeVisibility(e.target.value as YoutubeVisibility)}>
+          <option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option>
+        </select>}</Field>
+      </fieldset>}
+      {tiktokAccounts.length > 0 && <fieldset className="gf-post-group gf-post-tiktok" aria-label="TikTok options">
+        <legend>TikTok</legend>
+        {nicknames.length > 0 && <p className="gf-post-note">Posting to {nicknames.join(", ")} on TikTok.</p>}
+        {tiktokBlocker
+          ? <p className={tiktokLoaded || tiktokError ? "gf-post-recovery-note" : "gf-help"} role="status">{tiktokBlocker}</p>
+          : <>
+            <Field label="Who can see this video">{id => <select id={id} value={tiktok.privacy_level} onChange={e => setTiktok(old => ({ ...old, privacy_level: e.target.value }))}>
+              <option value="" disabled>Choose who can see it</option>
+              {privacyOptions.map(o => <option key={o.value} value={o.value}>{o.label || o.value}</option>)}
+            </select>}</Field>
+            <div className="gf-post-tiktok-toggles" role="group" aria-label="Allow viewers to">
+              {TIKTOK_TOGGLES.map(name => {
+                const allowed = toggleAllowed(name);
+                return <label key={name} className="gf-toggle-row">
+                  <span>Allow {TOGGLE_LABELS[name].toLowerCase()}{!allowed && <small>Turned off in this TikTok account</small>}</span>
+                  <input type="checkbox" role="switch" aria-label={`Allow ${TOGGLE_LABELS[name].toLowerCase()}`} checked={tiktok[name]} disabled={!allowed}
+                    onChange={e => setTiktok(old => ({ ...old, [name]: e.target.checked }))} />
+                </label>;
+              })}
+            </div>
+            <label className="gf-post-consent">
+              <input type="checkbox" checked={tiktok.content_preview_confirmed} onChange={e => setTiktok(old => ({ ...old, content_preview_confirmed: e.target.checked }))} />
+              <span>I watched the preview and this is the video I want to post.</span>
+            </label>
+            <label className="gf-post-consent">
+              <input type="checkbox" checked={tiktok.express_consent_given} onChange={e => setTiktok(old => ({ ...old, express_consent_given: e.target.checked }))} />
+              <span>By posting, I agree to TikTok's <a href={MUSIC_TERMS} target="_blank" rel="noreferrer noopener">Music Usage Confirmation</a>.</span>
+            </label>
+            <p className="gf-post-note">It can take a few minutes for the video to appear on the TikTok profile.</p>
+          </>}
+      </fieldset>}
       {pkg && pkg.candidates.length > 1 && <fieldset className="gf-post-group">
         <legend>Cover</legend>
         <div className="gf-cover-strip" role="group" aria-label="Cover frames">
@@ -419,19 +586,19 @@ export function PostToInstagram({
         </div>}
       </fieldset>
       {captionProblems.length > 0 && <div className="gf-inline-error" role="alert">{[...new Set(captionProblems)].join(" ")}</div>}
-      {compact && held && <div className="gf-post-group"><p className="gf-post-recovery-note">{verdict}</p><Field label="Override reason (required to post a held clip)">{id => <AutoTextarea id={id} rows={2} value={override} onChange={e => setOverride(e.target.value)} placeholder="Why is it fine to post anyway?" />}</Field></div>}
+      {compact && held && <div className="gf-post-group"><p className="gf-post-recovery-note">{verdict}</p><PillSelect label="Override reason (required to post a held clip)" options={OVERRIDE_REASON} maxLength={500} value={override} onChange={setOverride} /></div>}
       {needsApproval && !compact && <p className="gf-help" role="status">{approvalNote}</p>}
       <button className="gf-button full gf-post-submit" disabled={!ready} onClick={() => void submit()}>{submitLabel}</button>
       {notice && <p role="status">{notice}</p>}
       {error && <div className="gf-inline-error" role="alert">{error}</div>}
       {attempts.length > 0 && <ul className="gf-post-attempts" aria-label="Post attempts">{attempts.map(a => <li key={a.id}>
-        <strong>{a.account_name || a.account_id}</strong> · <span>{stateLabel[a.state]}</span>
+        <strong>{a.account_name || accountName(a.account_id)}</strong> · <span>{platformLabel(a.platform ?? target(a.account_id)?.platform)}</span> · <span>{stateLabel[a.state]}</span>
         {a.state === "scheduled" && a.scheduled_for && <> · {localTime(a.scheduled_for)}</>}
-        {a.permalink && <> · <a href={a.permalink} target="_blank" rel="noreferrer noopener">Open reel</a></>}
+        {a.permalink && <> · <a href={a.permalink} target="_blank" rel="noreferrer noopener">Open post</a></>}
         {a.error && <p className="gf-help">{a.error.message}</p>}
         {a.warnings.includes("caption_readback_mismatch") && <p className="gf-help">Instagram shows a different caption; check the post.</p>}
         {(a.warnings.includes("cover_upload_failed") || a.warnings.includes("cover_url_unavailable")) && <p className="gf-help">Custom cover couldn't be hosted; Instagram used the same frame from the video instead.</p>}
-        {(a.state === "unknown" || (a.state === "container_created" && !a.active)) &&
+        {needsCheck(a) &&
           <button className="gf-button secondary" disabled={busy} onClick={() => void act(a, "reconcile")}>Check status</button>}
         {a.state !== "unknown" && canResume(a) &&
           <button className="gf-button ghost" disabled={busy} onClick={() => void act(a, "resume")}>Continue</button>}

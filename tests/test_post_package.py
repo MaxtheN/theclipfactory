@@ -1,48 +1,15 @@
 """Post package: limits, cover hosting/fallback, scheduling and per-account captions. Offline only:
-fake Composio client and storage; no Composio write tool and no Instagram call is ever made."""
+a fake posting server; no cloud, Zernio or platform call is ever made."""
 
 from datetime import UTC, datetime, timedelta
 
-import httpx
 import pytest
 
 from clip_factory import post_package
 from clip_factory.post_schedule import PostScheduler
-from clip_factory.publish_storage import PublishStorage, PublishStorageError
+from clip_factory.posting_server import PostingServerError
 from clip_factory.publisher import PublishError
-from tests.test_publisher import CREATE, PUBLISH, USER, FakeStorage, holding_gate, post, world  # noqa: F401
-
-# Properties of the pinned INSTAGRAM_POST_IG_USER_MEDIA 20261112_00 schema (additionalProperties false),
-# read from tool metadata only. Note: no `collaborators`.
-PINNED_CREATE_PROPERTIES = {
-    "caption", "alt_text", "children", "cover_url", "image_url", "user_tags", "video_url", "audio_name",
-    "ig_user_id", "image_file", "media_type", "video_file", "location_id", "thumb_offset", "share_to_feed",
-    "is_carousel_item", "graph_api_version",
-}
-
-
-class CoverStorage(FakeStorage):
-    def __init__(self, store, *, cover_fail=None, **kw):
-        super().__init__(store, **kw)
-        self.cover_fail, self.covers, self.sizes = cover_fail, [], {}
-
-    def upload(self, path, sha):
-        hosted = super().upload(path, sha)
-        self.sizes[hosted["url"]] = (path.stat().st_size, "video/mp4")
-        return hosted
-
-    def upload_cover(self, path, sha):
-        if self.cover_fail:
-            raise self.cover_fail
-        name = f"{USER}/{sha}.jpg"
-        url = self.public_url(name)
-        self.covers.append(name)
-        self.public.add(url)
-        self.sizes[url] = (path.stat().st_size, "image/jpeg")
-        return {"url": url, "object": name, "bytes": path.stat().st_size, "reused": False}
-
-    def verify_public(self, url, size, content_type="video/mp4"):
-        return url in self.public and self.sizes.get(url, (size, content_type)) == (size, content_type)
+from tests.test_publisher import holding_gate, post, world, zernio_id  # noqa: F401
 
 
 def fake_extract(clip_path, time_ms, output):
@@ -52,7 +19,6 @@ def fake_extract(clip_path, time_ms, output):
 
 @pytest.fixture
 def cover_world(world, tmp_path):  # noqa: F811
-    world["state"]["storage"] = CoverStorage(world["store"])
     clip = world["add_clip"](duration=20.0, craft={"cover": {"mode": "best_frame", "time": 4.25}})
     (tmp_path / "clips" / "clip-1.jpg").write_bytes(b"\xff\xd8auto-cover")
     world["add_account"]()
@@ -64,7 +30,13 @@ def cover_world(world, tmp_path):  # noqa: F811
 
 
 def create_args(w):
-    return [c[1] for c in w["state"]["client"].calls if c[0] == CREATE]
+    """Each sent post, flattened to its caption plus Instagram platformSpecificData."""
+    return [{"caption": p["content"], **(p["platforms"][0].get("platformSpecificData") or {})}
+            for p, _ in w["state"]["server"].created]
+
+
+def server_calls(w):
+    return w["state"]["server"].calls
 
 
 # ----------------------------------------------------------------------------- limits
@@ -93,22 +65,24 @@ def test_caption_limits_and_features():
 def test_publisher_refuses_over_limit_captions(cover_world, caption, code):
     with pytest.raises(PublishError) as error:
         post(cover_world, publisher=cover_world["make_covers"](), caption=caption)
-    assert error.value.code == code and not cover_world["state"]["client"].calls
+    assert error.value.code == code and not server_calls(cover_world)
 
 
-def test_collaborators_are_refused_because_the_pinned_tool_has_no_such_field(cover_world):
-    assert "collaborators" not in PINNED_CREATE_PROPERTIES and not post_package.COLLABORATORS_SUPPORTED
+def test_instagram_collaborators_are_sent_and_limited_to_three(cover_world):
+    assert post_package.COLLABORATORS_SUPPORTED
+    publisher = cover_world["make_covers"]()
     with pytest.raises(PublishError) as error:
-        post(cover_world, publisher=cover_world["make_covers"](), package={"collaborators": ["friend"]})
-    assert error.value.code == "collaborators_unsupported"
-    with pytest.raises(PublishError) as error:
-        post(cover_world, publisher=cover_world["make_covers"](), package={"collaborators": list("abcd")})
+        post(cover_world, publisher=publisher, package={"collaborators": list("abcd")})
     assert error.value.code == "invalid_collaborators"
+    _, attempt = post(cover_world, publisher=publisher, package={"collaborators": ["@friend"]})
+    assert attempt["package"]["collaborators"] == ["friend"]
+    publisher.run(attempt["id"])
+    assert create_args(cover_world)[0]["collaborators"] == ["friend"]
 
 
 # ----------------------------------------------------------------------------- cover
 
-def test_chosen_cover_is_hosted_and_sent_as_cover_url_with_package_recorded(cover_world):
+def test_chosen_cover_is_uploaded_and_sent_as_the_instagram_thumbnail(cover_world):
     publisher = cover_world["make_covers"]()
     caption = "Most founders hire too early. Get the checklist, link in bio. #founders #hiring @mentor"
     _, attempt = post(cover_world, publisher=publisher, caption=caption,
@@ -122,11 +96,10 @@ def test_chosen_cover_is_hosted_and_sent_as_cover_url_with_package_recorded(cove
     row = publisher.get(attempt["id"])
     assert row["state"] == "mapped" and row["cover_mode"] == "cover_url" and row["posted_at"]
     args = create_args(cover_world)[0]
-    assert set(args) <= PINNED_CREATE_PROPERTIES
-    assert args["cover_url"].endswith(".jpg") and "thumb_offset" not in args and args["share_to_feed"] is False
-    assert row["container_arguments"]["cover_url"] == args["cover_url"]
-    storage = cover_world["state"]["storage"]
-    assert storage.covers == [row["cover_object"]] and row["cover_object"] in storage.deleted
+    assert args["instagramThumbnail"] == row["cover_url"] and row["cover_url"].endswith(".jpg")
+    assert "thumbOffset" not in args and args["shareToFeed"] is False
+    uploads = cover_world["state"]["server"].uploads
+    assert [u[1] for u in uploads] == ["video/mp4", "image/jpeg"] and uploads[1][2] == b"\xff\xd8jpeg-frame-7000"
 
 
 def test_auto_cover_uses_the_render_cover_jpg(cover_world):
@@ -136,30 +109,45 @@ def test_auto_cover_uses_the_render_cover_jpg(cover_world):
     assert attempt["package"]["cover"]["time_ms"] == 4250
     assert attempt["package"]["cover"]["local_path"] == "clips/clip-1.jpg"
     publisher.run(attempt["id"])
-    assert "cover_url" in create_args(cover_world)[0]
+    assert "instagramThumbnail" in create_args(cover_world)[0]
 
 
-def test_cover_upload_refused_falls_back_to_thumb_offset_and_still_posts(cover_world):
-    cover_world["state"]["storage"].cover_fail = PublishStorageError("Rejected", "upload_rejected", 502)
+def test_cover_upload_refused_falls_back_to_time_offset_and_still_posts(cover_world):
+    server = cover_world["state"]["server"]
+    original = server.upload
+
+    def upload(path, content_type, *, filename=None):
+        if content_type == "image/jpeg":
+            raise PostingServerError(502, "upload_rejected", "Rejected")
+        return original(path, content_type, filename=filename)
+
+    server.upload = upload
     publisher = cover_world["make_covers"]()
     _, attempt = post(cover_world, publisher=publisher, package={"cover_time_ms": 7000})
     publisher.run(attempt["id"])
     row = publisher.get(attempt["id"])
     args = create_args(cover_world)[0]
-    assert row["state"] == "mapped" and row["cover_mode"] == "thumb_offset"
-    assert args["thumb_offset"] == 7000 and "cover_url" not in args
+    assert row["state"] == "mapped" and row["cover_mode"] == "time_offset"
+    assert args["thumbOffset"] == 7000 and "instagramThumbnail" not in args
     assert "cover_upload_failed" in row["warnings"]
 
 
-def test_hosted_cover_that_vanished_before_container_falls_back(cover_world):
+def test_cover_file_changed_before_upload_falls_back(cover_world, tmp_path):
     publisher = cover_world["make_covers"]()
     _, attempt = post(cover_world, publisher=publisher)
-    publisher._upload(attempt, cover_world["store"].get("clips", "clip-1"))
-    storage = cover_world["state"]["storage"]
-    storage.public.discard(publisher.get(attempt["id"])["cover_url"])
+    (tmp_path / "clips" / "clip-1.jpg").write_bytes(b"\xff\xd8different")
     publisher.run(attempt["id"])
     row = publisher.get(attempt["id"])
-    assert create_args(cover_world)[0]["thumb_offset"] == 4250 and "cover_url_unavailable" in row["warnings"]
+    assert create_args(cover_world)[0]["thumbOffset"] == 4250 and "cover_file_missing" in row["warnings"]
+
+
+def test_other_platforms_get_the_frame_time_not_an_upload(cover_world):
+    cover_world["add_account"]("acct-yt", platform="youtube")
+    publisher = cover_world["make_covers"]()
+    _, attempt = post(cover_world, publisher=publisher, account="acct-yt")
+    publisher.run(attempt["id"])
+    assert [u[1] for u in cover_world["state"]["server"].uploads] == ["video/mp4"]
+    assert publisher.get(attempt["id"])["cover_mode"] == "time_offset"
 
 
 def test_cover_candidates_include_the_auto_frame_and_stay_inside_the_clip(cover_world):
@@ -169,50 +157,6 @@ def test_cover_candidates_include_the_auto_frame_and_stay_inside_the_clip(cover_
     with pytest.raises(PublishError) as error:
         post(cover_world, publisher=publisher, package={"cover_time_ms": 25000})
     assert error.value.code == "invalid_cover"
-
-
-def test_storage_cover_upload_path_and_type(tmp_path):
-    class Session:
-        user_id, access_token = USER, "token"
-
-    class Client:
-        session = Session()
-
-        class config:
-            url, publishable_key = "https://cloud.example", "pk"
-
-        def refresh(self):
-            pass
-
-    class Account:
-        client = Client()
-
-        def link(self):
-            return {"user_id": USER}
-
-        def status(self):
-            return {"signed_in": True}
-
-    seen = []
-
-    def handler(request):
-        seen.append((request.method, str(request.url), request.headers.get("content-type")))
-        if request.method == "HEAD":
-            return httpx.Response(200, headers={"content-type": "image/jpeg", "content-length": "5"})
-        return httpx.Response(200, json={"Key": "ok"})
-
-    jpg = tmp_path / "c.jpg"
-    jpg.write_bytes(b"\xff\xd8abc")
-    storage = PublishStorage(Account(), transport=httpx.MockTransport(handler))
-    hosted = storage.upload_cover(jpg, "a" * 64)
-    assert hosted["object"] == f"{USER}/{'a' * 64}.jpg"
-    assert seen[0] == ("POST", f"https://cloud.example/storage/v1/object/gf-publish/{USER}/{'a' * 64}.jpg",
-                       "image/jpeg")
-    big = tmp_path / "big.jpg"
-    big.write_bytes(b"x" * (8 * 1024 * 1024 + 1))
-    with pytest.raises(PublishStorageError, match="8 MB"):
-        storage.upload_cover(big, "b" * 64)
-
 
 # ----------------------------------------------------------------------------- scheduling
 
@@ -244,7 +188,7 @@ def test_schedule_lifecycle_posts_on_time_with_per_account_captions(cover_world)
     # Archive guard sees it (same `schedules` kind and status).
     assert cover_world["store"].get("schedules", row["id"])["status"] == "scheduled"
     scheduler.tick()
-    assert not cover_world["state"]["client"].calls and not cover_world["state"]["storage"].uploads
+    assert not server_calls(cover_world)
     with pytest.raises(PublishError) as error:  # one attempt per account per clip, even scheduled
         post(cover_world, publisher=publisher)
     assert error.value.code == "attempt_exists"
@@ -276,7 +220,7 @@ def test_overdue_after_reopen_never_posts_without_a_click(cover_world):
     assert [a["state"] for a in current["attempts"]] == ["scheduled", "scheduled"]
     for _ in range(3):
         reopened.tick()
-    assert not cover_world["state"]["client"].calls and not cover_world["state"]["storage"].uploads
+    assert not server_calls(cover_world)
     posted = reopened.decide(row["id"], "post_now")
     assert posted["status"] == "submitted" and posted["decision"]["action"] == "post_now"
     assert [a["state"] for a in posted["attempts"]] == ["created", "created"]
@@ -301,7 +245,7 @@ def test_overdue_reschedule_and_cancel(cover_world):
     assert error.value.code == "not_scheduled"
     _, again = post(cover_world, publisher=publisher)  # cancelled attempts do not block a new post
     assert again["state"] == "created"
-    assert not cover_world["state"]["client"].calls
+    assert not server_calls(cover_world)
 
 
 def test_mac_asleep_past_grace_is_overdue_not_late_posted(cover_world):
@@ -310,7 +254,7 @@ def test_mac_asleep_past_grace_is_overdue_not_late_posted(cover_world):
     row = schedule(cover_world, scheduler)
     clock.now += timedelta(hours=7, minutes=30)
     scheduler.tick()
-    assert scheduler.get(row["id"])["overdue_at"] and not cover_world["state"]["storage"].uploads
+    assert scheduler.get(row["id"])["overdue_at"] and not server_calls(cover_world)
 
 
 def test_schedule_is_all_or_nothing_and_rechecks_at_post_time(cover_world):
@@ -332,7 +276,7 @@ def test_schedule_is_all_or_nothing_and_rechecks_at_post_time(cover_world):
     scheduler.tick()
     attempt = scheduler.get(row["id"])["attempts"][0]
     assert attempt["state"] == "failed" and attempt["error"]["code"] == "quality_hold"
-    assert not cover_world["state"]["client"].calls
+    assert not server_calls(cover_world)
 
 
 def test_legacy_runner_skips_post_lane_and_legacy_cancel_cancels_attempts(cover_world):
@@ -344,9 +288,7 @@ def test_legacy_runner_skips_post_lane_and_legacy_cancel_cancels_attempts(cover_
     assert scheduler.get(row["id"])["attempts"][0]["state"] == "cancelled"
 
 
-def test_no_write_tool_was_executed_in_this_module(cover_world):
-    # The fake client records every tool; scheduling and packaging alone never reach it.
+def test_scheduling_alone_never_reaches_the_server(cover_world):
     clock, publisher = Clock(), cover_world["make_covers"]()
     schedule(cover_world, PostScheduler(cover_world["store"], publisher, clock=clock))
-    assert CREATE not in cover_world["state"]["client"].slugs()
-    assert PUBLISH not in cover_world["state"]["client"].slugs()
+    assert server_calls(cover_world) == [] and cover_world["state"]["server"].created == []

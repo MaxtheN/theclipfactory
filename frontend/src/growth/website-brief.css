@@ -484,3 +484,18 @@
 .gf-flow-app .gf-onboarding-step.gf-website-brief .gf-wb-group { gap: 26px; }
 .gf-flow-app .gf-onboarding-step.gf-website-brief .gf-wb-field { gap: 10px; }
 .gf-flow-app .gf-onboarding-step.gf-website-brief .gf-wb-field :is(input, select, textarea) { min-height: 46px; padding: 11px 14px; }
+
+/* Pill pickers in the review: full width, compact add input. */
+.gf-wb-pair:has(.gf-pill-field),
+.gf-wb-pair:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.gf-flow-app .gf-onboarding-step.gf-website-brief .gf-wb-field .gf-pill-field input.gf-pill-field-input,
+.gf-wb-field .gf-pill-field input.gf-pill-field-input {
+  width: auto;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-color: var(--focus);
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.2;
+}

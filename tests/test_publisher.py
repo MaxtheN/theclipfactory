@@ -1,121 +1,130 @@
-"""Offline publisher state machine: no Composio, Supabase, Keychain or Instagram calls."""
+"""Offline publisher state machine against a fake posting server: no cloud, Zernio or platform calls."""
 
 import hashlib
-import json
 import threading
 import time
-from datetime import UTC, datetime, timedelta
 
-import httpx
 import pytest
 from fastapi import HTTPException
 
-from clip_factory.composio import ComposioClient, ComposioError, ComposioPublishingClient
-from clip_factory.publish_storage import PublishStorageError
+from clip_factory.posting_server import PostingServerError
 from clip_factory.publisher import Publisher, PublishError
 from clip_factory.store import Store
 
-PUBLISH = "INSTAGRAM_POST_IG_USER_MEDIA_PUBLISH"
-CREATE = "INSTAGRAM_POST_IG_USER_MEDIA"
-NODES = "INSTAGRAM_GET_MULTIPLE_NODES"
-QUOTA = "INSTAGRAM_GET_IG_USER_CONTENT_PUBLISHING_LIMIT"
-MEDIA = "INSTAGRAM_GET_IG_MEDIA"
-USER = "0f6c3b0e-6a5e-4a4e-9a55-2b6a7c1d9e10"
+WORKSPACE = "0f6c3b0e-6a5e-4a4e-9a55-2b6a7c1d9e10"
+CREATOR = {"creator": {"nickname": "maker", "canPostMore": True},
+           "privacyLevels": [{"value": "PUBLIC_TO_EVERYONE", "label": "Everyone"},
+                             {"value": "SELF_ONLY", "label": "Only me"}],
+           "postingLimits": {"maxVideoDurationSec": 600, "interactionSettings": {
+               "allow_comment": {"enabled": True}, "allow_duet": {"enabled": True},
+               "allow_stitch": {"enabled": False}}}}
+TIKTOK = {"privacy_level": "PUBLIC_TO_EVERYONE", "allow_comment": True, "allow_duet": False,
+          "allow_stitch": False, "content_preview_confirmed": True, "express_consent_given": True}
 
 
-class FakeStorage:
-    def __init__(self, store, *, fail=None, signed_in=True):
-        self.store, self.fail, self.signed_in = store, fail, signed_in
-        self.uploads, self.deleted, self.public = [], [], set()
-
-    def user_id(self):
-        if not self.signed_in:
-            raise PublishStorageError("Sign in to Growth Factory cloud to post.", "sign_in_required", 409)
-        return USER
-
-    def object_path(self, user, sha):
-        return f"{user}/{sha}.mp4"
-
-    def public_url(self, name):
-        return f"https://cloud.example/storage/v1/object/public/gf-publish/{name}"
-
-    def upload(self, path, sha):
-        assert any(r["sha256"] == sha and r["pending_effect"] == "upload" and r["state"] == "uploading"
-                   for r in self.store.all("publish_attempts")), "durable record must precede the upload"
-        if self.fail:
-            raise self.fail
-        self.uploads.append(sha)
-        url = self.public_url(self.object_path(USER, sha))
-        self.public.add(url)
-        return {"url": url, "object": self.object_path(USER, sha), "bytes": path.stat().st_size, "reused": False}
-
-    def verify_public(self, url, size):
-        return url in self.public
-
-    def delete(self, name):
-        self.deleted.append(name)
-        return True
+def zernio_id(identifier: str) -> str:
+    return hashlib.sha256(identifier.encode()).hexdigest()[:24]
 
 
-class FakeClient:
-    PINNED_VERSION = "20261112_00"
+class FakeServer:
+    """In-memory posting server. Asserts the durable record precedes every external write."""
 
-    def __init__(self, store, *, statuses=("IN_PROGRESS", "FINISHED"), errors=None, caption=None,
-                 recent=None, quota=(0, 50)):
+    def __init__(self, store, *, statuses=("processing", "published")):
         self.store, self.statuses = store, list(statuses)
-        self.errors = errors or {}
-        self.caption, self.recent, self.quota = caption, recent or [], quota
+        self.signed_in, self.creator = True, CREATOR
+        self.errors: dict[str, list] = {}
+        self.uploads, self.created, self.posts, self.keys = [], [], {}, {}
         self.calls, self.running, self.max_running = [], 0, 0
         self.lock = threading.Lock()
+        self.create_then_fail = None
 
     def _pending(self, effect):
-        return any(r["pending_effect"] == effect for r in self.store.all("publish_attempts"))
+        return any(r.get("pending_effect") == effect for r in self.store.all("publish_attempts"))
 
-    def account_identity(self, account_id, user_id, *, version):
-        assert version == self.PINNED_VERSION
-        return {"instagram_user_id": "1784"}
-
-    def run(self, slug, arguments, *, connected_account_id, user_id):
+    def _enter(self, name):
         with self.lock:
             self.running += 1
             self.max_running = max(self.max_running, self.running)
+        time.sleep(0.001)
+        self.calls.append(name)
+        if self.errors.get(name):
+            error = self.errors[name].pop(0)
+            self._exit()
+            raise error
+
+    def _exit(self):
+        with self.lock:
+            self.running -= 1
+
+    def workspace_id(self):
+        if not self.signed_in:
+            raise PostingServerError(401, "sign_in_required", "Sign in to Growth Factory cloud to post.")
+        return WORKSPACE
+
+    def upload(self, path, content_type, *, filename=None):
+        self._enter("upload")
         try:
-            time.sleep(0.001)
-            self.calls.append((slug, dict(arguments), connected_account_id, user_id))
-            if self.errors.get(slug):
-                raise self.errors[slug].pop(0)
-            if slug == QUOTA:
-                return {"data": [{"quota_usage": self.quota[0], "config": {"quota_total": self.quota[1]}}]}
-            if slug == CREATE:
-                assert self._pending("create_container"), "durable record must precede the write"
-                return {"id": "900" + str(len(self.calls))}
-            if slug == NODES:
-                status = self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
-                return {arguments["object_ids"][0]: {"id": arguments["object_ids"][0], "status_code": status}}
-            if slug == PUBLISH:
-                assert self._pending("publish"), "durable record must precede the write"
-                assert arguments["max_wait_seconds"] == 0
-                return {"id": "1799" + arguments["creation_id"]}
-            if slug == MEDIA:
-                row = next(r for r in self.store.all("publish_attempts") if r["media_id"] == arguments["ig_media_id"])
-                return {"id": arguments["ig_media_id"], "caption": self.caption or row["caption"],
-                        "permalink": "https://www.instagram.com/reel/ABC123/?utm=x"}
-            raise AssertionError(slug)
+            if content_type == "video/mp4":
+                assert self._pending("upload"), "durable record must precede the upload"
+            self.uploads.append((filename, content_type, path.read_bytes()))
+            return f"https://media.example/{len(self.uploads)}/{filename}"
         finally:
-            with self.lock:
-                self.running -= 1
+            self._exit()
 
-    def media_identity(self, account_id, user_id, media_id, *, version, instagram_user_id):
-        self.calls.append(("media_identity", media_id, account_id, user_id))
-        return {"published_at": (datetime.now(UTC) - timedelta(seconds=5)).isoformat(),
-                "owner_id_namespace": "professional_user_id"}
+    def creator_info(self, account_id):
+        self.calls.append("creator_info")
+        return self.creator
 
-    def list_media(self, account_id, user_id, *, instagram_user_id, limit, version):
-        self.calls.append(("list_media", account_id))
-        return {"items": self.recent}
+    def _entry_status(self):
+        return self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
 
-    def slugs(self):
-        return [c[0] for c in self.calls]
+    def _apply(self, post):
+        status = self._entry_status()
+        entry = post["platforms"][0]
+        entry["status"] = status
+        if status == "published":
+            entry.update(platformPostId="1799" + post["id"][:6], url=f"https://example.social/p/{post['id'][:8]}")
+            post.update(status="published", publishedAt="2026-11-19T10:00:00+00:00")
+        elif status == "failed":
+            entry.update(error="Media processing failed: video too short", errorCategory="user_content",
+                         errorSource="user")
+            post["status"] = "failed"
+        return post
+
+    def create_post(self, payload, idempotency_key):
+        self._enter("create_post")
+        try:
+            assert self._pending("create_post"), "durable record must precede the post"
+            if idempotency_key in self.keys:
+                return {"replayed": True, "post": self.posts[self.keys[idempotency_key]]}
+            identifier = f"{len(self.posts) + 1:024x}"
+            target = payload["platforms"][0]
+            post = {"id": identifier, "status": "publishing", "externalId": payload["externalId"],
+                    "publishedAt": None, "scheduledFor": None,
+                    "platforms": [{"platform": None, "accountId": target["accountId"], "status": "pending"}]}
+            self.posts[identifier], self.keys[idempotency_key] = post, identifier
+            self.created.append((payload, idempotency_key))
+            self._apply(post)
+            if self.create_then_fail:
+                error, self.create_then_fail = self.create_then_fail, None
+                raise error
+            return {"replayed": False, "post": post}
+        finally:
+            self._exit()
+
+    def get_post(self, post_id):
+        self._enter("get_post")
+        try:
+            post = self.posts[post_id]
+            if post["platforms"][0]["status"] not in {"published", "failed"}:
+                self._apply(post)
+            return {"post": post, "events": []}
+        finally:
+            self._exit()
+
+    def find_posts(self, external_id):
+        self.calls.append("find_posts")
+        return [p for p in self.posts.values() if p["externalId"] == external_id]
 
 
 class FakeLearning:
@@ -168,22 +177,23 @@ def world(tmp_path):
         store.put("clips", {"id": identifier, "path": f"clips/{identifier}.mp4", "sha256": sha, "approved": True,
                             "approved_at": "2026-11-14T00:00:00+00:00", "campaign_id": "camp-1",
                             "profile_id": "prof-1", "hook": "A hook", "caption": "Watch this",
-                            "revision_number": 2, **extra})
+                            "revision_number": 2, "duration": 30.0, **extra})
         return store.get("clips", identifier)
 
-    def add_account(identifier="acct-1", **extra):
-        store.put("connected_accounts", {"id": identifier, "profile_id": "prof-1", "user_id": "gf-user",
-                                         "provider": "composio", "toolkit": "instagram", "status": "active",
-                                         "instagram_user_id": "1784", "verified_at": "2026-11-14T00:00:00+00:00",
+    def add_account(identifier="acct-1", platform="instagram", **extra):
+        store.put("connected_accounts", {"id": identifier, "profile_id": "prof-1", "provider": "zernio",
+                                         "platform": platform, "zernio_account_id": zernio_id(identifier),
+                                         "status": "active", "publishing_permitted": True,
+                                         "verified_at": "2026-11-14T00:00:00+00:00",
                                          "display_name": identifier, **extra})
 
-    state = {"client": FakeClient(store), "storage": FakeStorage(store), "learning": FakeLearning(store)}
+    state = {"server": FakeServer(store), "learning": FakeLearning(store), "enabled": True}
 
     def make(gate=passing_gate, start_worker=False, **options):
-        return Publisher(store, root=tmp_path, client_factory=lambda: state["client"],
-                         storage_factory=lambda: state["storage"], learning=state["learning"],
-                         campaigns=FakeCampaigns(store), gate=gate, sleep=lambda _: None,
-                         start_worker=start_worker, poll_interval=0, max_polls=5, item_gap=0, **options)
+        return Publisher(store, root=tmp_path, server_factory=lambda: state["server"], learning=state["learning"],
+                         campaigns=FakeCampaigns(store), gate=gate, enabled=lambda: state["enabled"],
+                         sleep=lambda _: None, start_worker=start_worker, poll_interval=0, max_polls=5,
+                         item_gap=0, **options)
 
     return {"store": store, "add_clip": add_clip, "add_account": add_account, "make": make, "state": state}
 
@@ -200,158 +210,161 @@ def test_happy_path_writes_durable_records_before_each_effect_and_maps(world):
     clip = world["add_clip"]()
     world["add_account"]()
     publisher, attempt = post(world)
-    assert attempt["state"] == "created" and attempt["active"] is True
+    assert attempt["state"] == "created" and attempt["active"] is True and attempt["provider"] == "zernio"
+    assert attempt["external_id"] == f"gf-{attempt['id']}" and attempt["idempotency_key"]
     publisher.run(attempt["id"])
     row = publisher.get(attempt["id"])
     assert row["state"] == "mapped" and row["active"] is False and row["pending_effect"] is None
-    assert row["permalink"] == "https://www.instagram.com/reel/ABC123/"
+    assert row["permalink"].startswith("https://example.social/p/") and row["platform_post_id"].startswith("1799")
     states = [h["state"] for h in row["history"]]
-    for expected in ("uploading", "uploaded", "container_created", "container_ready", "published", "mapped"):
+    for expected in ("uploading", "uploaded", "submitted", "published", "mapped"):
         assert expected in states
-    assert [h["pending_effect"] for h in row["history"]].count("publish") == 1
-    client = world["state"]["client"]
-    assert client.slugs().count(PUBLISH) == 1 and client.slugs().count(CREATE) == 1
-    create = next(c for c in client.calls if c[0] == CREATE)
-    assert create[1]["video_url"] == row["video_url"] and create[1]["media_type"] == "REELS"
-    assert create[2:] == ("acct-1", "gf-user")  # exact connected account + user on every call
+    assert [h["pending_effect"] for h in row["history"]].count("create_post") == 1
+    server = world["state"]["server"]
+    assert len(server.created) == 1
+    payload, key = server.created[0]
+    assert key == row["idempotency_key"] and payload["publishNow"] is True
+    assert payload["externalId"] == row["external_id"] and payload["content"] == "Watch this #reel"
+    assert payload["mediaItems"] == [{"url": row["video_url"], "type": "video"}]
+    target = payload["platforms"][0]
+    assert target["accountId"] == zernio_id("acct-1")
+    assert target["platformSpecificData"] == {"shareToFeed": True, "thumbOffset": 0}
+    assert server.uploads[0][2] == (world["store"].get("clips", "clip-1") and b"approved bytes clip-1")
     registered = world["state"]["learning"].registered[0]
-    assert registered["sha256"] == clip["sha256"] and registered["media_id"] == row["media_id"]
-    publication = world["store"].get("learning_publications", "pub-" + row["media_id"])
-    assert publication["mapping_source"] == "app_published"
-    assert publication["publish_attempt_id"] == row["id"]
-    assert world["state"]["storage"].deleted == [row["storage_object"]]
+    assert registered["sha256"] == clip["sha256"] and registered["media_id"] == row["zernio_post_id"]
+    publication = world["store"].get("learning_publications", "pub-" + row["zernio_post_id"])
+    assert publication["mapping_source"] == "app_published" and publication["publish_attempt_id"] == row["id"]
+    assert publication["provider"] == "zernio" and publication["platform"] == "instagram"
+    assert publication["platform_post_id"] == row["platform_post_id"]
 
 
-def test_crash_during_publish_is_unknown_and_never_retried_before_reconcile(world):
+def test_crash_while_posting_is_unknown_and_never_resent_before_reconcile(world):
     world["add_clip"]()
     world["add_account"]()
     _, attempt = post(world)
     store = world["store"]
-    # Simulate a process crash after the durable "publish" marker but before the response.
-    store.put("publish_attempts", {**store.get("publish_attempts", attempt["id"]), "state": "container_ready",
-                                   "pending_effect": "publish", "container_id": "555", "video_url": "https://x/y.mp4",
-                                   "external_started_at": datetime.now(UTC).isoformat()})
-    restarted = world["make"]()
-    row = restarted.get(attempt["id"])
-    assert row["state"] == "unknown" and row["previous_state"] == "container_ready" and not row["active"]
+    # Simulate a process crash after the durable "create_post" marker but before any reply.
+    store.patch("publish_attempts", attempt["id"], state="uploaded", video_url="https://media.example/v.mp4",
+                pending_effect="create_post", active=True)
+    publisher = world["make"]()
+    row = publisher.get(attempt["id"])
+    assert row["state"] == "unknown" and row["previous_state"] == "uploaded"
     with pytest.raises(PublishError) as error:
-        restarted.resume(attempt["id"])
+        publisher.resume(attempt["id"])
     assert error.value.code == "needs_reconcile"
-    client = world["state"]["client"]
-    client.statuses = ["FINISHED"]
-    row = restarted.reconcile(attempt["id"])
-    assert row["state"] == "container_ready" and row["pending_effect"] is None
-    assert PUBLISH not in client.slugs()  # reconcile only reads
-    restarted.resume(attempt["id"])
-    restarted.run(attempt["id"])
-    assert restarted.get(attempt["id"])["state"] == "mapped"
-    assert client.slugs().count(PUBLISH) == 1
-
-
-def test_reconcile_adopts_post_that_was_published_before_crash(world):
-    world["add_clip"]()
-    world["add_account"]()
-    publisher, attempt = post(world, caption="Exact caption")
-    store = world["store"]
-    started = datetime.now(UTC) - timedelta(minutes=1)
-    store.put("publish_attempts", {**store.get("publish_attempts", attempt["id"]), "state": "unknown",
-                                   "pending_effect": "publish", "active": False, "container_id": "555",
-                                   "external_started_at": started.isoformat()})
-    client = world["state"]["client"]
-    client.statuses = ["PUBLISHED"]
-    client.recent = [
-        {"media_id": "111", "media_type": "VIDEO", "caption_excerpt": "Exact caption",
-         "published_at": (started - timedelta(hours=3)).isoformat()},  # too old
-        {"media_id": "222", "media_type": "VIDEO", "caption_excerpt": "Exact caption",
-         "published_at": datetime.now(UTC).isoformat()},
-    ]
+    publisher.run(attempt["id"])  # a stray run does nothing for unknown
+    assert world["state"]["server"].created == []
+    # Nothing was created upstream: reconcile reads, finds none, and allows a resend with the same key.
     row = publisher.reconcile(attempt["id"])
-    assert row["state"] == "published" and row["media_id"] == "222"
+    assert row["state"] == "uploaded" and row["pending_effect"] is None
     publisher.resume(attempt["id"])
     publisher.run(attempt["id"])
     assert publisher.get(attempt["id"])["state"] == "mapped"
-    assert PUBLISH not in client.slugs() and CREATE not in client.slugs()
+    assert [k for _, k in world["state"]["server"].created] == [row["idempotency_key"]]
 
 
-def test_publish_timeout_becomes_unknown_without_blind_retry(world):
+def test_uncertain_create_reconciles_to_the_post_that_was_made(world):
     world["add_clip"]()
     world["add_account"]()
-    world["state"]["client"].errors = {PUBLISH: [ComposioError("timed out", code="timeout")]}
+    server = world["state"]["server"]
+    server.statuses = ["published"]
+    server.create_then_fail = PostingServerError(504, "timeout", "The posting server timed out.", uncertain=True)
     publisher, attempt = post(world)
     publisher.run(attempt["id"])
     row = publisher.get(attempt["id"])
-    assert row["state"] == "unknown" and row["pending_effect"] == "publish"
-    assert world["state"]["client"].slugs().count(PUBLISH) == 1
+    assert row["state"] == "unknown" and row["pending_effect"] == "create_post" and row["error"]["code"] == "timeout"
     with pytest.raises(PublishError):
         publisher.resume(attempt["id"])
-    with pytest.raises(PublishError) as error:
-        post(world, publisher)  # a fresh post for the same clip/account is refused too
-    assert error.value.code == "attempt_exists"
+    row = publisher.reconcile(attempt["id"])
+    assert row["state"] == "mapped" and row["zernio_post_id"] and len(server.created) == 1
+    assert "find_posts" in server.calls
 
 
-def test_unknown_container_creation_reconciles_back_to_uploaded(world):
+def test_server_5xx_after_send_is_unknown_not_failed(world):
     world["add_clip"]()
     world["add_account"]()
-    world["state"]["client"].errors = {CREATE: [ComposioError("network", code="network")]}
+    server = world["state"]["server"]
+    server.errors["create_post"] = [PostingServerError(502, "zernio_unavailable", "Zernio had a problem.",
+                                                       uncertain=True)]
     publisher, attempt = post(world)
     publisher.run(attempt["id"])
     assert publisher.get(attempt["id"])["state"] == "unknown"
-    row = publisher.reconcile(attempt["id"])
-    assert row["state"] == "uploaded" and "list_media" in world["state"]["client"].slugs()
-    publisher.resume(attempt["id"])
-    publisher.run(attempt["id"])
-    assert publisher.get(attempt["id"])["state"] == "mapped"
+    assert publisher.reconcile(attempt["id"])["state"] == "uploaded"
 
 
-def test_unknown_upload_reconciles_by_public_head(world):
+def test_in_progress_replay_waits_for_reconcile(world):
     world["add_clip"]()
     world["add_account"]()
-    world["state"]["storage"].fail = PublishStorageError("timed out", "timeout", 504)
-    publisher, attempt = post(world)
-    publisher.run(attempt["id"])
-    assert publisher.get(attempt["id"])["state"] == "unknown"
-    row = publisher.reconcile(attempt["id"])
-    assert row["state"] == "created"  # nothing public: safe to upload again
-    world["state"]["storage"].fail = None
-    publisher.resume(attempt["id"])
-    publisher.run(attempt["id"])
-    assert publisher.get(attempt["id"])["state"] == "mapped"
-
-
-def test_refused_container_and_processing_error_fail_definitely(world):
-    world["add_clip"]()
-    world["add_account"]()
-    world["state"]["client"].errors = {CREATE: [ComposioError("no", code="tool_failed")]}
+    world["state"]["server"].errors["create_post"] = [
+        PostingServerError(409, "in_progress", "This post is still being created.")]
     publisher, attempt = post(world)
     publisher.run(attempt["id"])
     row = publisher.get(attempt["id"])
-    assert row["state"] == "failed" and "instagram_business_content_publish" in row["error"]["message"]
-    # A definite failure allows a new attempt; this one hits a processing ERROR.
-    world["state"]["client"].statuses = ["ERROR"]
-    _, second = post(world, publisher)
+    assert row["state"] == "unknown" and row["pending_effect"] == "create_post"
+
+
+def test_definite_refusal_fails_and_retryable_refusal_stays_resumable(world):
+    world["add_clip"]()
+    world["add_clip"]("clip-2")
+    world["add_account"]()
+    server = world["state"]["server"]
+    server.errors["create_post"] = [PostingServerError(403, "media_not_allowed", "Attach only your media."),
+                                    PostingServerError(402, "posting_plan_limit", "Plan limit.")]
+    publisher, first = post(world)
+    publisher.run(first["id"])
+    row = publisher.get(first["id"])
+    assert row["state"] == "failed" and row["error"]["code"] == "media_not_allowed" and row["pending_effect"] is None
+    _, second = post(world, publisher, clip_id="clip-2")
     publisher.run(second["id"])
-    assert publisher.get(second["id"])["state"] == "failed"
-    assert PUBLISH not in world["state"]["client"].slugs()
+    row = publisher.get(second["id"])
+    assert row["state"] == "uploaded" and row["error"]["code"] == "posting_plan_limit"
+    publisher.resume(second["id"])
+    publisher.run(second["id"])
+    assert publisher.get(second["id"])["state"] == "mapped"
 
 
-def test_quota_exhausted_stops_before_any_container(world):
+def test_platform_failure_is_definite_with_its_category(world):
     world["add_clip"]()
     world["add_account"]()
-    world["state"]["client"].quota = (50, 50)
-    publisher, attempt = post(world)
-    publisher.run(attempt["id"])
-    assert publisher.get(attempt["id"])["error"]["code"] == "quota"
-    assert CREATE not in world["state"]["client"].slugs()
-
-
-def test_caption_readback_mismatch_is_flagged(world):
-    world["add_clip"]()
-    world["add_account"]()
-    world["state"]["client"].caption = "Watch this %23reel"
+    world["state"]["server"].statuses = ["processing", "failed"]
     publisher, attempt = post(world)
     publisher.run(attempt["id"])
     row = publisher.get(attempt["id"])
-    assert row["state"] == "mapped" and "caption_readback_mismatch" in row["warnings"]
+    assert row["state"] == "failed" and row["error"]["code"] == "user_content"
+    assert "too short" in row["error"]["message"] and row["zernio_post_id"]
+
+
+def test_still_publishing_after_polls_stays_submitted_until_checked(world):
+    world["add_clip"]()
+    world["add_account"]()
+    server = world["state"]["server"]
+    server.statuses = ["processing"]
+    publisher, attempt = post(world)
+    publisher.run(attempt["id"])
+    row = publisher.get(attempt["id"])
+    assert row["state"] == "submitted" and server.calls.count("get_post") == 5
+    server.statuses = ["published"]
+    assert publisher.reconcile(attempt["id"])["state"] == "mapped"
+    assert len(server.created) == 1
+
+
+def test_upload_failure_is_redone_not_unknown(world):
+    world["add_clip"]()
+    world["add_account"]()
+    server = world["state"]["server"]
+    server.errors["upload"] = [PostingServerError(502, "upload_failed", "Uploading the video failed.")]
+    publisher, attempt = post(world)
+    publisher.run(attempt["id"])
+    row = publisher.get(attempt["id"])
+    assert row["state"] == "created" and row["error"]["code"] == "upload_failed" and server.created == []
+    publisher.resume(attempt["id"])
+    publisher.run(attempt["id"])
+    assert publisher.get(attempt["id"])["state"] == "mapped"
+    # An upload in flight at a crash is simply redone.
+    world["add_clip"]("clip-2")
+    _, other = post(world, publisher, clip_id="clip-2")
+    world["store"].patch("publish_attempts", other["id"], state="uploading", pending_effect="upload", active=True)
+    assert world["make"]().get(other["id"])["state"] == "created"
 
 
 def test_no_learning_policy_leaves_published_awaiting_policy(world):
@@ -366,34 +379,42 @@ def test_no_learning_policy_leaves_published_awaiting_policy(world):
     publisher.resume(attempt["id"])
     publisher.run(attempt["id"])
     assert publisher.get(attempt["id"])["state"] == "mapped"
-    assert world["state"]["client"].slugs().count(PUBLISH) == 1
+    assert len(world["state"]["server"].created) == 1
 
 
-@pytest.mark.parametrize("case", ["archived", "unapproved", "changed", "unbound", "unverified", "legacy",
-                                  "unresolved_review"])
+@pytest.mark.parametrize("case", ["archived", "unapproved", "changed", "unbound", "inactive", "not_permitted",
+                                  "composio", "legacy", "unresolved_review"])
 def test_rejections(world, case):
     extra = {"unapproved": {"approved": False}, "legacy": {"publish_attempt": {"id": "j"}},
              "unresolved_review": {"team_review_status": "fail"}}.get(case, {})
     world["add_clip"](**extra)
-    world["add_account"](**({"profile_id": "other"} if case == "unbound" else
-                            {"verified_at": None} if case == "unverified" else {}))
+    world["add_account"](**{"unbound": {"profile_id": "other"}, "inactive": {"status": "disconnected"},
+                            "not_permitted": {"publishing_permitted": False},
+                            "composio": {"provider": "composio", "toolkit": "instagram"}}.get(case, {}))
     if case == "archived":
         world["store"].put("campaigns", {"id": "camp-1", "archived_at": "2026-11-14T00:00:00+00:00"})
     kwargs = {"sha256": "0" * 64} if case == "changed" else {}
     with pytest.raises(PublishError) as error:
         post(world, **kwargs)
-    assert error.value.status in {409, 422}
+    assert error.value.status in {403, 409, 422}
+    if case == "not_permitted":
+        assert error.value.code == "account_not_permitted"
     assert world["store"].all("publish_attempts") == []
 
 
-def test_sign_in_required_and_quality_hold_override(world):
+def test_publishing_disabled_sign_in_and_quality_hold_override(world):
     world["add_clip"]()
     world["add_account"]()
-    world["state"]["storage"].signed_in = False
+    world["state"]["enabled"] = False
+    with pytest.raises(PublishError) as error:
+        post(world)
+    assert error.value.code == "publishing_disabled" and error.value.status == 403
+    world["state"]["enabled"] = True
+    world["state"]["server"].signed_in = False
     with pytest.raises(PublishError) as error:
         post(world)
     assert error.value.code == "sign_in_required"
-    world["state"]["storage"].signed_in = True
+    world["state"]["server"].signed_in = True
     publisher = world["make"](gate=holding_gate)
     with pytest.raises(PublishError) as error:
         post(world, publisher)
@@ -404,7 +425,7 @@ def test_sign_in_required_and_quality_hold_override(world):
     assert attempt["override_reason"].startswith("Captions") and attempt["quality"]["verdict"] == "hold"
 
 
-def test_attempt_stops_if_approval_changes_before_external_effects(world):
+def test_attempt_stops_if_approval_or_setting_changes_before_external_effects(world):
     world["add_clip"]()
     world["add_account"]()
     publisher, attempt = post(world)
@@ -412,7 +433,15 @@ def test_attempt_stops_if_approval_changes_before_external_effects(world):
     publisher.run(attempt["id"])
     row = publisher.get(attempt["id"])
     assert row["state"] == "created" and row["error"]["code"] == "not_approved"
-    assert world["state"]["storage"].uploads == [] and world["state"]["client"].calls == []
+    world["store"].patch("clips", "clip-1", approved=True)
+    world["state"]["enabled"] = False
+    publisher.run(attempt["id"])
+    assert publisher.get(attempt["id"])["error"]["code"] == "publishing_disabled"
+    world["store"].patch("connected_accounts", "acct-1", publishing_permitted=False)
+    world["state"]["enabled"] = True
+    publisher.run(attempt["id"])
+    assert publisher.get(attempt["id"])["error"]["code"] == "account_not_permitted"
+    assert world["state"]["server"].calls == []
 
 
 def test_batch_is_validated_all_or_nothing_and_runs_sequentially(world):
@@ -420,11 +449,15 @@ def test_batch_is_validated_all_or_nothing_and_runs_sequentially(world):
     world["add_clip"]("clip-2")
     world["add_clip"]("clip-3", campaign_id="other")
     world["add_account"]("acct-1")
-    world["add_account"]("acct-2")
+    world["add_account"]("acct-2", platform="youtube")
+    world["add_account"]("acct-3", platform="tiktok")
     publisher = world["make"](start_worker=True)
     with pytest.raises(PublishError) as error:
         publisher.request_batch("camp-1", ["acct-1", "acct-2"], ["clip-1", "clip-3"])
     assert error.value.code == "batch_invalid" and world["store"].all("publish_attempts") == []
+    with pytest.raises(PublishError) as error:
+        publisher.request_batch("camp-1", ["acct-1", "acct-3"], ["clip-1"])
+    assert error.value.details["problems"][0]["code"] == "tiktok_consent_required"
     result = publisher.request_batch("camp-1", ["acct-1", "acct-2"], ["clip-1", "clip-2"],
                                      captions={"clip-2": "Second caption"})
     assert [(a["clip_id"], a["account_id"]) for a in result["attempts"]] == [
@@ -436,62 +469,94 @@ def test_batch_is_validated_all_or_nothing_and_runs_sequentially(world):
     publisher.close()
     rows = world["store"].all("publish_attempts")
     assert {r["state"] for r in rows} == {"mapped"}
-    client = world["state"]["client"]
-    assert client.max_running == 1  # one provider call at a time
-    publishes = [c for c in client.calls if c[0] == PUBLISH]
-    assert len(publishes) == 4
-    order = [c[2] for c in client.calls if c[0] == CREATE]
-    assert order == ["acct-1", "acct-2", "acct-1", "acct-2"]
-    assert any(c[1].get("caption") == "Second caption" for c in client.calls if c[0] == CREATE)
+    server = world["state"]["server"]
+    assert server.max_running == 1  # one server call at a time
+    order = [p["platforms"][0]["accountId"] for p, _ in server.created]
+    assert order == [zernio_id("acct-1"), zernio_id("acct-2")] * 2
+    assert any(p["content"] == "Second caption" for p, _ in server.created)
+    youtube = next(p for p, _ in server.created if p["platforms"][0]["accountId"] == zernio_id("acct-2"))
+    assert youtube["platforms"][0]["platformSpecificData"] == {"title": "A hook", "visibility": "public"}
 
 
-# ---------------------------------------------------------------- permitted-tool separation
+# ---------------------------------------------------------------- platforms
 
-def test_read_adapter_allowlist_is_unchanged_and_refuses_publish_tools():
-    assert ComposioClient.READ_TOOLS == {"INSTAGRAM_GET_USER_INFO", "INSTAGRAM_GET_IG_USER_MEDIA",
-                                         "INSTAGRAM_GET_IG_MEDIA", "INSTAGRAM_GET_IG_MEDIA_INSIGHTS"}
-    assert ComposioClient.PERMITTED_TOOLS == ComposioClient.READ_TOOLS
-    client = ComposioClient("key", transport=httpx.MockTransport(lambda r: pytest.fail("no network")))
-    for slug in (CREATE, PUBLISH, NODES, QUOTA):
-        with pytest.raises(ComposioError) as error:
-            client.tool_schema(slug)
-        assert error.value.code == "unsupported_tool"
-    assert ComposioPublishingClient.PUBLISH_TOOLS == {CREATE, PUBLISH, NODES, QUOTA}
-    publishing = ComposioPublishingClient("key", transport=httpx.MockTransport(lambda r: pytest.fail("no")))
-    with pytest.raises(ComposioError):
-        publishing.run("INSTAGRAM_DELETE_COMMENT", {}, connected_account_id="ca_1", user_id="u")
+def test_tiktok_requires_consent_and_creator_options(world):
+    world["add_clip"](craft={"cover": {"mode": "best_frame", "time": 2.0}})
+    world["add_account"](platform="tiktok")
+    for settings, code in ((None, "tiktok_consent_required"),
+                           ({**TIKTOK, "express_consent_given": False}, "tiktok_consent_required"),
+                           ({**TIKTOK, "allow_duet": None}, "tiktok_settings_required"),
+                           ({**TIKTOK, "privacy_level": "FOLLOWER_OF_CREATOR"}, "invalid_privacy_level"),
+                           ({**TIKTOK, "allow_stitch": True}, "tiktok_interaction_disabled")):
+        with pytest.raises(PublishError) as error:
+            post(world, package={"tiktok": settings})
+        assert error.value.code == code, settings
+    world["state"]["server"].creator = {**CREATOR, "creator": {"canPostMore": False}}
+    with pytest.raises(PublishError) as error:
+        post(world, package={"tiktok": TIKTOK})
+    assert error.value.code == "tiktok_cannot_post"
+    world["state"]["server"].creator = {**CREATOR, "postingLimits": {"maxVideoDurationSec": 15}}
+    with pytest.raises(PublishError) as error:
+        post(world, package={"tiktok": TIKTOK})
+    assert error.value.code == "too_long"
+    assert world["store"].all("publish_attempts") == []
+    world["state"]["server"].creator = CREATOR
+    publisher, attempt = post(world, package={"tiktok": TIKTOK})
+    assert attempt["package"]["tiktok"]["privacy_level"] == "PUBLIC_TO_EVERYONE"
+    publisher.run(attempt["id"])
+    payload, _ = world["state"]["server"].created[0]
+    assert payload["platforms"][0]["platformSpecificData"] == {
+        "privacy_level": "PUBLIC_TO_EVERYONE", "allow_comment": True, "allow_duet": False, "allow_stitch": False,
+        "content_preview_confirmed": True, "express_consent_given": True, "video_cover_timestamp_ms": 2000}
 
 
-def test_publishing_client_pins_version_and_exact_account():
-    seen = []
-    schema = {"type": "object", "required": ["ig_user_id", "creation_id"],
-              "properties": {"ig_user_id": {"type": "string"}, "creation_id": {"type": "string"},
-                             "max_wait_seconds": {"type": "integer"}}}
+def test_platform_caption_limits_titles_and_collaborators(world):
+    world["add_clip"](hook="H" * 140)
+    world["add_account"]("acct-x", platform="twitter")
+    world["add_account"]("acct-y", platform="youtube")
+    world["add_account"]("acct-i", platform="instagram")
+    with pytest.raises(PublishError) as error:
+        post(world, account="acct-x", caption="x" * 281)
+    assert error.value.code == "invalid_caption" and "280" in error.value.message
+    # Hashtag limits are Instagram's; other platforms do not apply them.
+    _, tweet = post(world, account="acct-x", caption=" ".join(f"#t{i}" for i in range(31))[:280])
+    assert tweet["state"] == "created"
+    with pytest.raises(PublishError) as error:
+        post(world, account="acct-y", package={"collaborators": ["friend"]})
+    assert error.value.code == "collaborators_unsupported"
+    _, video = post(world, account="acct-y", package={"youtube_visibility": "unlisted"})
+    assert video["package"]["youtube"] == {"title": "H" * 100, "visibility": "unlisted"}
+    publisher, reel = post(world, account="acct-i", package={"collaborators": ["friend.one"], "share_to_feed": False})
+    publisher.run(reel["id"])
+    payload = next(p for p, _ in world["state"]["server"].created
+               if p["platforms"][0]["accountId"] == zernio_id("acct-i"))
+    assert payload["platforms"][0]["platformSpecificData"] == {"shareToFeed": False, "thumbOffset": 0,
+                                                               "collaborators": ["friend.one"]}
 
-    def handler(request):
-        seen.append(request)
-        if request.url.path == f"/api/v3.1/tools/{PUBLISH}":
-            return httpx.Response(200, json={"slug": PUBLISH, "version": "20261112_00", "toolkit": {"slug": "instagram"},
-                                             "input_parameters": schema})
-        if request.url.path == "/api/v3/connected_accounts/ca_1":
-            return httpx.Response(200, json={"id": "ca_1", "user_id": "gf-user", "toolkit": {"slug": "instagram"},
-                                             "status": "ACTIVE", "auth_config": {"id": "ac_1"}})
-        if request.url.path == f"/api/v3.1/tools/execute/{PUBLISH}":
-            return httpx.Response(200, json={"successful": True, "data": {"id": "1799"}})
-        raise AssertionError(request.url)
 
-    client = ComposioPublishingClient("key", transport=httpx.MockTransport(handler))
-    data = client.run(PUBLISH, {"ig_user_id": "1784", "creation_id": "555", "max_wait_seconds": 0},
-                      connected_account_id="ca_1", user_id="gf-user")
-    assert data == {"id": "1799"}
-    assert seen[0].url.params["version"] == "20261112_00"
-    body = json.loads(seen[-1].content)
-    assert body["version"] == "20261112_00" and body["connected_account_id"] == "ca_1"
-    assert body["user_id"] == "gf-user"
-    with pytest.raises(ComposioError) as error:
-        client.run(PUBLISH, {"ig_user_id": "1784"}, connected_account_id="ca_1", user_id="gf-user")
-    assert error.value.code == "invalid_arguments"
+def test_legacy_composio_attempts_are_closed_or_flagged_on_start(world):
+    world["add_clip"]()
+    store = world["store"]
+    base = {"clip_id": "clip-1", "account_id": "ca_old", "campaign_id": "camp-1", "active": False,
+            "pending_effect": None, "history": []}
+    store.put("publish_attempts", {**base, "id": "old-created", "state": "uploaded"})
+    store.put("publish_attempts", {**base, "id": "old-container", "state": "container_ready"})
+    store.put("publish_attempts", {**base, "id": "old-mapped", "state": "mapped"})
+    publisher = world["make"]()
+    assert publisher.get("old-created")["state"] == "cancelled"
+    container = publisher.get("old-container")
+    assert container["state"] == "container_ready" and container["legacy"] is True
+    assert "legacy" not in publisher.get("old-mapped")
+    for action in (publisher.resume, publisher.reconcile):
+        with pytest.raises(PublishError) as error:
+            action("old-container")
+        assert error.value.code == "legacy_attempt"
+    publisher.run("old-container")
+    assert publisher.get("old-container")["state"] == "container_ready"
+    assert world["state"]["server"].calls == []
 
+
+# ---------------------------------------------------------------- source attribution (quality gate)
 
 def attribution_gate(clip, path, expected_sha256=None, source_video=None):
     """Real production gate with only local file probing stubbed for tiny fixture bytes."""
@@ -523,7 +588,7 @@ def test_submitted_caption_unknown_attribution_blocks_before_any_external_effect
     assert "Ana points out" in str(error.value)
     assert error.value.details["report"]["source_attribution"]["editorial_hold"]
     assert world["store"].all("publish_attempts") == []
-    assert world["state"]["client"].calls == [] and world["state"]["storage"].uploads == []
+    assert world["state"]["server"].calls == []
     # An explicit, recorded override is still required and remains visible.
     _, attempt = post(world, publisher, caption="Ana points out that the sourcing is vague.",
                       override_reason="I independently verified the speaker and accept this attribution.")
@@ -544,7 +609,7 @@ def test_stored_source_supports_reported_attribution_and_source_change_invalidat
     assert changed["source_attribution"]["speaker_context"] == "unknown"
     with pytest.raises(PublishError, match="Ana points out"):
         post(world, publisher, caption=submitted["caption"])
-    assert world["state"]["client"].calls == []
+    assert world["state"]["server"].calls == []
 
 
 def test_queued_post_rechecks_exact_caption_against_changed_source_before_upload(world):
@@ -555,14 +620,4 @@ def test_queued_post_rechecks_exact_caption_against_changed_source_before_upload
     world["store"].put("videos", video)
     publisher.run(attempt["id"])
     assert publisher.get(attempt["id"])["error"]["code"] == "quality_hold"
-    assert world["state"]["storage"].uploads == [] and world["state"]["client"].calls == []
-
-
-def test_container_status_reads_the_live_composio_shape():
-    from clip_factory.publisher import _container_status
-
-    live = {"data": {"objects": {"18092637188505740": {"id": "18092637188505740", "status": "FINISHED",
-                                                       "status_code": "FINISHED"}}}}
-    assert _container_status(live, "18092637188505740") == "FINISHED"
-    assert _container_status(live["data"], "18092637188505740") == "FINISHED"
-    assert _container_status({"data": {"objects": {}}}, "18092637188505740") is None
+    assert world["state"]["server"].calls == []
