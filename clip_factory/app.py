@@ -450,7 +450,7 @@ def create_app(data_dir: Path | None = None, token: str | None = None) -> FastAP
 
             return None if groq_configured() else {
                 "code": "cloud_speech_unavailable", "scope": "speech", "action": None,
-                "message": "Cloud speech needs your Groq key. Choose local speech or configure the key in Brand profile → AI model.",
+                "message": "Cloud speech needs your Groq key. Choose local speech or configure the key in Settings → Models.",
                 "tab": "AI model", "steps": [], "download_gb": 0,
             }
         return speech.check(models())
