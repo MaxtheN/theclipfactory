@@ -474,7 +474,7 @@ def test_batch_is_validated_all_or_nothing_and_runs_sequentially(world):
     order = [p["platforms"][0]["accountId"] for p, _ in server.created]
     assert order == [zernio_id("acct-1"), zernio_id("acct-2")] * 2
     assert any(p["content"] == "Second caption" for p, _ in server.created)
-    youtube = [p for p, _ in server.created if p["platforms"][0]["accountId"] == zernio_id("acct-2")][0]
+    youtube = next(p for p, _ in server.created if p["platforms"][0]["accountId"] == zernio_id("acct-2"))
     assert youtube["platforms"][0]["platformSpecificData"] == {"title": "A hook", "visibility": "public"}
 
 
@@ -528,8 +528,8 @@ def test_platform_caption_limits_titles_and_collaborators(world):
     assert video["package"]["youtube"] == {"title": "H" * 100, "visibility": "unlisted"}
     publisher, reel = post(world, account="acct-i", package={"collaborators": ["friend.one"], "share_to_feed": False})
     publisher.run(reel["id"])
-    payload = [p for p, _ in world["state"]["server"].created
-               if p["platforms"][0]["accountId"] == zernio_id("acct-i")][0]
+    payload = next(p for p, _ in world["state"]["server"].created
+               if p["platforms"][0]["accountId"] == zernio_id("acct-i"))
     assert payload["platforms"][0]["platformSpecificData"] == {"shareToFeed": False, "thumbOffset": 0,
                                                                "collaborators": ["friend.one"]}
 
