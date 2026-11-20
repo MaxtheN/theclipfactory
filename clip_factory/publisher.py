@@ -59,7 +59,14 @@ class PublishError(Exception):
         self.status, self.message, self.code, self.details = status, message, code, details
 
 
+PLAN_CODES = {"plan_required", "plan_limit", "plan_over_limit"}
+
+
 def _from_server(error: PostingServerError) -> PublishError:
+    if error.status == 402 and error.code in PLAN_CODES:
+        # The posting server's own Plan check (it holds even for a modified app): an Upgrade Prompt.
+        limit = error.details.get("limit") or ("posting" if error.code == "plan_required" else "connected_accounts")
+        return PublishError(402, error.message, "plan_limit", {**error.details, "limit": limit})
     # A cloud sign-in problem is a conflict on the local API: 401 there means the local session token.
     status = 409 if error.status == 401 else error.status if 400 <= error.status < 600 else 502
     return PublishError(status, error.message, error.code)

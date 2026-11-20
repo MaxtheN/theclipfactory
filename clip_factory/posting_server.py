@@ -33,10 +33,11 @@ class PostingServerError(Exception):
     """Credential-safe: carries only the server's short code and message, never tokens or bodies."""
 
     def __init__(self, status: int, code: str, message: str, *, uncertain: bool = False,
-                 retry_after: str | None = None):
+                 retry_after: str | None = None, details: dict | None = None):
         super().__init__(message)
         self.status, self.code, self.message = status, code, message
         self.uncertain, self.retry_after = uncertain, retry_after
+        self.details = details or {}
 
 
 def _error(response: httpx.Response, *, write: bool) -> PostingServerError:
@@ -52,8 +53,12 @@ def _error(response: httpx.Response, *, write: bool) -> PostingServerError:
     # A 5xx after a write was sent may mean the post exists upstream (e.g. Zernio created it, then the
     # server failed to record it). Only a read can tell.
     uncertain = write and status >= 500
+    # Plan refusals (402) name the limit and usage for the Upgrade Prompt.
+    details = {key: detail[key] for key in ("limit", "plan") if isinstance(detail.get(key), str)}
+    details.update({key: detail[key] for key in ("usage", "max")
+                    if isinstance(detail.get(key), int) and not isinstance(detail.get(key), bool)})
     return PostingServerError(status, code, message[:500], uncertain=uncertain,
-                              retry_after=response.headers.get("Retry-After"))
+                              retry_after=response.headers.get("Retry-After"), details=details)
 
 
 class PostingServerClient:

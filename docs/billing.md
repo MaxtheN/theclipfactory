@@ -51,8 +51,43 @@ total passes 10, and raise the Pro price or lower its account limit if early cus
 - Cancelling in the portal sets `cancel_at_period_end`; the plan stays until Stripe ends the subscription.
 
 The desktop app caches the entitlement and uses it for up to 7 days offline, then falls back to Free until it can
-reach the cloud. Signed out is Free. Downgrading never deletes work: extra brands become read-only for new runs, extra
-connected accounts stay connected but posting is held until they fit the plan.
+reach the cloud. Signed out is Free. Downgrading never deletes work: every brand, campaign, clip and result stays
+available and only creating more is blocked; extra connected accounts stay connected but posting (including scheduled
+posts) is held until they fit the plan.
+
+## In the desktop engine
+
+`clip_factory/billing.py` (tests: `tests/test_billing.py`):
+
+- **Entitlement.** `EntitlementService` asks `GET /entitlement` with the signed-in session and caches the answer in
+  SQLite (kind `billing`, id `entitlement`, with the owner's user id and `confirmed_at`). It is fresh for 10 minutes;
+  opening Checkout or the portal marks it stale so the next check asks again. If the cloud cannot be reached the cached
+  plan holds until 7 days after `confirmed_at` (state `offline`), then Free applies (state `expired`) until a check
+  succeeds. A failed check backs off for 60 seconds so an offline app never waits on the network for every request.
+  Signed out, an expired session, or a build without a cloud project: Free (`signed_out` / `not_configured`).
+- **Usage.** Brands = brand profiles; clips this month = clip records created since the first of the calendar month in
+  the machine's time zone (simulated `sim-` clips excluded); connected accounts = Zernio accounts not disconnected.
+- **Plan Limits.** A middleware (registered inside the local session check) answers gated `POST` routes with **402**:
+  creating a brand (`/api/profiles`); starting a production run (campaign `render`/`produce`, video
+  `produce`/`team`/`render`/`baseline`, growth A/B and recut, use a reference); starting a factory builder build;
+  connecting a posting account; posting, scheduling, batch posting and resuming a post. Exports, results, Learning
+  Loop tracking, demo and simulation routes, listing and disconnecting are never gated. A run that is already going
+  finishes and keeps every clip, even past the allowance.
+- **402 body.** `{"detail": "<message>", "error": {"code": "plan_limit", "limit", "usage", "max", "plan", "message"}}`
+  with `limit` one of `brands`, `clips_per_month`, `posting`, `connected_accounts`, `factory_builder`. The posting
+  server's own refusals (`plan_required`, `plan_limit`, `plan_over_limit`) are returned in the same shape.
+- **Scheduled posts.** While the plan does not allow posting, waiting schedules stay `scheduled` with
+  `held_code: "plan_limit"` and a note naming the limit; they never post and "Post now" answers 402. When the plan
+  allows posting again the hold is lifted; a time that passed during the hold becomes overdue and waits for a click.
+- **Routes.** `GET /api/billing` -> `{entitlement, usage, plans, signed_in, available}` (`entitlement` adds `name`,
+  `state`, `confirmed_at`, `grace_ends_at`, `message`; `usage` is `{brands, clips_this_month, connected_accounts,
+  month_start, resets_at}`). `POST /api/billing/refresh` confirms now. `POST /api/billing/checkout {plan, interval}` and
+  `POST /api/billing/portal` open the Stripe page in the system browser and return `{url, opened}`; errors are
+  `{"detail", "error": {code, message}}` (409 `sign_in_required` / `not_configured` / `subscription_exists`, 502 when
+  the cloud fails).
+
+The local limits on brands, clips and the factory builder are a convenience for an unmodified app; the posting limits
+also hold in the cloud, which is where the per-account cost is.
 
 ## HTTP contract
 

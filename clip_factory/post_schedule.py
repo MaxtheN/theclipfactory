@@ -10,6 +10,10 @@ reconcile-before-retry rules are unchanged.
 The app must be open at the scheduled time. A schedule whose time passed while the app was
 closed (or asleep beyond a short grace) is never posted late on its own: it becomes
 ``overdue`` and waits for the person to choose Post now / Reschedule / Cancel.
+
+While the Plan does not allow posting (``plan_check``), schedules are *held*: they stay ``scheduled``
+with ``held_code = "plan_limit"`` and a note naming the limit, and never post. When the Plan allows
+posting again the hold is lifted; a time that passed during the hold becomes ``overdue`` (a click).
 """
 
 from __future__ import annotations
@@ -29,6 +33,8 @@ LANE = "instagram_post"
 GRACE = timedelta(minutes=2)
 MAX_AHEAD = timedelta(days=60)
 NOTE = "The app must be open at that time."
+HELD = "plan_limit"
+RELEASED_LATE = "This time passed while posting was held by the plan. Post now, reschedule or cancel."
 log = logging.getLogger(__name__)
 
 
@@ -44,8 +50,10 @@ def parse_time(value) -> datetime:
 
 class PostScheduler:
     def __init__(self, store, publisher: Publisher, *, clock: Callable[[], datetime] = lambda: datetime.now(UTC),
-                 interval: float = 2.0):
+                 interval: float = 2.0, plan_check: Callable[[], PublishError | None] | None = None):
         self.store, self.publisher, self.clock, self.interval = store, publisher, clock, interval
+        # Returns the PublishError (code plan_limit) that would block posting now, or None.
+        self.plan_check = plan_check or (lambda: None)
         # Anything due before this moment was due while the app was closed: it needs a click.
         self.opened_at = clock()
         self.stopping = threading.Event()
@@ -109,11 +117,33 @@ class PostScheduler:
             return self.view(row)
 
     # ------------------------------------------------------------------ run
+    def _apply_plan(self, rows: list[dict]) -> None:
+        """Hold waiting schedules the Plan does not allow; lift holds once it does (late ones need a click)."""
+        waiting = [r for r in rows if r.get("status") == "scheduled" and not r.get("overdue_at")]
+        if not waiting:
+            return
+        refusal = self.plan_check()
+        current = self.clock()
+        for row in waiting:
+            if refusal is not None:
+                if row.get("held_code") != HELD or row.get("note") != refusal.message:
+                    row.update(held_code=HELD, held_at=row.get("held_at") or now(), note=refusal.message)
+                    self.store.patch(KIND, row["id"], held_code=HELD, held_at=row["held_at"], note=refusal.message)
+            elif row.get("held_code"):
+                late = datetime.fromisoformat(row["publish_at"]) <= current
+                changes = {"held_code": None, "held_at": None, "note": RELEASED_LATE if late else NOTE}
+                if late:
+                    changes["overdue_at"] = now()
+                row.update(changes)
+                self.store.patch(KIND, row["id"], **changes)
+
     def mark_overdue(self) -> None:
         """Flag (never post) schedules whose time passed while the app was closed or asleep."""
         current = self.clock()
-        for row in self._rows():
-            if row.get("status") != "scheduled" or row.get("overdue_at"):
+        rows = self._rows()
+        self._apply_plan(rows)
+        for row in rows:
+            if row.get("status") != "scheduled" or row.get("overdue_at") or row.get("held_code"):
                 continue
             due = datetime.fromisoformat(row["publish_at"])
             if due <= current and (due < self.opened_at or current - due > GRACE):
@@ -127,7 +157,7 @@ class PostScheduler:
             if row.get("status") == "cancelled":
                 self._cancel_attempts(row)  # also covers a cancel made through the legacy endpoint
                 continue
-            if row.get("status") != "scheduled" or row.get("overdue_at"):
+            if row.get("status") != "scheduled" or row.get("overdue_at") or row.get("held_code"):
                 continue
             if datetime.fromisoformat(row["publish_at"]) <= current:
                 self._execute(row, "Scheduled time reached; posting.")
@@ -157,7 +187,11 @@ class PostScheduler:
                 self._cancel_attempts(row)
                 return self.get(identifier)
             if action == "post_now":
-                self.store.patch(KIND, identifier, decision={"action": action, "at": now()})
+                refusal = self.plan_check()
+                if refusal is not None:
+                    raise refusal
+                self.store.patch(KIND, identifier, held_code=None, held_at=None,
+                                 decision={"action": action, "at": now()})
                 return self._execute(row, "Posting now at the person's request.")
             if action == "reschedule":
                 moment = parse_time(publish_at)
@@ -188,7 +222,9 @@ class PostScheduler:
             try:
                 self.tick()
                 with self.thread_lock:
-                    if not any(r.get("status") == "scheduled" and not r.get("overdue_at") for r in self._rows()):
+                    # Held rows need no thread: listing schedules re-checks the plan and lifts the hold.
+                    if not any(r.get("status") == "scheduled" and not r.get("overdue_at") and not r.get("held_code")
+                               for r in self._rows()):
                         self.thread_exiting = True
                         return  # nothing left to run on time; a new schedule starts the thread again
             except Exception:  # noqa: BLE001 - keep the scheduler alive; attempts record their own errors
