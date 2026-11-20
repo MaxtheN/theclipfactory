@@ -1388,7 +1388,7 @@ export function Results({
           </button>
         </div>
       )}
-      {!demoMode && <details className="gf-results-more" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
+      {!demoMode && <details className="gf-results-more gf-ui-disclosure" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
         <summary>Strategist and tools{pendingCount + drafts.length > 0 ? ` · ${pendingCount + drafts.length} to review` : ""}</summary>
       {visible && w.profileId && (
         <StrategistPanel
