@@ -1,0 +1,54 @@
+/* Plans and Billing: Settings section, plan comparison, Upgrade Prompt and the sidebar plan badge. */
+.gf-plan-current { display: grid; gap: 12px; }
+.gf-plan-current-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.gf-plan-current-head h3 { margin: 0; font-size: 16px; }
+.gf-plan-terms { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; color: var(--material-secondary); font-size: 12px; }
+.gf-plan-current-actions { display: flex; align-items: center; gap: 10px; }
+.gf-plan-checking { color: var(--material-secondary); font-size: 12px; }
+.gf-plan-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--material-hover); color: var(--material-ink); font-size: 12px; line-height: 1.5; }
+.gf-plan-warning { background: var(--status-warning-fill, rgba(176, 116, 18, 0.12)); color: var(--status-warning, #8a5a00); }
+.gf-plan-link { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; user-select: all; }
+
+.gf-plan-usage { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--material-divider); }
+.gf-plan-usage li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 16px; padding: 9px 0; border-bottom: 1px solid var(--material-divider); font-size: 13px; }
+.gf-plan-usage-label { color: var(--material-secondary); }
+.gf-plan-usage-value { font-variant-numeric: tabular-nums; text-align: right; }
+.gf-plan-reached { color: var(--status-warning, #8a5a00); font-weight: 600; }
+.gf-plan-meter { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--material-hover); overflow: hidden; }
+.gf-plan-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--material-ink); opacity: 0.55; transition: width 300ms ease; }
+.gf-plan-usage li.is-reached .gf-plan-meter > span { background: var(--status-warning, #8a5a00); opacity: 1; }
+
+.gf-plan-compare { display: grid; gap: 14px; }
+.gf-plan-compare-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.gf-plan-compare-head h3 { margin: 0; }
+.gf-plan-interval { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--material-hover); }
+.gf-app .gf-plan-interval button { min-height: 30px; padding: 5px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--material-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.gf-app .gf-plan-interval button[aria-pressed="true"] { background: var(--material-pane-solid); color: var(--material-ink); font-weight: 550; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+.gf-plan-interval button:focus-visible { outline: 2px solid var(--material-focus); outline-offset: 1px; }
+.gf-plan-save { color: var(--status-success, #2d6a45); }
+.gf-plan-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.gf-plan-cards > li { display: grid; align-content: start; gap: 10px; padding: 16px; border: 1px solid var(--material-divider); border-radius: 10px; }
+.gf-plan-cards > li.is-current { border-color: var(--material-ink); box-shadow: inset 0 0 0 1px var(--material-ink); }
+.gf-plan-cards .gf-button { justify-self: start; }
+.gf-plan-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gf-plan-card-head h4 { margin: 0; font-size: 14px; }
+.gf-plan-current-tag { padding: 2px 8px; border-radius: 999px; background: var(--material-selected); font-size: 11px; font-weight: 550; }
+.gf-plan-price { margin: 0; color: var(--material-secondary); font-size: 12px; }
+.gf-plan-price strong { color: var(--material-ink); font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+.gf-plan-limits { display: grid; gap: 6px; margin: 0; font-size: 12px; }
+.gf-plan-limits > div { display: flex; justify-content: space-between; gap: 8px; }
+.gf-plan-limits dt { color: var(--material-secondary); }
+.gf-plan-limits dd { margin: 0; text-align: right; }
+
+.gf-upgrade-prompt { display: grid; gap: 10px; }
+.gf-upgrade-prompt p { margin: 0; }
+.gf-upgrade-usage { font-variant-numeric: tabular-nums; }
+.gf-upgrade-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+
+.gf-app .gf-sidebar-bottom > .gf-plan-badge { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: 24px; margin: -4px 12px 10px; padding: 2px 9px; border: 1px solid var(--material-divider); border-radius: 999px; background: transparent; color: var(--material-secondary); font: inherit; font-size: 11px; font-weight: 550; cursor: pointer; }
+.gf-app .gf-sidebar-bottom > .gf-plan-badge:hover:not(:disabled) { background: var(--material-hover); color: var(--material-ink); }
+.gf-plan-badge:focus-visible { outline: 2px solid var(--material-focus); outline-offset: 2px; }
+.gf-plan-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--material-ink); opacity: 0.5; }
+.gf-plan-badge.is-warning .gf-plan-badge-dot { background: var(--status-warning, #8a5a00); opacity: 1; }
+.gf-plan-badge.is-warning { color: var(--status-warning, #8a5a00); }
+@media (prefers-reduced-motion: reduce) { .gf-plan-meter > span { transition: none; } }

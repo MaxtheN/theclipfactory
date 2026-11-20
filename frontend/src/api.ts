@@ -1,10 +1,20 @@
+/** The structured part of an error reply: `{"detail": "...", "error": {code, message, ...}}`. */
+export type ApiErrorBody = { code: string; message?: string; [key: string]: unknown };
+
+/** Window event fired for every 402 `plan_limit` reply, so the shell can show the Upgrade Prompt. */
+export const PLAN_LIMIT_EVENT = "gf-plan-limit";
+
 export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    public error?: ApiErrorBody,
   ) {
     super(message);
     this.name = "ApiError";
+  }
+  get code(): string | undefined {
+    return this.error?.code;
   }
 }
 export async function api<T>(
@@ -35,25 +45,29 @@ export async function api<T>(
   }
   if (!response.ok) {
     let detail = "";
+    let structured: ApiErrorBody | undefined;
     try {
       const body: unknown = await response.json();
-      if (
-        body &&
-        typeof body === "object" &&
-        "detail" in body &&
-        typeof body.detail === "string"
-      )
-        detail = body.detail;
+      if (body && typeof body === "object") {
+        if ("detail" in body && typeof body.detail === "string") detail = body.detail;
+        const error = "error" in body ? body.error : undefined;
+        if (error && typeof error === "object" && "code" in error && typeof error.code === "string")
+          structured = error as ApiErrorBody;
+      }
     } catch {
       /* Never expose an HTML error page. */
     }
-    throw new ApiError(
+    const failure = new ApiError(
       detail ||
         (response.status === 401 || response.status === 403
           ? "Local session unavailable. Open the app through its launcher to authenticate."
           : `Request failed (${response.status}). Please retry.`),
       response.status,
+      structured,
     );
+    if (response.status === 402 && structured?.code === "plan_limit")
+      window.dispatchEvent(new CustomEvent(PLAN_LIMIT_EVENT, { detail: { ...structured, message: failure.message } }));
+    throw failure;
   }
   if (response.status === 204) return undefined as T;
   try {

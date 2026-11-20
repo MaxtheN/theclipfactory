@@ -41,7 +41,7 @@ describe("Settings", () => {
     const onSection = show(factory(ready), "device");
     const nav = screen.getByRole("navigation", { name: "Settings sections" });
     expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual([
-      "Device and runtime", "Models", "Accounts and connections", "Privacy and storage", "Background jobs", "About",
+      "Device and runtime", "Models", "Accounts and connections", "Plan and billing", "Privacy and storage", "Background jobs", "About",
     ]);
     expect(within(nav).getByRole("button", { name: "Device and runtime" })).toHaveAttribute("aria-current", "page");
     fireEvent.click(within(nav).getByRole("button", { name: "About" }));

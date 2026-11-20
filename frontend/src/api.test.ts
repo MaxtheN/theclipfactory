@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, endpoint, post } from "./api";
+import { api, ApiError, endpoint, PLAN_LIMIT_EVENT, post } from "./api";
 afterEach(() => vi.unstubAllGlobals());
 describe("same-origin API boundary", () => {
   it("uses session cookies and exact JSON field names", async () => {
@@ -75,5 +75,42 @@ describe("same-origin API boundary", () => {
       "same-origin",
     );
     expect(endpoint("videos", "a/b", "media")).toBe("/api/videos/a%2Fb/media");
+  });
+});
+describe("structured errors and plan limits", () => {
+  const limitBody = {
+    detail: "The Free plan includes 1 brand. Upgrade to add more.",
+    error: { code: "plan_limit", limit: "brands", usage: 1, max: 1, plan: "free", message: "The Free plan includes 1 brand. Upgrade to add more." },
+  };
+  it("keeps the error code and announces a plan limit to the shell", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(limitBody), { status: 402 })));
+    const seen: unknown[] = [];
+    const listen = (event: Event) => seen.push((event as CustomEvent).detail);
+    window.addEventListener(PLAN_LIMIT_EVENT, listen);
+    try {
+      const failure = await api("/api/profiles", { method: "POST" }).catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(ApiError);
+      expect((failure as ApiError).status).toBe(402);
+      expect((failure as ApiError).code).toBe("plan_limit");
+      expect((failure as ApiError).message).toBe(limitBody.detail);
+      expect(seen).toEqual([expect.objectContaining({ code: "plan_limit", limit: "brands", usage: 1, max: 1 })]);
+    } finally {
+      window.removeEventListener(PLAN_LIMIT_EVENT, listen);
+    }
+  });
+  it("does not announce other errors", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: "Sign in first.", error: { code: "signed_out", message: "Sign in first." } }), { status: 409 })),
+    );
+    const listen = vi.fn();
+    window.addEventListener(PLAN_LIMIT_EVENT, listen);
+    try {
+      const failure = (await api("/api/billing/checkout", { method: "POST" }).catch((error: unknown) => error)) as ApiError;
+      expect(failure.code).toBe("signed_out");
+      expect(listen).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(PLAN_LIMIT_EVENT, listen);
+    }
   });
 });
