@@ -1,6 +1,7 @@
 import { AutoTextarea } from "../components/AutoTextarea";
+import { keepIfSame } from "./stable";
 import { ClipStyleSheet } from "./ClipStyle";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { UnsavedNote, useUnsavedDraft } from "./unsavedDrafts";
 import { activeJob, installedLlms } from "../productionPreflight";
 import type { Job, TeamRun } from "../types";
@@ -45,9 +46,14 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   onEditBrief?: () => void;
   activeSurface?: boolean;
 }) {
-  const sources = factory.data.videos.filter(v => w.campaign?.video_ids.includes(v.id));
-  const scope = { campaignId: w.campaign?.id || "", profileId: w.profileId, sourceIds: sources.map(v => v.id) };
-  const scopeKey = `${scope.campaignId}/${scope.profileId}/${scope.sourceIds.join("|")}`;
+  const campaignVideoIds = w.campaign?.video_ids;
+  const sources = useMemo(() => {
+    const ids = new Set(campaignVideoIds);
+    return factory.data.videos.filter(v => ids.has(v.id));
+  }, [factory.data.videos, campaignVideoIds]);
+  const scopeKey = `${w.campaign?.id || ""}/${w.profileId}/${sources.map(v => v.id).join("|")}`;
+  // Stable while the campaign, brand and its episodes stay the same, so the work below is reused.
+  const scope = useMemo(() => ({ campaignId: w.campaign?.id || "", profileId: w.profileId, sourceIds: sources.map(v => v.id) }), [scopeKey]);
   const [sourceId, setSourceId] = useState(preferredSource || sources[0]?.id || "");
   const [selectedId, setSelectedId] = useState(preferredClip || "");
   const [freshProduction, setFreshProduction] = useState(false);
@@ -79,12 +85,16 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const active = w.versions.find(v => v.id === activeRulesId(w) && v.status === "approved");
   const direction = active?.directions[w.profileId];
   const source = sources.find(v => v.id === sourceId);
-  const clipErrors: string[] = [];
-  const clips = factory.data.clips.filter(c => clipInScope(c, scope)).flatMap(c => {
-    try { return [parseProductionClip(c, c.id, { campaign_id: scope.campaignId, profile_id: scope.profileId, video_id: c.video_id })]; }
-    catch (e) { clipErrors.push(`${c.id}: ${message(e)}`); return []; }
-  });
-  const ordered = reviewOrder(clips);
+  // Parsing and ranking every clip is the heaviest work here; redo it only when the clips change.
+  const { clips, clipErrors } = useMemo(() => {
+    const clipErrors: string[] = [];
+    const clips = factory.data.clips.filter(c => clipInScope(c, scope)).flatMap(c => {
+      try { return [parseProductionClip(c, c.id, { campaign_id: scope.campaignId, profile_id: scope.profileId, video_id: c.video_id })]; }
+      catch (e) { clipErrors.push(`${c.id}: ${message(e)}`); return []; }
+    });
+    return { clips, clipErrors };
+  }, [factory.data.clips, scope]);
+  const ordered = useMemo(() => reviewOrder(clips), [clips]);
   const selected = freshProduction ? undefined : clips.find(c => c.id === selectedId) || ordered.above[0] || clips[0];
   const jobs = factory.data.jobs.filter(j => jobInScope(j, scope, runs));
   const models = installedLlms(factory.data.models, { needsVision: true });
@@ -152,12 +162,14 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   useEffect(() => {
     let live = true;
     const load = async () => {
-      try { const rows = await workspaceApi.teamRuns(); if (live) { setRuns(rows); setLedgerError(""); } }
+      try { const rows = await workspaceApi.teamRuns(); if (live) { setRuns(old => keepIfSame(old, rows)); setLedgerError(""); } }
       catch (e) { if (live) { setRuns([]); setLedgerError(message(e)); } }
     };
+    // Studio stays mounted behind other destinations; it only follows the ledger while shown.
+    if (!activeSurface) return () => { live = false; };
     void load(); const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 4000);
     return () => { live = false; window.clearInterval(timer); };
-  }, [scopeKey]);
+  }, [scopeKey, activeSurface]);
   useEffect(() => { if (!models.some(m => m.id === modelId)) setModelId(models[0]?.id || ""); }, [models.map(m => m.id).join("|"), modelId]);
   useEffect(() => { setPlaybackError(""); setPlaybackReady(false); }, [selected?.id]);
   useEffect(() => {
