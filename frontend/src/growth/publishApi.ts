@@ -29,6 +29,7 @@ export type AttemptState =
   | "created"
   | "uploading"
   | "uploaded"
+  | "submitted"
   | "container_created"
   | "container_ready"
   | "published"
@@ -127,14 +128,15 @@ export const inFlight = (a: PublishAttempt) =>
 /** States a human may continue from without risking a duplicate post. */
 export const canResume = (a: PublishAttempt) =>
   !a.active &&
-  (["created", "uploaded", "container_created", "container_ready"].includes(a.state) ||
+  (["created", "uploaded", "submitted"].includes(a.state) ||
     (a.state === "published" && a.mapping.status !== "mapped"));
 
 export const stateLabel: Record<AttemptState, string> = {
   scheduled: "Scheduled",
   created: "Queued",
   uploading: "Uploading video",
-  uploaded: "Hosted; creating Reel",
+  uploaded: "Uploaded; ready to post",
+  submitted: "Sent · the platform is processing",
   container_created: "Instagram is processing",
   container_ready: "Ready to publish",
   published: "Posted",

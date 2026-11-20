@@ -92,6 +92,7 @@ const attemptStages: Record<string, string> = {
   created: "Queued to post",
   uploading: "Uploading",
   uploaded: "Uploaded",
+  submitted: "Platform is processing",
   container_created: "Instagram is processing",
   container_ready: "Ready to publish",
   published: "Published",

@@ -125,7 +125,7 @@ def test_caption_timing_fail_holds_even_with_playback_pass_and_pop_style(clip):
     assert any("2 overlapping cues" in reason for reason in report["reasons"])
     assert report["rubric"]["caption_legibility"] == 1
     assert report["rubric"]["technical"] < 5
-    assert report["gate_version"] == quality.GATE_VERSION == 3
+    assert report["gate_version"] == quality.GATE_VERSION == 4
 
 
 def test_missing_caption_timing_stays_unknown_not_perfect_legibility(clip):

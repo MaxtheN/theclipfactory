@@ -70,6 +70,14 @@ class Policy(Body):
         return value
 
 
+def trackable_account(account: dict) -> bool:
+    """Accounts whose posts learning can measure: posting-server (Zernio) accounts, and Instagram
+    accounts connected through Composio before the switch (their insights are still read there)."""
+    if account.get("provider") == "zernio":
+        return bool(account.get("zernio_account_id")) and bool(account.get("platform"))
+    return account.get("provider") == "composio" and account.get("toolkit") == "instagram"
+
+
 class Publication(Body):
     policy_id: Identifier
     clip_id: Identifier
@@ -226,8 +234,8 @@ class LearningEngine:
         account = self._require("connected_accounts", policy["account_id"])
         if profile["id"] not in campaign["profile_ids"] or account.get("profile_id") != profile["id"]:
             raise HTTPException(422, "Policy account, profile and campaign must have the same explicit binding.")
-        if account.get("status") != "active" or account.get("provider") != "composio" or account.get("toolkit") != "instagram":
-            raise HTTPException(409, "An active bound Instagram account is required.")
+        if account.get("status") != "active" or not trackable_account(account):
+            raise HTTPException(409, "An active bound account is required.")
         return campaign, profile
 
     def configure_policy(self, body: Policy | dict, identifier: str | None = None) -> dict:
