@@ -1,6 +1,6 @@
 # Private cloud state foundation
 
-Target: user-created **GrowthFactory**, Supabase project `nywbjxmratokyplwjjhu` (Free).
+Target: Supabase project `spdtisizhcepmsogjvnr` ("jduhking's Project", us-east-2, Free). The cloud moved here on 2026-11-19 from the original project `nywbjxmratokyplwjjhu`, which is no longer used; accounts and rows were not carried over.
 
 **Current update (2026-11-14):** the metadata migration was applied and verified. Later work added Supabase Auth and publishing media storage. The Mac app still uses SQLite for operational state; there is no general metadata sync client or always-on hosted publishing/learning worker. The metadata/RLS design below is distinct from Auth and the publish bucket. See [publishing](instagram-publishing.md) and the [current handoff](HANDOFF.md).
 
@@ -60,6 +60,14 @@ The JWT probes test database authorization under administrator-supplied claims; 
 
 References: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [PostgreSQL row-security policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html).
 
-## Verified provider readback — 2026-11-14
+## Verified provider readback — 2026-11-19 (`spdtisizhcepmsogjvnr`)
+
+The project was empty (no `gf_*` objects, buckets or policies). The three migrations were applied unchanged, in order, through the Management API SQL endpoint; each ran as its own transaction. `supabase/tests/growth_factory_rls.sql` returned `RLS probes passed; synthetic rows rolled back.` and `growth_factory_readback.sql` returned 3 tables, 3 RLS enabled, 3 forced RLS, 7 policies, 0 anonymous/PUBLIC table grants; authenticated record data update true, record id/workspace/event update false, record delete false; 0 rows. Storage: bucket `gf-publish` public, 50 MB limit, `video/mp4` and `image/jpeg`; 4 `gf_publish_*` policies, all `authenticated`.
+
+Auth: email + password sign-up enabled with email confirmation **off** (`mailer_autoconfirm`), matching the original project. The publishable key in `clip_factory/cloud_config.json` was replaced.
+
+Live smoke through `clip_factory.cloud.SupabaseClient` with a throwaway user: sign-up returned a session, password sign-in and refresh worked, the user created and read back its own workspace and appended a `profiles/created` event, uploaded an MP4 to its own `gf-publish/<uid>/<sha256>.mp4`, read it from the public URL, was refused an upload under another user's prefix, deleted its object and logged out. Anonymous REST reads of `gf_workspaces` return 401. The throwaway user and its rows were then deleted.
+
+## Verified provider readback — 2026-11-14 (original project `nywbjxmratokyplwjjhu`)
 
 Exact reviewed migration was pasted, copied back and matched before SQL Editor execution; result Success. Full rollback probe file also matched, then returned `RLS probes passed; synthetic rows rolled back.` Catalog readback:3tables,3RLSenabled,3forcedRLS,7policies,0anonymous/PUBLICtablegrants; authenticated record data update=true, recordID/workspace/eventupdate=false, recorddelete=false. All three table rowcounts0 after rollback. This certifies the database controls under test claims; it does not certify app Auth, user tokens, team sharing or cloud sync. SQL Editor query73c22432-a834-4930-a78b-2516738659f1.
