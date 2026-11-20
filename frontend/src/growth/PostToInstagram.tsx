@@ -64,8 +64,9 @@ function Counters({ text, limits, label }: { text: string; limits: PostLimits; l
 }
 
 /**
- * Approve & post: one click approves this exact revision (when needed) and posts it, now or at a
- * scheduled time, to the chosen accounts. The package (caption, hashtags, CTA, cover, feed
+ * Posts an already-approved revision, now or at a scheduled time, to the chosen accounts. Approval is
+ * a separate decision made in review (REQ-CPR-019): posting never approves, and an unapproved
+ * revision cannot be posted. The package (caption, hashtags, CTA, cover, feed
  * sharing) is previewed on a phone first. Uncertain outcomes offer "Check status", never a blind retry.
  */
 function PostEditorSurface({ compact, open, onClose, children }: { compact: boolean; open: boolean; onClose: () => void; children: ReactNode }) {
@@ -79,7 +80,6 @@ export function PostToInstagram({
   disabled = false,
   compact = false,
   activeSurface = true,
-  approve,
   pollMs = 3000,
   now = () => new Date(),
 }: {
@@ -88,8 +88,6 @@ export function PostToInstagram({
   /** Keeps review focused; the full editor stays mounted in a deliberate sheet. */
   compact?: boolean;
   activeSurface?: boolean;
-  /** Records the human approval of this exact revision; returns the saved clip. */
-  approve: () => Promise<PostableClip | false | undefined>;
   pollMs?: number;
   /** Injected clock for schedule suggestions (tests). */
   now?: () => Date;
@@ -117,7 +115,7 @@ export function PostToInstagram({
   const [writing, setWriting] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
-  useEffect(() => setEditorOpen(false), [clip.id, clip.sha256]);
+  useEffect(() => setEditorOpen(false), [clip.id, clip.sha256, clip.approved]);
   useEffect(() => { if (!activeSurface) setEditorOpen(false); }, [activeSurface]);
   // Generated copy prefills the caption until the person edits it themselves.
   const edited = useRef(false), prefilled = useRef(false);
@@ -167,7 +165,8 @@ export function PostToInstagram({
   const scheduledAt = mode === "schedule" ? withOffset(when) : null;
   const scheduleProblem = mode !== "schedule" ? "" : !scheduledAt ? "Pick a date and time."
     : new Date(scheduledAt).getTime() <= now().getTime() + 60_000 ? "Pick a time at least a minute from now." : "";
-  const ready = !!targets && !!report && !signInRequired && chosen.length > 0
+  const needsApproval = !clip.approved;
+  const ready = !needsApproval && !!targets && !!report && !signInRequired && chosen.length > 0
     && chosen.every(a => captionFor(a).trim().length > 0) && captionProblems.length === 0 && !scheduleProblem
     && (!held || override.trim().length >= 10) && !busy && !disabled;
   const accountName = (id: string) => targets?.accounts.find(a => a.id === id)?.display_name || id;
@@ -177,18 +176,12 @@ export function PostToInstagram({
   const present = new Set(hashtagsOf(caption).map(t => t.toLowerCase()));
   const zone = localTimezone();
 
-  async function approved(): Promise<PostableClip> {
-    if (clip.approved) return clip;
-    const saved = await approve();
-    if (!saved || !saved.approved) throw new Error("Approval was not recorded; nothing was posted.");
-    return saved;
-  }
-
   async function submit() {
     if (!ready) return;
     setBusy(true); setError(""); setNotice("");
     try {
-      const current = await approved();
+      const current = clip;
+      if (!current.approved) throw new Error("Approve this revision before posting it.");
       if (!current.sha256) throw new Error("This revision has no recorded file hash; it cannot be posted.");
       const options = { share_to_feed: shareToFeed, cover_time_ms: coverMs, ...(held ? { override_reason: override.trim() } : {}) };
       if (mode === "schedule" && scheduledAt) {
@@ -287,9 +280,8 @@ export function PostToInstagram({
     },
   });
   const pending = schedules.filter(s => s.status === "scheduled");
-  const submitLabel = busy ? "Working…" : mode === "schedule"
-    ? (clip.approved ? "Schedule post" : "Approve & schedule")
-    : (clip.approved ? "Post to Instagram" : "Approve & post");
+  const submitLabel = busy ? "Working…" : mode === "schedule" ? "Schedule post" : "Post to Instagram";
+  const approvalNote = "Approve this revision to post it. Approving never posts on its own.";
 
   const verdict = !report ? "" : held
     ? `Held: ${report.reasons[0] ? report.reasons[0].charAt(0).toLowerCase() + report.reasons[0].slice(1) : "check the details before posting"}`
@@ -320,8 +312,8 @@ export function PostToInstagram({
     </section>
 
     {compact && <section className="gf-review-section gf-post-launcher" aria-label="Posting tools">
-      <button type="button" className="gf-button secondary full" onClick={() => setEditorOpen(true)}><Icon name="send" size={16} /> Prepare your post<Icon name="arrow" size={15} /></button>
-      <p className="gf-post-note">Preview, caption, accounts and timing.</p>
+      <button type="button" className="gf-button secondary full" disabled={needsApproval} onClick={() => setEditorOpen(true)}><Icon name="send" size={16} /> Prepare your post<Icon name="arrow" size={15} /></button>
+      <p className="gf-post-note">{needsApproval ? approvalNote : "Preview, caption, accounts and timing."}</p>
       {captionDirty && <UnsavedNote>Caption not saved</UnsavedNote>}
       {attempts.length > 0 && <p className="gf-post-note" role="status" aria-label="Posting activity">{[...new Set(attempts.map(a => a.state))].map(state => `${stateLabel[state]}: ${attempts.filter(a => a.state === state).length}`).join(" · ")}</p>}
       {attempts.some(a => a.state === "unknown" || (a.state === "container_created" && !a.active)) && <p className="gf-post-recovery-note" role="status">A post needs a status check. Open posting to check the exact attempt before trying again.</p>}
@@ -428,6 +420,7 @@ export function PostToInstagram({
       </fieldset>
       {captionProblems.length > 0 && <div className="gf-inline-error" role="alert">{[...new Set(captionProblems)].join(" ")}</div>}
       {compact && held && <div className="gf-post-group"><p className="gf-post-recovery-note">{verdict}</p><Field label="Override reason (required to post a held clip)">{id => <AutoTextarea id={id} rows={2} value={override} onChange={e => setOverride(e.target.value)} placeholder="Why is it fine to post anyway?" />}</Field></div>}
+      {needsApproval && !compact && <p className="gf-help" role="status">{approvalNote}</p>}
       <button className="gf-button full gf-post-submit" disabled={!ready} onClick={() => void submit()}>{submitLabel}</button>
       {notice && <p role="status">{notice}</p>}
       {error && <div className="gf-inline-error" role="alert">{error}</div>}

@@ -31,6 +31,12 @@ import { changedEditFields, clipInScope, editErrors, jobInScope, object, readine
 
 type Mode = "manual" | "agent";
 const message = (e: unknown) => e instanceof Error ? e.message : "The operation was not confirmed. Refresh before retrying.";
+/** Names the exact revision a review decision applies to, e.g. "revision 2". */
+function revisionName(clip: ProductionClip, capital = false): string {
+  const name = typeof clip.revision_number === "number" ? `revision ${clip.revision_number}` : "this revision";
+  return capital ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+}
+
 export function Studio({ w, factory, preferredSource, preferredMode, preferredClip, onDirection, onEditBrief, activeSurface = true }: {
   w: Workspace; factory: FactoryState; /** Kept for callers; Results is one click away in the sidebar. */ next: () => void; preferredSource?: string; preferredMode?: Mode; preferredClip?: string;
   /** Opens the direction screen when production is blocked on approval. */
@@ -353,11 +359,16 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
           {reviewReason && <p className="gf-help">{reviewReason}</p>}
           {!reviewPreview && !playbackReady && !playbackError && <p className="gf-help">Play the clip before approving.</p>}
           <div className="gf-inspector-footer">
-            {selected.approved ? <button className="gf-button full" disabled={!reviewReady || reviewPreview || uncertainExports.has(selected.id)} onClick={() => void exportClip(selected)}><Icon name="download" size={16} />{reviewPreview ? "Export · desktop app only" : "Export approved MP4"}</button> : <PrimaryAction full label="Approve this clip" intent="approve" disabled={!reviewReady} onClick={() => void perform(() => productionApi.review(selected, true), reviewPreview ? "Sample accepted; no real approval recorded." : "Approved. You can export it now.")} />}
+            {/* Approve, export and post are separate decisions (REQ-CPR-019). Approval names the exact revision it records. */}
+            {selected.approved
+              ? <p className="gf-approval-note" role="status"><Icon name="check" size={15} /> {revisionName(selected, true)} approved. Exporting and posting are separate steps.</p>
+              : <PrimaryAction full label={`Approve ${revisionName(selected)}`} intent="approve" disabled={!reviewReady} onClick={() => void perform(() => productionApi.review(selected, true), reviewPreview ? "Sample accepted; no real approval recorded." : `${revisionName(selected, true)} approved. Nothing was exported or posted.`)} />}
+            <button className={`gf-button ${selected.approved ? "" : "secondary "}full`} disabled={!selected.approved || !reviewReady || reviewPreview || uncertainExports.has(selected.id)} onClick={() => void exportClip(selected)}><Icon name="download" size={16} />{reviewPreview ? "Export · desktop app only" : "Export approved MP4"}</button>
+            {!selected.approved && !reviewPreview && <p className="gf-help">Export and posting unlock after you approve {revisionName(selected)}.</p>}
             <button className="gf-button secondary full" disabled={busy} onClick={() => revise(selected)}>Request a change<Icon name="settings" size={15} /></button>
           </div>
           {/* The hosted preview shows the post package with illustrative data; posting stays off there. */}
-          {(reviewPreview || !illustrativeSelected) && <PostToInstagram compact activeSurface={activeSurface} clip={selected} disabled={!reviewReady || reviewPreview} approve={async () => { const box: { clip?: ProductionClip } = {}; const ok = await perform(async () => { box.clip = await productionApi.review(selected, true); }, "Approved this exact revision."); return ok ? box.clip : false; }} />}
+          {(reviewPreview || !illustrativeSelected) && <PostToInstagram compact activeSurface={activeSurface} clip={selected} disabled={!reviewReady || reviewPreview} />}
         </div>
         <div className="gf-review-details">
           <button type="button" className="gf-review-detail-trigger" onClick={() => setDetailsOpen(true)}><Icon name="info" size={16} /><span>Checks & version details<small>Technical evidence and export history</small></span><Icon name="arrow" size={16} /></button>
