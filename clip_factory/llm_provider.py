@@ -22,6 +22,7 @@ module only moves text in and out and records provider, model, token usage and c
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import re
 import threading
@@ -565,6 +566,12 @@ class RoutedModels:
             local=lambda: self._models.run(job_id, identifier, action, **payload),
         )
         return {"output": result.text, "llm": result.provenance()}
+
+    def warm(self, identifier: str):
+        """A local model stays loaded across one run's batches; cloud calls hold nothing locally."""
+        if self._cloud():
+            return contextlib.nullcontext()
+        return self._models.warm(identifier)
 
     def run_batch(self, job_id: str, identifier: str, requests: list[dict]) -> list[dict]:
         if not requests or not self._cloud():

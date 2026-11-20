@@ -9,7 +9,7 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from clip_factory.jobs import JobCancelled, WorkError
-from clip_factory.models import Models
+from clip_factory.models import Models, held
 from clip_factory.ollama import LlmId, Ollama, OllamaError, base_url, is_remote
 
 TAGS = {
@@ -235,6 +235,28 @@ def test_a_batch_keeps_the_model_loaded_until_its_last_request(models):
     with pytest.raises(WorkError, match="invalid"):
         models.run_batch("job", "ollama:llama3.2:3b", [{"prompt": ""}])
     models.jobs.process.assert_not_called()
+
+
+def test_a_run_holds_its_model_across_batches_and_releases_it_once(models):
+    seen, unloaded = [], []
+    models.ollama = fake(seen=seen)
+    models.ollama.unload = unloaded.append
+    with models.warm("ollama:llama3.2:3b"):
+        with held(models, "ollama:llama3.2:3b"):  # a storyboard watched during a swarm, say
+            models.run_batch("job", "ollama:llama3.2:3b", [{"prompt": "one"}, {"prompt": "two"}])
+        assert unloaded == []  # the outer run still holds it
+        models.run_batch("job", "ollama:llama3.2:3b", [{"prompt": "three"}])
+    assert [body["keep_alive"] for body in seen] == ["10m", "10m", "10m"]
+    assert unloaded == ["llama3.2:3b"]
+    models.run_batch("job", "ollama:llama3.2:3b", [{"prompt": "four"}])
+    assert seen[-1]["keep_alive"] == 0  # released: a lone batch frees the memory after its last request
+    with pytest.raises(RuntimeError), models.warm("ollama:llama3.2:3b"):
+        raise RuntimeError("cancelled mid-run")
+    assert unloaded == ["llama3.2:3b"] * 2
+    # Nothing to hold: no model chosen, or a runner without warm (a test double).
+    with held(models, None), held(object(), "ollama:llama3.2:3b"):
+        pass
+    assert unloaded == ["llama3.2:3b"] * 2
 
 
 def test_vision_is_known_per_model(models):

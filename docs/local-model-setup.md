@@ -45,6 +45,46 @@ The CPU default is float32. int8 is about twice as fast, but on this CPU it gave
 
 The worker decodes the app's 16 kHz mono WAV itself, so transcription does not depend on PyAV's audio API. A creator's 30-minute source takes about 10 minutes to transcribe on a CPU like this one. GPU speed was not measured (no NVIDIA GPU was available for this benchmark).
 
+### Measuring speech on your computer
+
+[`scripts/bench-speech.py`](../scripts/bench-speech.py) transcribes a recording through the app's own worker and installed runtime: MLX Whisper on Apple silicon, faster-whisper on Windows and Linux. Each run prints:
+
+- its wall time, start-up and model load included as in the app, and times realtime;
+- the worker's peak memory;
+- words, lines and sentence ends;
+- word error rate against an optional reference text;
+- whether it gave the same transcript as the first run.
+
+```bash
+.venv/bin/python scripts/bench-speech.py talk.mp4 --seconds 600 --reference talk.txt --repeat 2
+```
+
+- On Windows the interpreter is `.venv\Scripts\python.exe`.
+- `--device cpu` measures the CPU on a computer whose app uses its NVIDIA GPU.
+- `--language` is the app's language setting (`en` unless changed).
+- `--json runs.jsonl` appends one line per run.
+
+Compare sentence ends as well as word errors. Clips and captions break at sentence ends, and word error rate ignores punctuation and capitals.
+
+On the VM above, 551 s of LibriSpeech dev-clean narration (73 utterances, joined) took 150.7 s end to end (3.7× realtime). It peaked at 7.7 GB, with 4.0% word error rate.
+
+### Batched faster-whisper: measured, not used
+
+faster-whisper's batched pipeline decodes several 30 s windows at once. At batch 8 it transcribed that narration 22% faster end to end (117.5 s), with the same word error rate. It is not used because the transcript lost punctuation. Times below are decoding only, without about 20 s of start-up and model load.
+
+| 551 s of narration | Decoding | Sentence ends per 100 words | Unpunctuated 15-word runs per 1,000 words |
+|---|---|---|---|
+| One window at a time (**used**) | 130.9 s | 7.2 | 3.5 |
+| Batch 8, faster-whisper's windows | 103.3 s | 5.1 | 21.8 |
+| Batch 8, windows that keep their pauses and end at the longest one | 144.0 s | 5.5 | 14.0 |
+
+- **The windows cause it.** faster-whisper joins speech with its pauses shortened, and Whisper then drops punctuation and capitals ("and mr john collier gives his sitter a cheerful slap"). The one-window-at-a-time decoder does the same on that joined audio.
+- **Keeping the pauses is no faster on this CPU.** It needs more windows (25 instead of 17), and batching itself saved only about 10% per window. That version was slower than the current path and still lost some punctuation.
+- **A punctuated prompt is unsafe.** On a podcast it made whole 30 s windows come back as "Love it.": 190 words were lost and word error rate rose from 9.0% to 18.2%. On narration it restored punctuation.
+- **Conversation was unaffected.** On conversational podcasts (Rev16), batched transcripts were punctuated as well as the current path's.
+
+GPU speed was not measured. Batching usually gains more on a GPU, but the punctuation loss does not depend on the device. Before enabling batching anywhere, compare sentence ends with the benchmark.
+
 ## Agents on Windows and Linux
 
 Which agent engine a computer gets, and which model fits it, is decided in [`clip_factory/local_agents.py`](../clip_factory/local_agents.py). Apple Silicon keeps MLX. Every other computer runs its agents through [Ollama](https://ollama.com/download), which the creator installs; the app detects it but never installs it.
@@ -66,3 +106,10 @@ The check runs before production starts, not partway through. In order, the app 
 With a saved OpenRouter key and cloud agents on, the check is skipped.
 
 Calls through Ollama are recorded with provider `ollama`, the model and token counts, at no cost. Memory pressure for the local-resource guard comes from psutil on Windows and Linux (under 10 % of RAM available is a warning, under 5 % is critical). The guard needs at least 6 GiB available, or the model plus 3 GiB, before each strategist, brand research, references, post copy or learning call, so a 12 GB computer with other apps open may be held there. Speed on Windows and Linux has not been measured.
+
+Two things keep a run's Ollama calls from repeating work:
+
+- **One model load per run.** During a swarm run or a storyboard watch, the model stays loaded from one batch of calls to the next. It is unloaded once, when the run's calls are done (`models.held`), so later steps such as rendering have the memory. Before, it was unloaded after every batch and loaded again for the next.
+- **A shared prompt opening.** The talk scouts' prompts all start with the same text, and each stretch's times come after the settings. Ollama can then reuse the cached start of the prompt instead of reading it again for every scout.
+
+Neither saving has been measured yet.

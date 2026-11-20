@@ -1,5 +1,6 @@
 """Optional OpenRouter provider: routing, Keychain handling, errors, parity and accounting (all offline)."""
 
+import contextlib
 import json
 import logging
 from types import SimpleNamespace
@@ -402,6 +403,20 @@ def test_routed_transcription_never_leaves_the_mac(tmp_path):
     routed = lp.RoutedModels(models, gate, "agents")
     routed.run("j", "whisper-turbo", "transcribe", audio="/tmp/a.wav")
     assert models.calls[0][0] == "run" and models.calls[0][1] == "whisper-turbo"
+
+
+def test_a_run_holds_a_local_model_loaded_and_nothing_for_the_cloud(tmp_path):
+    held = []
+    models = FakeModels()
+    models.warm = lambda identifier: held.append(identifier) or contextlib.nullcontext()
+    gate = gateway(tmp_path)
+    routed = lp.RoutedModels(models, gate, "agents")
+    with routed.warm("ollama:qwen3-vl:4b-instruct"):
+        pass
+    gate.update_settings({"cloud_agents": True})
+    with routed.warm("ollama:qwen3-vl:4b-instruct"):
+        pass
+    assert held == ["ollama:qwen3-vl:4b-instruct"]
 
 
 def test_team_counts_cloud_usage_on_the_run(tmp_path):

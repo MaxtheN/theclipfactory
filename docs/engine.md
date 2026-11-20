@@ -212,6 +212,8 @@ automatically. Details are in `docs/learning-loop.md` and `docs/strategist.md`.
 | Fact | Source |
 | --- | --- |
 | 60 s of audio transcribed in 6.2 s, with 174 word timestamps | `docs/local-model-setup.md` |
+| 551 s of narration transcribed on an 8-vCPU CPU in 150.7 s end to end (3.7× realtime), with 4.0% word error rate | `docs/local-model-setup.md`, `scripts/bench-speech.py` |
+| Batched faster-whisper is 22% faster on that CPU but gives 30% fewer sentence ends, so it is not used | `docs/local-model-setup.md` |
 | 90 s source → one critic-checked 15.1 s clip in **119.2 s** (team mode, qwen3-vl:4b) | `docs/local-model-setup.md`, `docs/demo-acceptance.md` |
 | 3.4 h stream: a single pass gave 72–158 s ranges, while scouts kept every clip ≤60 s and spread across the source | `scouts.py` header, `scripts/experiments/long_video_ab.py` |
 | Swarm at ~1.2 clips per usable minute | A design **target** (`team.py:SWARM_CLIPS_PER_MINUTE`), not measured |

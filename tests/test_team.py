@@ -3,6 +3,7 @@
 Roles select storyboard scenes by ID; source ranges are derived and repaired in code.
 """
 
+import contextlib
 import copy
 import json
 from types import SimpleNamespace
@@ -1548,6 +1549,34 @@ def test_swarm_cuts_a_talk_from_its_words_without_first_watching_every_scene(har
     assert (first["start"], first["end"]) == (0.0, 28.18)
     assert first["_team"]["swarm"]["duration"]["ends_on_sentence"] is True
     assert run["status"] == "needs_review"
+
+
+def test_talk_scouts_share_one_prompt_opening_and_one_model_load(harness):
+    events = []
+
+    class Holding(SwarmModels):
+        @contextlib.contextmanager
+        def warm(self, model_id):
+            events.append("hold")
+            yield
+            events.append("release")
+
+        def run_batch(self, job_id, model_id, requests):
+            events.append("batch")
+            return super().run_batch(job_id, model_id, requests)
+
+    lines = [{"start": 10.0 * i, "end": 10.0 * i + 8, "text": "Six words are spoken right here."} for i in range(60)]
+    swarm_source(harness, minutes=10, scenes=10, has_audio=True, transcript={"speech": "throughout", "segments": lines})
+    harness.models = harness.engine.models = Holding()
+    harness.execute(mode="swarm")
+    # One load for every batch, released once the last is read (Ollama reloads a model it let go).
+    assert events == ["hold", "batch", "batch", "release"]
+    prompts = [request["prompt"] for batch in harness.models.batches for request in batch]
+    # Instructions, brief and settings are word for word the same in every prompt and the stretch is named
+    # only after them: a local model keeps its reading of that opening from one stretch to the next.
+    openings = {prompt.split("Your stretch is ", 1)[0] for prompt in prompts}
+    assert len(prompts) == 10 and len(openings) == 1
+    assert next(iter(openings)).splitlines()[-1].startswith("Settings: ")
 
 
 def test_swarm_skips_empty_stretches_and_survives_failed_renders(harness):

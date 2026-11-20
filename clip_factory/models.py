@@ -15,7 +15,7 @@ import subprocess
 import sys
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path, PurePosixPath
 
 import psutil
@@ -245,6 +245,12 @@ def catalog_entry(identifier: str) -> dict | None:
     return item
 
 
+def held(models, identifier: str | None):
+    """models.warm(identifier) for a run of batches; a plain block when there is no model to hold."""
+    hold = getattr(models, "warm", None)
+    return hold(identifier) if identifier and callable(hold) else nullcontext()
+
+
 class Models:
     def __init__(self, directory: Path, jobs: Jobs):
         self.root = directory
@@ -261,6 +267,9 @@ class Models:
         self._asr_ready_cache = None
         # The device the last local transcription really ran on (CUDA can fall back to the CPU).
         self.last_speech_device: dict | None = None
+        # Models a run holds loaded across its batches (see warm), with how many runs hold each.
+        self._warm: dict[str, int] = {}
+        self._warm_lock = threading.Lock()
         self.ollama = Ollama()
 
     @property
@@ -677,6 +686,28 @@ class Models:
             except OllamaError:
                 return  # Cleanup must not erase a completed result or original task failure.
 
+    @contextmanager
+    def warm(self, identifier: str):
+        """Keep a local model loaded across the batches of one run, and release it when the block ends.
+
+        A batch alone unloads its model after its last request so speech models get the memory. A run
+        that sends batch after batch (a swarm, a storyboard) would then reload the weights for every
+        batch and lose the prompt cache that lets Ollama skip re-reading a shared prompt opening.
+        """
+        with self._warm_lock:
+            self._warm[identifier] = self._warm.get(identifier, 0) + 1
+        try:
+            yield
+        finally:
+            with self._warm_lock:
+                left = self._warm.get(identifier, 1) - 1
+                if left > 0:
+                    self._warm[identifier] = left
+                else:
+                    self._warm.pop(identifier, None)
+            if left <= 0:
+                self.release_warm(identifier)
+
     def vision(self, identifier: str) -> bool:
         """Whether this LLM can read frames. Both MLX shelf models are vision-language models."""
         if is_ollama(identifier):
@@ -701,6 +732,8 @@ class Models:
                 raise WorkError("Inference input exceeds limits or is invalid.") from exc
             self.require(identifier, "llm")
             name = model_name(identifier)
+            with self._warm_lock:
+                held = identifier in self._warm
             results = []
             for index, request in enumerate(requests):
                 self.jobs.check(job_id)
@@ -714,7 +747,8 @@ class Models:
                         schema=request.get("schema"),
                         temperature=request.get("temperature", 0.3),
                         max_tokens=request.get("max_tokens", 1500),
-                        keep_alive="5m" if index + 1 < len(requests) else 0,
+                        # Held by a run (see warm): stays loaded for its next batch, released at its end.
+                        keep_alive="10m" if held else "5m" if index + 1 < len(requests) else 0,
                         check=lambda: self.jobs.check(job_id),
                     )
                     self._log_ollama(job_id, name, text)

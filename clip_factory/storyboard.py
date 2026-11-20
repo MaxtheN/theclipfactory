@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from . import media
 from .jobs import Jobs, WorkError
-from .models import Models
+from .models import Models, held
 from .store import Store, now
 
 VERSION = 1
@@ -384,54 +384,56 @@ class Storyboards:
                 scene["loudness"] = heard
             vision = bool(model_id) and self.models.vision(model_id)
             described = 0
-            for offset in range(0, len(scenes), BATCH):
-                group = scenes[offset : offset + BATCH]
-                self.jobs.check(job_id)
-                span = (high - low) * 0.92
-                self.jobs.update(
-                    job_id,
-                    progress=round(low + (high - low) * 0.08 + span * offset / len(scenes)),
-                    message=f"Watching the footage: scene {offset + 1} of {len(scenes)}",
-                )
-                requests = []
-                for scene in group:
-                    targets = [
-                        (at, staging / f"s{scene['index']:03}-{n}.jpg")
-                        for n, at in enumerate(frame_times(scene["start"], scene["end"], cuts, duration))
-                    ]
-                    stills = media.extract_frames(self.jobs, job_id, source, targets, hdr=hdr)
-                    scene["frames"] = [{"time": f["time"], "file": Path(f["path"]).name} for f in stills]
-                    if not model_id or (not vision and not scene["speech"]):
-                        continue
-                    request = {
-                        "prompt": observation_prompt(scene, scene["speech"], vision and bool(stills)),
-                        "schema": Observation.model_json_schema(),
-                        "max_tokens": 450,
-                        "temperature": 0.2,
-                        "_scene": scene,
-                    }
-                    if vision and stills:
-                        request["images"] = [f["path"] for f in stills]
-                        request["image_labels"] = [f"Frame at {f['time']:.1f}s" for f in stills]
-                    requests.append(request)
-                if not requests:
-                    continue
-                try:
-                    outputs = self.models.run_batch(
-                        job_id, model_id, [{k: v for k, v in r.items() if k != "_scene"} for r in requests]
+            # One model load for the whole watch: batches follow each other within seconds.
+            with held(self.models, model_id):
+                for offset in range(0, len(scenes), BATCH):
+                    group = scenes[offset : offset + BATCH]
+                    self.jobs.check(job_id)
+                    span = (high - low) * 0.92
+                    self.jobs.update(
+                        job_id,
+                        progress=round(low + (high - low) * 0.08 + span * offset / len(scenes)),
+                        message=f"Watching the footage: scene {offset + 1} of {len(scenes)}",
                     )
-                except WorkError:
-                    if not described:
-                        raise
-                    continue
-                for request, output in zip(requests, outputs):
-                    observed = parse_observation(output.get("output"))
-                    if observed:
-                        scene = request["_scene"]
-                        if not (vision and scene["frames"]):
-                            observed.update(visual=None, on_screen_text=[], usable=True)
-                        scene.update(observed)
-                        described += 1
+                    requests = []
+                    for scene in group:
+                        targets = [
+                            (at, staging / f"s{scene['index']:03}-{n}.jpg")
+                            for n, at in enumerate(frame_times(scene["start"], scene["end"], cuts, duration))
+                        ]
+                        stills = media.extract_frames(self.jobs, job_id, source, targets, hdr=hdr)
+                        scene["frames"] = [{"time": f["time"], "file": Path(f["path"]).name} for f in stills]
+                        if not model_id or (not vision and not scene["speech"]):
+                            continue
+                        request = {
+                            "prompt": observation_prompt(scene, scene["speech"], vision and bool(stills)),
+                            "schema": Observation.model_json_schema(),
+                            "max_tokens": 450,
+                            "temperature": 0.2,
+                            "_scene": scene,
+                        }
+                        if vision and stills:
+                            request["images"] = [f["path"] for f in stills]
+                            request["image_labels"] = [f"Frame at {f['time']:.1f}s" for f in stills]
+                        requests.append(request)
+                    if not requests:
+                        continue
+                    try:
+                        outputs = self.models.run_batch(
+                            job_id, model_id, [{k: v for k, v in r.items() if k != "_scene"} for r in requests]
+                        )
+                    except WorkError:
+                        if not described:
+                            raise
+                        continue
+                    for request, output in zip(requests, outputs):
+                        observed = parse_observation(output.get("output"))
+                        if observed:
+                            scene = request["_scene"]
+                            if not (vision and scene["frames"]):
+                                observed.update(visual=None, on_screen_text=[], usable=True)
+                            scene.update(observed)
+                            described += 1
             interval = max(1.0, round(duration / SIGNAL_POINTS, 2))
             for scene in scenes:
                 scene["speech"] = clip(scene["speech"], SPEECH_STORED)
