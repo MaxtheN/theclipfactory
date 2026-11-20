@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { keepIfSame } from "./stable";
 import { api, endpoint, post } from "../api";
 import type { Campaign, Clip, FactoryLine, Job } from "../types";
 import type { FactoryState } from "../useFactory";
@@ -278,8 +279,8 @@ export function ActivityCenter({
         api<PublishAttemptSummary[]>("/api/publish-attempts"),
         api<PostScheduleSummary[]>("/api/post-schedules"),
       ]);
-      setAttempts(Array.isArray(rows) ? rows : []);
-      setSchedules(Array.isArray(planned) ? planned : []);
+      setAttempts((old) => keepIfSame(old, Array.isArray(rows) ? rows : []));
+      setSchedules((old) => keepIfSame(old, Array.isArray(planned) ? planned : []));
       setAttemptsError(false);
     } catch {
       setAttemptsError(true);

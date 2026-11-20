@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
+import { keepIfSame } from "./stable";
 import { SHOW_FACTORY_MAP } from "./appEvents";
 import { FirstRunInstagram } from "./FirstRunInstagram";
 import { ClipStyleSheet } from "./ClipStyle";
@@ -139,7 +140,7 @@ export function FactoryHome({
       try {
         const result = await workspaceApi.teamRuns();
         if (alive) {
-          setRuns(result);
+          setRuns((old) => keepIfSame(old, result));
           setRunError("");
         }
       } catch (e) {

@@ -9,7 +9,8 @@
     "desktop:review": "../.venv/bin/python ../scripts/preview-interface.py",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "perf": "vitest run --config vitest.perf.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/instrument-sans": "^5.3.0",
