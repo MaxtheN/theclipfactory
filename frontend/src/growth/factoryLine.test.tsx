@@ -412,6 +412,33 @@ describe("review wall in the Library", () => {
     expect(requests.filter(request => request.method === "PUT")).toEqual([]);
   });
 
+  it("episode cards say what is left to review instead of repeating the count", () => {
+    const episodes = (f: FactoryState) =>
+      <Library w={workspace()} factory={f} onReview={vi.fn()} onProduce={vi.fn()} onFactory={vi.fn()} view="footage" />;
+    const card = () => document.querySelector(".gf-episode-body") as HTMLElement;
+    const view = render(episodes(factory({}, { clips: [made("a"), made("b", { approved: true })] })));
+    expect(within(card()).getByText("1 to review")).toBeInTheDocument();
+    expect(within(card()).getByText("2 clips")).toBeInTheDocument();
+    view.rerender(episodes(factory({}, { clips: [made("a", { approved: true })] })));
+    expect(within(card()).getByText("All approved")).toBeInTheDocument();
+    view.rerender(episodes(factory()));
+    expect(within(card()).getByText("0 clips")).toBeInTheDocument();
+    expect(within(card()).queryByText(/to review|All approved|No clips yet/)).not.toBeInTheDocument();
+  });
+
+  it("empty clip lists point at the episode that is ready, not at adding footage", () => {
+    const onFactory = vi.fn();
+    const library = (view: "edits" | "wall") =>
+      <Library w={workspace()} factory={factory()} onReview={vi.fn()} onProduce={vi.fn()} onFactory={onFactory} view={view} />;
+    const view = render(library("edits"));
+    expect(screen.getByText("Your episode is ready. Press Find clips in Factory and new clips land here.")).toBeInTheDocument();
+    expect(screen.queryByText(/Add footage in Factory/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go to Factory" }));
+    expect(onFactory).toHaveBeenCalledTimes(1);
+    view.rerender(library("wall"));
+    expect(screen.getByText("Press Find clips on an episode in Factory and new clips land here.")).toBeInTheDocument();
+  });
+
   describe("freeing space", () => {
     const deleted = () => requests.filter((r) => r.method === "DELETE").map((r) => r.url);
     const library = (w: Workspace, f: FactoryState) =>
