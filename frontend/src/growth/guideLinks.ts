@@ -17,7 +17,9 @@ export type GuidePage =
   | "posting"
   | "models"
   | "settings-privacy"
-  | "plans";
+  | "plans"
+  | "faq"
+  | "self-hosting";
 
 export const GUIDE_URL = "https://growth-factory-landing.vercel.app/guide/";
 export const HELP_EVENT = "gf-help";

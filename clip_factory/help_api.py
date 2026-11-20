@@ -34,6 +34,8 @@ PAGES = (
     "models",
     "settings-privacy",
     "plans",
+    "faq",
+    "self-hosting",
 )
 ANCHOR = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
