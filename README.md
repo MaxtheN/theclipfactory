@@ -11,7 +11,7 @@ extension, run checks and a sample render, and present the change for human revi
 Built for **EVOLVE: 8090 AI Hackathon**. Video and Instagram are the first production
 line; broader marketing channels and paid optimization are roadmap work.
 
-[Submission guide](docs/submission/README.md) · [Project story](docs/submission/devpost.md) ·
+[User guide](docs/guide/README.md) · [Submission guide](docs/submission/README.md) · [Project story](docs/submission/devpost.md) ·
 [Run locally](#run-on-an-apple-silicon-mac) · [Engine](docs/engine.md) ·
 [Factory builder](docs/factory-builder.md) · [Third-party notices](docs/third-party-notices.md)
 
@@ -178,6 +178,7 @@ models, media and services retain their respective licenses and terms.
 
 ## Documentation
 
+- [User guide](docs/guide/README.md): how to use every part of the app (also opened from **Help** in the app)
 - [Submission checklist and field mapping](docs/submission/README.md)
 - [Devpost project story](docs/submission/devpost.md), [field-ready copy](docs/submission/fields.md), [judge Q&A](docs/submission/judge-qa.md)
 - [Two-minute demo](docs/submission/demo-script.md) and [video storyboard](docs/submission/video-storyboard.md)
