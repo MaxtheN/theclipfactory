@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { EmptyLine, Grid, Panel, Section } from "./layout";
 import type {
   BeliefEvidence,
   BeliefStatus,
@@ -116,7 +118,7 @@ export function BeliefCard({
       {onRetire && belief.status !== "retired" && (
         <button
           type="button"
-          className="gf-strategist-link"
+          className="gf-ui-text-button"
           onClick={() => onRetire(belief.id)}
         >
           Retire belief
@@ -129,39 +131,62 @@ export function BeliefCard({
 export function BeliefLedger({
   beliefs,
   onRetire,
+  emptyAction,
+  emptyHint,
 }: {
   beliefs: LedgerBelief[];
   onRetire?: (id: string) => void;
+  /** One action beside the empty line, e.g. the learning-loop demo. */
+  emptyAction?: ReactNode;
+  emptyHint?: string;
 }) {
   // One empty state instead of an empty card per lane.
   if (!beliefs.length)
-    return <p className="gf-strategist-empty">No insights yet.</p>;
+    return (
+      <Panel padding="compact" tone="dashed">
+        <EmptyLine action={emptyAction}>
+          <span>No insights yet.</span>
+          {emptyHint && <span> {emptyHint}</span>}
+        </EmptyLine>
+      </Panel>
+    );
   return (
-    <div className="gf-strategist-lanes">
+    <Grid min={240}>
       {LANES.map((lane) => {
         const rows = beliefs.filter((b) => b.layer === lane.layer);
         return (
-          <section
+          <Panel
+            as="section"
             key={lane.layer}
-            className={`gf-strategist-lane is-${lane.layer}`}
+            padding="compact"
+            className={`gf-strategist-ledger-lane is-${lane.layer}`}
             aria-label={`${lane.title} beliefs`}
           >
-            <h3>{lane.title}</h3>
-            <p className="gf-strategist-note">{lane.note}</p>
-            {rows.length ? (
-              rows.map((belief) => (
-                <BeliefCard
-                  key={belief.id}
-                  belief={belief}
-                  onRetire={onRetire}
-                />
-              ))
-            ) : (
-              <p className="gf-strategist-empty">Nothing learned here yet.</p>
-            )}
-          </section>
+            <Section
+              as="div"
+              level={3}
+              title={lane.title}
+              count={rows.length || undefined}
+              info={<p>{lane.note}</p>}
+              infoLabel={`About ${lane.title}`}
+            >
+              {rows.length ? (
+                <div className="gf-strategist-belief-list">
+                  {rows.map((belief) => (
+                    <BeliefCard
+                      key={belief.id}
+                      belief={belief}
+                      onRetire={onRetire}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyLine>Nothing learned here yet.</EmptyLine>
+              )}
+            </Section>
+          </Panel>
         );
       })}
-    </div>
+    </Grid>
   );
 }

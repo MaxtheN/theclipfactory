@@ -15,6 +15,16 @@ import {
   type StrategistView,
 } from "./strategistApi";
 import { experimentLines } from "./resultsModel";
+import {
+  Cluster,
+  EmptyLine,
+  Grid,
+  ListRow,
+  Panel,
+  Section,
+  Stack,
+  StatusLine,
+} from "./layout";
 import "./strategist.css";
 
 const STEP_MS = 1100;
@@ -39,12 +49,7 @@ function PortfolioStrip({
   metric: string | null;
 }) {
   if (!portfolio?.slots.length)
-    return (
-      <p className="gf-strategist-empty">
-        Nothing queued yet. The first experiments appear once posts are
-        measured.
-      </p>
-    );
+    return <EmptyLine>Nothing queued until posts are measured.</EmptyLine>;
   const lines = experimentLines(portfolio.slots, metric);
   const modes = [
     ...new Map(
@@ -71,8 +76,8 @@ function runLabel(run: StrategistRun | undefined): string | null {
   if (run.status === "queued") return "Waiting for the local worker…";
   if (run.status === "running") return `${run.message} (${run.progress}%)`;
   if (run.status === "failed") return `Last run failed: ${run.message}`;
-  if (run.status === "completed" && !run.measured_posts)
-    return "No real measured posts yet — nothing to learn from. Try the learning loop demo.";
+  // The empty belief list says this and offers the demo.
+  if (run.status === "completed" && !run.measured_posts) return null;
   if (run.status === "completed")
     return `Reviewed ${run.measured_posts} measured post${run.measured_posts === 1 ? "" : "s"}${run.proposals?.length ? ` · ${run.proposals.length} new suggestion${run.proposals.length === 1 ? "" : "s"}` : " · nothing new"}.`;
   return null;
@@ -242,172 +247,205 @@ export function StrategistPanel({
       ? view.baseline.metrics[view.target_metric]
       : null;
 
+  const metricLabel = (view?.target_metric ?? "result").replace(/_/g, " ");
+  const caveat = simulation?.caveat ?? view?.caveat;
+  const noMeasuredPosts =
+    !simulation && latest?.status === "completed" && !latest.measured_posts;
+
   return (
     <section
       ref={panel}
       className={`gf-strategist${simulation ? " is-simulated" : ""}${reduced ? " is-reduced" : ""}`}
       aria-labelledby="gf-strategist-title"
     >
-      {simulation && (
-        <div className="gf-strategist-banner" role="status">
-          {simulation.banner}
-        </div>
-      )}
-      <header className="gf-strategist-head">
-        <div>
-          <span className="gf-results-step">02</span>
-          <h2 id="gf-strategist-title">What we've learned</h2>
-          <p>
-            The Strategist compares each measured post with your typical{" "}
-            {(view?.target_metric ?? "result").replace(/_/g, " ")}
-            {baselineValue != null && view
-              ? ` (${baselineValue.toLocaleString()} across ${view.baseline.posts} posts)`
-              : ""}
-            . Every change it suggests waits for you.
-          </p>
-        </div>
-        <div className="gf-strategist-actions">
-          <button
-            type="button"
-            onClick={() => void run()}
-            disabled={busy || active || !!simulation}
-          >
-            {busy || active ? "Strategist running…" : "Run strategist"}
-          </button>
-        </div>
-      </header>
-      {error && (
-        <p className="gf-strategist-error" role="alert">
-          {error}
-        </p>
-      )}
-      {!simulation && progress && (
-        <p className="gf-strategist-progress" role="status">
-          {progress}
-          {latest?.status === "completed" && !latest.measured_posts && onDemo && (
+      <Stack gap="md">
+        {simulation && (
+          <div className="gf-strategist-banner" role="status">
+            {simulation.banner}
+          </div>
+        )}
+        <Section
+          as="div"
+          title="Strategist"
+          titleId="gf-strategist-title"
+          infoLabel="How the Strategist works"
+          info={
             <>
-              {" "}
-              <button type="button" className="gf-strategist-link" onClick={onDemo}>
-                Run the learning loop
-              </button>
+              <p>
+                Compares each measured post with your typical {metricLabel}
+                {baselineValue != null && view
+                  ? ` (${baselineValue.toLocaleString()} across ${view.baseline.posts} posts)`
+                  : ""}
+                . Every change it suggests waits for you.
+              </p>
+              <p>Observational, not proof. It guides the next test.</p>
+              {caveat && <p className="gf-strategist-caveat">{caveat}</p>}
             </>
-          )}
-        </p>
-      )}
-      {note && (
-        <p
-          className={`gf-strategist-model is-${latest?.model.status}`}
-          role="status"
-        >
-          {note}
-        </p>
-      )}
-      {simulation && current && (
-        <div className="gf-strategist-sim-controls">
-          <span>
-            Simulated post {current.step} of {simulation.steps.length}:{" "}
-            {current.post.views.toLocaleString()} views vs typical{" "}
-            {current.baseline_views?.toLocaleString() ?? "unknown"}
-            {current.layers_run.length
-              ? ` · reviewed ${current.layers_run.join(", ").replace("campaign", "posting plan")}`
-              : ""}
-          </span>
-          <button
-            type="button"
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            disabled={step === 0}
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setStep((s) => Math.min(simulation.steps.length - 1, s + 1))
-            }
-            disabled={step >= simulation.steps.length - 1}
-          >
-            Next
-          </button>
-          {!reduced && (
-            <button type="button" onClick={() => setPlaying((p) => !p)}>
-              {playing ? "Pause" : "Play"}
+          }
+          meta={!simulation && progress ? progress : undefined}
+          actions={
+            <button
+              type="button"
+              className="gf-button secondary compact"
+              onClick={() => void run()}
+              disabled={busy || active || !!simulation}
+            >
+              {busy || active ? "Strategist running…" : "Run strategist"}
             </button>
+          }
+        >
+          {error && (
+            <StatusLine tone="danger" alert>
+              {error}
+            </StatusLine>
           )}
-        </div>
-      )}
-      <BeliefLedger
-        beliefs={beliefs}
-        onRetire={simulation ? undefined : (id) => void retire(id)}
-      />
-      {!simulation && learnedExtra}
-      <p className="gf-strategist-footnote">
-        Observational, not proof. Guides the next test.
-      </p>
-      <section className="gf-strategist-section" aria-labelledby="gf-next-experiment">
-        <span className="gf-results-step">03</span>
-        <h3 id="gf-next-experiment">Next experiment</h3>
-        <p className="gf-strategist-note">
-          Mostly proven patterns; about 1 in 4 explores.
-        </p>
-        <PortfolioStrip
-          portfolio={portfolio}
-          metric={view?.target_metric ?? null}
-        />
-      </section>
-      {!simulation && (
-        <section className="gf-strategist-section" aria-labelledby="gf-waiting-for-you">
-          <span className="gf-results-step">04</span>
-          <h3 id="gf-waiting-for-you">
-            Waiting for you{waitingCount ? ` (${waitingCount})` : ""}
-          </h3>
-          {!waitingCount && (
-            <p className="gf-strategist-empty">
-              Nothing needs you right now.
-            </p>
+          {note && (
+            <StatusLine tone={latest?.model.status === "held" ? "warning" : "neutral"}>
+              {note}
+            </StatusLine>
           )}
-          {pending?.style_rules.map((rule) => (
-            <article key={rule.id} className="gf-strategist-proposal">
-              <span>
-                New {rule.layer === "selection" ? "clip-picking" : "editing"}{" "}
-                rule · Style rules version {rule.version}
-              </span>
+        </Section>
+        {simulation && current && (
+          <Cluster className="gf-strategist-sim-controls">
+            <span>
+              Simulated post {current.step} of {simulation.steps.length}:{" "}
+              {current.post.views.toLocaleString()} views vs typical{" "}
+              {current.baseline_views?.toLocaleString() ?? "unknown"}
+              {current.layers_run.length
+                ? ` · reviewed ${current.layers_run.join(", ").replace("campaign", "posting plan")}`
+                : ""}
+            </span>
+            <button
+              type="button"
+              className="gf-button secondary compact"
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              disabled={step === 0}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="gf-button secondary compact"
+              onClick={() =>
+                setStep((s) => Math.min(simulation.steps.length - 1, s + 1))
+              }
+              disabled={step >= simulation.steps.length - 1}
+            >
+              Next
+            </button>
+            {!reduced && (
               <button
                 type="button"
-                className="gf-strategist-link"
-                onClick={onOpenStyleRules}
-                disabled={!onOpenStyleRules}
+                className="gf-button secondary compact"
+                onClick={() => setPlaying((p) => !p)}
               >
-                Review in Style rules
+                {playing ? "Pause" : "Play"}
               </button>
-            </article>
-          ))}
-          {pending?.campaign.map((proposal) => (
-            <details key={proposal.id} className="gf-strategist-proposal">
-              <summary>Review a posting-time suggestion</summary>
-              <p>{proposal.summary}</p>
-              <small>{proposal.caveat}</small>
-              <div className="gf-strategist-actions">
-                <button
-                  type="button"
-                  onClick={() => void decide(proposal.id, true)}
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void decide(proposal.id, false)}
-                >
-                  Reject
-                </button>
-              </div>
-            </details>
-          ))}
-          {extraWaiting}
-        </section>
-      )}
-      <p className="gf-strategist-caveat">
-        {simulation?.caveat ?? view?.caveat}
-      </p>
+            )}
+          </Cluster>
+        )}
+        <BeliefLedger
+          beliefs={beliefs}
+          onRetire={simulation ? undefined : (id) => void retire(id)}
+          emptyAction={
+            noMeasuredPosts && onDemo ? (
+              <button type="button" className="gf-ui-text-button" onClick={onDemo}>
+                Run the learning loop
+              </button>
+            ) : undefined
+          }
+          emptyHint={noMeasuredPosts ? "No measured posts to learn from yet." : undefined}
+        />
+        {!simulation && learnedExtra}
+        <Grid min={320}>
+          <Panel
+            as="section"
+            padding="compact"
+            aria-labelledby="gf-next-experiment"
+          >
+            <Section
+              as="div"
+              level={3}
+              title="Next experiment"
+              titleId="gf-next-experiment"
+              infoLabel="How experiments are picked"
+              info={<p>Mostly proven patterns; about 1 in 4 explores.</p>}
+            >
+              <PortfolioStrip
+                portfolio={portfolio}
+                metric={view?.target_metric ?? null}
+              />
+            </Section>
+          </Panel>
+          {!simulation && (
+            <Panel
+              as="section"
+              padding="compact"
+              aria-labelledby="gf-waiting-for-you"
+            >
+              <Section
+                as="div"
+                level={3}
+                title="Waiting for you"
+                titleId="gf-waiting-for-you"
+                count={waitingCount || undefined}
+              >
+                {!waitingCount && <EmptyLine>Nothing needs you right now.</EmptyLine>}
+                {waitingCount > 0 && (
+                  <Stack gap="xs">
+                    {pending?.style_rules.map((rule) => (
+                      <ListRow
+                        key={rule.id}
+                        action={
+                          <button
+                            type="button"
+                            className="gf-ui-text-button"
+                            onClick={onOpenStyleRules}
+                            disabled={!onOpenStyleRules}
+                          >
+                            Review in Style rules
+                          </button>
+                        }
+                      >
+                        <span>
+                          New {rule.layer === "selection" ? "clip-picking" : "editing"} rule
+                        </span>
+                        <small>Style rules version {rule.version}</small>
+                      </ListRow>
+                    ))}
+                    {pending?.campaign.map((proposal) => (
+                      <details key={proposal.id} className="gf-list-row">
+                        <summary>Review a posting-time suggestion</summary>
+                        <Stack gap="sm">
+                          <p>{proposal.summary}</p>
+                          <small>{proposal.caveat}</small>
+                          <Cluster>
+                            <button
+                              type="button"
+                              className="gf-button secondary compact"
+                              onClick={() => void decide(proposal.id, true)}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="gf-button secondary compact"
+                              onClick={() => void decide(proposal.id, false)}
+                            >
+                              Reject
+                            </button>
+                          </Cluster>
+                        </Stack>
+                      </details>
+                    ))}
+                    {extraWaiting}
+                  </Stack>
+                )}
+              </Section>
+            </Panel>
+          )}
+        </Grid>
+      </Stack>
     </section>
   );
 }

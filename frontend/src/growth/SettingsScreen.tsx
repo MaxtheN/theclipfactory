@@ -44,16 +44,16 @@ function shown(key: ReadinessKey, value: SystemInfo[ReadinessKey]): string {
 
 /** The missing prerequisites production needs, each with the action that resolves it. */
 function missing(system: SystemInfo) {
-  const rows: { id: string; label: string; fix: string; models?: boolean }[] = [];
+  const rows: { id: string; label: string; fix?: string; models?: boolean }[] = [];
   if (system.ffmpeg === false || system.ffprobe === false)
     rows.push({ id: "ffmpeg", label: "FFmpeg is missing.", fix: platformWords().installFfmpeg });
   if (system.model_runtime === false)
-    rows.push({ id: "runtime", label: "The local model runtime isn’t set up.", fix: "Set up the runtime in Models.", models: true });
+    rows.push({ id: "runtime", label: "The local model runtime isn’t set up.", models: true });
   if (system.whisper === false)
-    rows.push({ id: "speech", label: "Speech-to-text isn’t installed.", fix: "Install speech in Models.", models: true });
+    rows.push({ id: "speech", label: "Speech-to-text isn’t installed.", models: true });
   const agents = system.agents?.engine === "ollama" ? system.agents.blocker : null;
   if (agents)
-    rows.push({ id: "agents", label: "Local agents can’t run yet.", fix: `${agents.message} Set them up in Models.`, models: true });
+    rows.push({ id: "agents", label: "Local agents can’t run yet.", fix: agents.message, models: true });
   return rows;
 }
 
@@ -117,7 +117,7 @@ export function SettingsScreen({
               <ul className="gf-settings-gaps" aria-label="Missing prerequisites">
                 {gaps.map((gap) => (
                   <li key={gap.id}>
-                    <span><strong>{gap.label}</strong> {gap.fix}</span>
+                    <span><strong>{gap.label}</strong>{gap.fix && <> {gap.fix}</>}</span>
                     {gap.models && <button type="button" className="gf-button secondary compact" onClick={() => onSection("models")}>Open Models<Icon name="arrow" size={14} /></button>}
                   </li>
                 ))}

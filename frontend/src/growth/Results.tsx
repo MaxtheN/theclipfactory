@@ -32,6 +32,7 @@ import { activeRulesId, type Workspace } from "./useCampaignWorkspace";
 import { reviewPreview, workspaceApi } from "./workspaceApi";
 import { Disclosure, Empty, Field, Pill, PrimaryAction } from "./parts";
 import { Icon } from "./Icon";
+import { ListRow, Panel, Section, Stack, StatRow } from "./layout";
 
 const productionKeys: (keyof Direction)[] = [
   "angles",
@@ -1022,28 +1023,38 @@ function PostedClips({
 function LearnedExtra({ memory }: { memory: LearningMemory | null }) {
   if (!memory || (!memory.posts && !memory.comparisons.length)) return null;
   const known = memory.baseline.filter((m) => m.median !== null).slice(0, 4);
+  const label = (name: string) => name.replace(/_/g, " ");
   return (
-    <div className="gf-results-typical">
+    <Panel padding="compact">
       {known.length > 0 && (
-        <p>
-          <strong>Your typical post</strong> (middle of {memory.posts} tracked):{" "}
-          {known
-            .map((m) => `${m.median!.toLocaleString()} ${m.name.replace(/_/g, " ")}`)
-            .join(" · ")}
-        </p>
+        <Section
+          as="div"
+          level={3}
+          title="Your typical post"
+          meta={`Median of ${memory.posts} tracked post${memory.posts === 1 ? "" : "s"}`}
+        >
+          <StatRow
+            items={known.map((m) => ({ key: m.name, label: label(m.name), value: m.median!.toLocaleString() }))}
+          />
+        </Section>
       )}
-      {memory.comparisons.map((c) => (
-        <p key={c.experimentId}>
-          <strong>Measured test · {c.variable.replace(/_/g, " ")}:</strong>{" "}
-          {c.metrics
-            .map(
-              (m) =>
-                `${m.name.replace(/_/g, " ")} ${m.parent?.toLocaleString() ?? "unknown"} → ${m.variant?.toLocaleString() ?? "unknown"}`,
-            )
-            .join(" · ")}
-        </p>
-      ))}
-    </div>
+      {memory.comparisons.length > 0 && (
+        <Section as="div" level={3} title="Measured tests" count={memory.comparisons.length}>
+          <Stack gap="xs">
+            {memory.comparisons.map((c) => (
+              <ListRow key={c.experimentId}>
+                <span>{label(c.variable)}</span>
+                <small>
+                  {c.metrics
+                    .map((m) => `${label(m.name)} ${m.parent?.toLocaleString() ?? "unknown"} → ${m.variant?.toLocaleString() ?? "unknown"}`)
+                    .join(" · ")}
+                </small>
+              </ListRow>
+            ))}
+          </Stack>
+        </Section>
+      )}
+    </Panel>
   );
 }
 
@@ -1390,43 +1401,45 @@ export function Results({
           extraWaiting={
             <>
               {memoryPending.map((p) => (
-                <article key={p.id} className="gf-strategist-proposal">
-                  <span>
-                    New Style rules
-                    {p.version !== null ? ` version ${p.version}` : ""} to review
-                    {"source" in p ? "" : " · from a measured test"}
-                  </span>
-                  <button
-                    type="button"
-                    className="gf-strategist-link"
-                    onClick={onEditingRules}
-                    disabled={!onEditingRules}
-                  >
-                    Review in Style rules
-                  </button>
-                </article>
+                <ListRow
+                  key={p.id}
+                  action={
+                    <button
+                      type="button"
+                      className="gf-ui-text-button"
+                      onClick={onEditingRules}
+                      disabled={!onEditingRules}
+                    >
+                      Review in Style rules
+                    </button>
+                  }
+                >
+                  <span>New Style rules{p.version !== null ? ` version ${p.version}` : ""}</span>
+                  {!("source" in p) && <small>From a measured test</small>}
+                </ListRow>
               ))}
               {drafts.map(({ experiment, clip }) => (
-                <article key={experiment.id} className="gf-strategist-proposal">
+                <ListRow
+                  key={experiment.id}
+                  action={
+                    <button
+                      type="button"
+                      className="gf-ui-text-button"
+                      onClick={() => onReview?.(clip)}
+                      disabled={!onReview}
+                    >
+                      Review draft
+                    </button>
+                  }
+                >
                   <span>
-                    New draft to review: changes the{" "}
-                    {textOf(experiment.variable).replace(/_/g, " ") || "edit"} ·{" "}
-                    “{clip.hook || clip.name}”
-                    {experiment.trigger === "demo_override" && (
-                      <span className="gf-automation-badge">
-                        Demo override · measured early
-                      </span>
-                    )}
+                    New draft: {textOf(experiment.variable).replace(/_/g, " ") || "edit"} change
                   </span>
-                  <button
-                    type="button"
-                    className="gf-strategist-link"
-                    onClick={() => onReview?.(clip)}
-                    disabled={!onReview}
-                  >
-                    Review draft
-                  </button>
-                </article>
+                  <small>
+                    “{clip.hook || clip.name}”
+                    {experiment.trigger === "demo_override" && " · Demo override, measured early"}
+                  </small>
+                </ListRow>
               ))}
             </>
           }
