@@ -11,6 +11,8 @@ import {
 } from "./workspaceApi";
 import { Disclosure, Field } from "./parts";
 import { Icon } from "./Icon";
+import { PillList, PillSelect } from "./PillField";
+import { AUDIENCE, EDIT_RULES, METRIC, METRIC_LABELS } from "./choiceOptions";
 import { BrandMark } from "./BrandMark";
 import { LaunchTransition, type LaunchPhase } from "./LaunchTransition";
 import { CloudAccountFields, useCloudAccount } from "./CloudSignIn";
@@ -799,20 +801,14 @@ export function Onboarding({
                 {drafted?.audience && audience === drafted.audience && (
                   <span className="gf-from-site" aria-hidden="true">from your site</span>
                 )}
-                <Field label="Who are we speaking to?">
-                  {(id) => (
-                    <AutoTextarea
-                      id={id}
-                      rows={3}
-                      required
-                      maxLength={3000}
-                      value={audience}
-                      disabled={locked}
-                      placeholder="Who do you want to reach, and what matters to them?"
-                      onChange={(e) => setAudience(e.target.value)}
-                    />
-                  )}
-                </Field>
+                <PillList
+                  label="Who are we speaking to?"
+                  format="comma"
+                  options={AUDIENCE}
+                  value={audience}
+                  disabled={locked}
+                  onChange={setAudience}
+                />
                 </div>
               </>
             )}
@@ -876,22 +872,15 @@ export function Onboarding({
                         />
                       )}
                     </Field>
-                    <Field
+                    <PillSelect
                       label="Primary metric"
                       hint="The measure you’ll bring back later. This sets a goal, not a result."
-                    >
-                      {(id) => (
-                        <input
-                          id={id}
-                          required
-                          maxLength={200}
-                          disabled={locked}
-                          value={customMetric}
-                          placeholder="e.g. qualified demo requests"
-                          onChange={(e) => setCustomMetric(e.target.value)}
-                        />
-                      )}
-                    </Field>
+                      options={METRIC}
+                      labels={METRIC_LABELS}
+                      value={customMetric}
+                      disabled={locked}
+                      onChange={setCustomMetric}
+                    />
                   </div>
                 )}
                 {outcome === "discovery" && (
@@ -978,21 +967,16 @@ export function Onboarding({
                   </div>
                 )}
                 <Disclosure title="Voice & boundaries" icon="settings">
-                  <Field
+                  <PillList
                     label="What should every edit respect?"
-                    hint="Up to 30 lines."
-                  >
-                    {(id) => (
-                      <AutoTextarea
-                        id={id}
-                        rows={3}
-                        maxLength={4000}
-                        value={guardrails}
-                        disabled={locked}
-                        onChange={(e) => setGuardrails(e.target.value)}
-                      />
-                    )}
-                  </Field>
+                    hint="Up to 30."
+                    format="lines"
+                    max={30}
+                    options={EDIT_RULES}
+                    value={guardrails}
+                    disabled={locked}
+                    onChange={setGuardrails}
+                  />
                 </Disclosure>
               </>
             )}

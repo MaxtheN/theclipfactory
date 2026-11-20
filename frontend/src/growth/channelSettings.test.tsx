@@ -28,6 +28,7 @@ import { Setup } from "./Setup";
 import { workspaceApi } from "./workspaceApi";
 import { resetPreview } from "./previewApi";
 import { GrowthApp } from "./GrowthApp";
+import { setPills, pillValue, pillsDisabled, pillGroup } from "../test-pills";
 
 const nativeShowModal = HTMLDialogElement.prototype.showModal;
 const nativeClose = HTMLDialogElement.prototype.close;
@@ -234,12 +235,12 @@ describe("brand profile", () => {
     fireEvent.click(opener);
     const editor = screen.getByRole("dialog", { name: "Brand, audience & voice" });
     expect(editor).toBeVisible();
-    fireEvent.change(within(editor).getByLabelText("Who it's for"), { target: { value: "A draft audience" } });
+    setPills("Who it's for", "A draft audience", within(editor));
     fireEvent.click(within(editor).getByRole("button", { name: "Close Brand, audience & voice" }));
     expect(opener).toHaveFocus();
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(opener);
-    expect(within(screen.getByRole("dialog")).getByLabelText("Who it's for")).toHaveValue("A draft audience");
+    expect(pillValue("Who it's for", within(screen.getByRole("dialog")))).toBe("A draft audience");
     expect(api.updateProfile).not.toHaveBeenCalled();
     expect(api.save).not.toHaveBeenCalled();
     expect(view.container.querySelectorAll("dialog")).toHaveLength(2);
@@ -264,16 +265,16 @@ describe("brand profile", () => {
     openProfileEditor("goals");
     const dialog = screen.getByRole("dialog", { name: "Goals & brief" });
     expect(dialog).toHaveClass("gf-panel-dialog-wide");
-    fireEvent.change(within(dialog).getByLabelText("Notes for the agents"), { target: { value: "A goal draft" } });
+    setPills("Notes for the agents", "A goal draft", within(dialog));
     fireEvent.click(within(dialog).getByRole("button", { name: "Close Goals & brief" }));
     view.rerender(<Setup {...props} goalsRequest={1} />);
-    expect(within(screen.getByRole("dialog", { name: "Goals & brief" })).getByLabelText("Notes for the agents")).toHaveValue("A goal draft");
+    expect(pillValue("Notes for the agents", within(screen.getByRole("dialog", { name: "Goals & brief" })))).toBe("A goal draft");
     view.rerender(<Setup {...props} active={false} goalsRequest={1} />);
     expect(screen.queryByRole("dialog")).toBeNull();
     view.rerender(<Setup {...props} active goalsRequest={1} />);
     expect(screen.queryByRole("dialog")).toBeNull();
     openProfileEditor("goals");
-    expect(within(screen.getByRole("dialog", { name: "Goals & brief" })).getByLabelText("Notes for the agents")).toHaveValue("A goal draft");
+    expect(pillValue("Notes for the agents", within(screen.getByRole("dialog", { name: "Goals & brief" })))).toBe("A goal draft");
     expect(api.save).not.toHaveBeenCalled();
     expect(api.updateProfile).not.toHaveBeenCalled();
   });
@@ -281,22 +282,22 @@ describe("brand profile", () => {
   it("shows focused brand fields and only offers Save after an edit", () => {
     const { view, next, onAccounts } = fixture();
     expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo");
-    expect(screen.getByLabelText("Who it's for")).toHaveValue("Builders");
-    expect(screen.getByLabelText("Voice & boundaries")).toHaveValue("Keep meaning");
+    expect(pillValue("Who it's for")).toBe("Builders");
+    expect(pillValue("Voice & boundaries")).toBe("Keep meaning");
     // Campaign fields live in the Campaign brief, not here.
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByLabelText("Campaign name")).toBeNull();
     expect(screen.queryByRole("button", { name: "Save brief" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull();
-    fireEvent.change(screen.getByLabelText("Who it's for"), { target: { value: "An edited audience" } });
+    setPills("Who it's for", "An edited audience");
     expect(screen.getByRole("button", { name: "Save brand" })).toBeEnabled();
-    fireEvent.change(screen.getByLabelText("Who it's for"), { target: { value: "Builders" } });
+    setPills("Who it's for", "Builders");
     expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull();
     expect(view.container.querySelector('input[type="file"]')).toBeNull();
     // Advanced is closed and holds the rarely used notes.
     const advanced = screen.getByLabelText("Advanced controls").closest("details")!;
     expect(advanced.open).toBe(false);
-    expect(advanced).toContainElement(screen.getByLabelText("Extra creative notes"));
+    expect(advanced).toContainElement(pillGroup("Extra creative notes"));
     fireEvent.click(screen.getByRole("button", { name: "Close Brand, audience & voice" }));
     fireEvent.click(screen.getByRole("button", { name: "Style rules" }));
     expect(next).toHaveBeenCalledTimes(1);
@@ -310,9 +311,7 @@ describe("brand profile", () => {
     const { api, store, next, onSaved } = fixture({
       latestVideos: ["source-a", "source-new"],
     });
-    fireEvent.change(screen.getByLabelText("Who it's for"), {
-      target: { value: "Founders shipping AI products" },
-    });
+    setPills("Who it's for", "Founders shipping AI products");
     fireEvent.click(saveButton());
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(api.updateProfile).toHaveBeenCalledTimes(1);
@@ -405,7 +404,7 @@ describe("brand profile", () => {
       Object.assign(saved, clone(body));
       return clone(saved);
     });
-    fireEvent.change(screen.getByLabelText("Who it's for"), { target: { value: "The first saved audience" } });
+    setPills("Who it's for", "The first saved audience");
     fireEvent.click(saveButton());
     await waitFor(() => expect(api.updateProfile).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("button", { name: "Close Brand, audience & voice" }));
@@ -429,7 +428,7 @@ describe("brand profile", () => {
   it("never falls back to another brand when the selected one is no longer linked", async () => {
     const { api, store, onSaved } = fixture();
     store.campaigns[0].profile_ids = ["profile-b"];
-    fireEvent.change(screen.getByLabelText("Who it's for"), { target: { value: "A changed audience" } });
+    setPills("Who it's for", "A changed audience");
     fireEvent.click(saveButton());
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -447,9 +446,7 @@ describe("brand profile", () => {
     api.updateProfile.mockRejectedValueOnce(
       new ApiError("Profile name must not be blank.", 422),
     );
-    fireEvent.change(screen.getByLabelText("Who it's for"), {
-      target: { value: "Retained audience" },
-    });
+    setPills("Who it's for", "Retained audience");
     fireEvent.click(saveButton());
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -457,7 +454,7 @@ describe("brand profile", () => {
       ),
     );
     expect(api.save).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Who it's for")).toHaveValue("Retained audience");
+    expect(pillValue("Who it's for")).toBe("Retained audience");
     expect(onSaved).not.toHaveBeenCalled();
     expect(saveButton()).toBeEnabled();
     fireEvent.click(saveButton());
@@ -510,11 +507,11 @@ describe("goals & brief (the default campaign)", () => {
     expect(screen.getByRole("option", { name: /^Drive visits/ })).toBeTruthy();
     expect(screen.queryByLabelText("Brand name")).toBeNull();
     expect(
-      screen.getAllByRole("button", { name: /^Save/ }).map((b) => b.textContent),
+      screen.getAllByRole("button", { name: /^Save\b/ }).map((b) => b.textContent),
     ).toEqual(["Save brief", "Save goals"]);
     expect(screen.getByRole("button", { name: "Save brief" })).toBeDisabled();
     expect(view.container.querySelector('input[type="file"]')).toBeNull();
-    expect(screen.getByLabelText("Primary metric")).toBeDisabled();
+    expect(pillsDisabled("Primary metric")).toBe(true);
     expect(saveButton()).toBeEnabled();
     // Advanced: footage attachment and shared brands stay available.
     expect(screen.getByLabelText("Attach Source A")).toBeDisabled();
@@ -529,9 +526,7 @@ describe("goals & brief (the default campaign)", () => {
       target: { value: "traffic" },
     });
     expect(saveButton()).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Primary metric"), {
-      target: { value: "full_episode_visits" },
-    });
+    setPills("Primary metric", "full_episode_visits");
     expect(saveButton()).toBeEnabled();
   });
 
@@ -543,9 +538,7 @@ describe("goals & brief (the default campaign)", () => {
     fireEvent.change(screen.getByLabelText("What are we working toward?"), {
       target: { value: "traffic" },
     });
-    fireEvent.change(screen.getByLabelText("Primary metric"), {
-      target: { value: " full_episode_visits " },
-    });
+    setPills("Primary metric", " full_episode_visits ");
     fireEvent.click(screen.getByLabelText("Attach Source B"));
     fireEvent.click(saveButton());
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
@@ -577,16 +570,14 @@ describe("goals & brief (the default campaign)", () => {
   it("keeps the draft after a rejected save and needs no readback for a definite refusal", async () => {
     const { api, onSaved, store } = fixture({ part: "campaign" });
     api.save.mockRejectedValueOnce(new ApiError("Conflict", 409));
-    fireEvent.change(screen.getByLabelText("Notes for the agents"), {
-      target: { value: "Favour founders" },
-    });
+    setPills("Notes for the agents", "Favour founders");
     fireEvent.click(saveButton());
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("Nothing was saved"),
     );
     expect(store.campaigns[0].notes).toBe("");
     expect(onSaved).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Notes for the agents")).toHaveValue("Favour founders");
+    expect(pillValue("Notes for the agents")).toBe("Favour founders");
     expect(saveButton()).toBeEnabled();
     fireEvent.click(saveButton());
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
@@ -599,9 +590,7 @@ describe("goals & brief (the default campaign)", () => {
     api.save.mockImplementationOnce(async () => {
       throw new ApiError("Cannot reach the local service.", 0);
     });
-    fireEvent.change(screen.getByLabelText("Notes for the agents"), {
-      target: { value: "Favour founders" },
-    });
+    setPills("Notes for the agents", "Favour founders");
     fireEvent.click(saveButton());
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(

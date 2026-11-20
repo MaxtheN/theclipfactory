@@ -15,6 +15,7 @@ import {
   type ResearchEvent,
   type WebsiteBriefApi,
 } from "./websiteBriefApi";
+import { pillValue } from "../test-pills";
 
 const draft: BrandDraft = {
   brand_name: "All-In",
@@ -394,7 +395,7 @@ describe("onboarding step 1: your website", () => {
     expect(await screen.findByRole("heading", { name: "Who should care?" })).toBeInTheDocument();
     expect(screen.getByText(/Drafted from your website/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Name your brand / podcast" })).toHaveValue("All-In");
-    expect(screen.getByRole("textbox", { name: "Who are we speaking to?" })).toHaveValue(
+    expect(pillValue("Who are we speaking to?")).toBe(
       "Founders and investors who follow tech and markets.",
     );
     expect(profile).not.toHaveBeenCalled();

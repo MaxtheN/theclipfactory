@@ -13,6 +13,8 @@ import {
   formatTime,
 } from "./parts";
 import { Icon } from "./Icon";
+import { PillList, PillSelect } from "./PillField";
+import { AUDIENCE, CREATIVE_NOTES, EDIT_RULES, METRIC, METRIC_LABELS, TONE } from "./choiceOptions";
 import { PanelDialog } from "./PanelDialog";
 import "./brand-profile.css";
 import { objectives, type BrandKit, type Campaign, type Profile } from "../types";
@@ -663,35 +665,26 @@ export function Setup({
             </footer>
           </section>
         )}
-        <Field label="Who it's for">
-          {(id) => (
-            <AutoTextarea
-              rows={1}
-              id={id}
-              maxLength={3000}
-              placeholder="Builders, founders and curious minds"
-              value={audience}
-              onChange={(e) => {
-                setAudience(e.target.value);
-                edited();
-              }}
-            />
-          )}
-        </Field>
-        <Field label="Voice & boundaries" hint="One rule per line.">
-          {(id) => (
-            <AutoTextarea
-              id={id}
-              rows={3}
-              maxLength={4000}
-              value={voice}
-              onChange={(e) => {
-                setVoice(e.target.value);
-                edited();
-              }}
-            />
-          )}
-        </Field>
+        <PillList
+          label="Who it's for"
+          format="comma"
+          options={AUDIENCE}
+          value={audience}
+          onChange={(v) => {
+            setAudience(v);
+            edited();
+          }}
+        />
+        <PillList
+          label="Voice & boundaries"
+          format="lines"
+          options={[...TONE, ...EDIT_RULES]}
+          value={voice}
+          onChange={(v) => {
+            setVoice(v);
+            edited();
+          }}
+        />
       </FieldGroup>
   );
 
@@ -769,21 +762,16 @@ export function Setup({
           <Icon name="down" size={15} />
         </summary>
         <div className="gf-disclosure-body">
-          <Field label="Extra creative notes">
-            {(id) => (
-              <AutoTextarea
-                id={id}
-                rows={2}
-                maxLength={4000}
-                placeholder="e.g. Lead with a clear claim; keep the context intact."
-                value={creative}
-                onChange={(e) => {
-                  setCreative(e.target.value);
-                  edited();
-                }}
-              />
-            )}
-          </Field>
+          <PillList
+            label="Extra creative notes"
+            format="lines"
+            options={CREATIVE_NOTES}
+            value={creative}
+            onChange={(v) => {
+              setCreative(v);
+              edited();
+            }}
+          />
           {onNewCampaign && (
             <button
               type="button"
@@ -836,48 +824,30 @@ export function Setup({
             </select>
           )}
         </Field>
-        <Field
+        <PillSelect
           label="Primary metric"
-          hint={
-            metricNeeded
-              ? "Required for this goal."
-              : "Not needed while exploring."
-          }
-        >
-          {(id) => (
-            <AutoTextarea
-              id={id}
-              rows={1}
-              maxLength={200}
-              value={metricNeeded ? metric : ""}
-              disabled={!metricNeeded}
-              placeholder={
-                metricNeeded
-                  ? "e.g. full_episode_visits"
-                  : "Not needed for discovery"
-              }
-              onChange={(e) => {
-                setMetric(e.target.value);
-                edited();
-              }}
-            />
-          )}
-        </Field>
-        <Field label="Notes for the agents" hint="Optional.">
-          {(id) => (
-            <AutoTextarea
-              id={id}
-              rows={2}
-              maxLength={2000}
-              placeholder="e.g. Favour the guest's founding story"
-              value={notes}
-              onChange={(e) => {
-                setNotes(e.target.value);
-                edited();
-              }}
-            />
-          )}
-        </Field>
+          hint={metricNeeded ? "Required for this goal." : "Not needed while exploring."}
+          options={METRIC}
+          labels={METRIC_LABELS}
+          value={metricNeeded ? metric : ""}
+          disabled={!metricNeeded}
+          onChange={(v) => {
+            setMetric(v);
+            edited();
+          }}
+        />
+        <PillList
+          label="Notes for the agents"
+          hint="Optional."
+          format="lines"
+          maxLength={500}
+          options={CREATIVE_NOTES}
+          value={notes}
+          onChange={(v) => {
+            setNotes(v);
+            edited();
+          }}
+        />
         <CampaignBriefEditor
           w={w}
           campaign={campaign}

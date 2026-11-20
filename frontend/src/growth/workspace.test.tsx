@@ -29,6 +29,7 @@ vi.mock("../api", async () => {
 });
 import { GrowthApp } from "./GrowthApp";
 import { saveDemoResult, type DemoResult } from "./demoStore";
+import { setPills, pillValue, pillGroup } from "../test-pills";
 const path = "/api/campaigns/preview-campaign";
 // Style rules belong to the workspace (profile), inherited by its campaigns.
 const workspacePath = "/api/profiles/preview-profile-allin";
@@ -187,7 +188,7 @@ describe("Growth Factory interface", () => {
     const advanced = screen.getByRole("navigation", { name: "Advanced navigation" });
     expect(within(advanced).getAllByRole("button").map((button) => button.textContent?.trim())).toEqual(["New brand"]);
     openBrandEditor();
-    fireEvent.change(screen.getByRole("textbox", { name: "Who it's for" }), { target: { value: "Channel-specific founders" } });
+    setPills("Who it's for", "Channel-specific founders");
     fireEvent.click(screen.getByRole("button", { name: "Save brand" }));
     // The workspace audience is saved on the workspace; the campaign brief keeps its own.
     await waitFor(async () => expect((await previewRequest<{ audience: string }[]>("/api/profiles")).some((p) => p.audience === "Channel-specific founders")).toBe(true));
@@ -202,7 +203,7 @@ describe("Growth Factory interface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to Brand profile" }));
     expect(screen.getByRole("heading", { name: "Brand profile" })).toHaveFocus();
     openBrandEditor();
-    expect(screen.getByRole("textbox", { name: "Who it's for" })).toHaveValue("Channel-specific founders");
+    expect(pillValue("Who it's for")).toBe("Channel-specific founders");
     closeBrandEditor();
     fireEvent.click(within(daily).getByRole("button", { name: "Factory" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit full style rules" }));
@@ -231,12 +232,7 @@ describe("Growth Factory interface", () => {
       expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"),
     );
     openBrandEditor();
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Who it's for" }),
-      {
-        target: { value: "A retained audience" },
-      },
-    );
+    setPills("Who it's for", "A retained audience");
     closeBrandEditor();
     fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     expect(
@@ -250,9 +246,7 @@ describe("Growth Factory interface", () => {
       screen.getByRole("navigation", { name: "Main navigation" }),
     ).toBeVisible();
     openBrandEditor();
-    expect(
-      screen.getByRole("textbox", { name: "Who it's for" }),
-    ).toHaveValue("A retained audience");
+    expect(pillValue("Who it's for")).toBe("A retained audience");
   });
   it("opens quick actions by keyboard or click and preserves drafts through navigation", async () => {
     render(<GrowthApp />);
@@ -260,10 +254,8 @@ describe("Growth Factory interface", () => {
       expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"),
     );
     openBrandEditor();
-    const audience = screen.getByRole("textbox", {
-      name: "Who it's for",
-    });
-    fireEvent.change(audience, { target: { value: "My unsaved audience" } });
+    setPills("Who it's for", "My unsaved audience");
+    const audience = pillGroup("Who it's for").querySelector<HTMLButtonElement>("button.is-add")!;
     audience.focus();
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     const search = screen.getByRole("combobox", {
@@ -282,15 +274,13 @@ describe("Growth Factory interface", () => {
     fireEvent.change(search, { target: { value: "setup" } });
     fireEvent.keyDown(search, { key: "Enter" });
     openBrandEditor();
-    expect(
-      screen.getByRole("textbox", { name: "Who it's for" }),
-    ).toHaveValue("My unsaved audience");
+    expect(pillValue("Who it's for")).toBe("My unsaved audience");
   });
   it("opens Goals from quick actions and closes editors when navigating away", async () => {
     render(<GrowthApp />);
     await waitFor(() => expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"));
     openBrandEditor();
-    fireEvent.change(screen.getByRole("textbox", { name: "Who it's for" }), { target: { value: "A retained modal draft" } });
+    setPills("Who it's for", "A retained modal draft");
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     const search = screen.getByRole("combobox", { name: "Search quick actions" });
     fireEvent.change(search, { target: { value: "library" } });
@@ -304,7 +294,7 @@ describe("Growth Factory interface", () => {
     expect(within(goals).getByRole("combobox", { name: "What are we working toward?" })).toBeVisible();
     fireEvent.click(within(goals).getByRole("button", { name: "Close Goals & brief" }));
     openBrandEditor();
-    expect(screen.getByRole("textbox", { name: "Who it's for" })).toHaveValue("A retained modal draft");
+    expect(pillValue("Who it's for")).toBe("A retained modal draft");
   });
 
   it("does not replay a handled Goals request when changing brand contexts", async () => {
@@ -360,7 +350,7 @@ describe("Growth Factory interface", () => {
     );
     expect(screen.queryByRole("button", { name: "Save brand" })).toBeNull();
     openBrandEditor();
-    fireEvent.change(screen.getByRole("textbox", { name: "Who it's for" }), { target: { value: "Builders and founders making thoughtful clips" } });
+    setPills("Who it's for", "Builders and founders making thoughtful clips");
     fireEvent.click(
       screen.getByRole("button", { name: "Save brand" }),
     );
@@ -396,12 +386,7 @@ describe("Growth Factory interface", () => {
       expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"),
     );
     openBrandEditor();
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Who it's for" }),
-      {
-        target: { value: "A very specific audience" },
-      },
-    );
+    setPills("Who it's for", "A very specific audience");
     closeBrandEditor();
     openEditingRules();
     // Moving away keeps the draft and says so on the destination that holds it.
@@ -409,9 +394,7 @@ describe("Growth Factory interface", () => {
     expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Brand profile" }));
     openBrandEditor();
-    expect(
-      screen.getByRole("textbox", { name: "Who it's for" }),
-    ).toHaveValue("A very specific audience");
+    expect(pillValue("Who it's for")).toBe("A very specific audience");
   });
   it("asks before a campaign switch would drop an unsaved brand edit", async () => {
     const original = await previewRequest<Campaign>(path);
@@ -422,7 +405,7 @@ describe("Growth Factory interface", () => {
     await waitFor(() => expect(picker).toHaveValue(single.id));
     await waitFor(() => expect(screen.getByLabelText("Brand name")).toHaveValue("All-In demo"));
     openBrandEditor();
-    fireEvent.change(screen.getByRole("textbox", { name: "Who it's for" }), { target: { value: "Kept on Stay" } });
+    setPills("Who it's for", "Kept on Stay");
     closeBrandEditor();
 
     fireEvent.change(picker, { target: { value: "preview-campaign" } });
@@ -433,7 +416,7 @@ describe("Growth Factory interface", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).not.toBeInTheDocument());
     expect(localStorage.getItem("growth-campaign")).toBe(single.id);
     openBrandEditor();
-    expect(screen.getByRole("textbox", { name: "Who it's for" })).toHaveValue("Kept on Stay");
+    expect(pillValue("Who it's for")).toBe("Kept on Stay");
     closeBrandEditor();
 
     fireEvent.change(picker, { target: { value: "preview-campaign" } });
