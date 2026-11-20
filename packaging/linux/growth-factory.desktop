@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Growth Factory
+Comment=Turn long videos into short clips on this computer
+Exec=growth-factory
+Icon=growth-factory
+Categories=AudioVideo;Video;
+Terminal=false
+StartupWMClass=growth-factory

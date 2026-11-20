@@ -1,4 +1,4 @@
-# Development, setup and Mac distribution
+# Development, setup and distribution
 
 Current product overview: [README](../README.md). Current submission status: [submission checklist](submission/README.md). This document covers setup and operational boundaries; it is not a claim of a signed release or a verified live post.
 
@@ -47,10 +47,23 @@ URL. Do not share the URL. In headless mode it is intentionally printed to local
 stdout; do not save stdout to persistent CI logs or files. The launcher disables
 HTTP access logs and does not persist its token. A restart creates a new token.
 
-For Linux development/CI, use Python supported by `pyproject.toml`,
-`python -m pip install -e '.[test]' 'setuptools>=75' wheel`, and build the frontend
-with `npm ci && npm run build` in `frontend/`. Use `python -m clip_factory.main --headless` or `--browser`.
-This is **not** a supported Linux MLX/native desktop installation claim.
+## First run on Windows 10/11 (x64) from source
+
+Run `powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1`. It finds Python
+3.11–3.13 through the `py` launcher, creates `.venv`, builds the frontend if absent or outdated,
+and installs `.[desktop]`. Python, Node.js and FFmpeg (`Gyan.FFmpeg`, which includes libass)
+are offered through **winget only after a confirmation**. It warns when Microsoft Edge WebView2,
+which shows the window, is missing. Then run `.venv\Scripts\clip-factory.exe` (add `--browser`
+or `--headless` as above). Windows on ARM is not supported.
+
+## First run on Linux (x64) from source
+
+Run `bash scripts/setup-linux.sh`. It finds Python 3.11–3.13, creates `.venv`, builds the
+frontend, and installs `.[desktop]` with `pywebview[qt]`, so the window uses Qt WebEngine from
+pip rather than the system's WebKitGTK. On Debian and Ubuntu it offers, after a confirmation,
+`apt` installs of FFmpeg and the EGL/GLES libraries MediaPipe face detection loads. Then run
+`.venv/bin/clip-factory`. Saving API keys needs a running Secret Service (GNOME Keyring or
+KWallet). CI and headless servers can use `python -m clip_factory.main --headless` or `--browser`.
 
 ## Local storage, privacy, and model setup
 
@@ -174,6 +187,54 @@ ffmpeg/Python tools. Install required tools separately. The packaged headless
 smoke is not proof that a real native window, Keychain prompt, or M5 inference
 works; perform the [manual Mac checklist](mac-testing.md).
 
+## Packaged Windows installer and Linux AppImage
+
+The workflow **Build Windows and Linux desktop apps (unsigned)** (`desktop-apps.yml`) runs
+on manual dispatch, on `v*` tags, and on `8090/**` branches that change the packaging. Each job
+runs `python scripts/build-desktop-app.py` on the matching x64 machine:
+
+1. Installs `.[desktop,test]` and PyInstaller into `build/packaging-venv` (plus `pywebview[qt]`
+   on Linux), builds the frontend, and runs the bounded packaging tests.
+2. `scripts/fetch-ffmpeg.py` downloads the newest stable static **GPL** FFmpeg build from
+   [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) (libass for captions, libx264 for
+   the encoder), checks it against the release's published SHA-256 list, and keeps only
+   `ffmpeg`, `ffprobe`, the GPL licence and a source notice.
+3. `packaging/growth-factory.spec` freezes one folder with the built UI, demo viewer, caption
+   font, face models, inference worker, cloud configuration and FFmpeg under `bin/`, where
+   `media.bundled_tool_dirs()` looks before PATH. Windows gets two executables over the same
+   files: `Growth Factory.exe` (windowed) and `growth-factory-cli.exe` (console, for
+   `--headless`, `--browser` and diagnostics).
+4. `scripts/verify-bundle-assets.py --desktop` checks every asset against the source and runs
+   the bundled FFmpeg, and `scripts/smoke-headless.py --expect-ffmpeg` launches the frozen app.
+5. **Windows:** Inno Setup (`packaging/windows/growth-factory.iss`) builds
+   `growth-factory-windows-x64-setup.exe`: a per-user install under
+   `%LOCALAPPDATA%\Programs\Growth Factory` with Start menu and optional desktop shortcuts and an
+   uninstaller. If the WebView2 runtime is missing, it runs Microsoft's bundled Evergreen
+   bootstrapper, whose Microsoft signature the build checks. CI then installs it silently and
+   smoke-tests the installed copy.
+   **Linux:** appimagetool packs `growth-factory-linux-x86_64.AppImage` with `packaging/linux/AppRun`,
+   which selects pywebview's Qt backend. CI unpacks the AppImage and smoke-tests its AppRun.
+6. Writes `<artifact>.manifest.json` with the size, SHA-256, commit, bundled FFmpeg build and
+   prerequisites, and uploads both as **CI artifacts**, not a release.
+
+```sh
+gh workflow run desktop-apps.yml --repo MaxtheN/theclipfactory --ref master
+```
+
+Known limits of these beta builds:
+
+- **Unsigned.** Windows SmartScreen warns before the first run (**More info → Run anyway**).
+  Buy a code-signing certificate before a public release. No auto-update.
+- **Linux glibc floor.** The AppImage is built on Ubuntu 22.04 and needs glibc 2.35 or newer.
+  It brings its own Qt WebEngine window, so WebKitGTK versions do not matter. It still uses the
+  system's X11/Wayland, OpenGL/EGL and NSS libraries, which desktop distributions include. If
+  the distribution blocks unprivileged user namespaces, AppRun turns off Qt WebEngine's sandbox.
+- **Size.** The Linux AppImage is about 500 MB (Qt WebEngine, OpenCV and MediaPipe, and FFmpeg).
+  The Windows installer is smaller because WebView2 comes from Windows.
+- **Not proven by CI:** opening a real window, key-store prompts, speech and agent runtimes,
+  and a clean-machine install. The headless smoke tests cover the bootstrap, UI, session and
+  FFmpeg only.
+
 ## Development and verification
 
 ```sh
@@ -184,7 +245,7 @@ python -m ruff check clip_factory scripts
 python scripts/smoke-headless.py
 ```
 
-CI runs frontend build/tests and backend/launcher tests on Linux and macOS. The
+CI runs frontend build/tests and backend/launcher tests on Linux, macOS and Windows. The
 headless smoke uses temporary data, authenticates through the real bootstrap
 redirect/cookie, loads the UI, and requests graceful shutdown; it keeps the token
 out of its output. Launcher unit tests use a minimal parent-app seam and a real
