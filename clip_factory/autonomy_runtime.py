@@ -282,10 +282,12 @@ class AutonomyRuntime:
         if server is None:
             raise WorkError("Sign in to Growth Factory cloud to collect metrics.")
         try:
-            reply = server.analytics(publication["media_id"])
+            result = parse_analytics(server.analytics(publication["media_id"]), account["platform"])
         except PostingServerError as error:
-            raise WorkError(f"Metrics could not be read: {error.message}") from None
-        result = parse_analytics(reply, account["platform"])
+            if error.status != 424:
+                raise WorkError(f"Metrics could not be read: {error.message}") from None
+            # 424: the platform reported nothing for this post. Unavailable, not zero, and not retried.
+            result = {"status": "unavailable", "metrics": {}}
         if result["status"] == "syncing":
             raise WorkError("The posting service is still syncing metrics for this post. It will retry.")
         stamp = now()
