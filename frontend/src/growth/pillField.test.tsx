@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { PillList, PillSelect, joinList, splitList } from "./PillField";
@@ -25,6 +25,7 @@ function Select() {
 
 const group = (name: string) => screen.getByRole("group", { name });
 const stored = () => screen.getByRole("status").textContent;
+const frame = () => act(() => new Promise<void>((done) => requestAnimationFrame(() => done())));
 
 describe("PillField", () => {
   it("picks and unpicks presets into the stored list", () => {
@@ -59,6 +60,29 @@ describe("PillField", () => {
     fireEvent.keyDown(input, { key: "Escape" });
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(stored()).toBe("");
+  });
+
+  it("leaves focus where the person moved it when a typed pill is kept on blur", async () => {
+    render(
+      <>
+        <List />
+        <button type="button">Next</button>
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add your own" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Add your own: Tone" }), { target: { value: "Calm" } });
+    act(() => screen.getByRole("button", { name: "Next" }).focus());
+    await frame();
+    expect(stored()).toBe("Calm");
+    expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
+  });
+
+  it("puts focus back on Add your own when Escape closes the input", async () => {
+    render(<List />);
+    fireEvent.click(screen.getByRole("button", { name: "Add your own" }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Add your own: Tone" }), { key: "Escape" });
+    await frame();
+    expect(screen.getByRole("button", { name: "Add your own" })).toHaveFocus();
   });
 
   it("stops at the cap: other pills disable and Add your own hides", () => {

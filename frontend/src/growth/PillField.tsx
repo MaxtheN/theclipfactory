@@ -100,8 +100,16 @@ export function PillField({
     }
     if (!keepOpen || single) {
       setAdding(false);
-      requestAnimationFrame(() => addButton.current?.focus());
+      refocusAdd();
     }
+  }
+  // Closing the input drops focus from the page, so put it back on "Add your own", unless the
+  // person has already moved it (Tab, or a click on another control): a commit on blur must not undo that.
+  function refocusAdd() {
+    requestAnimationFrame(() => {
+      const now = document.activeElement;
+      if (!now || now === document.body) addButton.current?.focus();
+    });
   }
 
   const pill = (v: string, isCustom: boolean) => {
@@ -151,7 +159,7 @@ export function PillField({
                 e.stopPropagation();
                 setDraft("");
                 setAdding(false);
-                requestAnimationFrame(() => addButton.current?.focus());
+                refocusAdd();
               }
             }}
           />
