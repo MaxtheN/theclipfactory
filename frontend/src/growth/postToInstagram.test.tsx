@@ -183,7 +183,7 @@ describe("PostToInstagram", () => {
       attempt({ state: "unknown", active: false, pending_effect: "publish", error: { code: "timeout", message: "Timed out." } }),
       attempt({ id: "at-2", account_id: "acct-2", account_name: "second", state: "mapped", active: false, permalink: "https://www.instagram.com/reel/X/" }),
     ] }));
-    api.reconcile.mockResolvedValue(attempt({ state: "container_ready", active: false }));
+    api.reconcile.mockResolvedValue(attempt({ state: "submitted", active: false }));
     render(<PostToInstagram clip={{ ...clip, approved: true }} />);
     expect(await screen.findByText("Outcome unknown · check status")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open reel" })).toHaveAttribute("href", "https://www.instagram.com/reel/X/");
