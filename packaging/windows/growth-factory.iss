@@ -1,7 +1,8 @@
 ; Inno Setup script for the Windows 10/11 x64 installer. Built by scripts/build-desktop-app.py:
 ;   iscc /DAppVersion=0.1.0 /DBundleDir=dist\Growth Factory /DWebView2Setup=build\webview2\MicrosoftEdgeWebview2Setup.exe
 ;        /DOutputDir=dist packaging\windows\growth-factory.iss
-; The installer and app are unsigned (beta): Windows SmartScreen warns before the first run.
+; The build script Authenticode-signs the app and this installer when a signer is configured
+; (docs/releasing.md); unsigned builds make Windows SmartScreen warn before the first run.
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif

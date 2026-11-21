@@ -1,8 +1,16 @@
-name: Build Mac desktop artifact (not notarized)
+name: Build Mac desktop app
+# Developer ID signed, notarized and stapled when the signing secrets are set (docs/releasing.md);
+# otherwise ad-hoc signed, with a notice in the job summary. Tags also attach it to a draft release.
 on:
   push:
+    tags: ["v*"]
     branches: ["8090/**"]
-    paths: [".github/workflows/mac-app.yml"]
+    paths:
+      - ".github/workflows/mac-app.yml"
+      - "scripts/build-mac-app.sh"
+      - "scripts/sign-mac-app.sh"
+      - "scripts/write-release-manifest.py"
+      - "packaging/macos/**"
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,8 +19,10 @@ jobs:
     # GitHub's current public runner table maps macos-15 to arm64; Intel is macos-15-intel.
     # https://docs.github.com/en/actions/reference/runners/github-hosted-runners
     runs-on: macos-15
-    # Build saved campaign learning with scoped strategies, retaining native reopen, queue regression, renderer readiness, and immutable hook controls.
-    timeout-minutes: 30
+    timeout-minutes: 90
+    env:
+      HAS_MAC_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+      HAS_NOTARY_KEY: ${{ secrets.APPLE_API_KEY_P8 != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,17 +43,90 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Import the Developer ID certificate
+        if: env.HAS_MAC_CERTIFICATE == 'true'
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(openssl rand -hex 24)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -f pkcs12 \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity="$(security find-identity -v -p codesigning "$keychain" \
+            | sed -nE 's/.*"(Developer ID Application: [^"]+)".*/\1/p' | head -1)"
+          if [ -z "$identity" ]; then
+            echo '::error::MACOS_CERTIFICATE_P12 holds no Developer ID Application certificate.'
+            exit 1
+          fi
+          echo "GF_MAC_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+      - name: Write the notarization key
+        if: env.HAS_MAC_CERTIFICATE == 'true' && env.HAS_NOTARY_KEY == 'true'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          if [ -z "$APPLE_API_KEY_ID" ] || [ -z "$APPLE_API_ISSUER_ID" ]; then
+            echo '::error::APPLE_API_KEY_P8 is set, so APPLE_API_KEY_ID and APPLE_API_ISSUER_ID are needed too.'
+            exit 1
+          fi
+          key="$RUNNER_TEMP/notary-key.p8"
+          printf '%s\n' "$APPLE_API_KEY_P8" > "$key"
+          { echo "GF_NOTARY_KEY=$key"; echo "GF_NOTARY_KEY_ID=$APPLE_API_KEY_ID"
+            echo "GF_NOTARY_ISSUER=$APPLE_API_ISSUER_ID"; } >> "$GITHUB_ENV"
       - name: Build Apple Silicon desktop bundle and run backend tests
         run: bash scripts/build-mac-app.sh
+      # The smoke scripts import clip_factory, which build-mac-app.sh installs into its packaging venv.
       - name: Verify app-owned Python bootstrap without Homebrew
-        run: python scripts/smoke-managed-python.py
+        run: build/packaging-venv/bin/python scripts/smoke-managed-python.py
       - name: Smoke packaged executable without GUI
-        run: python scripts/smoke-headless.py --executable 'dist/Growth Factory.app/Contents/MacOS/Growth Factory'
+        run: build/packaging-venv/bin/python scripts/smoke-headless.py --executable 'dist/Growth Factory.app/Contents/MacOS/Growth Factory'
       - name: Smoke real Cocoa window, authenticated UI, and reopen
-        run: python scripts/smoke-native.py --executable 'dist/Growth Factory.app/Contents/MacOS/Growth Factory'
+        run: build/packaging-venv/bin/python scripts/smoke-native.py --executable 'dist/Growth Factory.app/Contents/MacOS/Growth Factory'
+      - name: Signing summary
+        run: python scripts/signing-summary.py dist/growth-factory-mac-arm64.manifest.json
+      - name: Remove the signing keychain and key
+        if: always() && env.HAS_MAC_CERTIFICATE == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/notary-key.p8"
       - uses: actions/upload-artifact@v4
         with:
-          name: growth-factory-mac-arm64-not-notarized
-          path: dist/growth-factory-mac-arm64.zip
+          name: growth-factory-mac-arm64
+          path: |
+            dist/growth-factory-mac-arm64.zip
+            dist/growth-factory-mac-arm64.manifest.json
           if-no-files-found: error
           retention-days: 14
+  draft-release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Shared with desktop-apps.yml, so only one workflow creates the draft.
+    concurrency:
+      group: draft-release-${{ github.ref_name }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: growth-factory-mac-arm64
+          path: dist
+      - name: Attach to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: bash scripts/attach-release-assets.sh "$TAG" dist/*

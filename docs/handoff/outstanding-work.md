@@ -10,15 +10,17 @@ The product is built; these are what stand between `master` and paying customers
 
 1. **Owner setup.** Stripe, the billing migration, function deploys, Zernio, Vercel, certificates and legal review are
    the owner's. [launch-checklist.md](launch-checklist.md) lists them in order.
-2. **Signed installers:**
-   [WO-38](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/38) (Backlog, high,
-   next). Scope:
-   - sign and notarize the Mac app and sign the Windows installer in CI, behind secrets, so builds without
-     certificates still produce unsigned artifacts;
-   - publish a tagged release;
-   - then add download links to `landing-page/site/pages/download.html`. The site tests block installer links today,
-     so update `tests/pages.test.mjs` to allow exactly the signed release assets.
-3. **First release.** Tag `v0.2.0` (or similar) from `master` after WO-38. Install the result on clean Mac, Windows
+2. **Signed installers.** CI signing is built ([WO-38](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/38), [releasing.md](../releasing.md)):
+   - Developer ID signing, notarization and stapling on the Mac;
+   - Authenticode on Windows;
+   - draft releases on `v*` tags.
+   
+   It has not yet run with real certificates; the owner adds the secrets (launch checklist §6). After the first
+   signed release:
+   - add download links to `landing-page/site/pages/download.html`;
+   - update `tests/pages.test.mjs`, which blocks installer links today, to allow exactly the signed release
+     assets.
+3. **First release.** Once the signing secrets are set, tag `v0.2.0` (or similar) from `master`. Install the result on clean Mac, Windows
    and Linux machines, then remove or mark as superseded the `v0.1.0-preview` release, which predates billing and
    multi-platform posting.
 4. **End-to-end proof in Stripe test mode,** then live: free → Pro in the app, the webhook, the plan showing without
@@ -28,8 +30,6 @@ The product is built; these are what stand between `master` and paying customers
 
 ## 2. Open work orders
 
-- **[WO-38](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/38): Sign and notarize
-  desktop releases in CI** (Backlog, high). See §1.
 - **[WO-19](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/19): Consolidate design
   tokens and retire CSS override layers** (In Progress, medium). **Paused until after launch** by the owner.
   - The token source exists.

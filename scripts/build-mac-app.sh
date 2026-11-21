@@ -1,5 +1,7 @@
 #!/bin/bash
-# Build a local ad-hoc Apple Silicon artifact. No release upload or notarization is implied.
+# Build the Apple Silicon app and zip. Ad-hoc signed unless GF_MAC_SIGN_IDENTITY names a Developer ID
+# identity; then scripts/sign-mac-app.sh signs it, and notarizes it when the GF_NOTARY_* key is set.
+# Nothing is uploaded or published here (see docs/releasing.md).
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -42,9 +44,18 @@ done
   --distpath "$ROOT/dist" --workpath "$ROOT/build/pyinstaller" --specpath "$ROOT/build" \
   "$ROOT/scripts/desktop-entry.py"
 "$PACKAGE_PYTHON" "$ROOT/scripts/verify-bundle-assets.py" "$ROOT/dist/Growth Factory.app"
+SIGNING=ad_hoc
+if [[ -n "${GF_MAC_SIGN_IDENTITY:-}" ]]; then
+  # Signed before the smoke test, so a hardened-runtime problem fails the build.
+  bash "$ROOT/scripts/sign-mac-app.sh" "$ROOT/dist/Growth Factory.app"
+  SIGNING=developer_id
+  if [[ -n "${GF_NOTARY_KEY:-}" && -n "${GF_NOTARY_KEY_ID:-}" && -n "${GF_NOTARY_ISSUER:-}" ]]; then
+    SIGNING=developer_id_notarized
+  fi
+fi
 /usr/bin/codesign --verify --deep --strict "$ROOT/dist/Growth Factory.app"
 "$PACKAGE_PYTHON" "$ROOT/scripts/smoke-headless.py" --executable "$ROOT/dist/Growth Factory.app/Contents/MacOS/Growth Factory"
 # ditto retains bundle symlinks and resource metadata.
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent 'dist/Growth Factory.app' dist/growth-factory-mac-arm64.zip
-"$PACKAGE_PYTHON" "$ROOT/scripts/write-release-manifest.py" "$ROOT/dist/growth-factory-mac-arm64.zip" --root "$ROOT" --signature-verified --headless-verified
-printf '%s\n' 'Built dist/Growth Factory.app and dist/growth-factory-mac-arm64.zip (ad-hoc; not notarized or published).'
+"$PACKAGE_PYTHON" "$ROOT/scripts/write-release-manifest.py" "$ROOT/dist/growth-factory-mac-arm64.zip" --root "$ROOT" --signing "$SIGNING" --signature-verified --headless-verified
+printf 'Built dist/Growth Factory.app and dist/growth-factory-mac-arm64.zip (%s; not published).\n' "$SIGNING"

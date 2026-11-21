@@ -68,12 +68,23 @@ billing tables.
 
 - [ ] **Apple:** a Developer Program membership, a "Developer ID Application" certificate, and notarization
       credentials (an App Store Connect API key, or an Apple ID with an app-specific password and team id).
-- [ ] **Windows:** a code-signing certificate (OV, EV or Azure Trusted Signing).
-- [ ] Add them as GitHub Actions secrets under the names WO-38 documents. Unsigned builds keep working without them.
+- [ ] **Windows:** Azure Trusted Signing (the practical choice for CI), or a code-signing certificate whose key can
+      be exported to a `.pfx`. New certificates from certificate authorities keep the key on hardware, which CI cannot
+      use.
+- [ ] Add them as GitHub Actions secrets. [releasing.md](../releasing.md#secrets) explains how to get each one:
+  - Mac: `MACOS_CERTIFICATE_P12`, `MACOS_CERTIFICATE_PASSWORD`, `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID` and
+    `APPLE_API_ISSUER_ID`.
+  - Windows, either `WINDOWS_CERTIFICATE_PFX` and `WINDOWS_CERTIFICATE_PASSWORD` (only for an exportable
+    certificate), or the Azure Trusted Signing set: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`,
+    `AZURE_TRUSTED_SIGNING_ENDPOINT`, `AZURE_TRUSTED_SIGNING_ACCOUNT` and `AZURE_TRUSTED_SIGNING_PROFILE`.
+  
+  Unsigned builds keep working without them.
 
 ## 7. Release
 
-- [ ] **Tag:** after WO-38 merges, tag a release (for example `v0.2.0`). `desktop-apps.yml` builds on `v*` tags.
+- [ ] **Tag:** follow [releasing.md § Cut a release](../releasing.md#cut-a-release). Set the version, then tag (for
+      example `v0.2.0`). `mac-app.yml` and `desktop-apps.yml` build, sign and attach to a draft release. Check that
+      each job summary says signed.
 - [ ] **Clean installs:** install on a clean Mac, Windows PC and Linux machine, and make one clip on each.
 - [ ] **Download links:** add them to the website once the signed assets exist (an agent can do this). Mark
       `v0.1.0-preview` as superseded.

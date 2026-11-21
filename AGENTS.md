@@ -84,4 +84,5 @@ Vitest and `tests/test_learning.py` under load; rerun once before investigating.
 - Uncertain post outcomes are reconciled by external id, never blindly retried.
 - A downgrade never deletes anything; limits only block creating more.
 - Local first: name anything that leaves the computer before it goes.
-- No public installer link until a signed release exists (WO-38).
+- No public installer link until a signed release exists. Releases, signing and their secrets:
+  [docs/releasing.md](docs/releasing.md).

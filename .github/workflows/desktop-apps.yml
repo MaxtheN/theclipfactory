@@ -1,4 +1,7 @@
-name: Build Windows and Linux desktop apps (unsigned)
+name: Build Windows and Linux desktop apps
+# The Windows app and installer are Authenticode-signed when signing secrets are set (docs/releasing.md);
+# otherwise unsigned, with a notice in the job summary. Linux packages are not signed. Tags also attach
+# the builds to a draft release.
 on:
   workflow_dispatch:
   push:
@@ -10,6 +13,8 @@ on:
       - "packaging/**"
       - "clip_factory/main.py"
       - "scripts/build-desktop-app.py"
+      - "scripts/signing-summary.py"
+      - "scripts/attach-release-assets.sh"
       - "scripts/fetch-ffmpeg.py"
       - "scripts/verify-bundle-assets.py"
       - "scripts/smoke-headless.py"
@@ -30,6 +35,9 @@ jobs:
             artifact: growth-factory-linux-x86_64.AppImage
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    env:
+      HAS_WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE_PFX != '' }}
+      HAS_TRUSTED_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' }}
     defaults:
       run:
         shell: bash
@@ -73,9 +81,50 @@ jobs:
       - name: Check the source setup script parses
         if: runner.os == 'Linux'
         run: bash -n scripts/setup-linux.sh
+      - name: Import the Windows code-signing certificate
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_CERTIFICATE == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        # Into the user's store, so signtool selects it by thumbprint and no password is on a command line.
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password |
+            Where-Object { $_.HasPrivateKey } | Select-Object -First 1
+          Remove-Item $pfx
+          if (-not $cert) { throw 'WINDOWS_CERTIFICATE_PFX holds no certificate with a private key.' }
+          "GF_WINDOWS_SIGN_THUMBPRINT=$($cert.Thumbprint)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Set up Azure Trusted Signing
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_CERTIFICATE != 'true' && env.HAS_TRUSTED_SIGNING == 'true'
+        shell: pwsh
+        env:
+          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          AZURE_TRUSTED_SIGNING_ACCOUNT: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT }}
+          AZURE_TRUSTED_SIGNING_PROFILE: ${{ secrets.AZURE_TRUSTED_SIGNING_PROFILE }}
+        run: |
+          foreach ($name in 'AZURE_TRUSTED_SIGNING_ENDPOINT', 'AZURE_TRUSTED_SIGNING_ACCOUNT', 'AZURE_TRUSTED_SIGNING_PROFILE') {
+            if (-not [Environment]::GetEnvironmentVariable($name)) { throw "$name is needed for Trusted Signing." }
+          }
+          $tools = Join-Path $env:RUNNER_TEMP 'trusted-signing'
+          nuget install Microsoft.Trusted.Signing.Client -ExcludeVersion -OutputDirectory $tools -NonInteractive
+          $dlib = Get-ChildItem $tools -Recurse -Filter Azure.CodeSigning.Dlib.dll |
+            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if (-not $dlib) { throw 'The Trusted Signing client library was not found.' }
+          $metadata = Join-Path $env:RUNNER_TEMP 'trusted-signing.json'
+          @{ Endpoint = $env:AZURE_TRUSTED_SIGNING_ENDPOINT; CodeSigningAccountName = $env:AZURE_TRUSTED_SIGNING_ACCOUNT
+             CertificateProfileName = $env:AZURE_TRUSTED_SIGNING_PROFILE } | ConvertTo-Json | Set-Content $metadata
+          "GF_WINDOWS_SIGN_DLIB=$($dlib.FullName)", "GF_WINDOWS_SIGN_METADATA=$metadata" |
+            Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: Build, verify assets and smoke the bundle
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # Read by the Trusted Signing client only; empty unless that signer is configured.
+          AZURE_TENANT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_TENANT_ID || '' }}
+          AZURE_CLIENT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_SECRET || '' }}
         run: python scripts/build-desktop-app.py
       - name: Install silently and smoke the installed app
         if: runner.os == 'Windows'
@@ -116,11 +165,38 @@ jobs:
           QTWEBENGINE_DISABLE_SANDBOX=1 timeout 120 xvfb-run -a -s '-screen 0 1600x1000x24' \
             build/appimage-check/squashfs-root/AppRun --native-smoke --data-dir "$data"
           test -f "$data/native-smoke.json"
+      - name: Signing summary
+        run: python scripts/signing-summary.py "dist/${{ matrix.artifact }}.manifest.json"
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}-unsigned
+          name: ${{ matrix.artifact }}
           path: |
             dist/${{ matrix.artifact }}
             dist/${{ matrix.artifact }}.manifest.json
           if-no-files-found: error
           retention-days: 14
+  draft-release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Shared with mac-app.yml, so only one workflow creates the draft.
+    concurrency:
+      group: draft-release-${{ github.ref_name }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: growth-factory-*
+          merge-multiple: true
+          path: dist
+      - name: Attach to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: bash scripts/attach-release-assets.sh "$TAG" dist/*
