@@ -84,12 +84,13 @@ jobs:
             echo "GF_NOTARY_ISSUER=$APPLE_API_ISSUER_ID"; } >> "$GITHUB_ENV"
       - name: Build Apple Silicon desktop bundle and run backend tests
         run: bash scripts/build-mac-app.sh
+      # The smoke scripts import clip_factory, which build-mac-app.sh installs into its packaging venv.
       - name: Verify app-owned Python bootstrap without Homebrew
-        run: python scripts/smoke-managed-python.py
+        run: build/packaging-venv/bin/python scripts/smoke-managed-python.py
       - name: Smoke packaged executable without GUI
-        run: python scripts/smoke-headless.py --executable 'dist/Growth Factory.app/Contents/MacOS/Growth Factory'
+        run: build/packaging-venv/bin/python scripts/smoke-headless.py --executable 'dist/Growth Factory.app/Contents/MacOS/Growth Factory'
       - name: Smoke real Cocoa window, authenticated UI, and reopen
-        run: python scripts/smoke-native.py --executable 'dist/Growth Factory.app/Contents/MacOS/Growth Factory'
+        run: build/packaging-venv/bin/python scripts/smoke-native.py --executable 'dist/Growth Factory.app/Contents/MacOS/Growth Factory'
       - name: Signing summary
         run: python scripts/signing-summary.py dist/growth-factory-mac-arm64.manifest.json
       - name: Remove the signing keychain and key
