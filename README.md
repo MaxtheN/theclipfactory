@@ -1,6 +1,6 @@
 # Growth Factory
 
-**An AI growth department for your Mac, with a factory that can build its next editing tool.**
+**An AI growth department for your computer (Mac, Windows and Linux), with a factory that can build its next editing tool.**
 
 Give Growth Factory your brand, audience and footage. Agents find promising moments,
 make captioned vertical drafts and prepare them for human review. Publication and
@@ -8,8 +8,11 @@ account results feed the next creative decision. When an editing capability is
 missing, the factory can turn that gap into a coding work order, generate an
 extension, run checks and a sample render, and present the change for human review.
 
-Built for **EVOLVE: 8090 AI Hackathon**. Video and Instagram are the first production
-line; broader marketing channels and paid optimization are roadmap work.
+Started at the **EVOLVE: 8090 AI Hackathon**; now a self-serve desktop subscription (Free, Pro $24 a month,
+Business $200 a month). Video is the production line, posting to seven platforms; paid optimization is roadmap work.
+
+> **Picking up the work?** Read [AGENTS.md](AGENTS.md), then the [handoff packet](docs/handoff/README.md) and
+> [what is left](docs/handoff/outstanding-work.md).
 
 [User guide](docs/guide/README.md) · [Submission guide](docs/submission/README.md) · [Project story](docs/submission/devpost.md) ·
 [Run locally](#run-on-an-apple-silicon-mac) · [Engine](docs/engine.md) ·
@@ -43,13 +46,14 @@ execution evidence, not a general reliability or cost benchmark.
 | Production | Local Whisper transcription, storyboard analysis, scout swarm or optional deeper team review, sentence-aware moments and best-first ranking. |
 | Editing | Captioned 9:16 drafts, payoff teaser, title card, optional face-follow crop, measured jump cuts, loudness normalization, cover, brand styling and CTA. Available operations and fallbacks are [documented](docs/engine.md). |
 | Review | Exact-version playback, quality evidence, requested revisions, approval and verified exports. Library retains source/clip controls and explains files the local service keeps. |
-| Publication | Human-approved Composio Instagram flow, Supabase-hosted video/cover, caption and account controls, scheduling and durable attempt reconciliation. **First real app publication still requires live verification.** |
+| Publication | Human-approved posting to TikTok, Instagram, YouTube, Facebook, LinkedIn, X and Threads through the Growth Factory posting server (Zernio): connected accounts, per-platform captions, scheduling and durable attempt reconciliation. **First real app publication still requires live verification.** |
+| Plans and billing | Free, Pro and Business plans bought in the app through Stripe Checkout; plan limits enforced by the engine and the cloud; usage, upgrade prompts and Manage billing in Settings. See [billing](docs/billing.md). |
 | Learning | Saved observations, three-/six-day windows while open, cited one-variable proposals, unapproved revised drafts, Strategist beliefs and a labeled synthetic simulation. |
 | Builder | Capability requests, generated work orders, bounded extension generation/checks, review artifacts and an explicit draft-PR flow. Human merge and restart are required. |
 
-The sidebar has **Factory, Library, Results and Brand profile**. Runtime, models,
-narration, jobs and production defaults are in **Brand profile → Advanced → Engine
-& models**, also reachable through **⌘K**. There is one app navigation.
+The sidebar has **Factory, Library, Results, Brand profile and Settings**. Settings holds the device, models, speech,
+connected accounts and the plan. The Activity Center shows jobs and posts, **⌘K / Ctrl+K** opens quick actions, and
+**Help** opens the [user guide](docs/guide/README.md).
 
 ## Architecture and trust boundaries
 

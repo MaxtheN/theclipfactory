@@ -1,8 +1,9 @@
 # Growth Factory — engineering handoff
 
-> **Current handoff packet (2026-11-20): [handoff/README.md](handoff/README.md) and
-> [handoff/outstanding-work.md](handoff/outstanding-work.md).** The status sections below are
-> from 2026-11-14. Keep this file for the local Mac setup, Keychain service names and test data.
+> **Current handoff: [../AGENTS.md](../AGENTS.md), then [handoff/README.md](handoff/README.md),
+> [handoff/outstanding-work.md](handoff/outstanding-work.md) and
+> [handoff/launch-checklist.md](handoff/launch-checklist.md)** (as of `master` `9a0d4ae`). The status sections below
+> are from the 2026-11-14 hackathon. Keep this file for the local Mac setup, Keychain service names and test data.
 
 Current documentation refresh: 2026-11-14, after published master **`5e6c6a0`**.
 The operational snapshot below began at `e869666`; this update supersedes its old
