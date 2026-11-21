@@ -1,147 +1,130 @@
-# Outstanding work (2026-11-20)
+# Outstanding work
 
-What isn't yet built, merged, proven or closed as of `master` `327ec43`. Each section is in
-priority order. Work order links go to the
+What isn't yet built, merged, proven or closed as of `master` `9a0d4ae` (2026-11-20). Sections are in priority
+order. Work order links go to the
 [Growth Factory Software Factory project](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319).
 
-## 1. Open work orders
+## 1. To start selling
 
-### [WO-24](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/24): Connect accounts and post to several platforms from the app (In Progress, high)
+The product is built; these are what stand between `master` and paying customers.
 
-The engine and the posting server are done (WO-22, WO-23). **None of the WO-24 frontend is on
-`master` yet.** The app still shows the Instagram-only Composio connect flow
-(`ConnectInstagram.tsx`, `FirstRunInstagram.tsx`) and the manual "Track a post" path in
-`Results.tsx`.
+1. **Owner setup.** Stripe, the billing migration, function deploys, Zernio, Vercel, certificates and legal review are
+   the owner's. [launch-checklist.md](launch-checklist.md) lists them in order.
+2. **Signed installers:**
+   [WO-38](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/38) (Backlog, high,
+   next). Scope:
+   - sign and notarize the Mac app and sign the Windows installer in CI, behind secrets, so builds without
+     certificates still produce unsigned artifacts;
+   - publish a tagged release;
+   - then add download links to `landing-page/site/pages/download.html`. The site tests block installer links today,
+     so update `tests/pages.test.mjs` to allow exactly the signed release assets.
+3. **First release.** Tag `v0.2.0` (or similar) from `master` after WO-38. Install the result on clean Mac, Windows
+   and Linux machines, then remove or mark as superseded the `v0.1.0-preview` release, which predates billing and
+   multi-platform posting.
+4. **End-to-end proof in Stripe test mode,** then live: free → Pro in the app, the webhook, the plan showing without
+   a restart, cancelling in the portal, and the limits enforced. See [billing.md](../billing.md#deploy).
+5. **The first real post** through the app on a paid plan. Approve one clip, post it and watch the attempt states. If
+   the outcome is uncertain, use Check status; never retry blindly.
 
-To build:
+## 2. Open work orders
 
-- **Settings, connected accounts:** list the supported platforms with Connect (opens the hosted
-  connect page), connection status and Disconnect. This replaces the Composio flow.
-- **Post dialog on an approved clip:**
-  - target accounts;
-  - a caption per platform, within that platform's limit;
-  - Post now or Schedule;
-  - an optional YouTube title.
-- **TikTok step:** show the clip preview, the privacy levels this creator may use and the consent
-  statement. Posting stays blocked until the creator confirms.
-- **Outcomes:** per-platform results in the clip view and the Activity Center, with links to the
-  live post and Check status for uncertain attempts.
-- **Permission:** posting stays off until publishing permission is on for that account.
-- **Tests:** Vitest coverage and review-preview fixtures for the new endpoints.
+- **[WO-38](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/38): Sign and notarize
+  desktop releases in CI** (Backlog, high). See §1.
+- **[WO-19](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/19): Consolidate design
+  tokens and retire CSS override layers** (In Progress, medium). **Paused until after launch** by the owner.
+  - The token source exists.
+  - Still to fold in or retire, all in `frontend/src/growth/`: `desktop-glass`, `polish`, `pearl-studio`,
+    `shell-polish`, `website-alignment`, `identity`, `interactions` and `workspace-motion`.
+  - Also remove the two decorative `infinite` animations in `factory-map.css`.
+  - Work in small steps, add no new override sheet, and keep Vitest green.
+- **[WO-2](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/2): Workflow orchestration
+  and saved state** (Backlog, assigned to Nur). This is hackathon scope that later work has mostly delivered (saved
+  campaigns, strategy versions, durable jobs, approvals). Re-scope it against the code or close it.
+- **Stale statuses to close** (the code is on `master`):
+  - WO-9 and WO-10: In Progress, but implemented. See `channelSettings.test.tsx`, the archive and restore routes in
+    `campaign_api.py`, and `tests/test_campaign_archive.py`.
+  - WO-1 and WO-3 to WO-8: In Review hackathon builds; PRs #1 to #9 merged on 2026-11-14.
+  - WO-11, WO-12 and WO-13: In Review Phase 1 and 2 artifacts (navigation map, App Shell blueprint, design system).
+  - Several of these are assigned to teammates (James, Nur, Kartik); confirm before closing.
 
-Engine routes to use (`clip_factory/publish_api.py`):
+## 3. Open pull requests and branches
 
-- `GET /api/posting/accounts`, `POST /api/posting/accounts/sync`
-- `POST /api/posting/connect`, `GET /api/posting/connect/{request_id}`
-- `PUT /api/posting/accounts/{id}/binding`, `PUT /api/posting/accounts/{id}/permission`,
-  `DELETE /api/posting/accounts/{id}`
-- `GET /api/posting/accounts/{id}/tiktok-creator-info`
-- `/api/publish-attempts`: list, read, `reconcile`, `resume`
+| Item | State | Next step |
+|---|---|---|
+| PR #42 `8090/chat-pro-polish-loop-q7r4m1` | Teammate (jduhking): clearer errors and next steps from a UX review | Theirs to finish; do not push to it |
+| PR #47 `8090/chat-results-account-map-r7k2m9` | Teammate (jduhking): Results account map of posted clips | Theirs to finish; do not push to it |
+| `8090/chat-batched-transcribe-trial-k7m2q9` | No PR on purpose: batched faster-whisper was 22% faster on CPU but gave 30% fewer sentence ends | Bench with `--batch` on an NVIDIA PC; merge only if sentence ends hold ([local-model-setup.md](../local-model-setup.md#batched-faster-whisper-measured-not-used)) |
+| `8090/chat-polish-landing-page-e03414` | PR #10 closed; landing polish from 2026-11-14, superseded by PR #48 | Delete |
+| `feature/code-cut-off-desing-improvements` | PR #11 closed; superseded UI copy cuts | Confirm with Kartik, then delete |
 
-Contracts: [instagram-publishing.md](../instagram-publishing.md) and
-[posting-server.md](../posting-server.md).
+Already merged and safe to delete from origin:
+- `8090/chat-settings-models-wording-x8c2v5`
+- `8090/chat-switch-supabase-project-k2w9f4`
+- `8090/wo-22-zernio-posting-server-t5j8n2`
+- `8090/wo-23-zernio-engine-adapter-p6w3c8`
+- `8090/wo-24-multi-platform-posting-ui-c4x9m2`
+- `8090/wo-33-user-guide-g2k7p4`
+- `8090/wo-34-stripe-billing-cloud-b7q2x5`
+- `8090/wo-35-engine-plan-limits-f3h8k1`
+- `8090/wo-36-plan-billing-ui-j5r9t2`
+- `8090/wo-37-website-s8v3n6`
+- `8090/wo-39-strategist-local-time-w4n7d3`
 
-### [WO-19](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/19): Consolidate design tokens and retire CSS override layers (In Progress, medium)
+## 4. Built but not yet proven live
 
-PR #19 created the single token source; `material-tokens.css` and `operational-glass.css` are gone.
-Still to do:
+1. **Billing:** the Stripe flow end to end (§1.4). Only the Deno and pytest suites have run.
+2. **Posting:** a real post on each platform. The posting server was smoke-tested live on 2026-11-20 without posting.
+3. **Clip quality:** a fresh clip that passes editorial review, made by the current engine with speech intact. A high
+   rank is not acceptance; see [engine-eval.md](../engine-eval.md).
+4. **Learning:** a real measure → learn → re-cut cycle on real observations. Only the labelled demo and the simulation
+   have run.
+5. **Installs:** clean-machine installs on all three systems, and a run of `mac-app.yml` on current `master`.
+6. **Website:** after the Vercel deploy, check clean URLs, the 404 page, the `/billing/*` pages from a real Checkout,
+   and the sitemap.
 
-- Fold in or retire `desktop-glass`, `polish`, `pearl-studio`, `shell-polish`, `website-alignment`,
-  `identity`, `interactions` and `workspace-motion`. All eight are still in `frontend/src/growth/`
-  (43 CSS files in total).
-- Remove the two decorative `infinite` animations left in `factory-map.css`. Keep status motion,
-  with reduced-motion handling.
-- Work in small, reviewable steps. Add no new override sheet, and keep every Vitest suite passing.
+## 5. Not started
 
-### [WO-33](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/33): User guide and first-run tutorial (Backlog, medium)
+- **Cleanup: retire the Composio code.** The app posts through the posting server. The old Composio Instagram routes
+  and key handling are still in `clip_factory/autonomy_runtime.py` and `clip_factory/composio.py`, and
+  `publisher.py` closes legacy attempts. So do `docs/composio-setup.md`, `docs/meta-setup.md`,
+  `docs/instagram-connect.md` and parts of `docs/instagram-publishing.md`. Remove them once no saved data depends on
+  them.
+- **Always-on hosted workers:** schedules and metric collection run only while the app is open.
+- **State sync and team access:** records exist only in local SQLite. There is no owner-scoped sync and no team
+  members, even on Business.
+- **Single-instance coordination** for the desktop app.
+- **Strategist variables:** cover source, caption length, hashtag count and CTA. Today it varies hook style and posting
+  window.
+- **Clip quality (70 → 90):**
+  - a head-editor second pass;
+  - laughter and crosstalk signals, and diarization;
+  - filler trimming and punch-ins;
+  - a 30-moment human benchmark.
+- **Local speech on Intel Macs and ARM Windows or Linux:** today these use cloud speech or an imported transcript.
+- **Optional:** Groq as a provider for text agents; today it handles speech only. Stripe Tax (see
+  [billing.md](../billing.md#set-up-stripe-owner-once)).
+- **Out of scope until decided:** more channel types, paid ads and ROAS. No ad spending is authorized.
 
-Not started. Scope:
+## 6. Specs and decisions waiting on the owner
 
-- A user guide in `docs/guide/` with one page per area.
-- Restore the explanations trimmed from the UI: the team ledger, what is sent to AI providers,
-  clip evidence, the limits of Results and the Strategist, references, factory upgrades,
-  transcripts, privacy and posting recovery.
-- A first-run tutorial outline of 5–7 steps.
-- A Help entry in ⌘K and in the sidebar footer.
+- **Pending suggested edits** in the Software Factory, for the owner to accept or reject:
+  - Plans and Billing requirements and blueprint;
+  - Posting Server blueprint (`e0ac770e`);
+  - App Shell and Navigation blueprint (`062e2dcb`): seven Help suggestions;
+  - Requirements overview (`7bf11492`) and Clip Production and Review blueprint (`8538463e`);
+  - Results and Strategy Learning blueprint: older suggestions and a drift note from 2026-11-14.
+  
+  After accepting, re-run code analysis.
+- **Legal:** `privacy.html` and `terms.html` (sources in `landing-page/site/pages/`) are drafts. The refund wording is
+  an assumption.
+- **Small product questions left open:**
+  - whether to delete the GTA sample clip in the Knowledge Base;
+  - how clicks on the Factory-map strip should behave;
+  - whether Studio should confirm before resetting edited captions.
 
-No requirements document covers user documentation yet.
+## 7. Out-of-date docs
 
-### [WO-2](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/2): Workflow orchestration and saved state (Backlog, high, Nur)
-
-The hackathon-era orchestration lane from 2026-11-14. Much of its scope has since landed through
-other work: saved campaigns, strategy versions, durable jobs, observations and approvals. Re-scope it
-against the current code, or close it.
-
-## 2. Unmerged code
-
-| Branch | State | What it does | Next step |
-| --- | --- | --- | --- |
-| `8090/chat-batched-transcribe-trial-k7m2q9` | No PR on purpose, kept for a GPU trial (2026-11-20) | Batched faster-whisper (batch 8) and `scripts/bench-speech.py --batch`. On an 8-vCPU CPU it was 22% faster but gave 30% fewer sentence ends, so `master` decodes one window at a time; see [local-model-setup.md](../local-model-setup.md#batched-faster-whisper-measured-not-used) | Run the bench with `--batch` on an NVIDIA PC; merge only if sentence ends hold |
-| `8090/chat-polish-landing-page-e03414` | PR #10 closed | Landing-page polish from 2026-11-14 | Keep anything still wanted, then delete |
-| `feature/code-cut-off-desing-improvements` | PR #11 closed | UI copy cuts and Factory-map selection changes from 2026-11-14, probably superseded by later redesigns | Confirm it's superseded, then delete |
-
-These branches are already merged and can be deleted from origin:
-`8090/chat-switch-supabase-project-k2w9f4`, `8090/wo-22-zernio-posting-server-t5j8n2` and
-`8090/wo-23-zernio-engine-adapter-p6w3c8`.
-
-## 3. Built but not yet proven live
-
-1. **First real post through the app.** This has never been done. Approve one clip, post it through
-   the posting server and watch the attempt states. If the outcome is uncertain, reconcile with
-   Check status instead of retrying. This needs the WO-24 UI or a direct call to the engine API.
-2. **A fresh clip that passes editorial review**, made by the current engine with speech intact.
-   Watch and listen for meaning, captions, hook, framing and audio. A high rank is not acceptance;
-   see [engine-eval.md](../engine-eval.md).
-3. **A real measure → learn → re-cut cycle** on real observations, end to end. Only the labelled
-   demo and the simulation have run so far.
-4. **Clean-machine installs** of the Windows installer, the Linux AppImage and the Mac artifact.
-   Also run `desktop-apps.yml` and `mac-app.yml` on current `master`; the Mac artifact was last
-   built on 2026-11-14.
-
-## 4. Not started
-
-- **Strategist variables:** cover source, caption length, hashtag count and CTA were listed as
-  follow-ups on 2026-11-14. None of them appears in `strategist.py`, which varies hook style and
-  posting window.
-- **Always-on hosted workers:** schedules and metric collection only run while the app is open.
-- **State sync and team access:** operational records exist only in local SQLite. There is no
-  owner-scoped sync and no team membership.
-- **Signed releases:** Windows code signing, Mac notarization and single-instance coordination.
-- **Wider scope:** more channels, controlled paid experiments and ROAS. No ad spending is
-  authorized.
-- **Clip quality (score 70 → 90):** a head-editor second pass, laughter and crosstalk signals,
-  diarization, filler trimming, punch-ins on punchlines and a 30-moment human benchmark.
-- **Optional:** Groq as a provider for text agents. Today it is wired only for opt-in speech.
-
-## 5. Software Factory bookkeeping
-
-- **Close or verify work orders whose code has merged:**
-  - WO-9 and WO-10 have been In Progress since 2026-11-14, but both are implemented on `master`:
-    `channelSettings.test.tsx`, and the archive and restore endpoints in `campaign_api.py` with
-    `tests/test_campaign_archive.py`. Their `.sw-factory/WO-9` and `WO-10` checklists mark
-    implementation complete.
-  - WO-1 and WO-3 to WO-8 are hackathon builds from 2026-11-14; PRs #1–#9 merged that day. They
-    are still In Review.
-  - WO-11, WO-12 and WO-13 are the Phase 1–2 artifacts (navigation map, App Shell blueprint,
-    design system and prototype). They are still In Review.
-- **Blueprints:** Results and Strategy Learning has 13 pending suggested edits from 2026-11-14 and
-  a drift note against an old `master` (`632f890`). Accept or reject them, then re-run code
-  analysis. Campaign Workspace and Strategy and Precedent Research have two pending suggestions
-  each.
-- **Requirements:**
-  - the Requirements overview has five open threads;
-  - Success Metrics has six open review comments;
-  - Product Description, Campaign Workspace and Strategy, and Results and Strategy Learning each
-    have one pending suggestion.
-
-## 6. Out-of-date docs
-
-- `README.md`:
-  - The Publication row still describes the Composio Instagram flow; posting now goes through
-    Zernio.
-  - The sidebar line still says Factory, Library, Results and Brand profile, with Engine & models
-    under Brand profile. Settings and the Activity Center now exist.
-- `docs/finish-line.md` and `docs/product-roadmap.md` date from 2026-11-14.
-- `docs/HANDOFF.md`: §1–2 and §5–8 describe Kartik's Mac and the 2026-11-14 wave.
-- `docs/interface-architecture.md`: the visual-system section still describes the earlier
-  copper glass palette and `operational-glass.css`.
+- `docs/finish-line.md` and `docs/product-roadmap.md` are from 2026-11-14. Treat them as history.
+- `docs/HANDOFF.md` §1–2 and §5–8 describe Kartik's Mac and the hackathon wave.
+- `docs/interface-architecture.md`: the visual-system section describes the earlier copper glass palette.
+- `docs/submission/` is the hackathon submission, kept as a record.
