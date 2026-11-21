@@ -135,12 +135,18 @@ export interface PostedRow {
   mediaId: string;
   clipId: string;
   title: string;
+  /** The clip is not in this library (deleted, or posted elsewhere): the title is a placeholder. */
+  untitled: boolean;
   account: string;
+  /** The account the Publication Record names; "" when it names none. */
+  accountId: string;
   postedAt: number | null;
   /** 0..1 progress through the current measurement window. */
   window: number;
   windowLabel: string;
   measuredAt: number | null;
+  /** Views in the latest reading; null until a reading reports them (never zero by default). */
+  views: number | null;
   chips: Ratio[];
   demo: boolean;
   demoHours: number | null;
@@ -182,8 +188,11 @@ export function postedRows(args: {
         id: p.id,
         mediaId: text(p.media_id),
         clipId: text(p.clip_id),
-        title: clip?.hook || clip?.name || `Post ${text(p.media_id)}`,
-        account: text(account?.display_name) || text(p.account_id) || "Instagram",
+        title: clip?.hook || clip?.name || "Untitled post",
+        untitled: !(clip?.hook || clip?.name),
+        account:
+          text(account?.display_name) || text(account?.username) || text(p.account_id) || "Instagram",
+        accountId: text(p.account_id),
         postedAt: posted,
         window,
         windowLabel:
@@ -193,6 +202,7 @@ export function postedRows(args: {
               ? "Measuring now"
               : `Day ${day} of ${cadence} · next reading ${shortDate(due)}`,
         measuredAt: time(latest?.collected_at),
+        views: num(metrics.views),
         chips,
         demo,
         demoHours: num(latest?.real_elapsed_hours) ?? num(override?.real_elapsed_hours),
@@ -200,6 +210,168 @@ export function postedRows(args: {
       };
     })
     .sort((a, b) => (b.postedAt ?? 0) - (a.postedAt ?? 0));
+}
+
+// ------------------------------------------------------------------ Account Map
+// Posted clips grouped by the account they went to: one node per account, linked to the brand.
+
+export type ClipSort = "newest" | "views";
+export const CLIP_PAGE_SIZE = 5;
+
+export interface MapClip {
+  row: PostedRow;
+  /** Latest views; null until a reading reports them. */
+  views: number | null;
+  /** Views against the brand's typical (median) views. */
+  vsTypical: Ratio;
+  /** 0..1 of the account's best views, for the bar; 0 while unmeasured. */
+  share: number;
+  /** The same clip on the other accounts it was posted to. */
+  alsoOn: { key: string; name: string; rowId: string }[];
+}
+export interface MapAccount {
+  /** The account ID, or UNKNOWN_ACCOUNT for records that name no account. */
+  key: string;
+  name: string;
+  /** Platform id such as "instagram"; "" when the account record is gone. */
+  platform: string;
+  /** Connected to this brand now (active). Records on other accounts still show, marked. */
+  connected: boolean;
+  /** Newest first. */
+  clips: MapClip[];
+  /** Sum of measured views; null while nothing is measured. */
+  views: number | null;
+  measured: number;
+  best: MapClip | null;
+}
+export interface AccountMapModel {
+  brand: string;
+  clips: number;
+  views: number | null;
+  typical: number | null;
+  accounts: MapAccount[];
+}
+export const UNKNOWN_ACCOUNT = "unknown-account";
+
+const accountName = (a: Row) =>
+  text(a.display_name) || text(a.username) || text(a.id);
+const accountPlatform = (a: Row) => text(a.platform) || text(a.toolkit) || "instagram";
+const newestFirst = (a: MapClip, b: MapClip) => (b.row.postedAt ?? 0) - (a.row.postedAt ?? 0);
+
+/** Newest first, or most views first with unmeasured clips last. */
+export function sortClips(clips: MapClip[], sort: ClipSort): MapClip[] {
+  if (sort === "newest") return [...clips].sort(newestFirst);
+  return [...clips].sort(
+    (a, b) =>
+      Number(a.views === null) - Number(b.views === null) ||
+      (b.views ?? 0) - (a.views ?? 0) ||
+      newestFirst(a, b),
+  );
+}
+
+/** One page of a list. A page past the end shows the last page; an empty list has one empty page. */
+export function clipPage<T>(items: T[], page: number, size = CLIP_PAGE_SIZE) {
+  const pages = Math.max(1, Math.ceil(items.length / size));
+  const at = Math.min(Math.max(0, Math.floor(page) || 0), pages - 1);
+  return {
+    page: at,
+    pages,
+    total: items.length,
+    from: items.length ? at * size + 1 : 0,
+    to: Math.min(items.length, (at + 1) * size),
+    items: items.slice(at * size, (at + 1) * size),
+  };
+}
+
+/** "1.4× typical", or "no typical yet" before the brand has one. */
+export function timesTypical(r: Ratio): string {
+  if (r.value === null) return "not measured yet";
+  if (r.ratio === null) return "no typical yet";
+  return `${(Math.round(r.ratio * 10) / 10).toFixed(1)}× typical`;
+}
+
+/** 12400 → "12.4K". */
+export const compactCount = (n: number) =>
+  new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+
+export function accountMap(args: {
+  rows: PostedRow[];
+  /** The brand's connected (active) accounts: each gets a node even with nothing posted. */
+  connected: Row[];
+  /** Every account record the app knows, to name accounts that are no longer connected. */
+  known?: Row[];
+  brand: string;
+  typical: number | null;
+}): AccountMapModel {
+  const nodes = new Map<string, MapAccount>();
+  const add = (key: string, name: string, platform: string, connected: boolean) => {
+    const found = nodes.get(key);
+    if (found) return found;
+    const node: MapAccount = { key, name, platform, connected, clips: [], views: null, measured: 0, best: null };
+    nodes.set(key, node);
+    return node;
+  };
+  for (const a of args.connected) {
+    const id = text(a.id);
+    if (id) add(id, accountName(a), accountPlatform(a), true);
+  }
+  for (const row of args.rows) {
+    const key = row.accountId || UNKNOWN_ACCOUNT;
+    let node = nodes.get(key);
+    if (!node) {
+      const record = row.accountId ? args.known?.find((a) => a.id === row.accountId) : undefined;
+      node = record
+        ? add(key, accountName(record), accountPlatform(record), false)
+        : add(key, row.accountId ? row.account : "Unknown account", "", false);
+    }
+    node.clips.push({
+      row,
+      views: row.views,
+      vsTypical: ratioChip("views", row.views, args.typical),
+      share: 0,
+      alsoOn: [],
+    });
+  }
+  const byClip = new Map<string, { key: string; name: string; rowId: string }[]>();
+  for (const node of nodes.values())
+    for (const c of node.clips)
+      if (c.row.clipId)
+        byClip.set(c.row.clipId, [
+          ...(byClip.get(c.row.clipId) ?? []),
+          { key: node.key, name: node.name, rowId: c.row.id },
+        ]);
+  for (const node of nodes.values()) {
+    for (const c of node.clips)
+      c.alsoOn = (byClip.get(c.row.clipId) ?? []).filter(
+        (o, i, all) => o.key !== node.key && all.findIndex((x) => x.key === o.key) === i,
+      );
+    const measured = node.clips.filter((c) => c.views !== null);
+    node.measured = measured.length;
+    node.views = measured.length ? measured.reduce((sum, c) => sum + (c.views ?? 0), 0) : null;
+    node.best = measured.reduce<MapClip | null>(
+      (best, c) => (best === null || (c.views ?? 0) > (best.views ?? 0) ? c : best),
+      null,
+    );
+    const top = node.best?.views ?? 0;
+    for (const c of node.clips) c.share = top > 0 && c.views !== null ? c.views / top : 0;
+    node.clips = sortClips(node.clips, "newest");
+  }
+  // The account carrying the brand comes first; connected before disconnected on a tie.
+  const accounts = [...nodes.values()].sort(
+    (a, b) =>
+      (b.views ?? -1) - (a.views ?? -1) ||
+      Number(b.connected) - Number(a.connected) ||
+      b.clips.length - a.clips.length ||
+      a.name.localeCompare(b.name),
+  );
+  const measured = accounts.filter((a) => a.views !== null);
+  return {
+    brand: args.brand,
+    clips: accounts.reduce((n, a) => n + a.clips.length, 0),
+    views: measured.length ? measured.reduce((sum, a) => sum + (a.views ?? 0), 0) : null,
+    typical: args.typical,
+    accounts,
+  };
 }
 
 const VALUE_WORDS: Record<string, Record<string, string>> = {

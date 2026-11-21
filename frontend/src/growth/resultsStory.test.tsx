@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { api, post, put } from "../api";
 import type { FactoryState } from "../useFactory";
 import { Results } from "./Results";
@@ -120,6 +120,9 @@ describe("plain-language pieces", () => {
       now: NOW,
     });
     expect(rows[0].windowLabel).toBe("Day 1 of 3 · next reading Nov 16");
+    // The clip is not in this library: a plain placeholder title, never the platform's raw ID.
+    expect(rows[0].title).toBe("Untitled post");
+    expect(rows[0].untitled).toBe(true);
     expect(rows[0].demo).toBe(true);
     expect(rows[0].demoHours).toBe(5);
   });
@@ -235,6 +238,27 @@ describe("Results page", () => {
     },
   } as unknown as DemoResult;
 
+  it("leads from rules waiting for approval straight to them", async () => {
+    vi.mocked(api).mockImplementation(async (path: string) => {
+      if (path === "/api/automation/state")
+        return { policies: [], publications: [], snapshots: [], work: [], experiments: [] };
+      if (path === "/api/automation/accounts") return [];
+      if (path === "/api/automation/settings") return { configured: false };
+      return null;
+    });
+    vi.spyOn(strategistApi, "view").mockResolvedValue({
+      profile_id: "p", target_metric: "views", baseline: { statistic: null, posts: 0, metrics: {} }, beliefs: [], portfolio: null,
+      pending_proposals: { style_rules: [], campaign: [{ id: "cp", campaign_id: "c", status: "proposed", summary: "Open with the question", caveat: "", changes: [] }] },
+      runs: [], measured_posts: 0, due_layers: [], caveat: "", simulated: false,
+    } as never);
+    render(<Results w={emptyWorkspace()} factory={emptyFactory} next={vi.fn()} onRehearse={vi.fn()} />);
+    const review = await screen.findByRole("button", { name: "Review and approve" });
+    const more = screen.getByText(/^Strategist and tools · 1 to review/).closest("details")!;
+    expect(more.open).toBe(false);
+    fireEvent.click(review);
+    expect(more.open).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(more.querySelector("summary")));
+  });
   it("says when tracking fails even before anything is recorded", async () => {
     vi.mocked(api).mockImplementation(async (path: string) => (path === "/api/automation/accounts" ? [] : null));
     quietStrategist();

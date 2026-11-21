@@ -34,15 +34,22 @@ function speechSetupLine(system: SystemInfo | null) {
   return `Speech recognition isn't set up yet. Set it up once (${total ? `about ${total.toFixed(1)} GB download` : "a one-time download"}) and run again.`;
 }
 
+/**
+ * Why work waits on workspace data: `"loading"` while a routine read is in flight, `true` when
+ * data did not load (the shell then shows Reconnect), `false` when it is current.
+ */
+export type Staleness = boolean | "loading";
+const STALE_LINE = "Some workspace data did not load. Press Reconnect at the top, then try again.";
+
 export function readiness(input: {
   source?: Video; system: SystemInfo | null; models: Model[]; jobs: Job[];
   modelId: string; approved: boolean; sourceAttached: boolean; subtitles: boolean;
-  stale: boolean;
+  stale: Staleness;
 }) {
   const { source, system, models, jobs, modelId } = input;
   const shared: string[] = [];
-  if (input.stale) shared.push("Refresh unavailable or stale workspace data first.");
-  if (!input.approved) shared.push("Approve direction for this account profile first.");
+  if (input.stale) shared.push(input.stale === "loading" ? "Loading the latest episodes and clips…" : STALE_LINE);
+  if (!input.approved) shared.push("Pick your clip style first.");
   if (!source || !input.sourceAttached) shared.push("Add and select an episode first.");
   else if (source.duration == null || !Number.isFinite(source.duration) || source.duration <= 0) shared.push("This source has no usable duration. Check the imported file.");
   if (source && sourceHasActiveJob(jobs, source.id)) shared.push("This source already has queued or running work.");
@@ -107,8 +114,8 @@ export function changedEditFields(before: unknown, after: unknown) {
   if (!a || !b) return [];
   return EDIT_FIELDS.filter(key => key in b && a[key] !== b[key]);
 }
-export function reviewBlocker(clip: Clip, jobs: Job[], stale: boolean) {
-  if (stale) return "Refresh clip and queue data before review.";
+export function reviewBlocker(clip: Clip, jobs: Job[], stale: Staleness) {
+  if (stale) return stale === "loading" ? "Loading the latest clips…" : STALE_LINE;
   if (sourceHasActiveJob(jobs, clip.video_id) || jobs.some(j => activeJob(j) && object(j.context)?.clip_id === clip.id)) return "Wait for this source or clip task to finish.";
   if (clip.team_run_id && clip.team_review_status !== "pass" && clip.team_review_status !== "not_applicable") return "Resolve the team critique before human approval.";
   return null;

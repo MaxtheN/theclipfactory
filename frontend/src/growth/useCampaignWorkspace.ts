@@ -28,7 +28,10 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
   );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // `error` means the workspace itself could not be read, so screens hold their actions.
   const [error, setError] = useState("");
+  // A rejected action is reported apart from that: the workspace is re-read and stays usable.
+  const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState("");
   const mounted = useRef(true),
     generation = useRef(0),
@@ -116,20 +119,26 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
     if (actionLock.current || loadingNow.current) return false;
     actionLock.current = true;
     setBusy(true);
-    setError("");
+    setActionError("");
     setNotice("");
+    let done = false;
     try {
       await task();
+      done = true;
       await Promise.all([load(reloadId), refreshFactory()]);
       if (mounted.current) setNotice(success);
       return true;
     } catch (e) {
+      // A failed re-read after a completed task is already reported by load() as `error`.
+      if (done) return false;
       if (mounted.current)
-        setError(
+        setActionError(
           e instanceof Error
             ? e.message
             : "The operation failed. Your draft is still here.",
         );
+      // Re-read whatever the failed action may have touched, as Reconnect does; drafts stay.
+      void Promise.all([load(), refreshFactory()]).catch(() => {});
       return false;
     } finally {
       actionLock.current = false;
@@ -137,6 +146,7 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
     }
   }, [load, refreshFactory]);
   const clearNotice = useCallback(() => setNotice(""), []);
+  const clearActionError = useCallback(() => setActionError(""), []);
   // One object per actual change, so screens can memoize on it.
   return useMemo(
     () => ({
@@ -152,12 +162,14 @@ export function useCampaignWorkspace(refreshFactory: () => Promise<void>) {
       loading,
       busy,
       error,
+      actionError,
       notice,
       load,
       run,
       clearNotice,
+      clearActionError,
     }),
-    [campaigns, profiles, versions, observations, campaign, profileId, chooseProfile, selected, select, loading, busy, error, notice, load, run, clearNotice],
+    [campaigns, profiles, versions, observations, campaign, profileId, chooseProfile, selected, select, loading, busy, error, actionError, notice, load, run, clearNotice, clearActionError],
   );
 }
 export type Workspace = ReturnType<typeof useCampaignWorkspace>;

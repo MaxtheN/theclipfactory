@@ -30,7 +30,7 @@ import { rankOf, reviewOrder } from "./clipRanking";
 import "./campaign-brief.css";
 import "./review-panel.css";
 import { DIRECTION_MAX, parseProductionClip, type CampaignRenderRequest, type ExportRecord, type ProductionClip } from "./productionContracts";
-import { changedEditFields, clipInScope, editErrors, jobInScope, object, readiness, retryBlocker, reviewBlocker } from "./productionState";
+import { changedEditFields, clipInScope, editErrors, jobInScope, object, readiness, retryBlocker, reviewBlocker, type Staleness } from "./productionState";
 
 type Mode = "manual" | "agent";
 const message = (e: unknown) => e instanceof Error ? e.message : "The operation was not confirmed. Refresh before retrying.";
@@ -100,7 +100,9 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   const selected = freshProduction ? undefined : clips.find(c => c.id === selectedId) || ordered.above[0] || clips[0];
   const jobs = factory.data.jobs.filter(j => jobInScope(j, scope, runs));
   const models = installedLlms(factory.data.models, { needsVision: true });
-  const stale = factory.loading || !!factory.errors.videos || !!factory.errors.jobs || !!factory.errors.clips || w.loading || !!w.error;
+  // Data that did not load waits for Reconnect; a read in flight only waits for itself.
+  const unavailable = !!factory.errors.videos || !!factory.errors.jobs || !!factory.errors.clips || !!w.error;
+  const stale: Staleness = unavailable || (factory.loading || w.loading ? "loading" : false);
   const busy = w.busy || factory.busy || pending;
   const ready = readiness({ source, system: factory.errors.system ? null : factory.data.system, models: factory.errors.models ? [] : factory.data.models, jobs: factory.data.jobs, modelId, approved: !!direction, sourceAttached: !!source, subtitles, stale });
   const edits = editErrors({ start, end, hook, opening, coldStart, coldEnd, focusX }, source?.duration);
@@ -136,8 +138,9 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
     .filter((id): id is string => typeof id === "string");
   const confirmedOutputs = clips.filter(clip => resultIds.includes(clip.id) && clip.video_id === journeySourceId);
   const journey = (journeyJob || submittedHere) && stale ? {
-    state: "uncertain" as const, step: 1 as const, title: "Production status needs a refresh",
-    message: "Queue or output data is unavailable. Refresh before starting another run.",
+    state: "uncertain" as const, step: 1 as const,
+    title: stale === "loading" ? "Checking production status" : "Production status needs a refresh",
+    message: stale === "loading" ? "Loading the latest queue and outputs…" : "Queue or output data did not load. Press Reconnect at the top before starting another run.",
   } : journeyJob && ["failed", "cancelled"].includes(journeyJob.status) ? {
     state: "error" as const, step: 1 as const,
     title: journeyJob.status === "cancelled" ? "Production was cancelled" : "Production needs attention",
@@ -213,7 +216,12 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
   async function perform(task: () => Promise<unknown>, success: string) {
     if (lock.current || busy) return false;
     lock.current = true; setPending(true); setActionError("");
-    try { return await w.run(async () => { try { return await task(); } catch (e) { setActionError(message(e)); throw e; } }, success); }
+    try {
+      const ok = await w.run(async () => { try { return await task(); } catch (e) { setActionError(message(e)); throw e; } }, success);
+      // The refusal is shown here, beside the work; the shell's copy of it would say it twice.
+      if (!ok) w.clearActionError?.();
+      return ok;
+    }
     catch (e) { setActionError(message(e)); return false; }
     finally { lock.current = false; setPending(false); }
   }
@@ -388,7 +396,7 @@ export function Studio({ w, factory, preferredSource, preferredMode, preferredCl
           <button type="button" className="gf-review-detail-trigger" onClick={() => setDetailsOpen(true)}><Icon name="info" size={16} /><span>Checks & version details<small>Technical evidence and export history</small></span><Icon name="arrow" size={16} /></button>
           <PanelDialog open={detailsOpen && activeSurface} onClose={() => setDetailsOpen(false)} title="Checks & version details" description={`Evidence for ${selected.name}. Technical checks do not replace your review.`}>
             <ClipEvidence clip={selected} />
-            {selected.team_run_id && <button className="gf-button ghost full" disabled={busy || stale || factory.data.jobs.some(j => activeJob(j) && object(j.context)?.video_id === selected.video_id) || reviewPreview} onClick={() => void perform(async () => { const exact = selected.approved ? await productionApi.review(selected, false) : selected; await productionApi.recheck(exact); }, "Recheck queued. This version needs fresh approval afterwards.")}>Recheck technical critique</button>}
+            {selected.team_run_id && <button className="gf-button ghost full" disabled={busy || !!stale || factory.data.jobs.some(j => activeJob(j) && object(j.context)?.video_id === selected.video_id) || reviewPreview} onClick={() => void perform(async () => { const exact = selected.approved ? await productionApi.review(selected, false) : selected; await productionApi.recheck(exact); }, "Recheck queued. This version needs fresh approval afterwards.")}>Recheck technical critique</button>}
             <h3>Exports</h3>
             {reviewPreview ? <p>Exports run in the desktop app.</p> : <><button className="gf-button ghost" disabled={busy} onClick={() => void reconcile(selected)}>Refresh export history</button>{exportsState.error && <p role="alert">{exportsState.error}</p>}{uncertainExports.has(selected.id) && <p className="gf-help">An export was submitted for this version. Check history before exporting again; it won't be resent automatically.</p>}{!exportRows.length && <p>No exports yet.</p>}{exportRows.map(record => <div key={record.id}><strong>{record.created_at}</strong><p>{record.location}</p><a className="gf-button ghost" href={exportMediaUrl(record.id)} download>Download MP4</a><a className="gf-button ghost" href={exportManifestUrl(record.id)} download>Download manifest</a></div>)}</>}
           </PanelDialog>

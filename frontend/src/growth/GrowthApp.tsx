@@ -397,6 +397,22 @@ export function GrowthApp() {
     void w.load().catch(() => {});
     void factory.refresh();
   }
+  // Failed actions from either store; the factory's only ever holds a notice or an error.
+  const actionErrors = [...new Set([w.actionError, factory.actionError].filter(Boolean))];
+  // The dismiss button leaves with its banner; keep keyboard focus on the page, not <body>.
+  function keepFocusInPage() {
+    document.getElementById("growth-main")?.focus({ preventScroll: true });
+  }
+  function dismissActionErrors() {
+    w.clearActionError();
+    if (factory.actionError) factory.dismiss();
+    keepFocusInPage();
+  }
+  function dismissNotices() {
+    w.clearNotice();
+    if (factory.notice) factory.dismiss();
+    keepFocusInPage();
+  }
   const quickActions: QuickAction[] = [
     ...(["factory", "library", "results", "setup", "settings"] as const).map((id) => ({
       id,
@@ -798,15 +814,36 @@ export function GrowthApp() {
                     </button>
                   </div>
                 )}
-              {!onboarding && w.notice && (
+              {/* A rejected action is not a lost connection: say what failed and let it go. */}
+              {!onboarding && actionErrors.length > 0 && (
+                <div className="gf-message error" role="alert">
+                  <Icon name="info" />
+                  <span>
+                    <strong>{actionErrors[0]}</strong>
+                    {actionErrors.slice(1).map((text) => (
+                      <small key={text}>{text}</small>
+                    ))}
+                    <small>Your inputs are kept. Try again when you’re ready.</small>
+                  </span>
+                  <button
+                    type="button"
+                    className="gf-icon-button"
+                    aria-label="Dismiss error"
+                    onClick={dismissActionErrors}
+                  >
+                    <Icon name="close" size={15} />
+                  </button>
+                </div>
+              )}
+              {!onboarding && (w.notice || factory.notice) && (
                 <div className="gf-message success" role="status">
                   <Icon name="check" />
-                  <span>{w.notice}</span>
+                  <span>{w.notice || factory.notice}</span>
                   <button
                     type="button"
                     className="gf-icon-button"
                     aria-label="Dismiss update"
-                    onClick={w.clearNotice}
+                    onClick={dismissNotices}
                   >
                     <Icon name="close" size={15} />
                   </button>

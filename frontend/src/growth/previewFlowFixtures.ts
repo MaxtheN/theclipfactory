@@ -23,6 +23,12 @@ const iso = (ms: number) => new Date(ms).toISOString();
 const PROFILE = "preview-profile-allin";
 const CAMPAIGN = "preview-campaign";
 const POLICY = "preview-fixture-policy";
+const POLICY_TIKTOK = "preview-fixture-policy-tiktok";
+const POLICY_X = "preview-fixture-policy-x";
+const IG = "preview-fixture-account";
+const TIKTOK = "preview-fixture-tiktok";
+const YOUTUBE = "preview-fixture-youtube";
+const X = "preview-fixture-x";
 
 function fixtures(now: number) {
   const t0 = now - 26 * MIN; // finished run on source B
@@ -179,40 +185,68 @@ function fixtures(now: number) {
       created_at: iso(t1),
     },
   ];
+  // Posts across accounts for the Account Map: Instagram has two pages of clips, TikTok holds a
+  // cross-post of clip-2, YouTube has nothing yet and the X account is no longer connected.
+  const pub = (
+    n: number,
+    policy: string,
+    account: string,
+    clip: string,
+    daysAgo: number,
+    dueAfterDays: number | null,
+  ) => {
+    const at = now - daysAgo * 24 * H;
+    return {
+      id: `preview-fixture-pub-${n}`,
+      policy_id: policy,
+      clip_id: clip,
+      account_id: account,
+      media_id: `179000000000000${String(n).padStart(2, "0")}`,
+      published_at: iso(at),
+      next_due_at: dueAfterDays === null ? null : iso(at + dueAfterDays * 24 * H),
+      mapping_source: "user_confirmed",
+    };
+  };
   const publications = [
-    {
-      id: "preview-fixture-pub-1",
-      policy_id: POLICY,
-      clip_id: "preview-fixture-clip-2",
-      account_id: "preview-fixture-account",
-      media_id: "17900000000000001",
-      published_at: iso(now - 4.2 * 24 * H),
-      next_due_at: iso(now - 4.2 * 24 * H + 6 * 24 * H),
-      mapping_source: "user_confirmed",
-    },
-    {
-      id: "preview-fixture-pub-2",
-      policy_id: POLICY,
-      clip_id: "preview-fixture-clip-5",
-      account_id: "preview-fixture-account",
-      media_id: "17900000000000002",
-      published_at: iso(now - 1.4 * 24 * H),
-      next_due_at: iso(now - 1.4 * 24 * H + 3 * 24 * H),
-      mapping_source: "user_confirmed",
-    },
+    pub(1, POLICY, IG, "preview-fixture-clip-2", 4.2, 6),
+    pub(2, POLICY, IG, "preview-fixture-clip-5", 1.4, 3),
+    pub(3, POLICY, IG, "preview-fixture-clip-1", 6.5, null),
+    pub(4, POLICY, IG, "preview-fixture-clip-3", 8.8, null),
+    pub(5, POLICY, IG, "preview-fixture-clip-4", 11, null),
+    pub(6, POLICY, IG, "preview-fixture-clip-6", 13.5, null),
+    pub(7, POLICY, IG, "preview-fixture-clip-7", 16, null),
+    pub(8, POLICY_TIKTOK, TIKTOK, "preview-fixture-clip-2", 3.9, 6),
+    pub(9, POLICY_TIKTOK, TIKTOK, "preview-fixture-clip-8", 7.1, null),
+    pub(10, POLICY_TIKTOK, TIKTOK, "preview-fixture-clip-9", 0.6, 3),
+    pub(11, POLICY_X, X, "preview-fixture-clip-10", 18, null),
   ];
+  const reading = (
+    n: number,
+    publication: (typeof publications)[number],
+    ageDays: number,
+    metrics: Record<string, number>,
+  ) => ({
+    id: `preview-fixture-reading-${n}`,
+    policy_id: publication.policy_id,
+    publication_id: publication.id,
+    clip_id: publication.clip_id,
+    collected_at: iso(now - ageDays * 24 * H),
+    window_start: publication.published_at,
+    source: "Preview fixture",
+    metrics,
+    trigger: "schedule",
+  });
+  // pub-2 and pub-10 are still inside their first window: no reading yet.
   const snapshots = [
-    {
-      id: "preview-fixture-reading-1",
-      policy_id: POLICY,
-      publication_id: "preview-fixture-pub-1",
-      clip_id: "preview-fixture-clip-2",
-      collected_at: iso(now - 1.2 * 24 * H),
-      window_start: publications[0].published_at,
-      source: "Preview fixture",
-      metrics: { views: 4210, likes: 188, shares: 21 },
-      trigger: "schedule",
-    },
+    reading(1, publications[0], 1.2, { views: 4210, likes: 188, shares: 21 }),
+    reading(3, publications[2], 3.5, { views: 6120, likes: 301, shares: 44 }),
+    reading(4, publications[3], 5.8, { views: 2980, likes: 139, shares: 17 }),
+    reading(5, publications[4], 8, { views: 1840, likes: 76, shares: 9 }),
+    reading(6, publications[5], 10.5, { views: 3550, likes: 162, shares: 23 }),
+    reading(7, publications[6], 13, { views: 2410, likes: 98, shares: 12 }),
+    reading(8, publications[7], 0.9, { views: 12800, likes: 905, shares: 132 }),
+    reading(9, publications[8], 4.1, { views: 5400, likes: 344, shares: 38 }),
+    reading(11, publications[10], 15, { views: 760, likes: 31, shares: 2 }),
   ];
   const automation = {
     health: { status: "ok", message: "Preview fixture" },
@@ -221,11 +255,31 @@ function fixtures(now: number) {
         id: POLICY,
         campaign_id: CAMPAIGN,
         profile_id: PROFILE,
-        account_id: "preview-fixture-account",
+        account_id: IG,
         cadence_days: 3,
         enabled: true,
         auto_drafts: true,
         allowed_changes: ["hook", "duration"],
+      },
+      {
+        id: POLICY_TIKTOK,
+        campaign_id: CAMPAIGN,
+        profile_id: PROFILE,
+        account_id: TIKTOK,
+        cadence_days: 3,
+        enabled: true,
+        auto_drafts: false,
+        allowed_changes: ["hook"],
+      },
+      {
+        id: POLICY_X,
+        campaign_id: CAMPAIGN,
+        profile_id: PROFILE,
+        account_id: X,
+        cadence_days: 3,
+        enabled: false,
+        auto_drafts: false,
+        allowed_changes: [],
       },
     ],
     publications,
@@ -235,11 +289,11 @@ function fixtures(now: number) {
   };
   const memory = {
     baseline: {
-      posts: 3,
+      posts: 9,
       metrics: {
-        views: { median: 2980, known_posts: 3 },
-        likes: { median: 142, known_posts: 3 },
-        shares: { median: 18, known_posts: 3 },
+        views: { median: 2980, known_posts: 9 },
+        likes: { median: 142, known_posts: 9 },
+        shares: { median: 18, known_posts: 9 },
       },
     },
     experiments: [],
@@ -332,12 +386,10 @@ export function flowFixture(path: string, method: string): unknown {
   if (path === "/api/automation/state") return f.automation;
   if (path === "/api/automation/accounts")
     return [
-      {
-        id: "preview-fixture-account",
-        profile_id: PROFILE,
-        status: "active",
-        display_name: "@allin_preview_fixture",
-      },
+      { id: IG, profile_id: PROFILE, status: "active", platform: "instagram", display_name: "@allin_preview_fixture" },
+      { id: TIKTOK, profile_id: PROFILE, status: "active", platform: "tiktok", display_name: "@allin.clips.preview" },
+      { id: YOUTUBE, profile_id: PROFILE, status: "active", platform: "youtube", display_name: "All-In Clips (preview)" },
+      { id: X, profile_id: PROFILE, status: "disconnected", platform: "twitter", display_name: "@allin_old_preview" },
     ];
   if (path === "/api/automation/settings") return { configured: true, auth_config_id: "" };
   if (path.startsWith("/api/automation/memory")) return f.memory;

@@ -107,6 +107,17 @@ export const OFFLINE_KEY = "gf.cloud.offline";
 type Outcome = (typeof outcomes)[number]["id"] | "other" | "discovery" | "";
 type Voice = (typeof voices)[number]["id"] | "other";
 
+/** What to fix in a short text field: an empty one asks for it, a long one names the limit. */
+function textProblem(value: string, max: number, missing: string, noun: string) {
+  if (!value) return missing;
+  if (value.length > max)
+    return `Keep ${noun} to ${max.toLocaleString("en-US")} characters or fewer.`;
+  return "";
+}
+const NAME_MISSING = "Name your brand or podcast to continue.";
+const AUDIENCE_MISSING = "Pick who you’re speaking to, or add your own.";
+const METRIC_MISSING = "Add a primary metric, like newsletter sign-ups.";
+
 export function onboardingBodies(input: {
   name: string;
   audience: string;
@@ -128,14 +139,15 @@ export function onboardingBodies(input: {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
-  if (!name || name.length > 200)
-    throw new Error("Use a brand name between 1 and 200 characters.");
-  if (!audience || audience.length > 3000)
-    throw new Error("Describe your audience in 1–3,000 characters.");
+  const invalid =
+    textProblem(name, 200, NAME_MISSING, "the brand name") ||
+    textProblem(audience, 3000, AUDIENCE_MISSING, "the audience");
+  if (invalid) throw new Error(invalid);
   if (!(objectives as readonly string[]).includes(input.objective))
     throw new Error("Choose a supported objective.");
-  if (input.objective !== "discovery" && (!metric || metric.length > 200))
-    throw new Error("Use a primary metric between 1 and 200 characters.");
+  const metricProblem =
+    input.objective === "discovery" ? "" : textProblem(metric, 200, METRIC_MISSING, "the metric");
+  if (metricProblem) throw new Error(metricProblem);
   if (guardrails.length > 4000)
     throw new Error(
       "Keep voice and boundaries within 4,000 characters in total.",
@@ -308,24 +320,20 @@ export function Onboarding({
   }
   function problem(index: number) {
     if (index === 0) {
-      if (!name.trim() || name.trim().length > 200)
-        return "Use a brand name between 1 and 200 characters.";
-      if (!audience.trim() || audience.trim().length > 3000)
-        return "Describe your audience in 1–3,000 characters.";
+      const invalid =
+        textProblem(name.trim(), 200, NAME_MISSING, "the brand name") ||
+        textProblem(audience.trim(), 3000, AUDIENCE_MISSING, "the audience");
+      if (invalid) return invalid;
     }
     if (index === 1) {
       if (!outcome)
         return "Choose an outcome, or explore first with Discovery.";
-      if (
-        outcome === "other" &&
-        (!customOutcome.trim() || customOutcome.trim().length > 200)
-      )
-        return "Describe your outcome in 1–200 characters.";
-      if (
-        objective !== "discovery" &&
-        (!metric.trim() || metric.trim().length > 200)
-      )
-        return "Use a primary metric between 1 and 200 characters.";
+      const invalid =
+        (outcome === "other" &&
+          textProblem(customOutcome.trim(), 200, "Describe your outcome.", "the outcome")) ||
+        (objective !== "discovery" &&
+          textProblem(metric.trim(), 200, METRIC_MISSING, "the metric"));
+      if (invalid) return invalid;
     }
     if (index === 2) {
       if (voice === "other" && !customVoice.trim())
@@ -1017,7 +1025,7 @@ export function Onboarding({
                     {styleApproved ? (
                       <span className="gf-pill approved">Approved ✓</span>
                     ) : (
-                      <p>Choose a starting style. Every new version stays yours to review.</p>
+                      <p>Agents start from the style you approve here. Every new version stays yours to review.</p>
                     )}
                   </header>
                   <ClipStylePicker
@@ -1110,7 +1118,9 @@ export function Onboarding({
                 <p className="gf-onboarding-review-note">
                   {askAccount
                     ? `Next, save this brand to your account, or keep it on ${platformWords().computer} only.`
-                    : "Launch saves your choices and opens Factory. You choose when to add footage and start production."}
+                    : styleApproved
+                      ? "Launch saves your choices and opens Factory. You choose when to add footage and start production."
+                      : "Launch saves your choices and opens Factory. Agents start once you approve a clip style above, or pick one in Factory later."}
                 </p>
               </>
             )}

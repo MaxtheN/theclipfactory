@@ -45,12 +45,19 @@ export function ConnectedAccounts({
   const alive = useRef(true);
   const connected = useRef(onConnected);
   connected.current = onConnected;
-  useEffect(() => () => { alive.current = false; }, []);
+  // Set on every mount: React may mount, unmount and mount again (StrictMode does), and a
+  // flag left false would drop every later answer and leave the list loading forever.
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
 
   const load = useCallback(async (refresh: boolean) => {
     try {
       const rows = await postingApi.accounts(refresh);
       if (!alive.current) return;
+      // Anything but a list is not an answer; say so instead of loading forever.
+      if (!Array.isArray(rows)) throw new Error("Connected accounts are unavailable.");
       setAccounts(rows);
       setLoadError("");
     } catch (e) {

@@ -148,7 +148,7 @@ describe("WebsiteBrief", () => {
     const { container } = render(<WebsiteBrief onApply={vi.fn()} onSkip={onSkip} client={client([])} />);
     expect(screen.getByText("Before we start")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "What’s your website?" })).toBeInTheDocument();
-    expect(screen.getByText("We'll draft your brand brief from it. You review it first.")).toBeInTheDocument();
+    expect(screen.getByText("We’ll draft your brand brief from it. You review it first.")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("yourbrand.com")).toBeInTheDocument();
     const go = screen.getByRole("button", { name: "Build my brand brief" });
     expect(go).toBeDisabled();

@@ -1,0 +1,529 @@
+/* Account Map (Results > Posted clips): the brand linked to each account, each account holding
+   its posted clips. Graphite like the rest of Results; violet only marks the account in focus,
+   amber only marks an account that is no longer connected. */
+
+.gf-posted-views {
+  margin: -2px 0 16px;
+}
+
+.gf-amap {
+  display: grid;
+  /* An explicit column: an auto one grows to the canvas's max-content and spills out of the card. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.gf-amap-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.gf-amap-summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground, #9d9d9d);
+}
+.gf-amap-sort {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--divider, #323232);
+  border-radius: 9px;
+  background: var(--surface, #1f1f1f);
+}
+.gf-amap-sort button {
+  min-height: 26px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted-foreground, #9d9d9d);
+  background: transparent;
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.gf-amap-sort button:hover {
+  color: var(--foreground, #ececec);
+}
+.gf-amap-sort button[aria-pressed="true"] {
+  color: var(--foreground, #ececec);
+  background: #2a2a2a;
+}
+
+/* The canvas: brand on the left, accounts down the right, links drawn between them. */
+.gf-amap-canvas {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(200px, 248px) minmax(0, 640px);
+  justify-content: center;
+  column-gap: 72px;
+  align-items: start;
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--gf-r-line, #323232);
+  border-radius: 12px;
+  background-color: #1a1a1a;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.075) 1px, transparent 0);
+  background-size: 18px 18px;
+  overflow: hidden;
+}
+.gf-amap-wires {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.gf-amap-wire path {
+  fill: none;
+  stroke: #4a4a4a;
+  stroke-width: 1.5;
+  transition: stroke 160ms ease;
+}
+.gf-amap-wire circle {
+  fill: #1a1a1a;
+  stroke: #5e5e5e;
+  stroke-width: 1.5;
+  transition: stroke 160ms ease;
+}
+.gf-amap-wire.is-ghost path {
+  stroke: #3c3c3c;
+  stroke-dasharray: 4 5;
+}
+.gf-amap-wire.is-active path,
+.gf-amap-wire.is-active circle {
+  stroke: var(--gf-r-accent-ink, #af85f3);
+}
+
+/* Nodes */
+.gf-amap-brand,
+.gf-amap-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--gf-r-line, #323232);
+  border-radius: 10px;
+  background: var(--gf-r-surface, #1f1f1f);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  transition: border-color 160ms ease;
+}
+.gf-amap-node {
+  scroll-margin: 16px;
+}
+.gf-amap-node:focus {
+  outline: 2px solid var(--material-focus, #af85f3);
+  outline-offset: 2px;
+}
+.gf-amap-node.is-active {
+  border-color: #54456b;
+}
+.gf-amap-node.is-disconnected {
+  border-style: dashed;
+}
+.gf-amap-node.is-ghost {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-style: dashed;
+  background: rgba(31, 31, 31, 0.6);
+  box-shadow: none;
+}
+.gf-amap-accounts {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.gf-amap-node-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.gf-amap-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #2a2a2a;
+  color: var(--foreground, #ececec);
+  font-size: 13px;
+  font-weight: 600;
+}
+.gf-amap-avatar.is-brand {
+  background: #303030;
+  box-shadow: inset 0 0 0 1px #3d3d3d;
+}
+.gf-amap-avatar.is-ghost {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px #3d3d3d;
+  color: var(--muted-foreground, #9d9d9d);
+}
+.gf-amap-node-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.gf-app .gf-amap-node-name h3,
+.gf-amap-node-name strong {
+  overflow: hidden;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  color: var(--foreground, #ececec);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gf-amap-node-name p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground, #9d9d9d);
+}
+.gf-amap-pill {
+  padding: 1px 7px;
+  border: 1px solid #5a4630;
+  border-radius: 999px;
+  color: #d8b48c;
+  font-size: 11px;
+}
+
+/* View widgets */
+.gf-amap-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--gf-r-line, #323232);
+  border-radius: 8px;
+  background: var(--gf-r-line, #323232);
+}
+.gf-amap-stats.is-pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.gf-amap-stats > div {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--gf-r-soft, #242424);
+}
+.gf-amap-stats dt {
+  font-size: 11px;
+  color: var(--muted-foreground, #9d9d9d);
+}
+.gf-amap-stats dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 5px;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+  color: var(--foreground, #ececec);
+}
+.gf-amap-stats dd small {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted-foreground, #9d9d9d);
+}
+
+/* Brand entries: one per account, in the same order as the nodes so links never cross. */
+.gf-amap-entries {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.gf-amap-entries button {
+  display: grid;
+  grid-template-areas: "name views" "meta views";
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+  width: 100%;
+  min-height: 24px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+.gf-amap-entries button:hover,
+.gf-amap-entries button.is-active {
+  background: var(--selected, rgba(255, 255, 255, 0.075));
+}
+.gf-amap-entry-name {
+  grid-area: name;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--foreground, #ececec);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gf-amap-entry-meta {
+  grid-area: meta;
+  font-size: 11px;
+  color: var(--muted-foreground, #9d9d9d);
+}
+.gf-amap-entry-views {
+  grid-area: views;
+  align-self: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground, #ececec);
+}
+
+/* The clip list inside each account */
+.gf-amap-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 11px 4px 7px;
+  border: 1px solid var(--gf-r-line, #323232);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--foreground, #ececec);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+.gf-amap-toggle:hover {
+  background: var(--selected, rgba(255, 255, 255, 0.075));
+}
+.gf-amap-toggle svg {
+  transition: transform 160ms ease;
+}
+.gf-amap-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.gf-amap-list {
+  display: grid;
+  gap: 10px;
+}
+.gf-amap-list[hidden] {
+  display: none;
+}
+.gf-amap-clips {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--gf-r-line, #323232);
+  list-style: none;
+}
+.gf-amap-clip {
+  display: grid;
+  grid-template-areas: "text views" "bar ratio" "also also";
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 14px;
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--gf-r-line, #323232);
+  scroll-margin: 16px;
+  transition: background-color 400ms ease;
+}
+.gf-amap-clip:focus {
+  outline: 2px solid var(--material-focus, #af85f3);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+.gf-amap-clip.is-landing {
+  background: rgba(175, 133, 243, 0.1);
+}
+.gf-amap-clip-text {
+  display: grid;
+  grid-area: text;
+  gap: 2px;
+  min-width: 0;
+}
+.gf-amap-clip-text strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground, #ececec);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gf-amap-clip-text small {
+  font-size: 11px;
+  color: var(--muted-foreground, #9d9d9d);
+  overflow-wrap: anywhere;
+}
+.gf-amap-clip-views {
+  grid-area: views;
+  font-size: 12px;
+  color: var(--muted-foreground, #9d9d9d);
+  text-align: right;
+  white-space: nowrap;
+}
+.gf-amap-clip-views b {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground, #ececec);
+}
+.gf-amap-bar {
+  grid-area: bar;
+  align-self: center;
+  overflow: hidden;
+  height: 4px;
+  border-radius: 2px;
+  background: #2a2a2a;
+}
+.gf-amap-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gf-grey-400, #8a8a8a);
+}
+.gf-amap-ratio {
+  grid-area: ratio;
+  justify-self: end;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground, #9d9d9d);
+  background: #292929;
+  white-space: nowrap;
+}
+.gf-amap-ratio.is-up {
+  color: #8eab99;
+}
+.gf-amap-ratio.is-down {
+  color: #cd8a7a;
+}
+.gf-amap-also {
+  display: flex;
+  flex-wrap: wrap;
+  grid-area: also;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted-foreground, #9d9d9d);
+}
+.gf-amap-also button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 9px;
+  border: 1px solid var(--gf-r-line, #323232);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--foreground, #ececec);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+.gf-amap-also button:hover {
+  background: var(--selected, rgba(255, 255, 255, 0.075));
+}
+.gf-amap-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground, #9d9d9d);
+}
+.gf-amap-pager button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--gf-r-line, #323232);
+  border-radius: 7px;
+  color: var(--foreground, #ececec);
+  background: transparent;
+  cursor: pointer;
+}
+.gf-amap-pager button:hover:not([aria-disabled="true"]) {
+  background: var(--selected, rgba(255, 255, 255, 0.075));
+}
+.gf-amap-pager button[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+.gf-amap-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground, #9d9d9d);
+}
+.gf-amap-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground, #9d9d9d);
+}
+
+.gf-amap-sort button:focus-visible,
+.gf-amap-entries button:focus-visible,
+.gf-amap-toggle:focus-visible,
+.gf-amap-also button:focus-visible,
+.gf-amap-pager button:focus-visible {
+  outline: 2px solid var(--material-focus, #af85f3);
+  outline-offset: 2px;
+}
+
+/* Narrow: the brand sits on top and a rail runs down the left edge to each account. */
+.gf-amap.is-stacked .gf-amap-canvas {
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  row-gap: 24px;
+  padding: 14px;
+}
+.gf-amap.is-stacked .gf-amap-accounts {
+  padding-left: 28px;
+}
+.gf-amap.is-stacked .gf-amap-stats dd {
+  font-size: 16px;
+}
+.gf-amap.is-stacked .gf-amap-clip {
+  grid-template-areas: "text text" "views ratio" "bar bar" "also also";
+}
+.gf-amap.is-stacked .gf-amap-clip-views {
+  text-align: left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gf-amap *,
+  .gf-amap *::before,
+  .gf-amap *::after {
+    transition: none !important;
+  }
+}
