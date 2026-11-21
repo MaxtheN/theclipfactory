@@ -68,7 +68,7 @@ generated renderer extension with tests, and a change for human review.
 | Factory builder | Capability gap → work order → sandboxed extension and tests in a temporary worktree → human review → draft PR. Sandboxed on Linux; reduced isolation is labelled on Windows. See [factory-builder.md](../factory-builder.md). | `capabilities.py`, `factory_builder.py` |
 | User guide | 15 pages in `docs/guide/`, opened from Help in the app (an allowlisted local route) and published on the website. | `docs/guide/`, `help_api.py`, `guideLinks.ts` |
 | Website | Static site: home, product, learning, pricing (generated from `plans.json`), download and setup, docs (generated from `docs/guide/`), architecture diagrams, privacy, terms, the Stripe return pages, 404 and sitemap. See [landing-page/README.md](../../landing-page/README.md). | `landing-page/` |
-| Platforms and packaging | macOS on Apple Silicon (Intel uses cloud speech), Windows 10/11 x64, Linux x64. Unsigned Windows installer and Linux AppImage; an ad-hoc-signed Mac artifact. | `packaging/`, `scripts/build-desktop-app.py`, `scripts/build-mac-app.sh` |
+| Platforms and packaging | macOS on Apple Silicon (Intel uses cloud speech), Windows 10/11 x64, Linux x64. With the signing secrets set, CI produces a Developer ID signed and notarized Mac app and an Authenticode-signed Windows installer, and `v*` tags attach them to a draft release ([releasing.md](../releasing.md)). Without the secrets, the Mac app is ad-hoc signed and the Windows installer unsigned. The Linux AppImage is never signed. | `packaging/`, `scripts/build-desktop-app.py`, `scripts/build-mac-app.sh`, `scripts/sign-mac-app.sh` |
 
 ## How it is built
 
@@ -105,7 +105,7 @@ pywebview window (clip_factory/app.py, main.py)
 | `landing-page/` | Website: hand pages, `site/` sources, `build.mjs`, generated output, tests |
 | `docs/` | Topic docs; `docs/guide/` is the user guide; `docs/submission/` is from the hackathon |
 | `.sw-factory/` | Execution notes from earlier work orders |
-| `.github/workflows/` | `ci.yml` (every push), `desktop-apps.yml` (tags and packaging changes), `mac-app.yml` (manual) |
+| `.github/workflows/` | `ci.yml` (every push); `desktop-apps.yml` and `mac-app.yml` (tags, packaging changes, manual), which sign when the secrets are set |
 
 ## Specs
 
