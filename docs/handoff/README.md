@@ -116,7 +116,7 @@ The [Software Factory project](https://factory.8090.ai/project/2791013e-0f01-4b6
 - their blueprints, plus Posting Server;
 - 39 work orders.
 
-Every work order is Completed except WO-2 (Backlog, to re-scope or close) and WO-19 (paused until after launch). What remains is in
+Every work order is Completed except WO-2 (Backlog, to re-scope or close) and WO-19 (Backlog: paused until after launch). What remains is in
 [outstanding-work.md](outstanding-work.md).
 
 ## Secrets and accounts

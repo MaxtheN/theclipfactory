@@ -31,7 +31,7 @@ The product is built; these are what stand between `master` and paying customers
 ## 2. Open work orders
 
 - **[WO-19](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/19): Consolidate design
-  tokens and retire CSS override layers** (In Progress, medium). **Paused until after launch** by the owner.
+  tokens and retire CSS override layers** (Backlog, medium). **Paused until after launch** by the owner.
   - The token source exists.
   - Still to fold in or retire, all in `frontend/src/growth/`: `desktop-glass`, `polish`, `pearl-studio`,
     `shell-polish`, `website-alignment`, `identity`, `interactions` and `workspace-motion`.
