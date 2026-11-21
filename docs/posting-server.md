@@ -56,6 +56,22 @@ Errors are `{"error": {"code", "message"}}`. Notable codes: `sign_in_required`/`
 `posting_plan_limit` (402, Zernio plan limit; not retryable by the creator), `zernio_unavailable` (502, retry),
 `server_misconfigured` (502), `not_configured` (503).
 
+### Plan enforcement
+
+The owner's Growth Factory plan ([billing.md](billing.md)) is read from `gf_billing_subscriptions` on every gated
+request, so the desktop app cannot unlock posting by editing its own state. Refusals are `402` with
+`{"error": {"code", "message", "limit": "connected_accounts", "usage", "max", "plan"}}`:
+
+| Code | When |
+| --- | --- |
+| `plan_required` | The plan does not include posting (Free): `POST /connect`, `POST /uploads`, `POST /posts`. |
+| `plan_limit` | `POST /connect` when the profile already has the plan's number of connected accounts. |
+| `plan_over_limit` | `POST /posts` when more accounts are connected than the plan includes (after a downgrade). |
+
+Listing and disconnecting accounts and reading posts are never gated, so a downgraded owner can always get back under
+the limit. If the plan cannot be read the request fails closed with `503 store_unavailable`. `posting_plan_limit` is
+different: it is Zernio's own limit on the shared account and needs the administrator to upgrade Zernio.
+
 ### Creating posts
 
 ```http
@@ -108,6 +124,7 @@ the workspace id. No captions, tokens, account, post or media identifiers.
 1. Apply the migration (SQL Editor or `POST /v1/projects/<ref>/database/query`), then run
    `supabase/tests/posting_server_rls.sql`; it must end with
    `Posting server probes passed; synthetic rows rolled back.`
+   Billing must be applied first (`202611210001_billing.sql`): the plan gate reads `gf_billing_subscriptions`.
 2. Secrets (Management API `POST /v1/projects/<ref>/secrets` or the dashboard): `ZERNIO_API_KEY` and
    `ZERNIO_WEBHOOK_SECRET` (random, 32 bytes). `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided by the
    platform.
@@ -115,7 +132,7 @@ the workspace id. No captions, tokens, account, post or media identifiers.
 4. Webhook: `POST https://zernio.com/api/v1/webhooks/settings` with the function URL, the same secret and the events
    above; check with `POST /webhooks/test` and `GET /webhooks/logs` (expect `200`, `{"received":true,"stored":false}`).
 
-Tests: `cd supabase/functions && deno test posting/` (also `deno fmt --check`, `deno lint`, `deno check`; CI job
+Tests: `cd supabase/functions && deno test --allow-read posting/ billing/` (also `deno fmt --check`, `deno lint`, `deno check`; CI job
 `posting-server`).
 
 ## Verified live — 2026-11-20

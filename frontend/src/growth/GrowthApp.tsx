@@ -22,6 +22,9 @@ import type { LearningDemoPlan } from "./LearningLoopDemo";
 import { Library } from "./Library";
 import { NewCampaign } from "./NewCampaign";
 import { QuickActions, type QuickAction } from "./QuickActions";
+import { PlanBadge, UpgradePrompt } from "./PlanBilling";
+import { HelpButton } from "./Help";
+import { requestHelp } from "./guideLinks";
 import { BrandMark } from "./BrandMark";
 import { Dormant } from "./Dormant";
 import "./tokens.css";
@@ -496,6 +499,26 @@ export function GrowthApp() {
       run: () => setActivityRequest((n) => n + 1),
     },
     {
+      id: "plan",
+      label: "Plan and billing",
+      icon: "spark",
+      group: "App",
+      disabled: blocked || onboarding || !usable,
+      keywords: "plan billing upgrade subscription pricing pro business invoice payment limits usage",
+      hint: "Settings · Plan and billing",
+      run: () => go("settings", { section: "plan" }),
+    },
+    {
+      id: "help",
+      label: "Help",
+      icon: "info",
+      group: "App",
+      disabled: blocked,
+      keywords: "help guide docs documentation manual how support faq tutorial",
+      hint: "Open the user guide in your browser",
+      run: () => requestHelp(),
+    },
+    {
       id: "refresh",
       label: "Refresh",
       icon: "refresh",
@@ -617,6 +640,11 @@ export function GrowthApp() {
                 <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
                 <span>Settings</span>
               </button>
+              <HelpButton disabled={blocked} />
+              <PlanBadge
+                disabled={blocked || !usable || onboarding}
+                onOpen={() => go("settings", { section: "plan" })}
+              />
               {accountEmail && (
                 <p className="gf-sidebar-account" title={`Signed in as ${accountEmail}`}>
                   <span aria-hidden="true" className="gf-sidebar-account-dot" />
@@ -1032,6 +1060,7 @@ export function GrowthApp() {
         onDismiss={() => setQuickOpen(false)}
         actions={quickActions}
       />
+      {!onboarding && <UpgradePrompt onCompare={() => go("settings", { section: "plan" })} />}
       <span id="gf-unsaved-description" hidden>
         Has changes that are not saved
       </span>

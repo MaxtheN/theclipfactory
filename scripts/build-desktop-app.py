@@ -1,11 +1,12 @@
-"""Build the unsigned Windows installer or Linux AppImage on the matching x64 machine.
+"""Build the Windows installer or Linux AppImage on the matching x64 machine.
 
 Windows: dist/growth-factory-windows-x64-setup.exe (Inno Setup; checks for WebView2).
 Linux:   dist/growth-factory-linux-x86_64.AppImage (Qt WebEngine window, no WebKitGTK needed).
 
 Both bundle FFmpeg with libass, the caption font and the face models, are checked with the headless
-smoke test, and get a local manifest. Nothing is signed, uploaded or published. The Mac app keeps
-scripts/build-mac-app.sh.
+smoke test, and get a local manifest. The Windows executables and installer are Authenticode-signed
+when a signer is configured (see windows_signing and docs/releasing.md); otherwise, and always on
+Linux, they are unsigned. Nothing is uploaded or published. The Mac app keeps scripts/build-mac-app.sh.
 """
 from __future__ import annotations
 
@@ -25,6 +26,8 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[1]
 WEBVIEW2_BOOTSTRAPPER = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 APPIMAGETOOL = "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+# RFC 3161 timestamp servers, so signatures stay valid after the certificate expires.
+TIMESTAMP_URLS = {"certificate": "http://timestamp.digicert.com", "trusted_signing": "http://timestamp.acs.microsoft.com"}
 INNO_DEFAULT = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Inno Setup 6" / "ISCC.exe"
 TARGETS = {
     "windows": {"bundle": "Growth Factory", "cli": "growth-factory-cli.exe",
@@ -108,6 +111,51 @@ def webview2_bootstrapper() -> Path:
     return setup
 
 
+def windows_signing(env: dict | None = None) -> tuple[str, list[str]] | None:
+    """The configured Authenticode signer and its signtool arguments, or None to build unsigned.
+
+    certificate: GF_WINDOWS_SIGN_THUMBPRINT names a code-signing certificate already imported into the
+        user's certificate store (CI imports it from a secret), so no password reaches a command line.
+    trusted_signing: GF_WINDOWS_SIGN_DLIB and GF_WINDOWS_SIGN_METADATA point at the Azure Trusted
+        Signing client library and its account metadata; Azure credentials come from AZURE_* variables.
+    """
+    env = os.environ if env is None else env
+    thumbprint = env.get("GF_WINDOWS_SIGN_THUMBPRINT", "").strip()
+    dlib, metadata = env.get("GF_WINDOWS_SIGN_DLIB", "").strip(), env.get("GF_WINDOWS_SIGN_METADATA", "").strip()
+    if thumbprint:
+        if not re.fullmatch(r"[0-9A-Fa-f]{40}", thumbprint):
+            raise SystemExit("GF_WINDOWS_SIGN_THUMBPRINT must be a 40-character SHA-1 certificate thumbprint.")
+        return "certificate", ["sign", "/sha1", thumbprint, "/fd", "sha256",
+                               "/tr", TIMESTAMP_URLS["certificate"], "/td", "sha256"]
+    if dlib or metadata:
+        if not (dlib and metadata):
+            raise SystemExit("Trusted Signing needs both GF_WINDOWS_SIGN_DLIB and GF_WINDOWS_SIGN_METADATA.")
+        return "trusted_signing", ["sign", "/fd", "sha256", "/tr", TIMESTAMP_URLS["trusted_signing"],
+                                   "/td", "sha256", "/dlib", dlib, "/dmdf", metadata]
+    return None
+
+
+def signtool() -> str:
+    """signtool.exe from PATH, or the newest x64 copy in the Windows SDK."""
+    found = shutil.which("signtool")
+    if found:
+        return found
+    kits = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Windows Kits/10/bin"
+    candidates = sorted(kits.glob("10.*/x64/signtool.exe"), key=lambda path: [
+        int(part) for part in path.parent.parent.name.split(".") if part.isdigit()])
+    if not candidates:
+        raise SystemExit("signtool.exe was not found; install the Windows SDK signing tools.")
+    return str(candidates[-1])
+
+
+def sign_windows(files: list[Path], signer: tuple[str, list[str]]) -> None:
+    """Sign each file, then check the signature chains to a trusted root."""
+    tool = signtool()
+    for path in files:
+        run(tool, *signer[1], path)
+        run(tool, "verify", "/pa", path)
+
+
 def package_windows(bundle: Path) -> Path:
     iscc = shutil.which("iscc") or (str(INNO_DEFAULT) if INNO_DEFAULT.is_file() else None)
     if not iscc:
@@ -160,7 +208,7 @@ def git_value(*args: str) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
-def write_manifest(target: str, artifact: Path, ffmpeg_dir: Path) -> Path:
+def write_manifest(target: str, artifact: Path, ffmpeg_dir: Path, signing: str = "unsigned") -> Path:
     notice = (ffmpeg_dir / "FFMPEG-SOURCE.txt").read_text()
     asset = re.search(r"Build: (\S+) \(SHA-256 ([0-9a-f]{64})\)", notice)
     record = {
@@ -169,13 +217,15 @@ def write_manifest(target: str, artifact: Path, ffmpeg_dir: Path) -> Path:
         "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
         "built_at": datetime.now(UTC).isoformat(), "git_commit": git_value("rev-parse", "HEAD"),
         "contains_uncommitted_changes": bool(git_value("status", "--porcelain")),
-        "signing": "unsigned", "headless_bootstrap_and_demo_assets": "verified",
+        "signing": signing, "headless_bootstrap_and_demo_assets": "verified",
         "bundled_ffmpeg": {"asset": asset[1], "sha256": asset[2]} if asset else None,
         "release_published": False, "download_url": None,
         "separate_prerequisites": PREREQUISITES[target],
-        "limitations": ["Unsigned beta artifact: " + ("Windows SmartScreen warns before the first run."
+        "limitations": [("Authenticode-signed; SmartScreen can still warn until the certificate builds reputation."
+                         if signing != "unsigned" else
+                         "Unsigned beta artifact: " + ("Windows SmartScreen warns before the first run."
                                                        if target == "windows" else
-                                                       "mark it executable before the first run."),
+                                                       "mark it executable before the first run.")),
                         "No clean-machine installation or model-runtime acceptance is implied."],
     }
     destination = artifact.with_name(artifact.name + ".manifest.json")
@@ -190,6 +240,7 @@ def main() -> None:
     args = parser.parse_args()
     target = host_target()
     names = TARGETS[target]
+    signer = windows_signing() if target == "windows" else None
     python = packaging_python(target)
     if not args.skip_frontend:
         npm = shutil.which("npm") or sys.exit("Node.js 22.12+ with npm is required to build the frontend.")
@@ -211,12 +262,18 @@ def main() -> None:
     run(python, ROOT / "scripts/verify-bundle-assets.py", bundle, "--desktop")
     # The bundled FFmpeg is searched before PATH (media.tool_dirs), and the asset check ran it above.
     run(python, ROOT / "scripts/smoke-headless.py", "--executable", bundle / names["cli"], "--expect-ffmpeg")
+    if signer:
+        # The app's own executables first, so the installer packs signed copies.
+        sign_windows([bundle / "Growth Factory.exe", bundle / names["cli"]], signer)
     artifact = package_windows(bundle) if target == "windows" else package_linux(bundle)
+    if signer:
+        sign_windows([artifact], signer)
     if target == "linux":
         run(python, ROOT / "scripts/smoke-headless.py", "--executable", unpack_appimage(artifact), "--expect-ffmpeg")
-    manifest = write_manifest(target, artifact, ffmpeg_dir)
+    signing = f"authenticode_{signer[0]}" if signer else "unsigned"
+    manifest = write_manifest(target, artifact, ffmpeg_dir, signing)
     print(f"Built {artifact.relative_to(ROOT)} ({artifact.stat().st_size // 1_000_000} MB) and "
-          f"{manifest.relative_to(ROOT)}. Unsigned; not uploaded or published.")
+          f"{manifest.relative_to(ROOT)}. Signing: {signing}; not uploaded or published.")
 
 
 if __name__ == "__main__":

@@ -7,3 +7,6 @@ README.md
 package.json
 screenshots
 assets/alpine-story-original.png
+site
+build.mjs
+tests

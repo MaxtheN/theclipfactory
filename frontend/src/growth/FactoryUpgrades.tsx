@@ -11,8 +11,8 @@ import {
 import "./factory-upgrades.css";
 
 /**
- * "Factory upgrades": craft the renderer lacks, detected from saved evidence, turned into a work
- * order and, on an explicit click, a reviewed code change on its own branch. Nothing here files,
+ * "Factory upgrades": edits the app can't make yet, detected from saved evidence, turned into a
+ * work order and, on an explicit click, a reviewed code change on its own branch. Nothing here files,
  * builds, pushes or merges without a click; merged extensions appear after a restart.
  */
 export function FactoryUpgrades({ compact = false }: { compact?: boolean }) {

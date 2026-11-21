@@ -98,7 +98,7 @@ Both are Apache-2.0 and accept still frames. Download sizes come from the Ollama
 
 The check runs before production starts, not partway through. In order, the app reports:
 
-1. under 8 GB RAM: no local model fits; add an OpenRouter key under Brand profile → AI model, or write the work by hand;
+1. under 8 GB RAM: no local model fits; add an OpenRouter key under Settings → Models, or write the work by hand;
 2. Ollama not installed: a link to the download page, then **Check again**;
 3. Ollama installed but not running: start it, then **Check again**;
 4. no fitting model: download the recommended model through Ollama (a network download of the stated size).

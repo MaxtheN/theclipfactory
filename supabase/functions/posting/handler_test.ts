@@ -6,6 +6,8 @@ import { assert, assertEquals, assertFalse } from "@std/assert";
 import { createHandler, LIMITS, signatureMatches } from "./handler.ts";
 import { MemoryStore } from "./memory_store.ts";
 import { ZernioClient } from "./zernio.ts";
+import { entitlementFor, type PlanId } from "../_shared/plans.ts";
+import { PlanSourceError } from "../_shared/plan_source.ts";
 
 const WS_A = "11111111-1111-4111-8111-111111111111";
 const WS_B = "22222222-2222-4222-8222-222222222222";
@@ -84,7 +86,10 @@ class FakeZernio {
     }
     // Deliberately ignores profileId: the server must filter accounts itself.
     if (call.method === "GET" && call.path === "/accounts") return reply(200, { accounts: this.accounts });
-    if (call.method === "DELETE" && parts[0] === "accounts") return reply(200, { account: { _id: parts[1] } });
+    if (call.method === "DELETE" && parts[0] === "accounts") {
+      this.accounts = this.accounts.filter((account) => account._id !== parts[1]);
+      return reply(200, { account: { _id: parts[1] } });
+    }
     if (call.method === "GET" && parts[0] === "accounts" && parts[2] === "tiktok") {
       return reply(200, {
         creator: { nickname: "c" },
@@ -152,10 +157,28 @@ function setup(limits = { read: { window: 60, limit: 1000 }, write: { window: 60
   store.workspaces.set(WS_A, USER_A);
   store.workspaces.set(WS_B, USER_B);
   const logs: Record<string, unknown>[] = [];
+  // Owners' plans; Business unless a test says otherwise.
+  const plans = new Map<string, PlanId>();
+  const planFor = (owner: string) => {
+    const plan = plans.get(owner) ?? "business";
+    if (plan === "free") return entitlementFor(null);
+    return entitlementFor({
+      owner_id: owner,
+      stripe_customer_id: "cus_test",
+      stripe_subscription_id: "sub_test",
+      plan,
+      billing_interval: "month",
+      status: "active",
+      current_period_end: null,
+      cancel_at_period_end: false,
+      synced_at: "2026-11-20T00:00:00Z",
+    });
+  };
   const handler = createHandler({
     zernio: new ZernioClient("zk-test", zernio.fetch, "https://zernio.com/api/v1"),
     store,
     auth: { userId: async (token) => TOKENS[token] ?? null },
+    plans: { entitlement: async (owner) => planFor(owner) },
     webhookSecret: SECRET,
     log: (entry) => logs.push(entry),
     now: () => new Date("2026-11-20T00:00:00Z"),
@@ -177,7 +200,7 @@ function setup(limits = { read: { window: 60, limit: 1000 }, write: { window: 60
       }),
     );
   };
-  return { zernio, store, logs, handler, call };
+  return { zernio, store, logs, handler, call, plans };
 }
 
 async function body(response: Response) {
@@ -613,4 +636,105 @@ Deno.test("request logs carry no captions, tokens or identifiers", async () => {
 Deno.test("unknown routes are 404 after authentication", async () => {
   const t = setup();
   assertEquals((await body(await t.call("GET", "/nope"))).error.code, "not_found");
+});
+
+Deno.test("the Free plan cannot connect, upload or post but can still see and disconnect accounts", async () => {
+  const t = setup();
+  const ready = await readyWorkspace(t);
+  t.plans.set(USER_A, "free");
+  for (
+    const [method, path, payload] of [
+      ["POST", "/connect", { platform: "tiktok" }],
+      ["POST", "/uploads", { filename: "clip.mp4", contentType: "video/mp4", size: 1000 }],
+    ] as const
+  ) {
+    const response = await t.call(method, path, { body: payload });
+    assertEquals(response.status, 402, path);
+    const error = (await body(response)).error;
+    assertEquals(error.code, "plan_required");
+    assertEquals(error.plan, "free");
+    assertEquals(error.limit, "connected_accounts");
+  }
+  const post = await t.call("POST", "/posts", {
+    headers: { "Idempotency-Key": "free-plan-post-1" },
+    body: {
+      content: "hi",
+      platforms: [{ accountId: ready.instagram }],
+      mediaItems: [{ url: ready.mediaUrl }],
+      publishNow: true,
+    },
+  });
+  assertEquals(post.status, 402);
+  assertEquals((await body(post)).error.code, "plan_required");
+  assertFalse(t.zernio.calls.some((c) => c.method === "POST" && c.path === "/posts"));
+
+  assertEquals((await t.call("GET", "/accounts")).status, 200);
+  assertEquals((await t.call("DELETE", `/accounts/${ready.tiktok}`)).status, 200);
+});
+
+Deno.test("connecting stops at the plan's account limit", async () => {
+  const t = setup();
+  const ready = await readyWorkspace(t); // two accounts connected
+  t.plans.set(USER_A, "pro"); // three included
+  assertEquals((await t.call("POST", "/connect", { body: { platform: "youtube" } })).status, 200);
+  t.zernio.addAccount(ready.profileId, "youtube");
+  const refused = await t.call("POST", "/connect", { body: { platform: "facebook" } });
+  assertEquals(refused.status, 402);
+  const error = (await body(refused)).error;
+  assertEquals([error.code, error.usage, error.max, error.plan], ["plan_limit", 3, 3, "pro"]);
+  assert(error.message.includes("3 connected accounts"));
+  // Another owner's plan is separate.
+  await t.call("POST", "/register", { ws: WS_B, token: "token-b" });
+  assertEquals(
+    (await t.call("POST", "/connect", { ws: WS_B, token: "token-b", body: { platform: "tiktok" } })).status,
+    200,
+  );
+});
+
+Deno.test("after a downgrade, posting waits until the accounts fit the plan", async () => {
+  const t = setup();
+  const ready = await readyWorkspace(t);
+  t.zernio.addAccount(ready.profileId, "youtube");
+  const extra = t.zernio.addAccount(ready.profileId, "facebook"); // four connected
+  t.plans.set(USER_A, "pro");
+  const post = () =>
+    t.call("POST", "/posts", {
+      headers: { "Idempotency-Key": `downgrade-${crypto.randomUUID()}` },
+      body: {
+        content: "hi",
+        platforms: [{ accountId: ready.instagram }],
+        mediaItems: [{ url: ready.mediaUrl }],
+        publishNow: true,
+      },
+    });
+  const refused = await post();
+  assertEquals(refused.status, 402);
+  const error = (await body(refused)).error;
+  assertEquals([error.code, error.usage, error.max], ["plan_over_limit", 4, 3]);
+  assertEquals((await t.call("DELETE", `/accounts/${extra}`)).status, 200);
+  assertEquals((await post()).status, 201);
+});
+
+Deno.test("an unavailable plan lookup fails closed", async () => {
+  const t = setup();
+  await readyWorkspace(t);
+  const handler = createHandler({
+    zernio: new ZernioClient("zk-test", t.zernio.fetch, "https://zernio.com/api/v1"),
+    store: t.store,
+    auth: { userId: async (token) => TOKENS[token] ?? null },
+    plans: {
+      entitlement: async () => {
+        throw new PlanSourceError("down");
+      },
+    },
+    webhookSecret: SECRET,
+  });
+  const response = await handler(
+    new Request("https://x.supabase.co/functions/v1/posting/connect", {
+      method: "POST",
+      headers: { Authorization: "Bearer token-a", "X-GF-Workspace": WS_A },
+      body: JSON.stringify({ platform: "tiktok" }),
+    }),
+  );
+  assertEquals(response.status, 503);
 });

@@ -230,7 +230,7 @@ class GroqSpeech:
                                          data=data, files={"file": ("speech.wav", stream, "audio/wav")}) as response:
                     if response.status_code != 200:
                         kind = "auth" if response.status_code in {401, 403} else "rate" if response.status_code == 429 else "provider"
-                        message = {"auth": "Groq rejected the speech key. Check the key in Brand profile → AI model.",
+                        message = {"auth": "Groq rejected the speech key. Check the key in Settings → Models.",
                                    "rate": "Groq speech is rate-limited. Wait, then explicitly retry the transcription.",
                                    "provider": "Groq speech could not complete this request. No transcript was saved."}[kind]
                         raise CloudSpeechError(message, kind)
@@ -272,7 +272,7 @@ class GroqSpeech:
         language = None if language == "auto" or not language else language
         key = self.secrets.get()
         if not key:
-            raise CloudSpeechError("Add a Groq API key in Brand profile → AI model before enabling cloud speech.", "auth")
+            raise CloudSpeechError("Add a Groq API key in Settings → Models before enabling cloud speech.", "auth")
         started, segments, calls, detected, dropped = time.monotonic(), [], [], [], []
         try:
             with wave.open(str(audio), "rb") as source:

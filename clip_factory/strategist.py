@@ -24,8 +24,9 @@ import random
 import re
 import threading
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -152,24 +153,42 @@ def _opening(clip: dict, plan: dict) -> str | None:
     return None
 
 
-def _posting(published_at) -> tuple[str | None, str | None]:
+def posting_zone(name: str | None) -> tzinfo | None:
+    """The creator's zone from settings (IANA name). Empty or unknown: None, the system's local rules."""
+    if not name:
+        return None
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return None
+
+
+def zone_label(zone: tzinfo | None) -> str:
+    if zone is None:
+        return "local time"
+    return getattr(zone, "key", None) or str(zone)
+
+
+def _posting(published_at, zone: tzinfo | None = UTC) -> tuple[str | None, str | None]:
+    """Posting window and day type by the hour in `zone` (None: the system's local rules, DST-aware)."""
     try:
         moment = utc(published_at)
     except (TypeError, ValueError):
         return None, None
+    moment = moment.astimezone(zone) if zone is not None else moment.astimezone()
     hour = moment.hour
     window = "morning" if 5 <= hour < 12 else "afternoon" if 12 <= hour < 17 else "evening" if 17 <= hour < 22 else "night"
     return window, "weekend" if moment.weekday() >= 5 else "weekday"
 
 
-def tag_clip(clip: dict, publication: dict | None = None) -> dict:
+def tag_clip(clip: dict, publication: dict | None = None, zone: tzinfo | None = UTC) -> dict:
     """Deterministic feature tags from saved clip/edit-plan/publication facts. Unknown stays null."""
     plan = clip.get("edit_plan") if isinstance(clip.get("edit_plan"), dict) else {}
     start, end = plan.get("start", clip.get("start")), plan.get("end", clip.get("end"))
     seconds = end - start if _known(start) and _known(end) else None
     if seconds is not None and _known(plan.get("cold_open_start")) and _known(plan.get("cold_open_end")):
         seconds += plan["cold_open_end"] - plan["cold_open_start"]
-    window, day = _posting((publication or {}).get("published_at")) if publication else (None, None)
+    window, day = _posting((publication or {}).get("published_at"), zone) if publication else (None, None)
     pick = (lambda layer, variable, value: value if value in VOCAB[layer][variable] else None)
     legacy = with_legacy(plan) if plan else {}
     opening = _opening(clip, plan)
@@ -196,7 +215,7 @@ def tag_clip(clip: dict, publication: dict | None = None) -> dict:
 
 # --------------------------------------------------------------------------- evidence
 
-def measured_posts(store, profile_id: str) -> list[dict]:
+def measured_posts(store, profile_id: str, zone: tzinfo | None = UTC) -> list[dict]:
     """Tracked, clip-mapped publications with their LATEST cumulative snapshot (never summed)."""
     policies = {p["id"]: p for p in store.all("learning_policies") if p.get("profile_id") == profile_id}
     latest: dict[str, dict] = {}
@@ -212,7 +231,7 @@ def measured_posts(store, profile_id: str) -> list[dict]:
         clip = store.get("clips", publication.get("clip_id") or "") if snapshot else None
         if not snapshot or not clip or publication.get("policy_id") not in policies:
             continue
-        tags = tag_clip(clip, publication)
+        tags = tag_clip(clip, publication, zone)
         posts.append({
             "publication_id": publication["id"], "snapshot_id": snapshot["id"], "clip_id": clip["id"],
             "campaign_id": policies[publication["policy_id"]].get("campaign_id"),
@@ -310,11 +329,11 @@ def evaluate_belief(belief: dict, posts: list[dict], baseline: dict) -> dict:
             "evidence": evidence[-MAX_EVIDENCE:], "baseline_value": base}
 
 
-def describe(layer: str, variable: str, value: str, direction: str, metric: str) -> str:
+def describe(layer: str, variable: str, value: str, direction: str, metric: str, zone: str = "UTC") -> str:
     noun = {"hook_style": f"{value.replace('_', '-')} hooks", "duration_bucket": f"{value} clips",
             "opening_type": f"a {value.replace('_', ' ')} opening", "caption_style": f"{value.replace('_', ' ')} captions",
             "framing": f"'{value}' framing", "crop_focus": "a face-following crop" if value == "auto_face" else "a fixed crop", "moment_type": f"{value.replace('_', ' ')} moments",
-            "speaker_role": f"moments led by the {value}", "posting_window": f"posting in the {value} (UTC)",
+            "speaker_role": f"moments led by the {value}", "posting_window": f"posting in the {value} ({zone})",
             "day_type": f"posting on {value}s"}.get(variable, f"{variable}={value}")
     verb = "beat" if direction == "increase" else "fall short of"
     return f"Posts with {noun} tend to {verb} this account's median {metric}."
@@ -493,8 +512,10 @@ class Strategist:
     """
 
     def __init__(self, store, *, propose_rules: Callable | None = None, model_factory: Callable | None = None,
-                 clock: Callable | None = None, simulated: bool = False):
+                 clock: Callable | None = None, simulated: bool = False, zone: Callable | None = None):
         self.store, self.propose_rules, self.model_factory = store, propose_rules, model_factory
+        # zone() -> tzinfo | None: where posting windows are measured (None = system local). Default UTC.
+        self.zone = zone or (lambda: UTC)
         self.clock = clock or (lambda: datetime.now(UTC))
         self.simulated = simulated
 
@@ -534,7 +555,7 @@ class Strategist:
             "portfolio": None, "runs": 0}
 
     def due_layers(self, profile_id: str, posts: list[dict] | None = None) -> list[str]:
-        posts = measured_posts(self.store, profile_id) if posts is None else posts
+        posts = measured_posts(self.store, profile_id, self.zone()) if posts is None else posts
         state = self.state(profile_id)
         tagged = [p for p in posts if p["tagged"]]
         due = []
@@ -591,7 +612,8 @@ class Strategist:
 
     def _run(self, profile_id, layers, receipt, job_id):
         profile = self.guard_run(profile_id)
-        posts = measured_posts(self.store, profile_id)
+        zone = self.zone()
+        posts = measured_posts(self.store, profile_id, zone)
         tagged = [p for p in posts if p["tagged"]]
         baseline = account_baseline(self.store, profile_id)
         metric = target_metric(profile, baseline, self.campaigns_for(profile_id)[0])
@@ -607,7 +629,7 @@ class Strategist:
         elif due:
             receipt["model"] = self._hypothesize(profile_id, tagged, due, metric, existing, job_id, receipt)
             new += receipt["model"].pop("_beliefs", [])
-            new += self._scan(profile_id, tagged, baseline, metric, due, existing + new)
+            new += self._scan(profile_id, tagged, baseline, metric, due, existing + new, zone=zone)
         else:
             receipt["model"] = {"status": "skipped", "reasons": ["No layer is due."]}
         self._receipt(receipt, progress=60, message="Scoring beliefs")
@@ -642,7 +664,7 @@ class Strategist:
                 "cited_evidence_ids": cited, "label": "observational", "caveat": OBSERVATIONAL, "proposals": [],
                 "created_at": stamp, "updated_at": stamp, "history": [], "simulated": self.simulated}
 
-    def _scan(self, profile_id, tagged, baseline, metric, layers, existing) -> list[dict]:
+    def _scan(self, profile_id, tagged, baseline, metric, layers, existing, zone: tzinfo | None = UTC) -> list[dict]:
         """Deterministic pattern scan: name (not score) a candidate for any value seen on >=2 posts."""
         # A weakened belief frees its feature for the opposite-direction candidate; anything else blocks it.
         taken = {(b["variable"], b["value"]) for b in existing if b.get("status") not in {"weakened", "retired"}}
@@ -665,7 +687,7 @@ class Strategist:
                         candidates.append((-abs(shrunk), variable, value, direction))
             for _, variable, value, direction in sorted(candidates)[:MAX_NEW_SCAN]:
                 belief = self._new_belief(profile_id, layer, variable, value, direction, metric,
-                    statement=describe(layer, variable, value, direction, metric),
+                    statement=describe(layer, variable, value, direction, metric, zone_label(zone)),
                     rationale="Named by a deterministic scan of tagged posts; its confidence is earned by later posts.",
                     origin="pattern_scan", cited=[])
                 if not self.store.get("beliefs", belief["id"]):
@@ -850,7 +872,7 @@ class Strategist:
 
     def view(self, profile_id: str) -> dict:
         profile = self.require_profile(profile_id)
-        posts = measured_posts(self.store, profile_id)
+        posts = measured_posts(self.store, profile_id, self.zone())
         baseline = account_baseline(self.store, profile_id)
         state = self.state(profile_id)
         beliefs = self.beliefs(profile_id)

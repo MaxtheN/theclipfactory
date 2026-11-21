@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import post_package
+from .billing import PlanLimitError
 from .post_schedule import PostScheduler
 from .posting_accounts import PostingAccounts
 from .posting_server import PLATFORMS, PostingServerClient, PostingServerError
@@ -96,8 +97,12 @@ class BatchRequest(BaseModel):
     override_reasons: dict[str, str] = Field(default_factory=dict, max_length=10)
 
 
-def _http(error: PublishError) -> HTTPException:
+def _http(error: PublishError) -> HTTPException | PlanLimitError:
     # Plain-text detail for the UI; only batch validation returns its per-item problems.
+    if error.code == "plan_limit":
+        details = error.details or {}
+        return PlanLimitError(details.get("limit") or "posting", error.message, usage=details.get("usage"),
+                              max=details.get("max"), plan=details.get("plan") or "free")
     if error.code == "batch_invalid":
         return HTTPException(error.status, {"message": error.message, "code": error.code, **error.details})
     return HTTPException(error.status, error.message)
@@ -118,7 +123,12 @@ def install(app, runtime, engine, campaigns, *, publisher: Publisher | None = No
     publisher = publisher or Publisher(store, root=app.state.root, server_factory=server_factory,
                                        learning=engine, campaigns=campaigns, enabled=enabled)
     app.state.publisher = publisher
-    scheduler = scheduler or PostScheduler(store, publisher)
+    def plan_check() -> PublishError | None:
+        gate = getattr(app.state, "plan_gate", None)
+        refusal = gate.posting_refusal() if gate is not None else None
+        return PublishError(402, refusal.message, "plan_limit", refusal.details()) if refusal else None
+
+    scheduler = scheduler or PostScheduler(store, publisher, plan_check=plan_check)
     app.state.post_scheduler = scheduler
     accounts = accounts or PostingAccounts(store, server_factory=server_factory, engine=engine,
                                            open_url=lambda url: runtime.open_url(url))

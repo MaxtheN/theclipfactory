@@ -1,4 +1,4 @@
-/* Brand profile → AI model card, and the website step's cloud hint. */
+/* Settings → Models AI model card, and the website step's cloud hint. */
 .gf-app .gf-ai-model {
   display: grid;
   gap: var(--gf-s3, 12px);

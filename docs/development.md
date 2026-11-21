@@ -141,19 +141,21 @@ post** sheet. See [Instagram connection](instagram-connect.md),
 
 ## Packaged Mac `.app`
 
-The GitHub Actions workflow **Build Mac desktop artifact (not notarized)**
+The GitHub Actions workflow **Build Mac desktop app** (`mac-app.yml`)
 uses `macos-15` (arm64 in the current [official runner table](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)),
 asserts native OS/Python architecture, builds the frontend, copies it into
 `clip_factory/ui`, runs backend/launcher tests, and uses PyInstaller to build a
-windowed `Clip Factory.app`. `--add-data` includes the actual standalone
+windowed `Growth Factory.app`. `--add-data` includes the actual standalone
 `inference_worker.py` for the external runtime. Before archiving, the build checks
 that this file and **every built UI asset** match the bundle. It uploads a ZIP
 **CI artifact**, not a published release. The installed UI package path is preferred by the parent server over
 `frontend/dist`. No source-repository path should be required at runtime.
 
 The workflow is registered on the default branch and supports explicit manual
-dispatch. It also triggers for Mac-workflow-file changes on `8090/**` branches;
-ordinary source pushes do not publish a release. Select the reviewed branch/ref
+dispatch. It also runs on `v*` tags, which attach the build to a draft release, and on `8090/**`
+branches that change the Mac packaging. Ordinary source pushes do not build or publish a release.
+With the signing secrets set, the app is Developer ID signed, notarized and stapled; see
+[releasing.md](releasing.md). Select the reviewed branch/ref
 explicitly and confirm the run's head SHA before trusting its artifact.
 
 ```sh
@@ -171,9 +173,11 @@ source .venv/bin/activate
 bash scripts/build-mac-app.sh
 ```
 
-Output: `dist/Clip Factory.app` and `dist/clip-factory-mac-arm64.zip`.
-There is no Developer ID certificate/notarization in this build. PyInstaller uses
-**ad-hoc signing** on arm64; it does not establish a trusted publisher. Download
+Output: `dist/Growth Factory.app` and `dist/growth-factory-mac-arm64.zip`.
+A local build is **ad-hoc signed** by PyInstaller unless `GF_MAC_SIGN_IDENTITY` names a Developer ID
+identity in your keychain (then `scripts/sign-mac-app.sh` signs it, and notarizes it when the
+`GF_NOTARY_*` variables are set; see [releasing.md](releasing.md)). Ad-hoc signing does not establish
+a trusted publisher. Download
 only an artifact whose source and provenance you trust. Extract it, move it to
 Applications, and use Finder **right-click → Open**; macOS may require a per-app
 confirmation under System Settings → Privacy & Security. If your macOS policy
@@ -189,7 +193,7 @@ works; perform the [manual Mac checklist](mac-testing.md).
 
 ## Packaged Windows installer and Linux AppImage
 
-The workflow **Build Windows and Linux desktop apps (unsigned)** (`desktop-apps.yml`) runs
+The workflow **Build Windows and Linux desktop apps** (`desktop-apps.yml`) runs
 on manual dispatch, on `v*` tags, and on `8090/**` branches that change the packaging. Each job
 runs `python scripts/build-desktop-app.py` on the matching x64 machine:
 
@@ -214,8 +218,11 @@ runs `python scripts/build-desktop-app.py` on the matching x64 machine:
    smoke-tests the installed copy.
    **Linux:** appimagetool packs `growth-factory-linux-x86_64.AppImage` with `packaging/linux/AppRun`,
    which selects pywebview's Qt backend. CI unpacks the AppImage and smoke-tests its AppRun.
-6. Writes `<artifact>.manifest.json` with the size, SHA-256, commit, bundled FFmpeg build and
-   prerequisites, and uploads both as **CI artifacts**, not a release.
+6. **Windows, when a signer is configured:** Authenticode-signs both executables before Inno Setup
+   packs them, then the installer, and checks each signature ([releasing.md](releasing.md)).
+7. Writes `<artifact>.manifest.json` with the size, SHA-256, commit, signing, bundled FFmpeg build and
+   prerequisites, and uploads both as **CI artifacts**. On `v*` tags they are also attached to a
+   draft release, which is never published automatically.
 
 ```sh
 gh workflow run desktop-apps.yml --repo MaxtheN/theclipfactory --ref master
@@ -223,8 +230,8 @@ gh workflow run desktop-apps.yml --repo MaxtheN/theclipfactory --ref master
 
 Known limits of these beta builds:
 
-- **Unsigned.** Windows SmartScreen warns before the first run (**More info → Run anyway**).
-  Buy a code-signing certificate before a public release. No auto-update.
+- **Unsigned without the signing secrets.** Windows SmartScreen then warns before the first run
+  (**More info → Run anyway**). The Linux AppImage is never signed. No auto-update.
 - **Linux glibc floor.** The AppImage is built on Ubuntu 22.04 and needs glibc 2.35 or newer.
   It brings its own Qt WebEngine window, so WebKitGTK versions do not matter. It still uses the
   system's X11/Wayland, OpenGL/EGL and NSS libraries, which desktop distributions include. If
@@ -242,8 +249,11 @@ python -m pip install -e '.[test]' 'setuptools>=75' wheel
 python -m pytest tests scripts/tests -q
 python -m ruff check clip_factory scripts
 (cd frontend && npm ci && npm test && npm run build)
+(cd landing-page && npm run check && npm test)
 python scripts/smoke-headless.py
 ```
+
+The website renders the user guide from `docs/guide/`. After editing a guide page, run `npm run generate` in `landing-page/` and commit the result; CI's website job fails while the generated pages are stale.
 
 CI runs frontend build/tests and backend/launcher tests on Linux, macOS and Windows. The
 headless smoke uses temporary data, authenticates through the real bootstrap

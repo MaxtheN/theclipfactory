@@ -316,7 +316,7 @@ class GatewayBuilderModel:
         except WorkError:
             key = None
         if not key:
-            raise BuilderError("No OpenRouter key is saved. Add one in Brand profile → AI model.")
+            raise BuilderError("No OpenRouter key is saved. Add one in Settings → Models.")
         body = {
             "model": self.model,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],

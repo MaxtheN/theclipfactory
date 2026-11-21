@@ -10,6 +10,7 @@ import { CloudAccountRow } from "./CloudSignIn";
 import { ConnectedAccounts } from "./ConnectedAccounts";
 import { EngineSetup } from "./EngineSetup";
 import { Icon } from "./Icon";
+import { PlanBillingSection } from "./PlanBilling";
 import "./settings.css";
 import { platformWords } from "../platform";
 
@@ -17,6 +18,7 @@ export const settingsSections = [
   ["device", "Device and runtime", "settings"],
   ["models", "Models", "spark"],
   ["accounts", "Accounts and connections", "link"],
+  ["plan", "Plan and billing", "spark"],
   ["privacy", "Privacy and storage", "lock"],
   ["jobs", "Background jobs", "clock"],
   ["about", "About", "info"],
@@ -160,6 +162,7 @@ export function SettingsScreen({
             <AutomationPanel w={w} factory={factory} visible={visible} onReview={onReview} onEditingRules={onEditingRules} layout="accounts" />
           </div>
         </>}
+        {section === "plan" && <PlanBillingSection onSignIn={() => onSection("accounts")} />}
         {section === "privacy" && <>
           <header><h2>Privacy and storage</h2><p>Where {platformWords().computer} keeps your factory’s data.</p></header>
           {!system ? unavailable : (

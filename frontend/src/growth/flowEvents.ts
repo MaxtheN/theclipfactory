@@ -881,14 +881,14 @@ export function deriveFactoryMap(input: MapInput): FactoryMapModel {
     sheet: input.builder
       ? [
           {
-            title: "Upgrade ideas (craft the renderer lacks)",
+            title: "Upgrade ideas",
             rows: upgrades.slice(0, 10).map((r) => ({
               label: `${r.label}${r.demo ? " · demo" : ""}`,
               value: `${STATUS_LABEL[r.status]} · ${r.demand_count} signal${r.demand_count === 1 ? "" : "s"}`,
             })),
             note: upgrades.length
-              ? "Nothing is built, pushed or merged without your click. Review in Results → Factory upgrades."
-              : "Ideas appear when references, critic notes or change requests name missing craft.",
+              ? "Each idea is an edit your references, critic notes or change requests asked for that the app can't make yet. Nothing is built, pushed or merged without your click. Review in Results → Factory upgrades."
+              : "Ideas appear here when your references, critic notes or change requests ask for an edit the app can't make yet.",
           },
         ]
       : [{ title: "Unavailable", note: "The Factory builder could not be read. Nothing is assumed." }],

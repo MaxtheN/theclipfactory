@@ -1,0 +1,51 @@
+{
+  "//": "Mirror of supabase/functions/_shared/plans.ts. Parity tests in billing/handler_test.ts, tests/test_billing.py and landing-page/tests compare against this file.",
+  "currency": "usd",
+  "plans": [
+    {
+      "id": "free",
+      "name": "Free",
+      "price": {
+        "month": 0,
+        "year": 0
+      },
+      "limits": {
+        "brands": 1,
+        "clips_per_month": 20,
+        "posting": false,
+        "connected_accounts": 0,
+        "factory_builder": false
+      }
+    },
+    {
+      "id": "pro",
+      "name": "Pro",
+      "price": {
+        "month": 24,
+        "year": 19
+      },
+      "limits": {
+        "brands": 3,
+        "clips_per_month": null,
+        "posting": true,
+        "connected_accounts": 3,
+        "factory_builder": false
+      }
+    },
+    {
+      "id": "business",
+      "name": "Business",
+      "price": {
+        "month": 200,
+        "year": 160
+      },
+      "limits": {
+        "brands": 15,
+        "clips_per_month": null,
+        "posting": true,
+        "connected_accounts": 30,
+        "factory_builder": true
+      }
+    }
+  ]
+}

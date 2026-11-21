@@ -1,0 +1,30 @@
+.gf-help {
+  display: grid;
+  gap: 4px;
+}
+
+.gf-help-note {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--material-hover);
+  color: var(--material-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.gf-help-note a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.gf-help-dismiss {
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}

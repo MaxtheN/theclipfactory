@@ -1,6 +1,6 @@
 # Growth Factory
 
-**An AI growth department for your Mac, with a factory that can build its next editing tool.**
+**An AI growth department for your computer (Mac, Windows and Linux), with a factory that can build its next editing tool.**
 
 Give Growth Factory your brand, audience and footage. Agents find promising moments,
 make captioned vertical drafts and prepare them for human review. Publication and
@@ -8,10 +8,13 @@ account results feed the next creative decision. When an editing capability is
 missing, the factory can turn that gap into a coding work order, generate an
 extension, run checks and a sample render, and present the change for human review.
 
-Built for **EVOLVE: 8090 AI Hackathon**. Video and Instagram are the first production
-line; broader marketing channels and paid optimization are roadmap work.
+Started at the **EVOLVE: 8090 AI Hackathon**; now a self-serve desktop subscription (Free, Pro $24 a month,
+Business $200 a month). Video is the production line, posting to seven platforms; paid optimization is roadmap work.
 
-[Submission guide](docs/submission/README.md) · [Project story](docs/submission/devpost.md) ·
+> **Picking up the work?** Read [AGENTS.md](AGENTS.md), then the [handoff packet](docs/handoff/README.md) and
+> [what is left](docs/handoff/outstanding-work.md).
+
+[User guide](docs/guide/README.md) · [Submission guide](docs/submission/README.md) · [Project story](docs/submission/devpost.md) ·
 [Run locally](#run-on-an-apple-silicon-mac) · [Engine](docs/engine.md) ·
 [Factory builder](docs/factory-builder.md) · [Third-party notices](docs/third-party-notices.md)
 
@@ -52,6 +55,14 @@ and runtime checks are in **Settings → Device and runtime**; speech, local mod
 narration and production defaults are in **Settings → Models**, also reachable through
 **⌘K → Engine & models**; jobs are in **Settings → Background jobs**. There is one
 app navigation.
+| Publication | Human-approved posting to TikTok, Instagram, YouTube, Facebook, LinkedIn, X and Threads through the Growth Factory posting server (Zernio): connected accounts, per-platform captions, scheduling and durable attempt reconciliation. **First real app publication still requires live verification.** |
+| Plans and billing | Free, Pro and Business plans bought in the app through Stripe Checkout; plan limits enforced by the engine and the cloud; usage, upgrade prompts and Manage billing in Settings. See [billing](docs/billing.md). |
+| Learning | Saved observations, three-/six-day windows while open, cited one-variable proposals, unapproved revised drafts, Strategist beliefs and a labeled synthetic simulation. |
+| Builder | Capability requests, generated work orders, bounded extension generation/checks, review artifacts and an explicit draft-PR flow. Human merge and restart are required. |
+
+The sidebar has **Factory, Library, Results, Brand profile and Settings**. Settings holds the device, models, speech,
+connected accounts and the plan. The Activity Center shows jobs and posts, **⌘K / Ctrl+K** opens quick actions, and
+**Help** opens the [user guide](docs/guide/README.md).
 
 ## Architecture and trust boundaries
 
@@ -181,6 +192,7 @@ models, media and services retain their respective licenses and terms.
 
 ## Documentation
 
+- [User guide](docs/guide/README.md): how to use every part of the app (also opened from **Help** in the app)
 - [Submission checklist and field mapping](docs/submission/README.md)
 - [Devpost project story](docs/submission/devpost.md), [field-ready copy](docs/submission/fields.md), [judge Q&A](docs/submission/judge-qa.md)
 - [Two-minute demo](docs/submission/demo-script.md) and [video storyboard](docs/submission/video-storyboard.md)

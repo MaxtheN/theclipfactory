@@ -192,7 +192,7 @@ def authorized(client):
 
 def schedule(client, at=None):
     response = client.post("/api/clips/extended/schedule", json={"public_video_url": PUBLIC_URL,
-        "publish_at": (at or datetime.now(UTC) + timedelta(seconds=0.3)).isoformat()})
+        "publish_at": (at or datetime.now(UTC) + timedelta(seconds=1)).isoformat()})
     assert response.status_code == 201, response.text
     return response.json()
 

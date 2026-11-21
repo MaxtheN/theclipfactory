@@ -23,8 +23,17 @@ const reducedMotion = () =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** First-run welcome: a typed tagline over soft frost, one button, always skippable. */
-export function OnboardingIntro({ onStart }: { onStart: () => void }) {
+/**
+ * First-run welcome: a typed tagline, one button, always skippable. It sits over soft frost, or
+ * over the moving map when `contours` is on (the ripple starts at the brand mark).
+ */
+export function OnboardingIntro({
+  onStart,
+  contours = false,
+}: {
+  onStart: () => void;
+  contours?: boolean;
+}) {
   const [typed, setTyped] = useState(() =>
     reducedMotion() ? TAGLINE.length : 0,
   );
@@ -56,13 +65,15 @@ export function OnboardingIntro({ onStart }: { onStart: () => void }) {
         if (e.key === "Escape") go();
       }}
     >
-      <div className="gf-intro-aurora" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
+      {!contours && (
+        <div className="gf-intro-aurora" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      )}
       <div className="gf-intro-body">
-        <span className="gf-intro-mark">
+        <span className="gf-intro-mark" data-ripple-origin="">
           <BrandMark />
         </span>
         <h1 id="gf-intro-title">Your next chapter starts here.</h1>
