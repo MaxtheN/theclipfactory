@@ -1,6 +1,6 @@
 # Growth Factory handoff packet
 
-Snapshot of `master` at `9a0d4ae` (the merge of PR #48), 2026-11-20. Start at [AGENTS.md](../../AGENTS.md) for setup,
+Snapshot of `master` at `34988be` (the merge of PR #50), 2026-11-21. Start at [AGENTS.md](../../AGENTS.md) for setup,
 checks and conventions.
 
 | File | What it covers |
@@ -28,11 +28,12 @@ The catalog is `supabase/functions/_shared/plans.ts`, mirrored in `clip_factory/
 
 ## Health at this snapshot
 
-- **CI** (`ci.yml`: test on Ubuntu, macOS and Windows, plus posting-server and website) passed on `9a0d4ae`. The full
-  local pytest run passed: 1874 passed, 3 skipped, with `test_faces.py` deselected.
+- **CI** (`ci.yml`: test on Ubuntu, macOS and Windows, plus posting-server and website) passed on `34988be`. A local
+  run on 2026-11-21 passed: pytest 1803 passed and 3 skipped (one MediaPipe face test needs `libEGL`, missing from the
+  agent sandbox), vitest 575 passed, `tsc` clean and the frontend build succeeds.
 - **Desktop builds:**
-  - `desktop-apps.yml` (Windows installer, Linux AppImage; unsigned) last passed on 2026-11-20 on a WO-39 branch.
-  - `mac-app.yml` last ran on 2026-11-14.
+  - `desktop-apps.yml` (Windows installer, Linux AppImage) and `mac-app.yml` (Apple Silicon) last passed on
+    2026-11-21 on the WO-38 branch. Both builds were unsigned, with a notice, because no signing secrets are set yet.
   - The only GitHub release is `v0.1.0-preview` (Mac, 2026-11-14). It predates billing and multi-platform posting
     and is not linked from the website.
 - **Live:**
@@ -111,11 +112,11 @@ pywebview window (clip_factory/app.py, main.py)
 
 The [Software Factory project](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319) holds:
 - the requirements: App Shell and Navigation, Clip Production and Review, Campaign Workspace and Strategy, Results and
-  Strategy Learning, Plans and Billing, Precedent Research;
+  Strategy Learning (with its Account Map child), Plans and Billing, Desktop Distribution, Precedent Research;
 - their blueprints, plus Posting Server;
 - 39 work orders.
 
-Work orders WO-14 to WO-37 and WO-39 are Completed. What remains is in
+Every work order is Completed except WO-2 (Backlog, to re-scope or close) and WO-19 (Backlog: paused until after launch). What remains is in
 [outstanding-work.md](outstanding-work.md).
 
 ## Secrets and accounts

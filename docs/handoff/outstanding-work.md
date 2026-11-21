@@ -1,6 +1,6 @@
 # Outstanding work
 
-What isn't yet built, merged, proven or closed as of `master` `9a0d4ae` (2026-11-20). Sections are in priority
+What isn't yet built, merged, proven or closed as of `master` `34988be` (2026-11-21). Sections are in priority
 order. Work order links go to the
 [Growth Factory Software Factory project](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319).
 
@@ -31,7 +31,7 @@ The product is built; these are what stand between `master` and paying customers
 ## 2. Open work orders
 
 - **[WO-19](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/19): Consolidate design
-  tokens and retire CSS override layers** (In Progress, medium). **Paused until after launch** by the owner.
+  tokens and retire CSS override layers** (Backlog, medium). **Paused until after launch** by the owner.
   - The token source exists.
   - Still to fold in or retire, all in `frontend/src/growth/`: `desktop-glass`, `polish`, `pearl-studio`,
     `shell-polish`, `website-alignment`, `identity`, `interactions` and `workspace-motion`.
@@ -40,12 +40,6 @@ The product is built; these are what stand between `master` and paying customers
 - **[WO-2](https://factory.8090.ai/project/2791013e-0f01-4b6b-a530-854ffd4e0319/work-orders/2): Workflow orchestration
   and saved state** (Backlog, assigned to Nur). This is hackathon scope that later work has mostly delivered (saved
   campaigns, strategy versions, durable jobs, approvals). Re-scope it against the code or close it.
-- **Stale statuses to close** (the code is on `master`):
-  - WO-9 and WO-10: In Progress, but implemented. See `channelSettings.test.tsx`, the archive and restore routes in
-    `campaign_api.py`, and `tests/test_campaign_archive.py`.
-  - WO-1 and WO-3 to WO-8: In Review hackathon builds; PRs #1 to #9 merged on 2026-11-14.
-  - WO-11, WO-12 and WO-13: In Review Phase 1 and 2 artifacts (navigation map, App Shell blueprint, design system).
-  - Several of these are assigned to teammates (James, Nur, Kartik); confirm before closing.
 
 ## 3. Open pull requests and branches
 
@@ -54,21 +48,9 @@ The product is built; these are what stand between `master` and paying customers
 | PR #42 `8090/chat-pro-polish-loop-q7r4m1` | Teammate (jduhking): clearer errors and next steps from a UX review | Theirs to finish; do not push to it |
 | PR #47 `8090/chat-results-account-map-r7k2m9` | Teammate (jduhking): Results account map of posted clips | Theirs to finish; do not push to it |
 | `8090/chat-batched-transcribe-trial-k7m2q9` | No PR on purpose: batched faster-whisper was 22% faster on CPU but gave 30% fewer sentence ends | Bench with `--batch` on an NVIDIA PC; merge only if sentence ends hold ([local-model-setup.md](../local-model-setup.md#batched-faster-whisper-measured-not-used)) |
-| `8090/chat-polish-landing-page-e03414` | PR #10 closed; landing polish from 2026-11-14, superseded by PR #48 | Delete |
 | `feature/code-cut-off-desing-improvements` | PR #11 closed; superseded UI copy cuts | Confirm with Kartik, then delete |
 
-Already merged and safe to delete from origin:
-- `8090/chat-settings-models-wording-x8c2v5`
-- `8090/chat-switch-supabase-project-k2w9f4`
-- `8090/wo-22-zernio-posting-server-t5j8n2`
-- `8090/wo-23-zernio-engine-adapter-p6w3c8`
-- `8090/wo-24-multi-platform-posting-ui-c4x9m2`
-- `8090/wo-33-user-guide-g2k7p4`
-- `8090/wo-34-stripe-billing-cloud-b7q2x5`
-- `8090/wo-35-engine-plan-limits-f3h8k1`
-- `8090/wo-36-plan-billing-ui-j5r9t2`
-- `8090/wo-37-website-s8v3n6`
-- `8090/wo-39-strategist-local-time-w4n7d3`
+Merged branches have been deleted from origin.
 
 ## 4. Built but not yet proven live
 
@@ -108,6 +90,7 @@ Already merged and safe to delete from origin:
 ## 6. Specs and decisions waiting on the owner
 
 - **Pending suggested edits** in the Software Factory, for the owner to accept or reject:
+  - Desktop Distribution requirements and blueprint (new 2026-11-21: installers, signing, draft releases);
   - Plans and Billing requirements and blueprint;
   - Posting Server blueprint (`e0ac770e`);
   - App Shell and Navigation blueprint (`062e2dcb`): seven Help suggestions;

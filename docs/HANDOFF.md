@@ -2,7 +2,7 @@
 
 > **Current handoff: [../AGENTS.md](../AGENTS.md), then [handoff/README.md](handoff/README.md),
 > [handoff/outstanding-work.md](handoff/outstanding-work.md) and
-> [handoff/launch-checklist.md](handoff/launch-checklist.md)** (as of `master` `9a0d4ae`). The status sections below
+> [handoff/launch-checklist.md](handoff/launch-checklist.md)** (as of `master` `34988be`). The status sections below
 > are from the 2026-11-14 hackathon. Keep this file for the local Mac setup, Keychain service names and test data.
 
 Current documentation refresh: 2026-11-14, after published master **`5e6c6a0`**.
